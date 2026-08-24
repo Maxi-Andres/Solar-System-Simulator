@@ -1,7 +1,12 @@
 import type { OsculatingElements } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { orbitPointsKm, orbitSegmentsFor, propagate } from '../core/kepler.ts';
+import {
+  ORBIT_SAGITTA_RADII,
+  orbitPointsKm,
+  orbitSegmentsFor,
+  propagate,
+} from '../core/kepler.ts';
 
 /**
  * Regression tests for the "the orbit does not pass through the planet" bug.
@@ -70,7 +75,9 @@ describe('orbitSegmentsFor', () => {
 
     for (const [orbitRadius, bodyRadius] of cases) {
       const segments = orbitSegmentsFor(orbitRadius, bodyRadius);
-      expect(sagitta(orbitRadius, segments)).toBeLessThanOrEqual(bodyRadius * 1.01);
+      expect(sagitta(orbitRadius, segments)).toBeLessThanOrEqual(
+        bodyRadius * ORBIT_SAGITTA_RADII * 1.01,
+      );
     }
   });
 
@@ -85,14 +92,16 @@ describe('orbitSegmentsFor', () => {
     // The regression, stated as a number: at 512 segments Pluto's orbit line falls
     // more than ninety Pluto radii inside the true ellipse.
     expect(sagitta(7.376e9, 512) / PLUTO_RADIUS_KM).toBeGreaterThan(90);
-    // With the adaptive count it is under one.
+    // With the adaptive count it is a quarter of a radius.
     const adaptive = orbitSegmentsFor(7.376e9, PLUTO_RADIUS_KM);
-    expect(sagitta(7.376e9, adaptive) / PLUTO_RADIUS_KM).toBeLessThan(1.01);
+    expect(sagitta(7.376e9, adaptive) / PLUTO_RADIUS_KM).toBeLessThan(
+      ORBIT_SAGITTA_RADII * 1.01,
+    );
   });
 
   it('stays inside its bounds', () => {
     expect(orbitSegmentsFor(1e6, 1e6)).toBeGreaterThanOrEqual(256);
-    expect(orbitSegmentsFor(1e15, 1)).toBeLessThanOrEqual(8192);
+    expect(orbitSegmentsFor(1e15, 1)).toBeLessThanOrEqual(16384);
     // Degenerate inputs must not produce NaN or Infinity.
     expect(orbitSegmentsFor(0, 100)).toBe(256);
     expect(orbitSegmentsFor(100, 0)).toBe(256);
@@ -151,8 +160,8 @@ describe('orbitPointsKm', () => {
       );
     }
 
-    // Under two body radii: at that point the line visually goes through Pluto.
-    expect(nearest / PLUTO_RADIUS_KM).toBeLessThan(2);
+    // Under half a body radius: the line visually goes through Pluto.
+    expect(nearest / PLUTO_RADIUS_KM).toBeLessThan(0.5);
   });
 
   it('would miss by hundreds of radii at the old fixed 512 segments', () => {

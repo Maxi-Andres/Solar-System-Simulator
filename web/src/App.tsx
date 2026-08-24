@@ -164,8 +164,21 @@ export function App() {
           <Button onClick={() => clock.setRate(-WARP_RATES.dayPerSecond)} active={clock.rate < 0}>
             &minus;1 d/s
           </Button>
+        </div>
+
+        <div
+          style={{
+            marginTop: '0.55rem',
+            display: 'flex',
+            gap: '0.4rem',
+            alignItems: 'center',
+          }}
+        >
+          <span style={{ color: '#5a5a5a', fontSize: '0.66rem', letterSpacing: '0.14em' }}>
+            VIEW
+          </span>
           <Button onClick={() => setShowOrbits((on) => !on)} active={showOrbits}>
-            ORBITS
+            {showOrbits ? 'HIDE ORBITS' : 'SHOW ORBITS'}
           </Button>
         </div>
       </div>
