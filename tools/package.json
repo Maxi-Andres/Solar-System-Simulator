@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Static ephemeris generator backed by the JPL Horizons API",
   "scripts": {
-    "fetch": "node src/fetchData.ts",
+    "fetch:data": "node src/fetchData.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

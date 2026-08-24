@@ -9,10 +9,10 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
-    "preview": "pnpm --filter web preview",
-    "fetch:data": "pnpm --filter tools fetch",
+    "dev": "pnpm --filter @sss/web dev",
+    "build": "pnpm --filter @sss/web build",
+    "preview": "pnpm --filter @sss/web preview",
+    "fetch:data": "pnpm --filter @sss/tools fetch:data",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }

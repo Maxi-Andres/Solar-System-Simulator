@@ -6,7 +6,7 @@ warp, jump to date) and free camera navigation.
 
 Inspired by [NASA Eyes on the Solar System](https://eyes.nasa.gov/apps/solar-system/).
 
-> **Status:** work in progress. Step 0 (scaffolding) complete.
+> **Status:** work in progress. Step 1 (data generator) complete; nothing renders yet.
 
 ## Requirements
 
@@ -40,6 +40,32 @@ pnpm preview         # serve the build to verify it before publishing
 
 The site is fully static &mdash; there is no backend. JPL Horizons is queried only at
 build time, never from a visitor's browser.
+
+## Generated data
+
+`pnpm fetch:data` writes about 1.9 MB of JSON:
+
+```
+web/public/data/
+├─ manifest.json          # generation time, frame, covered window, body list
+├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
+├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
+└─ elements/<id>.json     # osculating orbital elements at one epoch
+```
+
+Two things about the reference frames are worth knowing, because getting them wrong
+produces numbers that look fine and are not:
+
+- **State vectors are barycentric** (`CENTER='500@0'`). The Solar System barycenter is
+  the inertial origin, so it is the right frame for positions. The Sun itself orbits
+  it, up to ~1.5 million km out.
+- **Orbital elements are heliocentric** (`CENTER='500@10'`). A Keplerian ellipse needs
+  the dominating mass at its focus. Requesting barycentric elements puts Mercury's
+  semi-major axis 2% off and its period 3% off; against the Sun's center the same
+  request lands within 0.01%.
+
+Positions come from vectors, so they are exact DE441 values regardless. The elements
+only shape the drawn orbit line and the out-of-window fallback.
 
 ## Data sources
 
