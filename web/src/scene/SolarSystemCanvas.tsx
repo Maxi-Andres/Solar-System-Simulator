@@ -1,10 +1,9 @@
 import type { BodyId } from '@sss/tools/types';
-import { OrbitControls } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { useEffect, useRef, type ComponentRef } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
+import { CameraRig } from './CameraRig.tsx';
 import { kmToUnits } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
@@ -36,62 +35,30 @@ export interface SolarSystemCanvasProps {
 }
 
 export function SolarSystemCanvas({ store, clock, focus, showOrbits }: SolarSystemCanvasProps) {
-  const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
-
   const focusBody = store.body(focus);
-  // Never let the camera inside the body it is looking at.
-  const minDistance = kmToUnits(focusBody.radiusEquatorialKm) * 1.05;
-
-  /**
-   * Reframe when the focus changes.
-   *
-   * Distances differ by six orders of magnitude between the Sun and Pluto, so a
-   * fixed camera distance would either bury the camera inside the Sun or leave Pluto
-   * a speck. Framing relative to the body's own radius keeps every body arriving at
-   * the same apparent size.
-   */
-  useEffect(() => {
-    const controls = controlsRef.current;
-    if (controls === null) {
-      return;
-    }
-    const distance = kmToUnits(focusBody.radiusEquatorialKm) * 8;
-    controls.object.position.set(distance * 0.4, distance * 0.35, distance);
-    controls.target.set(0, 0, 0);
-    controls.update();
-  }, [focus, focusBody.radiusEquatorialKm]);
+  const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
 
   return (
     <Canvas
       gl={{
         logarithmicDepthBuffer: true,
         antialias: true,
-        // Physically-correct-ish tone mapping; the Sun is genuinely much brighter
-        // than anything else in frame.
+        // The Sun is genuinely far brighter than anything else in frame, so a
+        // filmic curve keeps it from blowing out everything around it.
         toneMapping: 3, // THREE.ACESFilmicToneMapping
       }}
-      camera={{
-        fov: FOV_DEG,
-        near: 1e-6,
-        far: 1e11,
-        position: [kmToUnits(2e8), kmToUnits(1.2e8), kmToUnits(3e8)],
-      }}
+      camera={{ fov: FOV_DEG, near: 1e-6, far: 1e11 }}
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
       <Starfield />
       <SolarSystem store={store} clock={clock} focus={focus} showOrbits={showOrbits} />
-      <OrbitControls
-        ref={controlsRef}
-        target={[0, 0, 0]}
-        enablePan={false}
-        enableDamping
-        dampingFactor={0.08}
-        // Dolly is multiplicative in OrbitControls, which is what makes the wheel
-        // behave logarithmically: every notch changes distance by a fixed ratio, so
-        // 1e1 km to 1e10 km is a smooth continuum rather than an unusable slider.
-        zoomSpeed={1.1}
-        rotateSpeed={0.6}
-        minDistance={minDistance}
+      <CameraRig
+        focusKey={focus}
+        // Framing relative to the body's own radius, so switching from the Sun to
+        // Pluto -- six orders of magnitude apart -- arrives at the same apparent
+        // size instead of burying the camera or losing the body entirely.
+        framingDistance={radiusUnits * 8}
+        minDistance={radiusUnits * 1.05}
         maxDistance={kmToUnits(2e10)}
       />
     </Canvas>

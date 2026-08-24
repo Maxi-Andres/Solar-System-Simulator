@@ -160,3 +160,60 @@ export function orbitPolyline(elements: OsculatingElements, segments = 512): Vec
 export function periodDays(elements: OsculatingElements): number {
   return elements.periodSec / SECONDS_PER_DAY;
 }
+
+/**
+ * How many segments an orbit polyline needs before the planet visibly sits off it.
+ *
+ * A polyline chord cuts inside the true ellipse by the sagitta, r*(1 - cos(pi/N)).
+ * With a fixed 512 segments that is a quarter of a body radius for Earth but
+ * ninety-three radii for Pluto, whose orbit is huge and whose body is tiny — which
+ * is exactly the "orbit doesn't pass through the planet" artefact.
+ *
+ * Solving the sagitta down to one body radius makes the error scale with what is
+ * actually visible: Earth needs 341 segments, Neptune 947, Pluto 4951.
+ */
+export function orbitSegmentsFor(
+  orbitRadiusKm: number,
+  bodyRadiusKm: number,
+  minimum = 256,
+  maximum = 8192,
+): number {
+  if (orbitRadiusKm <= 0 || bodyRadiusKm <= 0) {
+    return minimum;
+  }
+  const cosine = 1 - bodyRadiusKm / orbitRadiusKm;
+  if (cosine <= -1) {
+    return minimum;
+  }
+  const segments = Math.ceil(Math.PI / Math.acos(Math.min(1, cosine)));
+  return Math.min(maximum, Math.max(minimum, segments));
+}
+
+/**
+ * Orbit points as a flat Float64Array of x,y,z triples, in km.
+ *
+ * Float64 on purpose: the caller rebases these against the focused body before
+ * handing them to the GPU. Storing them as float32 up front would bake in ~700 km of
+ * quantisation at Pluto's distance, which is glaring once the camera is close enough
+ * for that to matter.
+ */
+export function orbitPointsKm(elements: OsculatingElements, segments: number): Float64Array {
+  const points = new Float64Array(segments * 3);
+  const e = elements.eccentricity;
+  const a = elements.semiMajorAxisKm;
+  const sqrtOneMinusESquared = Math.sqrt(1 - e * e);
+
+  for (let i = 0; i < segments; i += 1) {
+    const E = (i / segments) * 2 * Math.PI;
+    const point = perifocalToReference(
+      a * (Math.cos(E) - e),
+      a * sqrtOneMinusESquared * Math.sin(E),
+      elements,
+    );
+    points[i * 3] = point.x;
+    points[i * 3 + 1] = point.y;
+    points[i * 3 + 2] = point.z;
+  }
+
+  return points;
+}

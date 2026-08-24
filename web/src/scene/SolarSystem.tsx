@@ -4,10 +4,10 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { orbitPolyline } from '../core/kepler.ts';
 import { J2000_JD, type SimClock } from '../core/time.ts';
 import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
+import { OrbitLine } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
   kmToUnits,
@@ -43,7 +43,7 @@ interface BodyHandles {
   readonly group: THREE.Group;
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
-  readonly orbit: THREE.LineLoop | null;
+  readonly orbit: OrbitLine | null;
 }
 
 export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProps) {
@@ -97,23 +97,13 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
       marker.renderOrder = 10;
       group.add(marker);
 
-      let orbit: THREE.LineLoop | null = null;
+      let orbit: OrbitLine | null = null;
       const elements = store.elementsFor(definition.id);
       if (definition.drawOrbit && elements !== null) {
-        const points = orbitPolyline(elements, 512)
-          // The polyline repeats its first point to close; LineLoop closes itself.
-          .slice(0, -1)
-          .map((p) => new THREE.Vector3(kmToUnits(p.x), kmToUnits(p.y), kmToUnits(p.z)));
-
-        orbit = new THREE.LineLoop(
-          new THREE.BufferGeometry().setFromPoints(points),
-          new THREE.LineBasicMaterial({
-            color: definition.color,
-            transparent: true,
-            opacity: 0.55,
-            depthWrite: false,
-          }),
-        );
+        // Segment count and float32 anchoring are both handled inside OrbitLine;
+        // see that file for why a fixed 512 segments put Pluto 93 radii off its own
+        // orbit.
+        orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
       }
 
       return { definition, group, mesh, marker, orbit };
@@ -130,6 +120,7 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
 
     const jd = clock.tdbJulianDay;
     const snapshot = rebaseFrame(store, focus, jd);
+    const focusRadiusKm = store.body(focus).radiusEquatorialKm;
     const fov = (camera as THREE.PerspectiveCamera).fov;
     const cameraDistanceUnits = camera.position.length();
 
@@ -141,7 +132,7 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
       if (rebased === undefined) {
         handle.group.visible = false;
         if (handle.orbit !== null) {
-          handle.orbit.visible = false;
+          handle.orbit.line.visible = false;
         }
         continue;
       }
@@ -187,13 +178,12 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
       meshMaterial.opacity = 1 - opacity;
 
       if (handle.orbit !== null) {
-        handle.orbit.visible = showOrbits && sun !== undefined;
+        handle.orbit.line.visible = showOrbits && sun !== undefined;
         if (sun !== undefined) {
-          handle.orbit.position.set(
-            kmToUnits(sun.positionKm.x),
-            kmToUnits(sun.positionKm.y),
-            kmToUnits(sun.positionKm.z),
-          );
+          // Rebuild tolerance scales with the focused body's radius: that is the
+          // smallest thing on screen worth resolving, so drifting by less than that
+          // cannot be seen.
+          handle.orbit.update(sun.positionKm, focusRadiusKm * 0.25);
         }
       }
     }
@@ -229,7 +219,7 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
       {handles
         .filter((handle) => handle.orbit !== null)
         .map((handle) => (
-          <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!} />
+          <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!.line} />
         ))}
     </group>
   );
