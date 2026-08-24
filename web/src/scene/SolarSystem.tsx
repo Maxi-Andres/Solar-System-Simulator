@@ -1,0 +1,236 @@
+import type { BodyDefinition, BodyId } from '@sss/tools/types';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
+import * as THREE from 'three';
+
+import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { orbitPolyline } from '../core/kepler.ts';
+import { J2000_JD, type SimClock } from '../core/time.ts';
+import { rebaseFrame } from './floatingOrigin.ts';
+import { markerTexture } from './markerTexture.ts';
+import {
+  angularRadiusPixels,
+  kmToUnits,
+  markerOpacity,
+  pixelsToWorldSize,
+  rotationAngle,
+} from './scale.ts';
+
+/**
+ * The scene graph, driven imperatively.
+ *
+ * React builds the objects once; after that, everything moves inside `useFrame` by
+ * writing straight into the three.js objects. Re-rendering React sixty times a
+ * second to move ten planets would be pure overhead, and the clock — not React
+ * state — is already the source of truth for time.
+ */
+
+/** Marker diameter on screen, in CSS pixels. Matches the NASA Eyes look. */
+const MARKER_PIXELS = 11;
+
+/** Sphere tessellation. Generous, because a focused planet fills the screen. */
+const SPHERE_SEGMENTS = 64;
+
+export interface SolarSystemProps {
+  readonly store: EphemerisStore;
+  readonly clock: SimClock;
+  readonly focus: BodyId;
+  readonly showOrbits: boolean;
+}
+
+interface BodyHandles {
+  readonly definition: BodyDefinition;
+  readonly group: THREE.Group;
+  readonly mesh: THREE.Mesh;
+  readonly marker: THREE.Sprite;
+  readonly orbit: THREE.LineLoop | null;
+}
+
+export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProps) {
+  const rootRef = useRef<THREE.Group>(null);
+  const sunLightRef = useRef<THREE.PointLight>(null);
+
+  /**
+   * Build every body once. The geometry is in real kilometres converted to scene
+   * units, so a sphere's radius here is the body's actual radius — nothing is
+   * inflated for visibility. Oblateness is applied by scaling the polar axis, which
+   * makes Saturn and Jupiter visibly flattened, as they are.
+   */
+  const handles = useMemo<BodyHandles[]>(() => {
+    const texture = markerTexture();
+
+    return store.bodies.map((definition) => {
+      const group = new THREE.Group();
+      group.name = definition.id;
+
+      const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
+      const geometry = new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
+
+      // The Sun emits rather than receives, so it gets an unlit material.
+      const material =
+        definition.kind === 'star'
+          ? new THREE.MeshBasicMaterial({ color: definition.color })
+          : new THREE.MeshStandardMaterial({
+              color: definition.color,
+              roughness: 1,
+              metalness: 0,
+            });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      // Polar flattening: Saturn is 9.8% shorter pole to pole than across.
+      mesh.scale.set(1, definition.radiusPolarKm / definition.radiusEquatorialKm, 1);
+      // Axial tilt, about the x axis of the body's own frame.
+      mesh.rotation.z = (definition.axialTiltDeg * Math.PI) / 180;
+      group.add(mesh);
+
+      const marker = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: texture,
+          color: definition.color,
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+          sizeAttenuation: true,
+        }),
+      );
+      // Markers draw over everything: a planet behind the Sun still needs a label.
+      marker.renderOrder = 10;
+      group.add(marker);
+
+      let orbit: THREE.LineLoop | null = null;
+      const elements = store.elementsFor(definition.id);
+      if (definition.drawOrbit && elements !== null) {
+        const points = orbitPolyline(elements, 512)
+          // The polyline repeats its first point to close; LineLoop closes itself.
+          .slice(0, -1)
+          .map((p) => new THREE.Vector3(kmToUnits(p.x), kmToUnits(p.y), kmToUnits(p.z)));
+
+        orbit = new THREE.LineLoop(
+          new THREE.BufferGeometry().setFromPoints(points),
+          new THREE.LineBasicMaterial({
+            color: definition.color,
+            transparent: true,
+            opacity: 0.55,
+            depthWrite: false,
+          }),
+        );
+      }
+
+      return { definition, group, mesh, marker, orbit };
+    });
+  }, [store]);
+
+  const { size, camera } = useThree();
+
+  useFrame(() => {
+    const root = rootRef.current;
+    if (root === null) {
+      return;
+    }
+
+    const jd = clock.tdbJulianDay;
+    const snapshot = rebaseFrame(store, focus, jd);
+    const fov = (camera as THREE.PerspectiveCamera).fov;
+    const cameraDistanceUnits = camera.position.length();
+
+    // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
+    const sun = snapshot.bodies.get('sun');
+
+    for (const handle of handles) {
+      const rebased = snapshot.bodies.get(handle.definition.id);
+      if (rebased === undefined) {
+        handle.group.visible = false;
+        if (handle.orbit !== null) {
+          handle.orbit.visible = false;
+        }
+        continue;
+      }
+
+      handle.group.visible = true;
+      handle.group.position.set(
+        kmToUnits(rebased.positionKm.x),
+        kmToUnits(rebased.positionKm.y),
+        kmToUnits(rebased.positionKm.z),
+      );
+
+      // Spin the body on its own axis at its real sidereal rate.
+      handle.mesh.rotation.y = rotationAngle(
+        jd,
+        J2000_JD,
+        handle.definition.rotationPeriodHours,
+      );
+
+      // Distance from the camera, not from the focus: what the camera sees is what
+      // decides whether a sphere is big enough to be worth drawing.
+      const distanceUnits = handle.group.position.distanceTo(camera.position);
+      const distanceKm = distanceUnits * 1000;
+
+      const pixelRadius = angularRadiusPixels(
+        handle.definition.radiusEquatorialKm,
+        distanceKm,
+        size.height,
+        fov,
+      );
+      const opacity = markerOpacity(pixelRadius);
+
+      handle.marker.visible = opacity > 0.01;
+      if (handle.marker.visible) {
+        (handle.marker.material as THREE.SpriteMaterial).opacity = opacity;
+        // Constant on-screen size, whatever the distance.
+        const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
+        handle.marker.scale.setScalar(worldSize);
+      }
+
+      handle.mesh.visible = opacity < 0.99;
+      const meshMaterial = handle.mesh.material as THREE.Material;
+      meshMaterial.transparent = opacity > 0;
+      meshMaterial.opacity = 1 - opacity;
+
+      if (handle.orbit !== null) {
+        handle.orbit.visible = showOrbits && sun !== undefined;
+        if (sun !== undefined) {
+          handle.orbit.position.set(
+            kmToUnits(sun.positionKm.x),
+            kmToUnits(sun.positionKm.y),
+            kmToUnits(sun.positionKm.z),
+          );
+        }
+      }
+    }
+
+    // The Sun is the only light source, which is what puts a real terminator on
+    // every planet: the day/night line you see is geometry, not a shader trick.
+    if (sunLightRef.current !== null && sun !== undefined) {
+      sunLightRef.current.position.set(
+        kmToUnits(sun.positionKm.x),
+        kmToUnits(sun.positionKm.y),
+        kmToUnits(sun.positionKm.z),
+      );
+    }
+
+    void cameraDistanceUnits;
+  });
+
+  return (
+    <group ref={rootRef}>
+      {/*
+        Point light with no distance falloff: inverse-square over interplanetary
+        distances would underflow to black long before Neptune. Real illuminance
+        does fall off, but reproducing that would make the outer planets invisible
+        rather than dim, which is a worse lie than a flat light.
+      */}
+      <pointLight ref={sunLightRef} intensity={1.6} distance={0} decay={0} color="#fff6e0" />
+      {/* A touch of ambient so the night side reads as a shape, not a void. */}
+      <ambientLight intensity={0.05} />
+
+      {handles.map((handle) => (
+        <primitive key={handle.definition.id} object={handle.group} />
+      ))}
+      {handles
+        .filter((handle) => handle.orbit !== null)
+        .map((handle) => (
+          <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!} />
+        ))}
+    </group>
+  );
+}
