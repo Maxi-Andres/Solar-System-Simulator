@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Ephemerides generated from JPL Horizons: NEVER committed.
+# Regenerate with `pnpm fetch:data` (locally, and in CI before the build).
+web/public/data/
+
+.env
+.env.local
+.DS_Store
+Thumbs.db

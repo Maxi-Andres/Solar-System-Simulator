@@ -1,0 +1,18 @@
+{
+  "name": "@sss/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static ephemeris generator backed by the JPL Horizons API",
+  "scripts": {
+    "fetch": "node src/fetchData.ts",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

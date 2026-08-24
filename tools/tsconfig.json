@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // Node 22 runs TypeScript directly (native type stripping), so there is no tsx
+    // and no build step. The tradeoff: relative imports MUST carry the .ts extension.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src", "vitest.config.ts"]
+}

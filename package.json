@@ -1,0 +1,19 @@
+{
+  "name": "solar-system-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time solar system simulator using official NASA/JPL ephemerides",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "preview": "pnpm --filter web preview",
+    "fetch:data": "pnpm --filter tools fetch",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

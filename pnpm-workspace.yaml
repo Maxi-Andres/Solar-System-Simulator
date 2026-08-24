@@ -1,0 +1,7 @@
+packages:
+  - tools
+  - web
+
+# pnpm 10 does not run install scripts unless they are listed here.
+onlyBuiltDependencies:
+  - esbuild
