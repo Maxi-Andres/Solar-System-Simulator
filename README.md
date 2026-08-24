@@ -6,7 +6,8 @@ warp, jump to date) and free camera navigation.
 
 Inspired by [NASA Eyes on the Solar System](https://eyes.nasa.gov/apps/solar-system/).
 
-> **Status:** work in progress. Step 1 (data generator) complete; nothing renders yet.
+> **Status:** work in progress. Step 2 (compute core) complete. The app shows a live
+> text readout of real positions, distances and velocities; the 3D scene is step 3.
 
 ## Requirements
 
