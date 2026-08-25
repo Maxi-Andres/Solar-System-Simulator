@@ -13,6 +13,7 @@ import {
   angularRadiusPixels,
   kmToUnits,
   markerOpacity,
+  meshOpacity,
   pixelsToWorldSize,
   rotationAngle,
 } from './scale.ts';
@@ -122,6 +123,9 @@ export function SolarSystem({
       );
       // Markers draw over everything: a planet behind the Sun still needs a label.
       marker.renderOrder = 10;
+      // The sprite is scaled to a fixed pixel size, which at Pluto's distance
+      // means tens of thousands of scene units; leave culling to the mesh.
+      marker.frustumCulled = false;
       group.add(marker);
 
       let orbit: OrbitLine | null = null;
@@ -198,20 +202,23 @@ export function SolarSystem({
         size.height,
         fov,
       );
-      const opacity = markerOpacity(pixelRadius);
+      // Ring and sphere are independent: they overlap rather than swapping, so
+      // nothing pops at any distance. See scale.ts.
+      const ringOpacity = markerOpacity(pixelRadius);
+      const sphereOpacity = meshOpacity(pixelRadius);
 
-      handle.marker.visible = showIcons && opacity > 0.01;
+      handle.marker.visible = showIcons && ringOpacity > 0.005;
       if (handle.marker.visible) {
-        (handle.marker.material as THREE.SpriteMaterial).opacity = opacity;
+        (handle.marker.material as THREE.SpriteMaterial).opacity = ringOpacity;
         // Constant on-screen size, whatever the distance.
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         handle.marker.scale.setScalar(worldSize);
       }
 
-      handle.mesh.visible = opacity < 0.99;
+      handle.mesh.visible = sphereOpacity > 0.005;
       const meshMaterial = handle.mesh.material as THREE.Material;
-      meshMaterial.transparent = opacity > 0;
-      meshMaterial.opacity = 1 - opacity;
+      meshMaterial.transparent = sphereOpacity < 1;
+      meshMaterial.opacity = sphereOpacity;
 
       if (handle.orbit !== null) {
         handle.orbit.line.visible = showOrbits && sun !== undefined;

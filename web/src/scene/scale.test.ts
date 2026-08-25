@@ -6,8 +6,11 @@ import {
   KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
-  MARKER_ONLY_PX,
-  MESH_ONLY_PX,
+  MARKER_FADE_OUT_PX,
+  MARKER_FULL_PX,
+  MESH_FADE_END_PX,
+  MESH_FADE_START_PX,
+  meshOpacity,
   pixelsToWorldSize,
   rotationAngle,
   toSceneUnits,
@@ -112,27 +115,69 @@ describe('angularRadiusPixels', () => {
   });
 });
 
-describe('markerOpacity', () => {
-  it('shows only the marker below the lower threshold', () => {
-    expect(markerOpacity(0)).toBe(1);
-    expect(markerOpacity(MARKER_ONLY_PX)).toBe(1);
+describe('marker and mesh opacity', () => {
+  it('draws the ring fully around a small sphere', () => {
+    expect(markerOpacity(0.01)).toBe(1);
+    expect(markerOpacity(MARKER_FULL_PX)).toBe(1);
   });
 
-  it('shows only the mesh above the upper threshold', () => {
-    expect(markerOpacity(MESH_ONLY_PX)).toBe(0);
+  it('drops the ring once the sphere outgrows it', () => {
+    expect(markerOpacity(MARKER_FADE_OUT_PX)).toBe(0);
     expect(markerOpacity(500)).toBe(0);
   });
 
-  it('cross-fades monotonically in between, with no pop', () => {
-    let previous = 1;
-    for (let px = MARKER_ONLY_PX; px <= MESH_ONLY_PX; px += 0.1) {
-      const opacity = markerOpacity(px);
-      expect(opacity).toBeLessThanOrEqual(previous + 1e-9);
-      expect(opacity).toBeGreaterThanOrEqual(0);
-      expect(opacity).toBeLessThanOrEqual(1);
-      previous = opacity;
+  it('keeps the sphere fully drawn while it is still visible', () => {
+    // The regression: the sphere used to vanish at 2.5 px, while still a 5 px wide
+    // disc. It must stay solid there now.
+    expect(meshOpacity(2.5)).toBe(1);
+    expect(meshOpacity(MESH_FADE_START_PX)).toBe(1);
+    expect(meshOpacity(50)).toBe(1);
+  });
+
+  it('only fades the sphere once it is essentially sub-pixel', () => {
+    expect(meshOpacity(MESH_FADE_END_PX)).toBe(0);
+    expect(meshOpacity(0)).toBe(0);
+    expect(meshOpacity(0.9)).toBeGreaterThan(0);
+    expect(meshOpacity(0.9)).toBeLessThan(1);
+  });
+
+  it('overlaps: both are visible together across a wide band', () => {
+    // This is what removes the pop. Between the ring being full and the sphere
+    // starting to fade, you see a dot inside a ring -- exactly the NASA Eyes look.
+    for (const px of [0.5, 1, 2, 3, 4]) {
+      expect(markerOpacity(px)).toBeGreaterThan(0);
+      expect(meshOpacity(px)).toBeGreaterThan(0);
     }
-    expect(markerOpacity((MARKER_ONLY_PX + MESH_ONLY_PX) / 2)).toBeCloseTo(0.5, 9);
+  });
+
+  it('never leaves nothing on screen at any size', () => {
+    // The actual bug: at some distances the sphere was gone and the marker had not
+    // taken over. Sweeping every scale, something must always be drawn.
+    for (let px = 0; px <= 40; px += 0.05) {
+      expect(markerOpacity(px) + meshOpacity(px)).toBeGreaterThan(0.05);
+    }
+  });
+
+  it('moves monotonically, so nothing flickers as you approach', () => {
+    let ring = markerOpacity(0);
+    let sphere = meshOpacity(0);
+    for (let px = 0; px <= 20; px += 0.05) {
+      const nextRing = markerOpacity(px);
+      const nextSphere = meshOpacity(px);
+      expect(nextRing).toBeLessThanOrEqual(ring + 1e-9);
+      expect(nextSphere).toBeGreaterThanOrEqual(sphere - 1e-9);
+      ring = nextRing;
+      sphere = nextSphere;
+    }
+  });
+
+  it('stays inside [0, 1]', () => {
+    for (let px = 0; px <= 40; px += 0.25) {
+      for (const value of [markerOpacity(px), meshOpacity(px)]) {
+        expect(value).toBeGreaterThanOrEqual(0);
+        expect(value).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
 

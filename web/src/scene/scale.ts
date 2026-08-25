@@ -72,27 +72,64 @@ export function angularRadiusPixels(
   return (radiusKm / distanceKm) * (viewportHeightPx / (2 * Math.tan(halfFovRad)));
 }
 
-/** Below this many pixels a sphere is not worth drawing; show the marker instead. */
-export const MARKER_ONLY_PX = 2.5;
+/**
+ * Marker and mesh visibility.
+ *
+ * These two do NOT hand off to each other — they overlap, and that is the point. An
+ * earlier version faded the sphere out at 2.5 px and swapped in the marker, which
+ * popped twice over: the sphere vanished while it was still a 5 px wide disc, and
+ * the 11 px marker that replaced it was more than double its size.
+ *
+ * Instead the hollow marker fades in *around* the shrinking sphere, the way NASA
+ * Eyes draws it. A distant planet is a dot inside a ring; approach and the dot grows
+ * until it fills the ring, which then fades away. The sphere itself is only faded
+ * out once it drops below a pixel, where it has nothing left to show and would
+ * otherwise shimmer against the antialiasing.
+ *
+ * Nothing ever appears or disappears abruptly, at any distance.
+ */
 
-/** Above this many pixels the mesh carries the image on its own. */
-export const MESH_ONLY_PX = 6;
+/** Above this radius the sphere is larger than the ring, so the ring is gone. */
+export const MARKER_FADE_OUT_PX = 9;
+
+/** Below this radius the ring is fully drawn, comfortably enclosing the sphere. */
+export const MARKER_FULL_PX = 4;
+
+/** Below this radius the sphere starts fading; it is nearly sub-pixel already. */
+export const MESH_FADE_START_PX = 1.5;
+
+/** Below this radius the sphere is gone, having become genuinely invisible. */
+export const MESH_FADE_END_PX = 0.4;
+
+/** Linear ramp from 1 at `full` to 0 at `none`, clamped outside. */
+function ramp(value: number, full: number, none: number): number {
+  if (full < none) {
+    if (value <= full) return 1;
+    if (value >= none) return 0;
+    return 1 - (value - full) / (none - full);
+  }
+  if (value >= full) return 1;
+  if (value <= none) return 0;
+  return (value - none) / (full - none);
+}
 
 /**
- * How much the marker should show, from 1 (marker only) to 0 (mesh only).
+ * How visible the hollow marker ring should be, from 1 to 0.
  *
- * The band between the two thresholds cross-fades, so a planet does not pop as you
- * approach it. This is exactly the transition visible in NASA Eyes: distant planets
- * are hollow circles, and they dissolve into lit spheres as the camera closes in.
+ * Full below MARKER_FULL_PX, gone above MARKER_FADE_OUT_PX.
  */
 export function markerOpacity(pixelRadius: number): number {
-  if (pixelRadius <= MARKER_ONLY_PX) {
-    return 1;
-  }
-  if (pixelRadius >= MESH_ONLY_PX) {
-    return 0;
-  }
-  return 1 - (pixelRadius - MARKER_ONLY_PX) / (MESH_ONLY_PX - MARKER_ONLY_PX);
+  return ramp(pixelRadius, MARKER_FULL_PX, MARKER_FADE_OUT_PX);
+}
+
+/**
+ * How visible the real sphere should be, from 1 to 0.
+ *
+ * Stays fully drawn until it is nearly sub-pixel, so it shrinks smoothly rather than
+ * cutting out while still clearly visible.
+ */
+export function meshOpacity(pixelRadius: number): number {
+  return ramp(pixelRadius, MESH_FADE_START_PX, MESH_FADE_END_PX);
 }
 
 /**

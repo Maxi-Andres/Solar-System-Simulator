@@ -9,7 +9,7 @@ import {
   type Fetcher,
 } from '../core/ephemerisStore.ts';
 import { orbitCenterKm, rebaseFrame } from './floatingOrigin.ts';
-import { angularRadiusPixels, kmToUnits, markerOpacity } from './scale.ts';
+import { angularRadiusPixels, kmToUnits, markerOpacity, meshOpacity } from './scale.ts';
 
 /**
  * Scene-layer tests against the real generated data.
@@ -146,6 +146,8 @@ describeWithData('what the scene will actually show', () => {
 
       expect(px).toBeLessThan(1);
       expect(markerOpacity(px)).toBe(1);
+      // And the sphere is faded out down there, being sub-pixel.
+      expect(meshOpacity(px)).toBeLessThan(1);
     }
   });
 
@@ -157,8 +159,9 @@ describeWithData('what the scene will actually show', () => {
 
     expect(px).toBeGreaterThan(2.5);
     expect(px).toBeLessThan(3);
-    expect(markerOpacity(px)).toBeGreaterThan(0);
-    expect(markerOpacity(px)).toBeLessThan(1);
+    // A 2.7 px sphere is solid, with the ring drawn around it.
+    expect(meshOpacity(px)).toBe(1);
+    expect(markerOpacity(px)).toBe(1);
   });
 
   it('draws a planet as a mesh once the camera is a few radii away', () => {
@@ -168,7 +171,7 @@ describeWithData('what the scene will actually show', () => {
       const px = angularRadiusPixels(body.radiusEquatorialKm, distance, HEIGHT_PX, FOV);
 
       expect(px).toBeGreaterThan(6);
-      expect(markerOpacity(px)).toBe(0);
+      expect(meshOpacity(px)).toBe(1);
     }
   });
 
@@ -182,11 +185,8 @@ describeWithData('what the scene will actually show', () => {
     expect(meshDistanceKm).toBeGreaterThan(384_400); // farther than the Moon
     expect(meshDistanceKm).toBeLessThan(5_000_000);
 
-    // Twice that distance halves the pixel radius to 3 px, still mid-fade; the
-    // marker only takes over completely past 2.4x, at 2.5 px.
-    expect(
-      markerOpacity(angularRadiusPixels(6378.1366, meshDistanceKm * 2, HEIGHT_PX, FOV)),
-    ).toBeGreaterThan(0.5);
+    // The sphere stays solid well past that distance now; only the ring changes.
+    expect(meshOpacity(angularRadiusPixels(6378.1366, meshDistanceKm * 3, HEIGHT_PX, FOV))).toBe(1);
     expect(markerOpacity(angularRadiusPixels(6378.1366, meshDistanceKm * 3, HEIGHT_PX, FOV))).toBe(1);
     expect(markerOpacity(angularRadiusPixels(6378.1366, meshDistanceKm * 0.5, HEIGHT_PX, FOV))).toBe(0);
   });
