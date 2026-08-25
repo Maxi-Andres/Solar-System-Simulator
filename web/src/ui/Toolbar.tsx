@@ -6,8 +6,10 @@ import { useViewStore, type PanelId } from '../state/store.ts';
  * The vertical toolbar on the right, matching the NASA Eyes layout: info, layers,
  * zoom, lighting, fullscreen, readout.
  *
- * Icons are inline SVG rather than an icon font or sprite sheet — a handful of
- * simple glyphs, no extra bytes to load, and they inherit colour from CSS.
+ * Icons are inline SVG paths written by hand, not an icon font, sprite sheet or
+ * third-party set — nothing to install and nothing to attribute. They follow the
+ * common 24x24 / 1.6 stroke / round-cap convention so they sit together, and they
+ * inherit colour from CSS.
  */
 
 const ZOOM_STEP = 1.35;
@@ -101,10 +103,22 @@ export function Toolbar() {
         title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         onClick={toggleFullscreen}
       >
-        <path d="M4 9V4h5" />
-        <path d="M20 15v5h-5" />
-        <path d="M4 4l6 6" />
-        <path d="M20 20l-6-6" />
+        {fullscreen ? (
+          // Arrows pointing inward: the action is to shrink back down.
+          <>
+            <path d="M10 4v6H4" />
+            <path d="M14 20v-6h6" />
+            <path d="M4 4l6 6" />
+            <path d="M20 20l-6-6" />
+          </>
+        ) : (
+          <>
+            <path d="M4 9V4h5" />
+            <path d="M20 15v5h-5" />
+            <path d="M4 4l6 6" />
+            <path d="M20 20l-6-6" />
+          </>
+        )}
       </ToolButton>
 
       <ToolButton
