@@ -1,0 +1,63 @@
+name: CI
+
+# Checks on every branch except main, and on pull requests. Pushes to main are
+# already covered end to end by the deploy workflow, so running both would just
+# duplicate the work.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      # The ephemerides are cached for the day. The integration tests check computed
+      # positions against JPL's own numbers, so they need real data to be worth
+      # running — but a fresh pull on every push would mean twenty requests to JPL
+      # per commit. The window is rebuilt around "today", so a daily key is exactly
+      # the right granularity.
+      # GitHub Actions expressions have no date function, so the key is built here.
+      - name: Compute cache key
+        id: day
+        run: echo "utc=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache ephemerides
+        id: ephemerides
+        uses: actions/cache@v6
+        with:
+          path: web/public/data
+          # No restore-keys on purpose: a near miss must not serve yesterday's
+          # window, it must trigger a fresh fetch.
+          key: ephemerides-${{ hashFiles('tools/src/**') }}-${{ steps.day.outputs.utc }}
+
+      - name: Fetch ephemerides from JPL Horizons
+        if: steps.ephemerides.outputs.cache-hit != 'true'
+        run: pnpm fetch:data
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
