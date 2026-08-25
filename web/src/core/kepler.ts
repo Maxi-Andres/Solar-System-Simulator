@@ -229,3 +229,149 @@ export function orbitPointsKm(elements: OsculatingElements, segments: number): F
 
   return points;
 }
+
+/**
+ * Derives the osculating elements from a state vector.
+ *
+ * The osculating ellipse at an instant is, by definition, the two-body orbit that
+ * matches the body's position and velocity right then — so it passes exactly through
+ * the body, always. That property is the whole reason this exists.
+ *
+ * The generator downloads elements at a single epoch, which is fine for the instant
+ * it was made and progressively wrong afterwards: perturbations pull the real path
+ * off that fixed ellipse. Measured against the drawn line, eight years from the
+ * epoch put Neptune 135 body radii off its own orbit and Pluto 4400. Recomputing the
+ * ellipse from the current state removes the drift entirely rather than reducing it,
+ * because there is no longer a stale epoch to drift from.
+ *
+ * `mu` is the gravitational parameter of the two-body system, G(M + m). Standard
+ * derivation via the angular momentum, eccentricity and node vectors.
+ */
+export function stateToOsculatingElements(
+  state: StateVector,
+  mu: number,
+  jd: number,
+  id: string,
+  center: string,
+): OsculatingElements | null {
+  const { position: r, velocity: v } = state;
+
+  const rMag = Math.hypot(r.x, r.y, r.z);
+  const vMag = Math.hypot(v.x, v.y, v.z);
+  if (rMag === 0 || !Number.isFinite(rMag) || !Number.isFinite(vMag)) {
+    return null;
+  }
+
+  // Specific angular momentum, h = r x v. Its direction is the orbit normal.
+  const h = {
+    x: r.y * v.z - r.z * v.y,
+    y: r.z * v.x - r.x * v.z,
+    z: r.x * v.y - r.y * v.x,
+  };
+  const hMag = Math.hypot(h.x, h.y, h.z);
+  if (hMag === 0) {
+    // Radial trajectory: no orbital plane to speak of.
+    return null;
+  }
+
+  // Node vector, n = k x h, pointing at the ascending node.
+  const n = { x: -h.y, y: h.x, z: 0 };
+  const nMag = Math.hypot(n.x, n.y);
+
+  // Eccentricity vector, pointing at periapsis.
+  const rDotV = r.x * v.x + r.y * v.y + r.z * v.z;
+  const scale = vMag * vMag - mu / rMag;
+  const e = {
+    x: (scale * r.x - rDotV * v.x) / mu,
+    y: (scale * r.y - rDotV * v.y) / mu,
+    z: (scale * r.z - rDotV * v.z) / mu,
+  };
+  const eccentricity = Math.hypot(e.x, e.y, e.z);
+
+  // Semi-major axis from the vis-viva energy.
+  const energy = (vMag * vMag) / 2 - mu / rMag;
+  if (energy >= 0) {
+    // Parabolic or hyperbolic: no closed ellipse to draw. Comets in phase B will
+    // need a separate path for this.
+    return null;
+  }
+  const semiMajorAxisKm = -mu / (2 * energy);
+
+  const inclinationRad = Math.acos(clamp(h.z / hMag, -1, 1));
+
+  // Longitude of ascending node. Degenerate for an equatorial orbit, where the node
+  // is undefined and zero is the conventional choice.
+  const ascendingNodeRad =
+    nMag === 0 ? 0 : normalizeAngle(Math.atan2(n.y, n.x));
+
+  // Argument of periapsis, measured from the node in the orbital plane.
+  let argPeriapsisRad: number;
+  if (nMag === 0) {
+    // Equatorial: measure from the reference direction instead.
+    argPeriapsisRad = normalizeAngle(Math.atan2(e.y, e.x) * (h.z < 0 ? -1 : 1));
+  } else if (eccentricity === 0) {
+    argPeriapsisRad = 0;
+  } else {
+    const nDotE = (n.x * e.x + n.y * e.y) / (nMag * eccentricity);
+    argPeriapsisRad = Math.acos(clamp(nDotE, -1, 1));
+    if (e.z < 0) {
+      argPeriapsisRad = 2 * Math.PI - argPeriapsisRad;
+    }
+  }
+
+  // True anomaly, then eccentric and mean anomaly.
+  let trueAnomalyRad: number;
+  if (eccentricity === 0) {
+    // Circular: measure position from the node.
+    const nDotR = nMag === 0 ? r.x / rMag : (n.x * r.x + n.y * r.y) / (nMag * rMag);
+    trueAnomalyRad = Math.acos(clamp(nDotR, -1, 1));
+    if (r.z < 0) {
+      trueAnomalyRad = 2 * Math.PI - trueAnomalyRad;
+    }
+  } else {
+    const eDotR = (e.x * r.x + e.y * r.y + e.z * r.z) / (eccentricity * rMag);
+    trueAnomalyRad = Math.acos(clamp(eDotR, -1, 1));
+    if (rDotV < 0) {
+      trueAnomalyRad = 2 * Math.PI - trueAnomalyRad;
+    }
+  }
+
+  const eccentricAnomalyRad = 2 * Math.atan2(
+    Math.sqrt(1 - eccentricity) * Math.sin(trueAnomalyRad / 2),
+    Math.sqrt(1 + eccentricity) * Math.cos(trueAnomalyRad / 2),
+  );
+  const meanAnomalyRad = normalizeAngle(
+    eccentricAnomalyRad - eccentricity * Math.sin(eccentricAnomalyRad),
+  );
+
+  const meanMotionRadPerSec = Math.sqrt(mu / semiMajorAxisKm ** 3);
+  const periodSec = (2 * Math.PI) / meanMotionRadPerSec;
+
+  return {
+    id,
+    center,
+    epochJd: jd,
+    eccentricity,
+    periapsisKm: semiMajorAxisKm * (1 - eccentricity),
+    inclinationDeg: inclinationRad / DEG_TO_RAD,
+    ascendingNodeDeg: ascendingNodeRad / DEG_TO_RAD,
+    argPeriapsisDeg: argPeriapsisRad / DEG_TO_RAD,
+    periapsisTimeJd: jd - meanAnomalyRad / meanMotionRadPerSec / SECONDS_PER_DAY,
+    meanMotionDegPerSec: meanMotionRadPerSec / DEG_TO_RAD,
+    meanAnomalyDeg: meanAnomalyRad / DEG_TO_RAD,
+    trueAnomalyDeg: normalizeAngle(trueAnomalyRad) / DEG_TO_RAD,
+    semiMajorAxisKm,
+    apoapsisKm: semiMajorAxisKm * (1 + eccentricity),
+    periodSec,
+  };
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value));
+}
+
+/** Wraps an angle into [0, 2*pi). */
+function normalizeAngle(radians: number): number {
+  const wrapped = radians % (2 * Math.PI);
+  return wrapped < 0 ? wrapped + 2 * Math.PI : wrapped;
+}

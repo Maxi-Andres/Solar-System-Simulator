@@ -58,7 +58,7 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             color: '#f0f0f0',
           }}
         >
-          Your Solar System
+          Max&rsquo;s Solar System
         </h1>
         <div style={{ height: 1, background: '#2a2a2a', margin: '1.1rem 0' }} />
         <h2

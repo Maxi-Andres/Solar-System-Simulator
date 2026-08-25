@@ -11,19 +11,17 @@ export const OUT_UNITS = 'KM-S';
 /**
  * Vector window, in years around today.
  *
- * One year back covers scrubbing into the recent past; five years forward means a
- * deploy stays useful long after the weekly cron would have refreshed it. At a
- * one-day step that is ~2200 samples per body, roughly 150 KB of JSON each.
+ * Ten years each way. The window moves with every run, so the past edge advances
+ * too — a year of weekly deploys and a one-year window would no longer be able to
+ * show where the planets were today. Ten years back keeps that reachable.
+ *
+ * This costs nothing, because sample spacing became per-body at the same time: 20
+ * years of coverage is now 16,900 samples across the catalog, against 21,900 for the
+ * six-year window that used one day for everything. More than three times the span,
+ * for less data.
  */
-export const WINDOW_YEARS_BACK = 1;
-export const WINDOW_YEARS_FORWARD = 5;
-
-/**
- * Sample spacing. One day keeps cubic Hermite error at the kilometre level even for
- * Mercury, whose 88-day period is the tightest curve in the v1 catalog.
- */
-export const STEP_SIZE = '1d';
-export const STEP_DAYS = 1;
+export const WINDOW_YEARS_BACK = 10;
+export const WINDOW_YEARS_FORWARD = 10;
 
 /** Rounding applied before serializing, to keep the JSON small. */
 export const POSITION_DECIMALS = 3; // km, i.e. 1 mm
@@ -36,9 +34,30 @@ export const TIME_DECIMALS = 6; // days, i.e. ~0.09 s
  * cap plus retries is plenty.
  */
 export const MAX_CONCURRENT_REQUESTS = 2;
-export const MAX_RETRIES = 4;
-export const RETRY_BASE_DELAY_MS = 1000;
-export const REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Retry budget.
+ *
+ * Four attempts spread over seven seconds was not enough: CI failed with Horizons
+ * returning 503 on Mercury four times in a row. Six attempts with exponential backoff
+ * and jitter spans about a minute, which is the right order for a service that is
+ * briefly busy rather than down. Jitter matters because GitHub Actions runners share
+ * outbound addresses — without it, everyone retrying in lockstep is part of the load.
+ */
+export const MAX_RETRIES = 6;
+export const RETRY_BASE_DELAY_MS = 2000;
+export const RETRY_MAX_DELAY_MS = 45_000;
+export const REQUEST_TIMEOUT_MS = 90_000;
+
+/**
+ * Largest number of samples to ask for in one request.
+ *
+ * Mercury over the full twenty years at a one-day step is 7307 samples — a 1.4 MB
+ * response taking three seconds, twenty-eight times Neptune's. That was reliably the
+ * first request to be refused when Horizons was busy. Splitting the window into
+ * chunks keeps every request small; the pieces are stitched back together locally.
+ */
+export const MAX_SAMPLES_PER_REQUEST = 1500;
 
 /**
  * Output directory: web/public/data, resolved from this file so it works the same

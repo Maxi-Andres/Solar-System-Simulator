@@ -16,14 +16,13 @@ import {
   OUTPUT_DIR,
   REF_PLANE,
   REF_SYSTEM,
-  STEP_DAYS,
   WINDOW_YEARS_BACK,
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
+import { fetchVectors } from './horizons/fetchVectors.ts';
 import { parseElements } from './horizons/parseElements.ts';
-import { parseVectors } from './horizons/parseVectors.ts';
-import { elementsQuery, fromJulianDay, vectorQuery } from './horizons/queries.ts';
+import { elementsQuery, fromJulianDay } from './horizons/queries.ts';
 import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
 import {
   prepareOutputDir,
@@ -87,21 +86,24 @@ async function fetchBody(
   epoch: Date,
 ): Promise<BodyResult> {
   // Both calls for one body run together; the concurrency cap above limits how many
-  // bodies are in flight, so JPL sees a handful of requests at a time, not twenty.
-  const [vectorsResponse, elementsResponse] = await Promise.all([
-    callHorizons(vectorQuery(body, start, stop), `${body.name} vectors`),
+  // bodies are in flight, so JPL sees a handful of requests at a time.
+  const [vectors, elementsResponse] = await Promise.all([
+    fetchVectors(body, start, stop),
     body.drawOrbit
       ? callHorizons(elementsQuery(body, epoch), `${body.name} elements`)
       : Promise.resolve(null),
   ]);
 
-  const vectors = parseVectors(vectorsResponse.result, body);
   const elements =
     elementsResponse === null ? null : parseElements(elementsResponse.result, body);
 
-  console.log(`[fetch-data] ${body.name.padEnd(8)} ${vectors.count} samples`);
+  console.log(
+    `[fetch-data] ${body.name.padEnd(8)} ${String(vectors.table.count).padStart(5)} samples ` +
+      `at ${body.stepDays}d` +
+      (vectors.chunks > 1 ? ` (${vectors.chunks} requests)` : ''),
+  );
 
-  return { vectors, elements, sourceVersion: vectorsResponse.signature.version };
+  return { vectors: vectors.table, elements, sourceVersion: vectors.sourceVersion };
 }
 
 async function main(): Promise<void> {
@@ -129,16 +131,23 @@ async function main(): Promise<void> {
 
   await writeCatalog(CATALOG);
 
-  // The actual span comes from the data, not from what we asked for: Horizons
-  // resolves the requested dates to TDB instants that differ slightly.
-  const reference = results[0]?.vectors;
-  if (reference === undefined) {
-    throw new Error('No bodies were fetched; the catalog appears to be empty.');
+  // The window every body can answer for: the intersection of all the tables, not
+  // the range we asked for. Publishing the request instead would claim coverage the
+  // widest-stepped bodies do not have, and the app would fall back to propagation
+  // without flagging it.
+  let startJd = -Infinity;
+  let stopJd = Infinity;
+  for (const result of results) {
+    const first = result.vectors.t[0];
+    const last = result.vectors.t.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new Error(`${result.vectors.id} produced an empty vector table.`);
+    }
+    startJd = Math.max(startJd, first);
+    stopJd = Math.min(stopJd, last);
   }
-  const startJd = reference.t[0];
-  const stopJd = reference.t.at(-1);
-  if (startJd === undefined || stopJd === undefined) {
-    throw new Error('The reference vector table had no samples.');
+  if (!Number.isFinite(startJd) || !Number.isFinite(stopJd) || stopJd <= startJd) {
+    throw new Error('The bodies do not share a usable time window.');
   }
 
   const manifest: Manifest = {
@@ -159,7 +168,6 @@ async function main(): Promise<void> {
       stopJd,
       startUtc: fromJulianDay(startJd).toISOString(),
       stopUtc: fromJulianDay(stopJd).toISOString(),
-      stepDays: STEP_DAYS,
     },
     bodies: CATALOG.map((body) => body.id),
   };

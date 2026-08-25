@@ -26,22 +26,34 @@ import { KM_PER_UNIT } from './scale.ts';
  * camera. Near the focus the coordinates are small and precise; far from it they are
  * large but so distant that the error is far below a pixel. The buffer is only
  * rebuilt when the anchor goes stale, not every frame.
+ *
+ * A third cause turned up later, and it was the largest of all: the ellipse was built
+ * from elements at a **fixed epoch**, while the planet moves on exact vectors that
+ * include perturbations. Scrub eight years from that epoch and Neptune sat 135 body
+ * radii off its own orbit, Pluto 4400. The ellipse is now recomputed from the body's
+ * current state, which by definition passes through it — see `setElements`.
  */
 export class OrbitLine {
   readonly line: THREE.LineLoop;
   /** Authoritative points, heliocentric, km, float64. */
-  readonly #pointsKm: Float64Array;
-  readonly #positions: Float32Array;
+  #pointsKm: Float64Array;
+  #positions: Float32Array;
+  /** The elements the current geometry was built from. */
+  #builtFrom: OsculatingElements | null = null;
   /** Sun position relative to focus, in km, at the last rebuild. */
   #anchorKm: Vec3 = { x: 0, y: 0, z: 0 };
   #anchored = false;
   /** How far the anchor may drift before the buffer is rebuilt, in km. */
   #toleranceKm = 1;
 
+  readonly #bodyRadiusKm: number;
+
   constructor(elements: OsculatingElements, bodyRadiusKm: number, color: string) {
+    this.#bodyRadiusKm = bodyRadiusKm;
     const segments = orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm);
     this.#pointsKm = orbitPointsKm(elements, segments);
     this.#positions = new Float32Array(segments * 3);
+    this.#builtFrom = elements;
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(this.#positions, 3));
@@ -63,6 +75,70 @@ export class OrbitLine {
 
   get segments(): number {
     return this.#pointsKm.length / 3;
+  }
+
+  /**
+   * Rebuilds the ellipse from fresh elements, if doing so would visibly move it.
+   *
+   * The trigger is how far the ellipse would shift, not how much time has passed.
+   * Throttling on elapsed time looked reasonable and was wrong: at a four-hundredth
+   * of the orbital period, Pluto's line was frozen for 226 days while Pluto's own
+   * centre circles the Pluto-Charon barycentre every 6.4 days. It drifted off the
+   * frozen ellipse and came back, over and over.
+   *
+   * Estimating the shift instead handles that automatically, and costs nothing: the
+   * elements themselves are a few dozen operations, and only the polyline — up to
+   * eleven thousand points for Pluto — is expensive. This rebuilds exactly when the
+   * shift crosses what the eye could resolve.
+   */
+  setElements(elements: OsculatingElements): void {
+    if (this.#builtFrom !== null && this.#shiftKm(elements) < this.#bodyRadiusKm * 0.4) {
+      return;
+    }
+
+    const segments = orbitSegmentsFor(elements.apoapsisKm, this.#bodyRadiusKm);
+    this.#pointsKm = orbitPointsKm(elements, segments);
+    this.#builtFrom = elements;
+
+    if (this.#positions.length !== segments * 3) {
+      this.#positions = new Float32Array(segments * 3);
+      this.line.geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(this.#positions, 3),
+      );
+    }
+    // Force the next update() to refill the buffer with the new shape.
+    this.#anchored = false;
+  }
+
+  /**
+   * Roughly how far the drawn ellipse would move if rebuilt from these elements.
+   *
+   * Each term is the displacement that change produces at orbital distance: a shift
+   * in semi-major axis moves the curve directly, a shift in eccentricity moves the
+   * focus by a*de, and a rotation of the orbital plane or of periapsis sweeps the
+   * curve through a*dtheta. Taking the largest is enough for a threshold test.
+   */
+  #shiftKm(next: OsculatingElements): number {
+    const previous = this.#builtFrom;
+    if (previous === null) {
+      return Infinity;
+    }
+
+    const a = next.semiMajorAxisKm;
+    const radians = (degrees: number): number => (degrees * Math.PI) / 180;
+    const angleShift = (from: number, to: number): number => {
+      const raw = Math.abs(to - from) % 360;
+      return radians(raw > 180 ? 360 - raw : raw) * a;
+    };
+
+    return Math.max(
+      Math.abs(next.semiMajorAxisKm - previous.semiMajorAxisKm),
+      Math.abs(next.eccentricity - previous.eccentricity) * a,
+      angleShift(previous.inclinationDeg, next.inclinationDeg),
+      angleShift(previous.ascendingNodeDeg, next.ascendingNodeDeg),
+      angleShift(previous.argPeriapsisDeg, next.argPeriapsisDeg),
+    );
   }
 
   /**

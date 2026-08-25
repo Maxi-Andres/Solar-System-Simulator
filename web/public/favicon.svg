@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    Favicon: a rocket on a dark tile.
+
+    Hand-drawn, like the interface icons — no icon set, nothing to attribute. Sized
+    for legibility at 16px: heavy strokes, few details, generous margins. SVG favicons
+    are supported by every current browser, and the ICO fallback in index.html covers
+    the rest.
+  -->
+  <rect width="32" height="32" rx="7" fill="#161d28" />
+
+  <g
+    fill="none"
+    stroke="#e8edf5"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <!-- Body: nose up-right, tail down-left. -->
+    <path d="M13.2 18.8 A11 11 0 0 1 24.5 7.5 A11 11 0 0 1 13.2 18.8 Z" />
+    <!-- Porthole. -->
+    <circle cx="19.2" cy="12.8" r="1.9" />
+    <!-- Fins. -->
+    <path d="M12.4 13.6 L9 13.2 A6.5 6.5 0 0 1 13.6 9.2" />
+    <path d="M18.4 19.6 L18.8 23 A6.5 6.5 0 0 0 22.8 18.4" />
+    <!-- Exhaust. -->
+    <path d="M11.4 20.6 A4.4 4.4 0 0 0 7.6 24.4 A4.4 4.4 0 0 0 11.4 20.6 Z" />
+  </g>
+</svg>

@@ -3,6 +3,7 @@ import {
   MAX_RETRIES,
   REQUEST_TIMEOUT_MS,
   RETRY_BASE_DELAY_MS,
+  RETRY_MAX_DELAY_MS,
 } from '../config.ts';
 
 /**
@@ -42,7 +43,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * anything permanent (a bad body id, a malformed query) so we fail fast instead of
  * hammering JPL over a mistake of ours.
  */
-class RetryableError extends Error {}
+class RetryableError extends Error {
+  /** Seconds the server asked us to wait, when it said so. */
+  readonly retryAfterSeconds: number | null;
+
+  constructor(message: string, retryAfterSeconds: number | null = null) {
+    super(message);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Delay before attempt number `attempt`, in milliseconds.
+ *
+ * Exponential, capped, and jittered by +-25%. The jitter is not cosmetic: CI runners
+ * share outbound addresses, so identical backoff schedules would have every retry
+ * arrive together and keep the service busy.
+ */
+export function retryDelayMs(attempt: number, retryAfterSeconds: number | null): number {
+  if (retryAfterSeconds !== null) {
+    return Math.min(retryAfterSeconds * 1000, RETRY_MAX_DELAY_MS);
+  }
+  const exponential = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  const jittered = exponential * (0.75 + Math.random() * 0.5);
+  // Cap after jittering, not before: capping first let the upper jitter push the
+  // wait past the ceiling it was supposed to enforce.
+  return Math.min(Math.round(jittered), RETRY_MAX_DELAY_MS);
+}
 
 async function callOnce(params: Readonly<Record<string, string>>): Promise<HorizonsResponse> {
   const url = new URL(HORIZONS_API_URL);
@@ -64,7 +91,12 @@ async function callOnce(params: Readonly<Record<string, string>>): Promise<Horiz
   }
 
   if (RETRYABLE_STATUSES.has(response.status)) {
-    throw new RetryableError(`Horizons returned HTTP ${response.status}`);
+    const header = response.headers.get('retry-after');
+    const retryAfter = header === null ? null : Number(header);
+    throw new RetryableError(
+      `Horizons returned HTTP ${response.status}`,
+      Number.isFinite(retryAfter) ? retryAfter : null,
+    );
   }
 
   const body: unknown = await response.json().catch(() => null);
@@ -109,10 +141,10 @@ export async function callHorizons(
       if (!(error instanceof RetryableError) || attempt === MAX_RETRIES) {
         break;
       }
-      const wait = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      const wait = retryDelayMs(attempt, error.retryAfterSeconds);
       console.warn(
         `[horizons] ${label}: attempt ${attempt}/${MAX_RETRIES} failed (${error.message}). ` +
-          `Retrying in ${wait} ms.`,
+          `Retrying in ${(wait / 1000).toFixed(1)} s.`,
       );
       await delay(wait);
     }

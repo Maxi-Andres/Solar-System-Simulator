@@ -1,4 +1,4 @@
-import { OUT_UNITS, REF_PLANE, REF_SYSTEM, STEP_SIZE } from '../config.ts';
+import { OUT_UNITS, REF_PLANE, REF_SYSTEM } from '../config.ts';
 import type { BodyDefinition } from '../types.ts';
 
 /** Unix epoch (1970-01-01T00:00:00Z) as a Julian day number. */
@@ -13,6 +13,11 @@ export function toJulianDay(date: Date): number {
 /** Converts a Julian day number back to a Date. */
 export function fromJulianDay(jd: number): Date {
   return new Date((jd - UNIX_EPOCH_JD) * MS_PER_DAY);
+}
+
+/** Adds whole days to a date. */
+export function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 86_400_000);
 }
 
 /** Formats a Date as the YYYY-MM-DD string Horizons expects for START/STOP_TIME. */
@@ -51,7 +56,9 @@ export function vectorQuery(
     EPHEM_TYPE: 'VECTORS',
     START_TIME: toHorizonsDate(start),
     STOP_TIME: toHorizonsDate(stop),
-    STEP_SIZE,
+    // Per body: see the measurements in catalog.ts for why one step cannot serve
+    // both Mercury and Neptune.
+    STEP_SIZE: `${body.stepDays}d`,
     // Table type 2 is position + velocity; without labels the rows are plain CSV.
     VEC_TABLE: '2',
     VEC_LABELS: 'NO',
