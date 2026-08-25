@@ -2,6 +2,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
+import { useViewStore } from '../state/store.ts';
+
 /**
  * Free-rotation camera rig.
  *
@@ -136,6 +138,17 @@ export function CameraRig({
   }, [gl, minDistance, maxDistance]);
 
   useFrame(() => {
+    // Toolbar zoom buttons feed in here rather than through React state, so a click
+    // eases in exactly like a wheel notch instead of jumping.
+    const impulse = useViewStore.getState().consumeZoomImpulse();
+    if (impulse !== 1) {
+      targetDistance.current = THREE.MathUtils.clamp(
+        targetDistance.current * impulse,
+        minDistance,
+        maxDistance,
+      );
+    }
+
     // Ease the distance; direction is applied immediately so dragging stays crisp.
     const current = offset.current.length();
     const eased = current + (targetDistance.current - current) * DAMPING;

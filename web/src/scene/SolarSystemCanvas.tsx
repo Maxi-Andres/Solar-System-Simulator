@@ -3,7 +3,11 @@ import { Canvas } from '@react-three/fiber';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
+import type { LightingMode } from '../state/store.ts';
+import type { RefObject } from 'react';
+
 import { CameraRig } from './CameraRig.tsx';
+import { LabelProjector } from './LabelProjector.tsx';
 import { kmToUnits } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
@@ -32,9 +36,24 @@ export interface SolarSystemCanvasProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
+  readonly showIcons: boolean;
+  readonly showLabels: boolean;
+  readonly lighting: LightingMode;
+  readonly visibleKinds: ReadonlySet<string>;
+  readonly labelElements: RefObject<Map<BodyId, HTMLElement | null>>;
 }
 
-export function SolarSystemCanvas({ store, clock, focus, showOrbits }: SolarSystemCanvasProps) {
+export function SolarSystemCanvas({
+  store,
+  clock,
+  focus,
+  showOrbits,
+  showIcons,
+  showLabels,
+  lighting,
+  visibleKinds,
+  labelElements,
+}: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
 
@@ -51,7 +70,22 @@ export function SolarSystemCanvas({ store, clock, focus, showOrbits }: SolarSyst
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
       <Starfield />
-      <SolarSystem store={store} clock={clock} focus={focus} showOrbits={showOrbits} />
+      <SolarSystem
+        store={store}
+        clock={clock}
+        focus={focus}
+        showOrbits={showOrbits}
+        showIcons={showIcons}
+        lighting={lighting}
+        visibleKinds={visibleKinds}
+      />
+      <LabelProjector
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showLabels}
+        elements={labelElements}
+      />
       <CameraRig
         focusKey={focus}
         // Framing relative to the body's own radius, so switching from the Sun to

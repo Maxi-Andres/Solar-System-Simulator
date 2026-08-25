@@ -4,6 +4,7 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import type { LightingMode } from '../state/store.ts';
 import { J2000_JD, type SimClock } from '../core/time.ts';
 import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
@@ -36,7 +37,25 @@ export interface SolarSystemProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
+  readonly showIcons: boolean;
+  readonly lighting: LightingMode;
+  /** Body kinds currently switched on in the layers panel. */
+  readonly visibleKinds: ReadonlySet<string>;
 }
+
+/**
+ * Sun intensity and ambient fill per lighting mode.
+ *
+ * Only `natural` is physical: sunlight and nothing else, so the night side is truly
+ * black. `shadow` adds a little fill so the unlit hemisphere still reads as a
+ * sphere. `flood` abandons directional light entirely, which is unphysical but makes
+ * every body identifiable at a glance — the tradeoff NASA Eyes makes too.
+ */
+const LIGHTING: Record<LightingMode, { sun: number; ambient: number }> = {
+  flood: { sun: 0.15, ambient: 1.35 },
+  shadow: { sun: 1.6, ambient: 0.08 },
+  natural: { sun: 1.9, ambient: 0 },
+};
 
 interface BodyHandles {
   readonly definition: BodyDefinition;
@@ -46,7 +65,15 @@ interface BodyHandles {
   readonly orbit: OrbitLine | null;
 }
 
-export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProps) {
+export function SolarSystem({
+  store,
+  clock,
+  focus,
+  showOrbits,
+  showIcons,
+  lighting,
+  visibleKinds,
+}: SolarSystemProps) {
   const rootRef = useRef<THREE.Group>(null);
   const sunLightRef = useRef<THREE.PointLight>(null);
 
@@ -137,7 +164,16 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
         continue;
       }
 
-      handle.group.visible = true;
+      // A body switched off in the layers panel disappears entirely, orbit and all.
+      const kindVisible = visibleKinds.has(handle.definition.kind);
+      handle.group.visible = kindVisible;
+      if (!kindVisible) {
+        if (handle.orbit !== null) {
+          handle.orbit.line.visible = false;
+        }
+        continue;
+      }
+
       handle.group.position.set(
         kmToUnits(rebased.positionKm.x),
         kmToUnits(rebased.positionKm.y),
@@ -164,7 +200,7 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
       );
       const opacity = markerOpacity(pixelRadius);
 
-      handle.marker.visible = opacity > 0.01;
+      handle.marker.visible = showIcons && opacity > 0.01;
       if (handle.marker.visible) {
         (handle.marker.material as THREE.SpriteMaterial).opacity = opacity;
         // Constant on-screen size, whatever the distance.
@@ -209,9 +245,14 @@ export function SolarSystem({ store, clock, focus, showOrbits }: SolarSystemProp
         does fall off, but reproducing that would make the outer planets invisible
         rather than dim, which is a worse lie than a flat light.
       */}
-      <pointLight ref={sunLightRef} intensity={1.6} distance={0} decay={0} color="#fff6e0" />
-      {/* A touch of ambient so the night side reads as a shape, not a void. */}
-      <ambientLight intensity={0.05} />
+      <pointLight
+        ref={sunLightRef}
+        intensity={LIGHTING[lighting].sun}
+        distance={0}
+        decay={0}
+        color="#fff6e0"
+      />
+      <ambientLight intensity={LIGHTING[lighting].ambient} />
 
       {handles.map((handle) => (
         <primitive key={handle.definition.id} object={handle.group} />
