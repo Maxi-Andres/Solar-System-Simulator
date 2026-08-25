@@ -20,9 +20,9 @@ import {
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
+import { fetchVectors } from './horizons/fetchVectors.ts';
 import { parseElements } from './horizons/parseElements.ts';
-import { parseVectors } from './horizons/parseVectors.ts';
-import { elementsQuery, fromJulianDay, vectorQuery } from './horizons/queries.ts';
+import { elementsQuery, fromJulianDay } from './horizons/queries.ts';
 import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
 import {
   prepareOutputDir,
@@ -86,24 +86,24 @@ async function fetchBody(
   epoch: Date,
 ): Promise<BodyResult> {
   // Both calls for one body run together; the concurrency cap above limits how many
-  // bodies are in flight, so JPL sees a handful of requests at a time, not twenty.
-  const [vectorsResponse, elementsResponse] = await Promise.all([
-    callHorizons(vectorQuery(body, start, stop), `${body.name} vectors`),
+  // bodies are in flight, so JPL sees a handful of requests at a time.
+  const [vectors, elementsResponse] = await Promise.all([
+    fetchVectors(body, start, stop),
     body.drawOrbit
       ? callHorizons(elementsQuery(body, epoch), `${body.name} elements`)
       : Promise.resolve(null),
   ]);
 
-  const vectors = parseVectors(vectorsResponse.result, body);
   const elements =
     elementsResponse === null ? null : parseElements(elementsResponse.result, body);
 
   console.log(
-    `[fetch-data] ${body.name.padEnd(8)} ${String(vectors.count).padStart(5)} samples ` +
-      `at ${body.stepDays}d`,
+    `[fetch-data] ${body.name.padEnd(8)} ${String(vectors.table.count).padStart(5)} samples ` +
+      `at ${body.stepDays}d` +
+      (vectors.chunks > 1 ? ` (${vectors.chunks} requests)` : ''),
   );
 
-  return { vectors, elements, sourceVersion: vectorsResponse.signature.version };
+  return { vectors: vectors.table, elements, sourceVersion: vectors.sourceVersion };
 }
 
 async function main(): Promise<void> {

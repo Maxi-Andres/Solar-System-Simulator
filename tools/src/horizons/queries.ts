@@ -55,12 +55,7 @@ export function vectorQuery(
     CENTER: body.center,
     EPHEM_TYPE: 'VECTORS',
     START_TIME: toHorizonsDate(start),
-    // One extra step past the window. Horizons stops at the last whole step before
-    // STOP_TIME, so with a 32-day step the giants ended eight days short of the
-    // advertised window — and in that gap they silently fell back to Keplerian
-    // propagation while the inner planets were still exact, which showed up as the
-    // outer planets jumping off their orbits near the end of the data.
-    STOP_TIME: toHorizonsDate(addDays(stop, body.stepDays)),
+    STOP_TIME: toHorizonsDate(stop),
     // Per body: see the measurements in catalog.ts for why one step cannot serve
     // both Mercury and Neptune.
     STEP_SIZE: `${body.stepDays}d`,

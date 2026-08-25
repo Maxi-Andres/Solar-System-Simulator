@@ -48,13 +48,30 @@ jobs:
         uses: actions/cache@v6
         with:
           path: web/public/data
-          # No restore-keys on purpose: a near miss must not serve yesterday's
-          # window, it must trigger a fresh fetch.
           key: ephemerides-${{ hashFiles('tools/src/**') }}-${{ steps.day.outputs.utc }}
+          # Falls back to an earlier day's data if today's fetch cannot run. The
+          # integration tests care that the numbers are real, not that they are from
+          # this morning.
+          restore-keys: |
+            ephemerides-${{ hashFiles('tools/src/**') }}-
 
+      # Allowed to fail. JPL Horizons is occasionally busy, and a pull request going
+      # red because a third-party service had a bad minute tells you nothing about the
+      # change under review. If the fetch fails and no cached data exists, the
+      # integration tests skip themselves by design and the rest still runs. The
+      # deploy workflow does NOT do this — there, stale or missing data must stop the
+      # release.
       - name: Fetch ephemerides from JPL Horizons
+        id: fetch
         if: steps.ephemerides.outputs.cache-hit != 'true'
+        continue-on-error: true
         run: pnpm fetch:data
+
+      - name: Note when ephemerides are unavailable
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::warning::Could not fetch ephemerides from JPL Horizons."
+          echo "::warning::Integration tests will skip themselves; unit tests still run."
 
       - name: Test
         run: pnpm test
