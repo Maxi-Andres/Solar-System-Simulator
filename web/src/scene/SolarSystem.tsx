@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { LightingMode } from '../state/store.ts';
 import { J2000_JD, type SimClock } from '../core/time.ts';
+import { stateToOsculatingElements } from '../core/kepler.ts';
 import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { OrbitLine } from './orbitGeometry.ts';
@@ -152,6 +153,7 @@ export function SolarSystem({
     const jd = clock.tdbJulianDay;
     const snapshot = rebaseFrame(store, focus, jd);
     const focusRadiusKm = store.body(focus).radiusEquatorialKm;
+    const sunGm = store.body('sun').gmKm3S2;
     const fov = (camera as THREE.PerspectiveCamera).fov;
     const cameraDistanceUnits = camera.position.length();
 
@@ -223,6 +225,26 @@ export function SolarSystem({
       if (handle.orbit !== null) {
         handle.orbit.line.visible = showOrbits && sun !== undefined;
         if (sun !== undefined) {
+          // Re-derive the ellipse from where the body actually is right now. Elements
+          // frozen at one epoch drift off the real path as perturbations accumulate;
+          // the osculating ellipse of this instant passes through the body by
+          // definition. OrbitLine throttles the rebuild internally.
+          const heliocentric = store.stateRelativeTo(handle.definition.id, 'sun', jd);
+          if (heliocentric !== null) {
+            const live = stateToOsculatingElements(
+              heliocentric,
+              // Two-body mu is G(M + m); the planet's own mass shifts Jupiter's
+              // period by ~0.05%, which is small but free to include.
+              sunGm + handle.definition.gmKm3S2,
+              jd,
+              handle.definition.id,
+              '500@10',
+            );
+            if (live !== null) {
+              handle.orbit.setElements(live);
+            }
+          }
+
           // Rebuild tolerance scales with the focused body's radius: that is the
           // smallest thing on screen worth resolving, so drifting by less than that
           // cannot be seen.

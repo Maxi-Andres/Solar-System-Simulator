@@ -4,6 +4,8 @@ A real-time, to-scale simulation of the Solar System built on official NASA/JPL
 ephemerides. Real distances, real radii, real velocities, drawn orbits, time controls
 and free camera navigation.
 
+**→ [maxi-andres.github.io/Solar-System-Simulator](https://maxi-andres.github.io/Solar-System-Simulator/)**
+
 Inspired by [NASA Eyes on the Solar System](https://eyes.nasa.gov/apps/solar-system/).
 
 > **Status:** v1 complete — Sun, eight planets and Pluto. See [Roadmap](#roadmap).
@@ -158,7 +160,8 @@ Two workflows in `.github/workflows/`:
   site; the local command exists for development and for the integration tests.
 
 To enable it, once: **Settings → Pages → Source → GitHub Actions**. That also creates
-the `github-pages` environment the deploy job targets.
+the `github-pages` environment the deploy job targets, which is why an editor may flag
+`environment: name: github-pages` as unknown until then.
 
 `web/vite.config.ts` sets `base: '/Solar-System-Simulator/'` for a project site.
 Override with `VITE_BASE` if the repo is renamed, or set it to `/` for a user site.

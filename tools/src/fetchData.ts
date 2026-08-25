@@ -131,16 +131,23 @@ async function main(): Promise<void> {
 
   await writeCatalog(CATALOG);
 
-  // The actual span comes from the data, not from what we asked for: Horizons
-  // resolves the requested dates to TDB instants that differ slightly.
-  const reference = results[0]?.vectors;
-  if (reference === undefined) {
-    throw new Error('No bodies were fetched; the catalog appears to be empty.');
+  // The window every body can answer for: the intersection of all the tables, not
+  // the range we asked for. Publishing the request instead would claim coverage the
+  // widest-stepped bodies do not have, and the app would fall back to propagation
+  // without flagging it.
+  let startJd = -Infinity;
+  let stopJd = Infinity;
+  for (const result of results) {
+    const first = result.vectors.t[0];
+    const last = result.vectors.t.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new Error(`${result.vectors.id} produced an empty vector table.`);
+    }
+    startJd = Math.max(startJd, first);
+    stopJd = Math.min(stopJd, last);
   }
-  const startJd = reference.t[0];
-  const stopJd = reference.t.at(-1);
-  if (startJd === undefined || stopJd === undefined) {
-    throw new Error('The reference vector table had no samples.');
+  if (!Number.isFinite(startJd) || !Number.isFinite(stopJd) || stopJd <= startJd) {
+    throw new Error('The bodies do not share a usable time window.');
   }
 
   const manifest: Manifest = {

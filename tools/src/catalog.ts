@@ -45,7 +45,17 @@ export const SSB_CENTER = '500@0';
  * Charon: its body center circles their shared barycenter every 6.4 days, so no
  * spacing wider than a couple of days can follow it.
  *
- * Each value below is one notch safer than the measured limit.
+ * Each value below is one notch safer than the measured limit — and the four giants
+ * are two notches, at 32 days rather than the 64 their positions tolerate.
+ *
+ * Position is not the reason: it is 0.02 body radii either way, and Neptune's
+ * interpolated position sits 360 km from JPL's on a 4.47e9 km orbit. Velocity is.
+ * The orbit ellipse is now derived from the interpolated state, and Hermite velocity
+ * error scales as h^3 where position error scales as h^4. Neptune at 32 days carries
+ * 1.34 m/s of velocity error out of 5.47 km/s — 2.4e-4 — and that lands amplified in
+ * the eccentricity, because at e = 0.01 the eccentricity vector is the difference of
+ * two nearly equal terms and magnifies velocity error by roughly 1/e. Halving the
+ * step costs 456 samples across the catalog, under 3%.
  */
 
 /**
@@ -165,7 +175,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Jupiter',
     horizonsId: '599',
     // a 12-year orbit needs nothing finer
-    stepDays: 64,
+    stepDays: 32,
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
@@ -183,7 +193,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     id: 'saturn',
     name: 'Saturn',
     horizonsId: '699',
-    stepDays: 64,
+    stepDays: 32,
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
@@ -201,7 +211,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     id: 'uranus',
     name: 'Uranus',
     horizonsId: '799',
-    stepDays: 64,
+    stepDays: 32,
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
@@ -219,7 +229,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     id: 'neptune',
     name: 'Neptune',
     horizonsId: '899',
-    stepDays: 64,
+    stepDays: 32,
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,

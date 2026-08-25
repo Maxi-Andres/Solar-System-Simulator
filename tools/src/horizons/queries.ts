@@ -15,6 +15,11 @@ export function fromJulianDay(jd: number): Date {
   return new Date((jd - UNIX_EPOCH_JD) * MS_PER_DAY);
 }
 
+/** Adds whole days to a date. */
+export function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 86_400_000);
+}
+
 /** Formats a Date as the YYYY-MM-DD string Horizons expects for START/STOP_TIME. */
 export function toHorizonsDate(date: Date): string {
   const isoDate = date.toISOString().slice(0, 10);
@@ -50,7 +55,12 @@ export function vectorQuery(
     CENTER: body.center,
     EPHEM_TYPE: 'VECTORS',
     START_TIME: toHorizonsDate(start),
-    STOP_TIME: toHorizonsDate(stop),
+    // One extra step past the window. Horizons stops at the last whole step before
+    // STOP_TIME, so with a 32-day step the giants ended eight days short of the
+    // advertised window — and in that gap they silently fell back to Keplerian
+    // propagation while the inner planets were still exact, which showed up as the
+    // outer planets jumping off their orbits near the end of the data.
+    STOP_TIME: toHorizonsDate(addDays(stop, body.stepDays)),
     // Per body: see the measurements in catalog.ts for why one step cannot serve
     // both Mercury and Neptune.
     STEP_SIZE: `${body.stepDays}d`,
