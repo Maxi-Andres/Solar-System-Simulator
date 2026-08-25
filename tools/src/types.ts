@@ -33,6 +33,15 @@ export interface BodyDefinition {
    * body center, not the barycenter -- see catalog.ts for why that matters.
    */
   readonly elementsCenter: string;
+  /**
+   * Sample spacing for the state vectors, in days.
+   *
+   * Chosen per body from measured interpolation error, not set globally. A single
+   * step cannot serve both Mercury and Neptune: at one day Neptune is sampled 60,000
+   * times per orbit for no benefit, while Mercury genuinely needs it. See catalog.ts
+   * for the measurements.
+   */
+  readonly stepDays: number;
   /** Parent body id, or null when the parent is the Solar System barycenter. */
   readonly parent: BodyId | null;
   readonly kind: BodyKind;
@@ -110,13 +119,17 @@ export interface FrameInfo {
   readonly units: string;
 }
 
-/** The time span covered by the downloaded vector tables. */
+/**
+ * The time span covered by the downloaded vector tables.
+ *
+ * No step size here: it varies per body. Each body's spacing lives in the catalog,
+ * and its actual sample times are in its own table.
+ */
 export interface WindowInfo {
   readonly startJd: number;
   readonly stopJd: number;
   readonly startUtc: string;
   readonly stopUtc: string;
-  readonly stepDays: number;
 }
 
 /**

@@ -16,7 +16,6 @@ import {
   OUTPUT_DIR,
   REF_PLANE,
   REF_SYSTEM,
-  STEP_DAYS,
   WINDOW_YEARS_BACK,
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
@@ -99,7 +98,10 @@ async function fetchBody(
   const elements =
     elementsResponse === null ? null : parseElements(elementsResponse.result, body);
 
-  console.log(`[fetch-data] ${body.name.padEnd(8)} ${vectors.count} samples`);
+  console.log(
+    `[fetch-data] ${body.name.padEnd(8)} ${String(vectors.count).padStart(5)} samples ` +
+      `at ${body.stepDays}d`,
+  );
 
   return { vectors, elements, sourceVersion: vectorsResponse.signature.version };
 }
@@ -159,7 +161,6 @@ async function main(): Promise<void> {
       stopJd,
       startUtc: fromJulianDay(startJd).toISOString(),
       stopUtc: fromJulianDay(stopJd).toISOString(),
-      stepDays: STEP_DAYS,
     },
     bodies: CATALOG.map((body) => body.id),
   };

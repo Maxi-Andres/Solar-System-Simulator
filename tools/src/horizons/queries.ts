@@ -1,4 +1,4 @@
-import { OUT_UNITS, REF_PLANE, REF_SYSTEM, STEP_SIZE } from '../config.ts';
+import { OUT_UNITS, REF_PLANE, REF_SYSTEM } from '../config.ts';
 import type { BodyDefinition } from '../types.ts';
 
 /** Unix epoch (1970-01-01T00:00:00Z) as a Julian day number. */
@@ -51,7 +51,9 @@ export function vectorQuery(
     EPHEM_TYPE: 'VECTORS',
     START_TIME: toHorizonsDate(start),
     STOP_TIME: toHorizonsDate(stop),
-    STEP_SIZE,
+    // Per body: see the measurements in catalog.ts for why one step cannot serve
+    // both Mercury and Neptune.
+    STEP_SIZE: `${body.stepDays}d`,
     // Table type 2 is position + velocity; without labels the rows are plain CSV.
     VEC_TABLE: '2',
     VEC_LABELS: 'NO',

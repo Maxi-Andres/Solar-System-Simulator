@@ -11,19 +11,17 @@ export const OUT_UNITS = 'KM-S';
 /**
  * Vector window, in years around today.
  *
- * One year back covers scrubbing into the recent past; five years forward means a
- * deploy stays useful long after the weekly cron would have refreshed it. At a
- * one-day step that is ~2200 samples per body, roughly 150 KB of JSON each.
+ * Ten years each way. The window moves with every run, so the past edge advances
+ * too — a year of weekly deploys and a one-year window would no longer be able to
+ * show where the planets were today. Ten years back keeps that reachable.
+ *
+ * This costs nothing, because sample spacing became per-body at the same time: 20
+ * years of coverage is now 16,900 samples across the catalog, against 21,900 for the
+ * six-year window that used one day for everything. More than three times the span,
+ * for less data.
  */
-export const WINDOW_YEARS_BACK = 1;
-export const WINDOW_YEARS_FORWARD = 5;
-
-/**
- * Sample spacing. One day keeps cubic Hermite error at the kilometre level even for
- * Mercury, whose 88-day period is the tightest curve in the v1 catalog.
- */
-export const STEP_SIZE = '1d';
-export const STEP_DAYS = 1;
+export const WINDOW_YEARS_BACK = 10;
+export const WINDOW_YEARS_FORWARD = 10;
 
 /** Rounding applied before serializing, to keep the JSON small. */
 export const POSITION_DECIMALS = 3; // km, i.e. 1 mm

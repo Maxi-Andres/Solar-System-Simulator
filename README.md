@@ -1,4 +1,4 @@
-# Solar System Simulator
+# Max's Solar System
 
 A real-time, to-scale simulation of the Solar System built on official NASA/JPL
 ephemerides. Real distances, real radii, real velocities, drawn orbits, time controls
@@ -82,7 +82,8 @@ time, never from a visitor's browser.
 
 ## Generated data
 
-`pnpm fetch:data` writes about 1.9 MB of JSON:
+`pnpm fetch:data` writes about 1.5 MB of JSON, covering 20 years — ten back and ten
+forward from the day it runs:
 
 ```
 web/public/data/
@@ -106,21 +107,40 @@ produces numbers that look fine and are not:
 Positions come from vectors, so they are exact DE441 values regardless. The elements
 only shape the drawn orbit line and the out-of-window fallback.
 
+### Sample spacing
+
+Spacing is chosen **per body from measured error**, not set globally. A single step
+cannot serve both Mercury and Neptune: at one day Neptune's 165-year orbit gets 60,000
+samples per revolution for no benefit, while Mercury at 47 km/s genuinely needs every
+one. Each body's daily ephemeris was decimated and re-interpolated to find the widest
+spacing that still lands well inside its own radius:
+
+| Body | Step | Interpolation error |
+|---|---|---|
+| Mercury | 1 day | < 0.01 body radii |
+| Pluto | 2 days | 0.07 — limited by Charon, not by its orbit |
+| Venus, Earth | 4 days | < 0.01 |
+| Sun, Mars | 8 days | < 0.01 |
+| Jupiter, Saturn, Uranus, Neptune | 64 days | 0.02 |
+
+That is why a 20-year window costs less than the 6-year one that used a flat one-day
+step: 16,900 samples against 21,900.
+
 ### Freshness
 
 Planetary ephemerides do not go stale. DE441 is a deterministic integration covering
-year −13200 to 17191, so a build today already carries exact positions through 2031.
-The weekly CI run re-centres that window on the present; it does not correct drift.
+year −13200 to 17191, so a build today already carries exact positions for a decade
+either side. The weekly CI run re-centres that window on the present; it does not
+correct drift.
 
 Outside the downloaded window the app falls back to Keplerian propagation and says
 **APPROXIMATE** while it does.
 
 Two caveats worth knowing:
 
-- **The window's past edge moves too.** After a year of weekly runs the site can no
-  longer show today's positions exactly — they have fallen out the back. Raise
-  `WINDOW_YEARS_BACK` in `tools/src/config.ts` if that matters; the cost is
-  proportional (10 years back is ~4.7 MB of data instead of ~1.9 MB).
+- **The window's past edge moves too.** It is ten years wide, so a decade of weekly
+  runs would eventually push today out the back. `WINDOW_YEARS_BACK` in
+  `tools/src/config.ts` if that ever matters.
 - **GitHub disables scheduled workflows in public repositories after 60 days with no
   activity.** GitHub emails a warning first, and any push or a click in the Actions
   tab re-enables it. If it does lapse, nothing breaks: the published site stays exact
@@ -145,16 +165,16 @@ Override with `VITE_BASE` if the repo is renamed, or set it to `/` for a user si
 
 ## Page weight
 
-About **1.1 MB gzipped** on first load: 296 KB of application and 801 KB of
-ephemerides. GitHub Pages serves both compressed, so the 1.9 MB of JSON on disk is
+About **940 KB gzipped** on first load: 296 KB of application and 647 KB of
+ephemerides. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
 not what crosses the wire.
 
 | Connection | First load |
 |---|---|
-| Fibre / good wifi (50 Mbps) | 0.2 s |
+| Fibre / good wifi (50 Mbps) | 0.15 s |
 | Typical broadband (20 Mbps) | 0.4 s |
-| 4G mobile (10 Mbps) | 0.9 s |
-| 3G mobile (1.6 Mbps) | 5.5 s |
+| 4G mobile (10 Mbps) | 0.8 s |
+| 3G mobile (1.6 Mbps) | 4.7 s |
 
 Everything is cached after the first visit, so this is a first-load cost only. The
 app does wait for all ten bodies before rendering, since a partially-populated Solar

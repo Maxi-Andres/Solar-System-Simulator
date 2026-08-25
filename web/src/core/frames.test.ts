@@ -9,6 +9,7 @@ function body(id: string, parent: string | null): BodyDefinition {
     id,
     name: id,
     horizonsId: '0',
+    stepDays: 1,
     center: '500@0',
     elementsCenter: '500@10',
     parent,
