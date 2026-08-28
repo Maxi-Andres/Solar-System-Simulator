@@ -30,6 +30,14 @@ Everything else is measured:
   pole to pole, because it is.
 - **Rotation** at each body's real sidereal rate, retrograde for Venus, Uranus and
   Pluto.
+- **Axis direction and prime meridian** from the IAU rotational elements, so every body
+  is turned the way it is actually turned. Verified against JPL's own sub-solar point for
+  all nine planets across 2026: the worst disagreement is **0.0026°**, nine arcseconds.
+  Earth's noon falls on Greenwich.
+- **Surface maps registered to that axis**, checked by reading the actual pixels through
+  the renderer's own geometry: the Sahara has to come out sand-coloured, the Amazon
+  green, the Pacific blue. Which matters, because the two publishers start their images
+  at different longitudes and assuming otherwise turns a planet half way round.
 - **Time** converted UTC → TAI → TT → TDB, leap seconds included. Skipping that 69 s
   offset would misplace Earth by 2000 km.
 - **Light time and relative speeds**, computed from the same vectors. The readout
@@ -53,7 +61,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 190 tests across both workspaces
+pnpm test            # 269 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -78,6 +86,7 @@ pnpm preview         # serve the build to verify it before publishing
 | `tools/` | Ephemeris generator. Queries JPL Horizons and writes static JSON. Runs locally and in CI. |
 | `web/` | Frontend: Vite + React + Three.js. Reads the JSON from its own origin. |
 | `web/public/data/` | **Generated, not versioned.** Recreate with `pnpm fetch:data`. |
+| `web/public/textures/` | Surface maps, **committed**. Static third-party assets that never change, so the build does not depend on a third-party host being up. Credited in `CREDITS.md`, which a test enforces. |
 
 The site is fully static — there is no backend. JPL Horizons is queried only at build
 time, never from a visitor's browser.
@@ -172,6 +181,11 @@ About **940 KB gzipped** on first load: 296 KB of application and 647 KB of
 ephemerides. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
 not what crosses the wire.
 
+The 4.3 MB of surface maps is **not** part of that. Each is fetched only when its body
+grows past about six pixels on screen, so looking at the Solar System from outside
+costs nothing, and approaching one planet costs one image — between 76 KB (Uranus) and
+852 KB (Mercury).
+
 | Connection | First load |
 |---|---|
 | Fibre / good wifi (50 Mbps) | 0.15 s |
@@ -195,7 +209,8 @@ past a few dozen bodies that should become progressive loading.
 
 ## Roadmap
 
-- **Textures** — surface maps, which will make the already-correct rotation visible.
+- **Textures, continued** — Saturn's rings, Earth's clouds and night lights, and a real
+  Milky Way behind the starfield. Surface maps themselves are done.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
@@ -211,8 +226,22 @@ Stated plainly, since the point of the project is that everything else is not:
 - The **starfield is procedurally generated**, not a catalog. It is the one thing on
   screen that is not real. Phase D replaces it.
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
-- Body rotation is at the correct rate but **not aligned to a real prime meridian** —
-  that needs the IAU rotational elements, and matters once textures land.
+- **Surface maps are illustrative composites**, not cartographic products.
+  The Solar System Scope set is built on NASA imagery with colour and detail added by
+  its authors; only Pluto's is a mission product. Venus shows its atmosphere, which is
+  what is visible, rather than the radar map of the ground beneath.
+- **Latitude on the flattened bodies is approximate.** A map is wrapped by the sphere's
+  own parametrisation and the sphere is then scaled to the real polar flattening, which
+  lands a feature between where planetocentric and planetographic latitude would each
+  put it. Saturn is the worst at about 1.5° at mid-latitudes; Earth and Mars are under
+  0.1°. Committing to either convention would be false precision on an artist's map.
+- **The IAU periodic terms are dropped**, except Neptune's. Every other one is under
+  0.01°; Neptune's reaches 0.7° and is carried. The linear pole rates — precession — are
+  carried for every body, because Earth's alone reaches 0.145° by 2026.
+- **Pluto's axial tilt is listed as 119.591°, not the 122.53° NASA publishes.** That
+  figure comes from the pole the IAU retired in 2009, which sits 2.9° from the current
+  one — exactly the gap between the two numbers. The value here matches the axis that
+  is actually drawn.
 - The **surface** distance mode subtracts equatorial radii, not the radius along the
   line of sight. NASA Eyes does the same.
 
@@ -220,7 +249,11 @@ Stated plainly, since the point of the project is that everything else is not:
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
 - Satellite orbital data: **CelesTrak**.
-- Planetary textures: see `web/public/textures/CREDITS.md`.
+- Planetary surface maps: **Solar System Scope** (CC BY 4.0) for the Sun and the eight
+  planets; **NASA/JHUAPL/SwRI** New Horizons mosaic for Pluto. Full details in
+  `web/public/textures/CREDITS.md`.
+- Rotational elements: **IAU Working Group on Cartographic Coordinates and Rotational
+  Elements**, 2015 report (Archinal et al. 2018).
 - Interface icons are hand-written inline SVG — no icon set, nothing to attribute.
 
 This project is not affiliated with or endorsed by NASA or JPL.

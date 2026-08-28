@@ -147,23 +147,3 @@ export function pixelsToWorldSize(
   const halfFovRad = (fovDeg * Math.PI) / 360;
   return (pixels / viewportHeightPx) * 2 * distanceUnits * Math.tan(halfFovRad);
 }
-
-/**
- * Rotation angle of a body about its own axis, in radians.
- *
- * Sidereal rotation, measured from J2000. A negative period means retrograde
- * rotation, which the sign of the result carries through: Venus and Uranus really do
- * turn the other way, and the catalog records that as a negative period.
- *
- * This is not aligned to a real prime meridian — that needs the IAU rotational
- * elements (W0 and Wdot per body), which is a phase A concern once textures make
- * longitude visible. Until then the rate and direction are right and the zero point
- * is arbitrary.
- */
-export function rotationAngle(jd: number, j2000Jd: number, rotationPeriodHours: number): number {
-  if (rotationPeriodHours === 0) {
-    return 0;
-  }
-  const periodDays = rotationPeriodHours / 24;
-  return ((jd - j2000Jd) / periodDays) * 2 * Math.PI;
-}

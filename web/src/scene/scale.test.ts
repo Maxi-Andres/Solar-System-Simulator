@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { J2000_JD } from '../core/time.ts';
 import {
   angularRadiusPixels,
   KM_PER_UNIT,
@@ -12,7 +11,6 @@ import {
   MESH_FADE_START_PX,
   meshOpacity,
   pixelsToWorldSize,
-  rotationAngle,
   toSceneUnits,
   unitsToKm,
 } from './scale.ts';
@@ -202,36 +200,5 @@ describe('pixelsToWorldSize', () => {
     const far = pixelsToWorldSize(11, 1000, HEIGHT, FOV);
 
     expect(far / near).toBeCloseTo(10, 9);
-  });
-});
-
-describe('rotationAngle', () => {
-  it('completes one turn per rotation period', () => {
-    const oneDay = rotationAngle(J2000_JD + 1, J2000_JD, 24);
-
-    expect(oneDay).toBeCloseTo(2 * Math.PI, 12);
-  });
-
-  it('turns Earth once per sidereal day, not once per solar day', () => {
-    // 23h 56m 4s, so after 24 hours Earth has over-rotated by about 1 degree.
-    const afterOneSolarDay = rotationAngle(J2000_JD + 1, J2000_JD, 23.9344695);
-    const extraDegrees = ((afterOneSolarDay - 2 * Math.PI) * 180) / Math.PI;
-
-    expect(extraDegrees).toBeCloseTo(0.986, 2);
-  });
-
-  it('runs backwards for retrograde rotators', () => {
-    // Venus: -5832.5 hours.
-    expect(rotationAngle(J2000_JD + 100, J2000_JD, -5832.5)).toBeLessThan(0);
-    expect(rotationAngle(J2000_JD + 100, J2000_JD, 23.93)).toBeGreaterThan(0);
-  });
-
-  it('is zero at the epoch and reverses with time', () => {
-    expect(rotationAngle(J2000_JD, J2000_JD, 24)).toBe(0);
-    expect(rotationAngle(J2000_JD - 1, J2000_JD, 24)).toBeCloseTo(-2 * Math.PI, 12);
-  });
-
-  it('does not divide by zero for a non-rotating body', () => {
-    expect(rotationAngle(J2000_JD + 500, J2000_JD, 0)).toBe(0);
   });
 });

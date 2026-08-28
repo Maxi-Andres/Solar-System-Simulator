@@ -5,18 +5,19 @@ import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { LightingMode } from '../state/store.ts';
-import { J2000_JD, type SimClock } from '../core/time.ts';
+import type { SimClock } from '../core/time.ts';
 import { stateToOsculatingElements } from '../core/kepler.ts';
 import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
+import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
+import { loadBodyTexture } from './textureCache.ts';
 import {
   angularRadiusPixels,
   kmToUnits,
   markerOpacity,
   meshOpacity,
   pixelsToWorldSize,
-  rotationAngle,
 } from './scale.ts';
 
 /**
@@ -33,6 +34,15 @@ const MARKER_PIXELS = 11;
 
 /** Sphere tessellation. Generous, because a focused planet fills the screen. */
 const SPHERE_SEGMENTS = 64;
+
+/**
+ * On-screen radius, in pixels, at which a body's surface map is worth fetching.
+ *
+ * Above the marker ring's own size, so the request goes out while the body is still
+ * a growing dot and the image has arrived by the time there is any detail to show.
+ * Below that it is a few pixels of colour and a 500 KB download would buy nothing.
+ */
+const TEXTURE_REQUEST_PX = 6;
 
 export interface SolarSystemProps {
   readonly store: EphemerisStore;
@@ -65,6 +75,8 @@ interface BodyHandles {
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
   readonly orbit: OrbitLine | null;
+  /** Set once the surface map has been asked for, so it is asked for once. */
+  textureRequested: boolean;
 }
 
 export function SolarSystem({
@@ -107,9 +119,9 @@ export function SolarSystem({
 
       const mesh = new THREE.Mesh(geometry, material);
       // Polar flattening: Saturn is 9.8% shorter pole to pole than across.
+      // Applied in the body's own frame, where local y is the rotation axis, so it
+      // stays correct once orientation.ts turns that frame to the real pole.
       mesh.scale.set(1, definition.radiusPolarKm / definition.radiusEquatorialKm, 1);
-      // Axial tilt, about the x axis of the body's own frame.
-      mesh.rotation.z = (definition.axialTiltDeg * Math.PI) / 180;
       group.add(mesh);
 
       const marker = new THREE.Sprite(
@@ -138,11 +150,11 @@ export function SolarSystem({
         orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
       }
 
-      return { definition, group, mesh, marker, orbit };
+      return { definition, group, mesh, marker, orbit, textureRequested: false };
     });
   }, [store]);
 
-  const { size, camera } = useThree();
+  const { size, camera, gl } = useThree();
 
   useFrame(() => {
     const root = rootRef.current;
@@ -186,12 +198,10 @@ export function SolarSystem({
         kmToUnits(rebased.positionKm.z),
       );
 
-      // Spin the body on its own axis at its real sidereal rate.
-      handle.mesh.rotation.y = rotationAngle(
-        jd,
-        J2000_JD,
-        handle.definition.rotationPeriodHours,
-      );
+      // Point the axis where the IAU says it points and turn the prime meridian to
+      // where it is now. This is one assignment and it carries the axial tilt, the
+      // rotation rate, its direction and the absolute phase all at once.
+      handle.mesh.quaternion.copy(bodyOrientation(jd, handle.definition));
 
       // Distance from the camera, not from the focus: what the camera sees is what
       // decides whether a sphere is big enough to be worth drawing.
@@ -218,9 +228,37 @@ export function SolarSystem({
       }
 
       handle.mesh.visible = sphereOpacity > 0.005;
-      const meshMaterial = handle.mesh.material as THREE.Material;
+      const meshMaterial = handle.mesh.material as
+        | THREE.MeshBasicMaterial
+        | THREE.MeshStandardMaterial;
       meshMaterial.transparent = sphereOpacity < 1;
       meshMaterial.opacity = sphereOpacity;
+
+      // Fetch the surface map the first time this body is worth looking at, and
+      // never again. Until it arrives the flat colour keeps showing, so approaching
+      // a planet degrades to the old render rather than to a blank sphere.
+      if (
+        !handle.textureRequested &&
+        handle.definition.texture !== null &&
+        pixelRadius >= TEXTURE_REQUEST_PX
+      ) {
+        handle.textureRequested = true;
+        void loadBodyTexture(handle.definition.texture, {
+          anisotropy: gl.capabilities.getMaxAnisotropy(),
+        })
+          .then((texture) => {
+            meshMaterial.map = texture;
+            // The catalog colour was standing in for the surface; left in place it
+            // would now tint it.
+            meshMaterial.color.set('#ffffff');
+            meshMaterial.needsUpdate = true;
+          })
+          .catch((error: unknown) => {
+            // Not fatal, and not silent: the body keeps its colour and stays
+            // usable, but a missing map is a deployment problem worth seeing.
+            console.error(`Could not load the surface map for ${handle.definition.id}`, error);
+          });
+      }
 
       if (handle.orbit !== null) {
         handle.orbit.line.visible = showOrbits && sun !== undefined;

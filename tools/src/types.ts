@@ -11,6 +11,22 @@ export type BodyId = string;
 export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'moon' | 'spacecraft';
 
 /**
+ * A single trigonometric term correcting the IAU rotational elements.
+ *
+ * `N = angleDeg + rateDegPerCentury * T`, with T in Julian centuries from J2000, and
+ * then alpha0 += raSinCoeffDeg * sin(N), delta0 += decCosCoeffDeg * cos(N),
+ * W += wSinCoeffDeg * sin(N). That is exactly the shape the report publishes for
+ * Neptune; a body needing several terms would need this to become a list.
+ */
+export interface PoleNutation {
+  readonly angleDeg: number;
+  readonly rateDegPerCentury: number;
+  readonly raSinCoeffDeg: number;
+  readonly decCosCoeffDeg: number;
+  readonly wSinCoeffDeg: number;
+}
+
+/**
  * A body in the catalog.
  *
  * `parent` is what makes the whole thing extensible: v1 hangs everything off the
@@ -53,12 +69,62 @@ export interface BodyDefinition {
   readonly rotationPeriodHours: number;
   /** Axial tilt in degrees, relative to the body's orbital plane. */
   readonly axialTiltDeg: number;
+  /**
+   * Right ascension of the north pole, ICRF equatorial frame, degrees at J2000.
+   *
+   * This and the three fields below are the IAU rotational elements: together they
+   * say where the body's axis points and which way its prime meridian faces at any
+   * instant. Without them a textured sphere spins about an arbitrary axis from an
+   * arbitrary starting angle, which looks fine and is fiction.
+   */
+  readonly poleRaDeg: number;
+  /** Declination of the north pole, ICRF equatorial frame, degrees at J2000. */
+  readonly poleDecDeg: number;
+  /**
+   * Rates of change of the pole direction, degrees per Julian century.
+   *
+   * Precession, mostly. Small enough to look droppable and not droppable: Earth's
+   * declination rate alone moves its pole 0.145 degrees by 2026, which is ten times
+   * every other residual in the sub-solar comparison against JPL. Zero for the bodies
+   * the IAU report gives no rate for.
+   */
+  readonly poleRaRateDegPerCentury: number;
+  readonly poleDecRateDegPerCentury: number;
+  /** Prime meridian angle W at J2000, degrees, measured east from the node. */
+  readonly primeMeridianDeg: number;
+  /**
+   * dW/dt in degrees per day.
+   *
+   * Negative where W decreases with time. That is not the same statement as a
+   * negative `rotationPeriodHours` -- see the note above Pluto in catalog.ts.
+   */
+  readonly rotationRateDegPerDay: number;
+  /**
+   * The one periodic term large enough to matter, or null where there is none.
+   *
+   * The IAU report gives trigonometric corrections to the pole and to W for several
+   * bodies. Almost all are under 0.01 degrees and are dropped. Neptune's is not: it
+   * swings its pole by up to 0.7 degrees, and leaving it out puts the sub-solar
+   * latitude 0.28 degrees from JPL's own value where including it lands within
+   * 0.004. See catalog.ts.
+   */
+  readonly poleNutation: PoleNutation | null;
   /** Hex color used for the orbit line, the marker and the label. */
   readonly color: string;
   /** The Sun has no meaningful orbit to draw around the barycenter. */
   readonly drawOrbit: boolean;
   /** Texture file name under web/public/textures/, or null if not available yet. */
   readonly texture: string | null;
+  /**
+   * Which longitude sits at the LEFT edge of that image, in degrees east.
+   *
+   * Not a detail, and not a constant: it differs by publisher, and getting it wrong
+   * turns the body 180 degrees without changing anything a self-consistency check
+   * could notice. Solar System Scope centres its maps on the prime meridian, so their
+   * left edge is 180 W. NASA's Pluto mosaic starts at 0. Both are measured from the
+   * pixels in textureAlignment.test.ts rather than taken on trust.
+   */
+  readonly textureLongitudeOriginDeg: number;
 }
 
 /**

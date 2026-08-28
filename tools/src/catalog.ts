@@ -16,6 +16,12 @@ import type { BodyDefinition } from './types.ts';
  *
  * Adding a moon later means one more entry with `parent` set and `center` pointing
  * at the parent's Horizons body center, e.g. Io: parent 'jupiter', center '500@599'.
+ *
+ * The web app does NOT read this file at runtime: it reads `bodies.json`, which the
+ * generator writes from it, so the published site and the data it ships can never
+ * disagree. The `@sss/tools/catalog` export exists for the web tests, which need the
+ * real numbers before any data has been generated. It is pure data with no Node
+ * imports, so nothing from the generator can reach the browser bundle through it.
  */
 
 /** Solar System barycenter: the frame every v1 state vector is measured against. */
@@ -72,6 +78,37 @@ export const SSB_CENTER = '500@0';
  */
 export const SUN_CENTER = '500@10';
 
+/**
+ * IAU rotational elements: `poleRaDeg`, `poleDecDeg`, `primeMeridianDeg` and
+ * `rotationRateDegPerDay`.
+ *
+ * Source: IAU WGCCRE 2015 report (Archinal et al., Celest Mech Dyn Astr 130:22,
+ * 2018) -- the same report the radii come from. They answer two questions a bare
+ * rotation period cannot: which way the axis points in inertial space, and which
+ * face is turned toward you at a given instant. Both become visible the moment a
+ * body carries a texture instead of a flat colour.
+ *
+ * `W = W0 + Wdot * d`, with d in days from J2000 TDB, measured east along the
+ * body's equator from its ascending node on the ICRF equator.
+ *
+ * Three things about these numbers are worth stating rather than discovering later:
+ *
+ *  - **Only the constant terms are here.** The report also gives per-century rates
+ *    for the pole (Earth: -0.641 deg/century in RA) and periodic terms for several
+ *    bodies. Over this project's twenty-year window the pole rates amount to under
+ *    0.07 deg, and every periodic term is below 0.01 deg -- except Neptune's, which
+ *    reaches 0.7 deg. At 2048 px of texture across 360 deg that is 4 pixels on a
+ *    body whose surface is a featureless blue disc, so it is dropped along with the
+ *    rest. Documented in the README under Known approximations.
+ *  - **The giants rotate by their magnetic field.** Jupiter, Saturn, Uranus and
+ *    Neptune have no surface to track, so IAU defines W from the rotation of the
+ *    magnetic field (System III). That is the convention every published map of
+ *    them is drawn against, so it is the right one to use here.
+ *  - **`rotationRateDegPerDay` is not a second copy of `rotationPeriodHours`.**
+ *    They agree in magnitude to better than 0.01% and a test pins that. They do not
+ *    always agree in sign, and that is not a bug -- see Pluto below.
+ */
+
 export const CATALOG: readonly BodyDefinition[] = [
   {
     id: 'sun',
@@ -90,11 +127,19 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 132712440041.279419,
     rotationPeriodHours: 609.12,
     axialTiltDeg: 7.25,
+    poleRaDeg: 286.13,
+    poleDecDeg: 63.87,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 84.176,
+    rotationRateDegPerDay: 14.1844,
+    poleNutation: null,
     color: '#ffd24a',
     // The Sun's motion about the barycenter is a small wobble, not an orbit worth
     // drawing as a conic.
     drawOrbit: false,
-    texture: null,
+    texture: 'sun.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'mercury',
@@ -111,9 +156,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 22031.868551,
     rotationPeriodHours: 1407.6,
     axialTiltDeg: 0.034,
+    poleRaDeg: 281.0103,
+    poleDecDeg: 61.4155,
+    poleRaRateDegPerCentury: -0.0328,
+    poleDecRateDegPerCentury: -0.0049,
+    primeMeridianDeg: 329.5988,
+    rotationRateDegPerDay: 6.1385108,
+    poleNutation: null,
     color: '#a98cd8',
     drawOrbit: true,
-    texture: null,
+    texture: 'mercury.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'venus',
@@ -130,9 +183,21 @@ export const CATALOG: readonly BodyDefinition[] = [
     // Retrograde rotation, hence the negative period.
     rotationPeriodHours: -5832.5,
     axialTiltDeg: 177.36,
+    poleRaDeg: 272.76,
+    poleDecDeg: 67.16,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 160.2,
+    rotationRateDegPerDay: -1.4813688,
+    poleNutation: null,
     color: '#e8a33d',
     drawOrbit: true,
-    texture: null,
+    // The atmosphere map, not the radar surface map. Venus is wrapped in opaque
+    // cloud: the surface is real but it is not what is there to see. Its cloud
+    // pattern also moves, so its longitude origin is nominal in a way the solid
+    // bodies' are not.
+    texture: 'venus.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'earth',
@@ -148,9 +213,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 398600.435507,
     rotationPeriodHours: 23.9344695,
     axialTiltDeg: 23.4392911,
+    poleRaDeg: 0.0,
+    poleDecDeg: 90.0,
+    poleRaRateDegPerCentury: -0.641,
+    poleDecRateDegPerCentury: -0.557,
+    primeMeridianDeg: 190.147,
+    rotationRateDegPerDay: 360.9856235,
+    poleNutation: null,
     color: '#3aa8e0',
     drawOrbit: true,
-    texture: null,
+    texture: 'earth.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'mars',
@@ -166,9 +239,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 42828.375816,
     rotationPeriodHours: 24.622962,
     axialTiltDeg: 25.19,
+    poleRaDeg: 317.68143,
+    poleDecDeg: 52.8865,
+    poleRaRateDegPerCentury: -0.1061,
+    poleDecRateDegPerCentury: -0.0609,
+    primeMeridianDeg: 176.63,
+    rotationRateDegPerDay: 350.891982443297,
+    poleNutation: null,
     color: '#d96c3f',
     drawOrbit: true,
-    texture: null,
+    texture: 'mars.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'jupiter',
@@ -185,9 +266,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 126712764.1,
     rotationPeriodHours: 9.92496,
     axialTiltDeg: 3.13,
+    poleRaDeg: 268.056595,
+    poleDecDeg: 64.495303,
+    poleRaRateDegPerCentury: -0.006499,
+    poleDecRateDegPerCentury: 0.002413,
+    primeMeridianDeg: 284.95,
+    rotationRateDegPerDay: 870.536,
+    poleNutation: null,
     color: '#d8a05a',
     drawOrbit: true,
-    texture: null,
+    texture: 'jupiter.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'saturn',
@@ -203,9 +292,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 37940584.8418,
     rotationPeriodHours: 10.656,
     axialTiltDeg: 26.73,
+    poleRaDeg: 40.589,
+    poleDecDeg: 83.537,
+    poleRaRateDegPerCentury: -0.036,
+    poleDecRateDegPerCentury: -0.004,
+    primeMeridianDeg: 38.9,
+    rotationRateDegPerDay: 810.7939024,
+    poleNutation: null,
     color: '#e0c060',
     drawOrbit: true,
-    texture: null,
+    texture: 'saturn.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'uranus',
@@ -221,9 +318,17 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 5794556.4,
     rotationPeriodHours: -17.24,
     axialTiltDeg: 97.77,
+    poleRaDeg: 257.311,
+    poleDecDeg: -15.175,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 203.81,
+    rotationRateDegPerDay: -501.1600928,
+    poleNutation: null,
     color: '#7fd8d8',
     drawOrbit: true,
-    texture: null,
+    texture: 'uranus.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'neptune',
@@ -239,9 +344,26 @@ export const CATALOG: readonly BodyDefinition[] = [
     gmKm3S2: 6836527.10058,
     rotationPeriodHours: 16.11,
     axialTiltDeg: 28.32,
+    poleRaDeg: 299.36,
+    poleDecDeg: 43.46,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 253.18,
+    rotationRateDegPerDay: 536.3128492,
+    // The only body here whose periodic term is large enough to see. Leaving it out
+    // puts the sub-solar latitude 0.278 deg from JPL's; including it lands within
+    // 0.004 deg. Measured against Horizons across 2026, not assumed.
+    poleNutation: {
+      angleDeg: 357.85,
+      rateDegPerCentury: 52.316,
+      raSinCoeffDeg: 0.7,
+      decCosCoeffDeg: -0.51,
+      wSinCoeffDeg: -0.48,
+    },
     color: '#5a7fd8',
     drawOrbit: true,
-    texture: null,
+    texture: 'neptune.jpg',
+    textureLongitudeOriginDeg: 180,
   },
   {
     id: 'pluto',
@@ -257,10 +379,32 @@ export const CATALOG: readonly BodyDefinition[] = [
     radiusPolarKm: 1188.3,
     gmKm3S2: 869.613817,
     rotationPeriodHours: -153.2928,
-    axialTiltDeg: 122.53,
+    // 119.591, not the 122.53 the NASA fact sheet publishes. That figure comes from
+    // Pluto's pre-2009 IAU pole, which sits 2.9 deg from the one adopted since --
+    // and 2.9 deg is exactly the gap between the two numbers. The pole below is the
+    // current one, and it reproduces JPL's own sub-solar latitude for Pluto to five
+    // decimal places, so this is the tilt that matches what is drawn.
+    axialTiltDeg: 119.591,
+    // The one body where the period's sign and W's sign disagree, and both are
+    // right. For planets the IAU north pole is the one north of the invariable
+    // plane, so a body turning backwards gets a negative Wdot -- Venus and Uranus.
+    // For dwarf planets it is the positive pole by the right-hand rule instead, so
+    // Pluto's W always increases. It is still retrograde in the sense the fact
+    // sheets mean: its 122.53 deg obliquity tips the axis past its orbit normal, so
+    // it spins against its own orbital motion. Both statements describe the same
+    // rotation. The texture below is drawn against this same IAU pole, so using it
+    // is what puts Sputnik Planitia where Sputnik Planitia is.
+    poleRaDeg: 132.993,
+    poleDecDeg: -6.163,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 302.695,
+    rotationRateDegPerDay: 56.3625225,
+    poleNutation: null,
     color: '#b0a090',
     drawOrbit: true,
-    texture: null,
+    texture: 'pluto.jpg',
+    textureLongitudeOriginDeg: 0,
   },
 ];
 

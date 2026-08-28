@@ -96,6 +96,8 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             'Positions and velocities, interpolated from JPL state vectors. Error against JPL at finer resolution: 32 m for Earth, 9.7 km for Mercury.',
             'Radii and polar flattening from the IAU 2015 report — Saturn really is 9.8% shorter pole to pole.',
             'Rotation at each body’s real sidereal rate, retrograde where it is retrograde: Venus, Uranus and Pluto.',
+            'Axis direction and prime meridian from the IAU rotational elements, so each body is turned the way it is actually turned. Checked against JPL’s own sub-solar point for every planet: worst disagreement 0.0026°.',
+            'Surface maps registered to that axis, checked against the images’ own pixels. Earth’s noon really falls on Greenwich, and the daylit half is the half that should be lit.',
             'Orbits drawn as osculating ellipses, heliocentric, recomputed each deploy.',
             'Light time and relative speeds, computed from the same vectors.',
           ]}
@@ -107,7 +109,8 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             'The starfield is procedurally generated, not a catalog. It is the one thing on screen that is not real. Gaia data replaces it later.',
             'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
             'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does.',
-            'Planet surfaces are flat colours for now; textures come after the first release.',
+            'Surface maps are illustrative composites, not registered cartographic products. On the flattened bodies a feature can sit about 1.5° from its true latitude — Saturn is the worst; Earth and Mars are under 0.1°.',
+            'Saturn has no rings yet, and Earth has no clouds or night lights. Both are coming.',
           ]}
         />
 

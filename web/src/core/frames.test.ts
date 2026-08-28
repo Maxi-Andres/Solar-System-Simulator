@@ -19,9 +19,17 @@ function body(id: string, parent: string | null): BodyDefinition {
     gmKm3S2: 1,
     rotationPeriodHours: 1,
     axialTiltDeg: 0,
+    poleRaDeg: 0,
+    poleDecDeg: 90,
+    poleRaRateDegPerCentury: 0,
+    poleDecRateDegPerCentury: 0,
+    primeMeridianDeg: 0,
+    rotationRateDegPerDay: 360,
+    poleNutation: null,
     color: '#ffffff',
     drawOrbit: true,
     texture: null,
+    textureLongitudeOriginDeg: 180,
   };
 }
 
