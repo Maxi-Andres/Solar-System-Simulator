@@ -11,6 +11,7 @@ import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
+import { LIGHTING } from './shading.ts';
 import { loadBodyTexture } from './textureCache.ts';
 import {
   angularRadiusPixels,
@@ -54,20 +55,6 @@ export interface SolarSystemProps {
   /** Body kinds currently switched on in the layers panel. */
   readonly visibleKinds: ReadonlySet<string>;
 }
-
-/**
- * Sun intensity and ambient fill per lighting mode.
- *
- * Only `natural` is physical: sunlight and nothing else, so the night side is truly
- * black. `shadow` adds a little fill so the unlit hemisphere still reads as a
- * sphere. `flood` abandons directional light entirely, which is unphysical but makes
- * every body identifiable at a glance — the tradeoff NASA Eyes makes too.
- */
-const LIGHTING: Record<LightingMode, { sun: number; ambient: number }> = {
-  flood: { sun: 0.15, ambient: 1.35 },
-  shadow: { sun: 1.6, ambient: 0.08 },
-  natural: { sun: 1.9, ambient: 0 },
-};
 
 interface BodyHandles {
   readonly definition: BodyDefinition;

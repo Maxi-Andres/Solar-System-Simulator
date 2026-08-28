@@ -1,6 +1,8 @@
 import type { BodyId } from '@sss/tools/types';
 import { create } from 'zustand';
 
+import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
+
 /**
  * View state.
  *
@@ -32,12 +34,18 @@ export const LIGHTING_MODES: readonly {
   {
     id: 'shadow',
     label: 'Shadow Lighting',
-    description: 'Sunlight with a real terminator, plus enough fill to read the night side.',
+    description:
+      'Sunlight plus enough fill to read the night side. That fill has a price: on a ' +
+      'bright body the dark half never reaches black, so there is no terminator edge, ' +
+      'only a gradient.',
   },
   {
     id: 'natural',
     label: 'Natural Lighting',
-    description: 'Sunlight only. The night side is genuinely black, as it is in space.',
+    description:
+      'Sunlight only. The night side is genuinely black and the terminator lands ' +
+      'within a few degrees of where the geometry puts it. The default, because it is ' +
+      'the only one of the three that is true.',
   },
 ];
 
@@ -135,7 +143,7 @@ export interface ViewState {
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
   layers: DEFAULT_LAYERS,
-  lighting: 'shadow',
+  lighting: PHYSICAL_LIGHTING,
   openPanel: null,
   zoomImpulse: 1,
 

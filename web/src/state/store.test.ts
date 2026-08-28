@@ -14,7 +14,7 @@ beforeEach(() => {
   useViewStore.setState({
     focus: 'sun',
     layers: { ...INITIAL.layers },
-    lighting: 'shadow',
+    lighting: 'natural',
     openPanel: null,
     zoomImpulse: 1,
   });
