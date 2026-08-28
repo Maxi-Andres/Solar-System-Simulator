@@ -47,6 +47,16 @@ NASA material is public domain; the courtesy line is
 Institute**. Solar System Scope has no Pluto map, and this is better data anyway. It
 was downscaled from 5926 x 2963 to 2048 x 1024 to match the rest of the set.
 
+**Part of Pluto is invented, and it has to be said plainly.** New Horizons flew past in
+July 2015, when Pluto's southern hemisphere was in polar winter — unlit, and therefore
+unphotographable. The original mosaic is black from about 36 S to the pole, 30% of the
+image. Rendering that as a black cap reads as a bug rather than as missing data, so it
+is filled with **rgb(135, 112, 104)**, the average colour of the mapped part, with the
+boundary relaxed over a few dozen pixels so there is no seam. Reproduce it by masking
+every pixel below luminance 12, setting it to the mean of the rest, and running 40
+iterations of a 3x3 average over the masked pixels only, wrapping in longitude and
+clamping at the poles. Nothing south of about 40 S on Pluto is observation.
+
 ## Two things worth knowing about how these are drawn
 
 - **Venus is its atmosphere, not its surface.** Solar System Scope also publishes the

@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { decode } from 'jpeg-js';
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG } from '@sss/tools/catalog';
@@ -73,5 +74,55 @@ describe('textureUrl', () => {
     // project site breaks.
     expect(textureUrl('earth.jpg')).toBe(`${import.meta.env.BASE_URL}textures/earth.jpg`);
     expect(textureUrl('earth.jpg')).toContain('textures/earth.jpg');
+  });
+});
+
+/**
+ * No map may ship with a hole in it.
+ *
+ * Pluto's original mosaic has one: New Horizons flew past in July 2015, when Pluto's
+ * southern hemisphere was in polar winter and simply could not be photographed. Thirty
+ * percent of the file was black, and a black cap on a rendered body reads as a
+ * rendering fault rather than as missing data.
+ *
+ * It is filled with the average colour of the mapped part, with the boundary relaxed so
+ * there is no seam. That is invented, and it is labelled as invented in CREDITS.md, the
+ * README and the About panel. This test exists so the next map with a gap is noticed
+ * rather than shipped.
+ */
+describe('no map has an unfilled gap', () => {
+  const nearBlackFraction = (pixels: { data: Uint8Array | Buffer; width: number; height: number }) => {
+    let dark = 0;
+    for (let i = 0; i < pixels.width * pixels.height; i += 1) {
+      const o = i * 4;
+      const luminance = 0.299 * pixels.data[o]! + 0.587 * pixels.data[o + 1]! + 0.114 * pixels.data[o + 2]!;
+      if (luminance < 12) {
+        dark += 1;
+      }
+    }
+    return dark / (pixels.width * pixels.height);
+  };
+
+  it.each(files)('leaves no black region in %s', async (file) => {
+    const pixels = decode(await readFile(join(TEXTURE_DIR, file)), { useTArray: true });
+
+    // A percent of stray dark pixels is normal; a hole is not.
+    expect(nearBlackFraction(pixels)).toBeLessThan(0.01);
+  });
+
+  it("fills Pluto's polar night with the average of what was mapped", async () => {
+    const { width, height, data } = decode(await readFile(join(TEXTURE_DIR, 'pluto.jpg')), {
+      useTArray: true,
+    });
+    // Deep in the unmapped south, well past the boundary blend.
+    const y = Math.round(((90 + 75) / 180) * height);
+    let r = 0;
+    for (let x = 0; x < width; x += 1) {
+      r += data[(y * width + x) * 4]!;
+    }
+
+    // The fill colour, rgb(135, 112, 104). Flat, because it is not data.
+    expect(r / width).toBeGreaterThan(125);
+    expect(r / width).toBeLessThan(145);
   });
 });

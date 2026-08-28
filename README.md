@@ -61,7 +61,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 269 tests across both workspaces
+pnpm test            # 280 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -226,6 +226,10 @@ Stated plainly, since the point of the project is that everything else is not:
 - The **starfield is procedurally generated**, not a catalog. It is the one thing on
   screen that is not real. Phase D replaces it.
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
+- **Pluto's southern hemisphere is invented.** New Horizons could not photograph it —
+  it was in polar winter during the 2015 flyby — so the original mosaic is black from
+  about 36°S down. It is filled with the average colour of the mapped part so it does
+  not render as a black cap. Nothing south of about 40°S on Pluto is an observation.
 - **Surface maps are illustrative composites**, not cartographic products.
   The Solar System Scope set is built on NASA imagery with colour and detail added by
   its authors; only Pluto's is a mission product. Venus shows its atmosphere, which is
