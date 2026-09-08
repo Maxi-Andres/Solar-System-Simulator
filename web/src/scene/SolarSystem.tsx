@@ -174,9 +174,16 @@ export function SolarSystem({
         // scattering model rather than MeshStandardMaterial's Lambert term. See
         // ringMaterial.ts: with Lambert the rings all but vanished, because in 2026
         // the Sun sits 7 degrees above the ring plane.
+        const material = ringMaterial();
+        // The planet's own shape, so the shader can work out where its shadow falls.
+        // Oblate, and it matters: Saturn is 9.8% flatter pole to pole, which narrows
+        // the shadow it throws across its rings.
+        material.uniforms.uEquatorialRadius!.value = kmToUnits(definition.radiusEquatorialKm);
+        material.uniforms.uPolarRadius!.value = kmToUnits(definition.radiusPolarKm);
+
         ring = new THREE.Mesh(
           ringGeometry(definition.rings.innerRadiusKm, definition.rings.outerRadiusKm),
-          ringMaterial(),
+          material,
         );
         ring.renderOrder = 1;
         // Spans 2.35 planetary radii, so its own bounding sphere is a poor proxy for

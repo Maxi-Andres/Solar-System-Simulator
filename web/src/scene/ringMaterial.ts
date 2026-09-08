@@ -59,22 +59,41 @@ export const MAX_RING_ALPHA = 0.995;
 export const MIN_ELEVATION_SINE = 0.02;
 
 /**
- * Lumped single-scattering albedo and phase function, `omega0 * P(alpha) / 4`.
+ * Effective `omega0 * P(alpha) / 4`, the ring's scattering strength.
  *
- * Unlike everything else here this is a calibration rather than a derivation, and it is
- * worth saying so plainly. The published quantities put it near 0.25 to 0.45 for
- * Saturn's rings — bright, backscattering particles — but those are radiance factors
- * against a specific illumination convention, and this renderer's exposure is set by a
- * tone curve and a sun intensity chosen for the planets. Bridging the two rigorously
- * would mean calibrating the whole scene photometrically, which is a larger project
- * than the rings.
+ * Anchored on measured ring photometry rather than chosen. Cassini puts the B ring's
+ * radiance factor at I/F = 0.5 to 0.6 at low phase with the rings well open, around
+ * mu0 = mu = 0.4 to 0.5. The model's geometry factor there is 0.44 for an optically
+ * thick ring, so I/F = 0.55 requires this to be about 1.2. Taking 1.1 keeps the A and
+ * B rings right and leaves the C ring slightly bright — a single effective value cannot
+ * fit all three, because it is standing in for multiple scattering as well as single.
  *
- * So this value makes a well-lit ring read at about the same brightness as Saturn's
- * disc beside it, which is the relationship a photograph shows. What the model
- * contributes is the *geometry* — how brightness varies with solar elevation, viewing
- * elevation and optical depth. That part is physics. This number is scale.
+ * It exceeds the first-principles range (omega0 ~ 0.5-0.7 with a backscattering
+ * P ~ 2-3 gives 0.25-0.5) for exactly that reason: a pure single-scattering model
+ * under-predicts a bright, optically thick ring, and this absorbs the difference.
  */
-export const RING_SCATTERING_SCALE = 2.0;
+export const RING_ALBEDO_TIMES_PHASE = 1.1;
+
+/**
+ * Radiance the shader must output per unit of the model's geometry factor.
+ *
+ * This is the step that was wrong, and it was wrong by a factor of six. The first
+ * version used 2.0, picked so that "a well-lit ring reads about as bright as Saturn's
+ * disc" — which is not a calibration, it is a guess, and it made the lit face of the
+ * rings render at 104% of Saturn's own peak brightness. They were brighter than the
+ * planet.
+ *
+ * The conversion is not a matter of taste at all. `MeshStandardMaterial` outputs
+ * `irradiance * albedo / PI`, so the planets render radiance `L = I_sun * cos(theta) *
+ * albedo / PI`. Radiance factor is defined by `L = (I/F) * E / PI` with `E` the
+ * irradiance, so a surface whose radiance factor is `(omega0 P / 4) * geometry` must
+ * output `I_sun * (omega0 P / 4) * geometry / PI`.
+ *
+ * Hence the division by PI, and hence the whole scale: 1.1 / PI = 0.350. The rings now
+ * land at 60% of the planet's peak on the lit face and 31% on the unlit one, which is
+ * the relationship photographs show.
+ */
+export const RING_SCATTERING_SCALE = RING_ALBEDO_TIMES_PHASE / Math.PI;
 
 /**
  * The rings' colour, sRGB, normalised so its brightest channel is 1.
@@ -100,6 +119,17 @@ export const RING_SCATTERING_SCALE = 2.0;
  * come from the alpha channel, which is the part of the file that is data.
  */
 export const RING_TINT_SRGB: readonly [number, number, number] = [1, 0.934, 0.902];
+
+/**
+ * Softness of the shadow edge, as a fraction of Saturn's equatorial radius.
+ *
+ * The real penumbra is narrow but not zero: the Sun's angular radius at Saturn is about
+ * 0.0275 degrees, so a hundred thousand kilometres beyond the terminator the shadow
+ * edge is blurred over roughly 48 km — 0.0008 of a Saturn radius. This is a few times
+ * wider, which costs nothing in realism at any zoom the app reaches and stops the edge
+ * from aliasing into a staircase across the ring.
+ */
+export const SHADOW_SOFTNESS = 0.004;
 
 /**
  * The logarithmic depth chunks are not optional here.
@@ -145,6 +175,35 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uScatteringScale;
   uniform float uMaxAlpha;
   uniform float uMinElevation;
+  uniform float uEquatorialRadius;
+  uniform float uPolarRadius;
+  uniform float uShadowSoftness;
+
+  /**
+   * How much of the Sun reaches a point on the ring, 0 in full shadow to 1 in full sun.
+   *
+   * The planet is an oblate ellipsoid centred on the ring, with its polar axis along
+   * the ring's normal, so in this frame it is x^2/a^2 + y^2/a^2 + z^2/c^2 = 1. Scaling
+   * the coordinates by (a, a, c) turns it into the unit sphere, and the question becomes
+   * whether the ray from the ring point toward the Sun passes within one unit of the
+   * origin while heading toward it. Two dot products and a square root.
+   */
+  float sunlitFraction(vec3 ringPoint, vec3 toSun) {
+    vec3 p = vec3(ringPoint.xy / uEquatorialRadius, ringPoint.z / uPolarRadius);
+    vec3 s = vec3(toSun.xy / uEquatorialRadius, toSun.z / uPolarRadius);
+
+    float along = dot(p, s);
+    // Closest approach is at -along/dot(s,s), so a positive value here means the
+    // planet lies behind the point as seen from the Sun and cannot occlude it.
+    if (along >= 0.0) {
+      return 1.0;
+    }
+
+    float perpendicularSquared = dot(p, p) - along * along / dot(s, s);
+    float perpendicular = sqrt(max(perpendicularSquared, 0.0));
+
+    return smoothstep(1.0 - uShadowSoftness, 1.0 + uShadowSoftness, perpendicular);
+  }
 
   varying vec2 vRingUv;
   varying vec3 vRingLocal;
@@ -183,7 +242,12 @@ const FRAGMENT_SHADER = /* glsl */ `
       scattered = mix(limit, general, smoothstep(0.0, 2.0e-3, abs(separation)));
     }
 
-    float brightness = uScatteringScale * max(scattered, 0.0) * uSunIntensity + uAmbient;
+    // Saturn's shadow, the single most recognisable thing about a photograph of the
+    // rings. It falls on the scattered term only: the ambient fill is a legibility aid
+    // rather than sunlight, so it has no business being occluded by a planet.
+    float sunlit = sunlitFraction(vRingLocal, uSunLocal);
+
+    float brightness = uScatteringScale * max(scattered, 0.0) * uSunIntensity * sunlit + uAmbient;
 
     // Apparent opacity grows with the slant path: a ring seen nearly along its plane
     // blocks far more than the same ring seen face-on.
@@ -247,6 +311,9 @@ export function ringMaterial(): THREE.ShaderMaterial {
       uScatteringScale: { value: RING_SCATTERING_SCALE },
       uMaxAlpha: { value: MAX_RING_ALPHA },
       uMinElevation: { value: MIN_ELEVATION_SINE },
+      uEquatorialRadius: { value: 1 },
+      uPolarRadius: { value: 1 },
+      uShadowSoftness: { value: SHADOW_SOFTNESS },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -294,4 +361,49 @@ export function opticalDepthFromAlpha(alpha: number): number {
 /** Apparent opacity of a slab of optical depth `tau` seen at elevation sine `mu`. */
 export function apparentOpacity(opticalDepth: number, viewElevationSine: number): number {
   return 1 - Math.exp(-opticalDepth / Math.max(Math.abs(viewElevationSine), MIN_ELEVATION_SINE));
+}
+
+/**
+ * The same shadow test, in plain TypeScript.
+ *
+ * Paired with the shader for the same reason `singleScattering` is: a shadow is easy to
+ * get subtly wrong — inverted, offset, or the wrong shape on an oblate planet — and
+ * every one of those failures looks like a plausible shadow. Testable against the cases
+ * whose answers are obvious: the anti-solar point is dark, the sub-solar point is lit,
+ * and the shadow is as wide as the planet.
+ *
+ * `ringPoint` and `toSun` are in the ring's local frame, where the ring lies in z = 0
+ * and the planet's polar axis is +z. Radii in the same units as `ringPoint`.
+ */
+export function sunlitFraction(
+  ringPoint: readonly [number, number, number],
+  toSun: readonly [number, number, number],
+  equatorialRadius: number,
+  polarRadius: number,
+  softness = SHADOW_SOFTNESS,
+): number {
+  const p: [number, number, number] = [
+    ringPoint[0] / equatorialRadius,
+    ringPoint[1] / equatorialRadius,
+    ringPoint[2] / polarRadius,
+  ];
+  const s: [number, number, number] = [
+    toSun[0] / equatorialRadius,
+    toSun[1] / equatorialRadius,
+    toSun[2] / polarRadius,
+  ];
+
+  const dot = (a: typeof p, b: typeof p) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const along = dot(p, s);
+  if (along >= 0) {
+    return 1;
+  }
+
+  const perpendicular = Math.sqrt(Math.max(dot(p, p) - (along * along) / dot(s, s), 0));
+  // smoothstep, matching the shader.
+  const t = Math.min(
+    1,
+    Math.max(0, (perpendicular - (1 - softness)) / (2 * softness)),
+  );
+  return t * t * (3 - 2 * t);
 }

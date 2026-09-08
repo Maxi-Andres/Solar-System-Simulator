@@ -39,7 +39,12 @@ Everything else is measured:
   they do. They scatter light as a slab of separated particles (single-scattering, from
   optical depth read out of the map's alpha) rather than as a flat surface, which is why
   they stay visible with the Sun near their plane and why the unlit face shows the dense
-  B ring dark against the sparse C ring.
+  B ring dark against the sparse C ring. Brightness is anchored on Cassini's measured
+  radiance factor for the B ring, so they come out darker than Saturn's disc rather than
+  brighter.
+- **Saturn's shadow on the rings**, cast by its real oblate silhouette. Its reach along
+  the ring plane is `c / tan(solar elevation)`, so with the Sun near the ring plane it
+  crosses the entire system and with the rings wide open it barely touches them.
 - **Surface maps registered to that axis**, checked by reading the actual pixels through
   the renderer's own geometry: the Sahara has to come out sand-coloured, the Amazon
   green, the Pacific blue. Which matters, because publishers start their images at
@@ -68,7 +73,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 362 tests across both workspaces
+pnpm test            # 379 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -265,7 +270,8 @@ Stated plainly, since the point of the project is that everything else is not:
   image's alpha profile against surveyed ring boundaries: `r(u) = 69942 + 71938·u`, RMS
   residual 1365 km. That is wider than the Encke Gap the map draws (325 km), so every
   division is present and roughly placed and none is at a surveyed radius.
-- **Saturn casts no shadow on its rings**, and the rings cast none on Saturn.
+- **The rings cast no shadow back onto Saturn.** Saturn's shadow on the rings is drawn;
+  the reverse, a set of dark bands across the planet, is not.
 - **Pluto's southern hemisphere is invented.** New Horizons could not photograph it —
   it was in polar winter during the 2015 flyby — so the original mosaic is black from
   about 36°S down. It is filled with the average colour of the mapped part so it does

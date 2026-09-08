@@ -8,6 +8,9 @@ import { PNG } from 'pngjs';
 import { getBody } from '@sss/tools/catalog';
 import {
   apparentOpacity,
+  RING_ALBEDO_TIMES_PHASE,
+  SHADOW_SOFTNESS,
+  sunlitFraction,
   MIN_ELEVATION_SINE,
   opticalDepthFromAlpha,
   RING_SCATTERING_SCALE,
@@ -42,6 +45,20 @@ const reflected = (tau: number, muSun: number, muView = VIEW) =>
 const transmitted = (tau: number, muSun: number, muView = VIEW) =>
   singleScattering(tau, muSun, muView, false) * RING_SCATTERING_SCALE;
 
+/**
+ * Radiance factor, the unit ring photometry is published in.
+ *
+ * Comparisons against a Lambertian ring have to happen here rather than in rendered
+ * radiance: the two differ by a factor of PI and an albedo, and the first version of
+ * these tests compared the model's radiance against Lambert's bare cosine, which is
+ * not a comparison of anything. A Lambert surface has I/F = albedo * mu0.
+ */
+const radianceFactor = (tau: number, muSun: number, muView = VIEW) =>
+  RING_ALBEDO_TIMES_PHASE * singleScattering(tau, muSun, muView, true);
+
+/** Reflectance of a Lambertian stand-in, so the comparison means something. */
+const LAMBERT_ALBEDO = 0.5;
+
 describe('optical depth from the texture', () => {
   it('reads alpha as face-on opacity, so tau = -ln(1 - alpha)', () => {
     expect(opticalDepthFromAlpha(0)).toBeCloseTo(0, 9);
@@ -64,20 +81,51 @@ describe('optical depth from the texture', () => {
 });
 
 describe('brightness near edge-on illumination', () => {
-  it('beats the Lambert term it replaced at every solar elevation', () => {
-    // The bug, stated as a test. Lambert returns mu0 itself.
+  it('outshines a Lambertian ring of the same albedo, most where it matters', () => {
+    // The bug, stated as a test, in radiance factor so the two are comparable. The
+    // margin is largest exactly where the old model failed: low Sun, grazing view.
     for (const [year, muSun] of Object.entries(SOLAR_ELEVATION)) {
-      expect(reflected(TAU_MEAN, muSun), year).toBeGreaterThan(muSun * 2);
+      const lambert = LAMBERT_ALBEDO * muSun;
+
+      expect(radianceFactor(TAU_MEAN, muSun, 1), year).toBeGreaterThan(lambert);
+      expect(radianceFactor(TAU_MEAN, muSun, 0.5), year).toBeGreaterThan(lambert * 2);
     }
   });
 
-  it('is three times brighter than Lambert at 2026 geometry', () => {
-    // 0.400 against 0.125, measured. This is the number that answers "the rings are
-    // barely visible".
-    const model = reflected(TAU_MEAN, SOLAR_ELEVATION[2026]);
+  it('doubles a Lambertian ring at 2026 geometry, and triples it at a grazing view', () => {
+    // Measured: I/F 0.122 face-on and 0.220 at mu = 0.5, against Lambert's 0.0625.
+    const muSun = SOLAR_ELEVATION[2026];
+    const lambert = LAMBERT_ALBEDO * muSun;
 
-    expect(model).toBeCloseTo(0.4, 2);
-    expect(model / SOLAR_ELEVATION[2026]).toBeGreaterThan(3);
+    expect(radianceFactor(TAU_MEAN, muSun, 1)).toBeCloseTo(0.122, 3);
+    expect(radianceFactor(TAU_MEAN, muSun, 1) / lambert).toBeCloseTo(1.96, 1);
+    expect(radianceFactor(TAU_MEAN, muSun, 0.5) / lambert).toBeCloseTo(3.52, 1);
+  });
+
+  it('reproduces the measured B ring radiance factor with the rings open', () => {
+    // The anchor RING_ALBEDO_TIMES_PHASE was set from, checked back: Cassini puts the
+    // B ring at I/F = 0.5 to 0.6 at low phase with the rings well open. 2030 geometry
+    // at a typical viewing elevation lands at 0.498.
+    const dense = opticalDepthFromAlpha(0.95);
+
+    expect(radianceFactor(dense, SOLAR_ELEVATION[2030], 0.5)).toBeGreaterThan(0.45);
+    expect(radianceFactor(dense, SOLAR_ELEVATION[2030], 0.5)).toBeLessThan(0.65);
+  });
+
+  it('does not render brighter than the planet it orbits', () => {
+    // The defect this scale replaced: at 2.0 the lit face rendered at 104% of Saturn's
+    // own peak, so the rings outshone Saturn. Saturn's disc peaks at I/F = its albedo.
+    const SATURN_PEAK_RADIANCE_FACTOR = 0.54;
+
+    for (const muSun of Object.values(SOLAR_ELEVATION)) {
+      expect(radianceFactor(TAU_MEAN, muSun, 1)).toBeLessThan(SATURN_PEAK_RADIANCE_FACTOR);
+    }
+  });
+
+  it('divides by PI, because that is what the renderer expects', () => {
+    // MeshStandardMaterial outputs irradiance * albedo / PI, so a material handing back
+    // a radiance factor has to do the same. Missing it was the whole six-fold error.
+    expect(RING_SCATTERING_SCALE).toBeCloseTo(RING_ALBEDO_TIMES_PHASE / Math.PI, 12);
   });
 
   it('brightens as the rings open toward 2032', () => {
@@ -326,5 +374,105 @@ describe('the ring tint', () => {
     expect(blueSum / n - redSum / n).toBeGreaterThan(5);
     // ...and the tint we draw with is not.
     expect(RING_TINT_SRGB[2]).toBeLessThan(RING_TINT_SRGB[0]);
+  });
+});
+
+describe('the shadow the planet throws on its rings', () => {
+  // Saturn, in km, so the numbers below read as distances.
+  const A = 60268;
+  const C = 54364;
+  const RING = 100000;
+  /** Sun near the ring plane, as it is in 2026. */
+  const SUN: readonly [number, number, number] = [1, 0, 0.125];
+
+  const lit = (point: readonly [number, number, number]) => sunlitFraction(point, SUN, A, C);
+
+  it('darkens the anti-solar side and leaves the sunward side alone', () => {
+    expect(lit([-RING, 0, 0])).toBe(0);
+    expect(lit([RING, 0, 0])).toBe(1);
+  });
+
+  it('does not shadow the flanks, ninety degrees from the Sun', () => {
+    expect(lit([0, RING, 0])).toBe(1);
+    expect(lit([0, -RING, 0])).toBe(1);
+  });
+
+  /** Half-width of the shadow across the ring plane at distance `x` down-sun, in km. */
+  function shadowHalfWidth(x: number, sun: readonly [number, number, number]): number {
+    let dark = 0;
+    let light = A * 3;
+    for (let i = 0; i < 60; i += 1) {
+      const middle = (dark + light) / 2;
+      if (sunlitFraction([-x, middle, 0], sun, A, C) < 0.5) {
+        dark = middle;
+      } else {
+        light = middle;
+      }
+    }
+    return (dark + light) / 2;
+  }
+
+  it('throws a shadow the width of the planet when the Sun is in the ring plane', () => {
+    // The edge then sits at the equatorial radius exactly, which is what makes the
+    // shadow read as the planet's silhouette rather than a wedge of arbitrary width.
+    expect(shadowHalfWidth(RING, [1, 0, 0])).toBeCloseTo(A, 0);
+  });
+
+  it('narrows the shadow as the Sun rises, because the planet is oblate', () => {
+    // The ray from a ring point toward a raised Sun climbs as it travels, and crosses
+    // the planet where its silhouette is narrower. Measured: 0.974 of the equatorial
+    // radius in 2026, 0.718 by 2030 as the rings open. Predicted exactly by the
+    // ellipsoid's own profile, A * sqrt(1 - (z/C)^2) at the height the ray reaches.
+    expect(shadowHalfWidth(RING, [1, 0, 0.125]) / A).toBeCloseTo(0.974, 2);
+    expect(shadowHalfWidth(RING, [1, 0, 0.417]) / A).toBeCloseTo(0.718, 2);
+
+    const height = (0.125 / Math.sqrt(1 + 0.125 ** 2)) * RING;
+    expect(shadowHalfWidth(RING, [1, 0, 0.125])).toBeCloseTo(
+      A * Math.sqrt(1 - (height / C) ** 2),
+      -2,
+    );
+  });
+
+  it('stretches the shadow right across the rings when the Sun is near their plane', () => {
+    // The reach along the ring plane is C / tan(solar elevation), so at 2026's 7.2
+    // degrees it is about 431,000 km -- three times the outer ring. That is why a
+    // photograph taken now shows the shadow crossing the entire system, and why one
+    // taken with the rings wide open shows only a stub.
+    const RING_OUTER = 141880;
+    const reach = (muSun: number) => (C * Math.sqrt(1 - muSun ** 2)) / muSun;
+
+    expect(reach(0.125)).toBeGreaterThan(RING_OUTER * 2);
+    expect(lit([-RING_OUTER * 0.99, 0, 0])).toBe(0);
+
+    // Wide open, the shadow no longer reaches the middle of the rings at all: the cone
+    // passes below the ring plane before it gets there.
+    expect(sunlitFraction([-RING, 0, 0], [1, 0, 0.7], A, C)).toBe(1);
+  });
+
+  it('softens the edge, but only just', () => {
+    const edge = shadowHalfWidth(RING, [1, 0, 0.125]);
+
+    // Enough to stop the boundary aliasing across the ring, narrow enough to stay
+    // physical: the real penumbra is about 48 km at this distance, and this is a few
+    // times that.
+    expect(lit([-RING, edge * (1 - 3 * SHADOW_SOFTNESS), 0])).toBe(0);
+    expect(lit([-RING, edge * (1 + 3 * SHADOW_SOFTNESS), 0])).toBe(1);
+    // And the transition is monotone through it, not a spike.
+    expect(lit([-RING, edge * 0.999, 0])).toBeLessThan(lit([-RING, edge * 1.001, 0]));
+  });
+
+  it('shadows nothing when the Sun is straight above the ring plane', () => {
+    // Not a Saturn geometry, but the degenerate case the maths has to survive: the
+    // shadow collapses onto the planet itself and the whole ring stays lit.
+    const overhead: readonly [number, number, number] = [0, 0, 1];
+
+    expect(sunlitFraction([RING, 0, 0], overhead, A, C)).toBe(1);
+    expect(sunlitFraction([-RING, 0, 0], overhead, A, C)).toBe(1);
+  });
+
+  it('is applied to sunlight and not to the ambient fill', () => {
+    // Flood and Shadow lighting add ambient for legibility. Occluding that with a
+    // planet would apply a physical effect to an unphysical light.
+    expect(RING_SHADERS.fragment).toContain('uSunIntensity * sunlit + uAmbient');
   });
 });
