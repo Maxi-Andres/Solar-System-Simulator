@@ -11,7 +11,10 @@ import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
+import { ringGeometry } from './ringGeometry.ts';
+import { ringMaterial } from './ringMaterial.ts';
 import { LIGHTING } from './shading.ts';
+import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
 import {
   angularRadiusPixels,
@@ -29,6 +32,14 @@ import {
  * second to move ten planets would be pure overhead, and the clock — not React
  * state — is already the source of truth for time.
  */
+
+/** Scratch objects for the frame loop, which must not allocate. */
+const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
+const scratchPole = new THREE.Vector3();
+const scratchSun = new THREE.Vector3();
+const scratchBody = new THREE.Vector3();
+const scratchCamera = new THREE.Vector3();
+const scratchQuaternion = new THREE.Quaternion();
 
 /** Marker diameter on screen, in CSS pixels. Matches the NASA Eyes look. */
 const MARKER_PIXELS = 11;
@@ -74,6 +85,8 @@ interface BodyHandles {
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
   readonly orbit: OrbitLine | null;
+  /** Ring system mesh, for the one body here that has one. */
+  readonly ring: THREE.Mesh | null;
   /**
    * Texture bookkeeping, so a map is fetched once per file and the orientation always
    * matches the image actually on the material.
@@ -87,6 +100,8 @@ interface BodyHandles {
   requestedFile: string | null;
   shownFile: string | null;
   shownOriginDeg: number;
+  /** Set once the ring map has been asked for, so it is asked for once. */
+  ringRequested: boolean;
 }
 
 export function SolarSystem({
@@ -151,6 +166,25 @@ export function SolarSystem({
       marker.frustumCulled = false;
       group.add(marker);
 
+      let ring: THREE.Mesh | null = null;
+      if (definition.rings !== null) {
+        // A sibling of the sphere, not a child: the sphere carries the polar
+        // flattening scale, and a ring hung off it would be squashed by 9.8% too.
+        // A ring is a slab of separated particles, not a surface, so it gets its own
+        // scattering model rather than MeshStandardMaterial's Lambert term. See
+        // ringMaterial.ts: with Lambert the rings all but vanished, because in 2026
+        // the Sun sits 7 degrees above the ring plane.
+        ring = new THREE.Mesh(
+          ringGeometry(definition.rings.innerRadiusKm, definition.rings.outerRadiusKm),
+          ringMaterial(),
+        );
+        ring.renderOrder = 1;
+        // Spans 2.35 planetary radii, so its own bounding sphere is a poor proxy for
+        // whether Saturn is on screen; the group's position already decides that.
+        ring.frustumCulled = false;
+        group.add(ring);
+      }
+
       let orbit: OrbitLine | null = null;
       const elements = store.elementsFor(definition.id);
       if (definition.drawOrbit && elements !== null) {
@@ -166,9 +200,11 @@ export function SolarSystem({
         mesh,
         marker,
         orbit,
+        ring,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
+        ringRequested: false,
       };
     });
   }, [store]);
@@ -209,6 +245,23 @@ export function SolarSystem({
           handle.orbit.line.visible = false;
         }
         continue;
+      }
+
+      if (handle.ring !== null) {
+        // The rings lie in the equatorial plane, so their normal is the pole -- the
+        // same pole the sphere is oriented by, from the same IAU elements. That is
+        // the whole reason this step was cheap: 6a already established where the
+        // axis points, and a ring is that axis with a disc around it.
+        //
+        // No rotation about the pole is applied, and that is deliberate. Ring
+        // particles are on independent Keplerian orbits, so there is no rigid
+        // rotation to apply; and the texture has no azimuthal structure, so none
+        // would be visible if there were.
+        const pole = poleDirection(jd, handle.definition);
+        handle.ring.quaternion.setFromUnitVectors(
+          RING_LOCAL_NORMAL,
+          scratchPole.set(pole.x, pole.y, pole.z),
+        );
       }
 
       handle.group.position.set(
@@ -261,6 +314,59 @@ export function SolarSystem({
         | THREE.MeshStandardMaterial;
       meshMaterial.transparent = sphereOpacity < 1;
       meshMaterial.opacity = sphereOpacity;
+
+      if (handle.ring !== null && handle.definition.rings !== null && sun !== undefined) {
+        // Tied to the sphere's own fade rather than the ring's larger angular size,
+        // so the two appear and disappear together. The alternative -- fading the
+        // ring on its own 2.35x radius -- would grow rings on Saturn while Saturn
+        // itself was still a marker dot, which reads as a glitch rather than as
+        // scale.
+        const uniforms = (handle.ring.material as THREE.ShaderMaterial).uniforms;
+        handle.ring.visible = sphereOpacity > 0.005;
+        uniforms.uFade!.value = sphereOpacity;
+        uniforms.uSunIntensity!.value = LIGHTING[lighting].sun;
+        uniforms.uAmbient!.value = LIGHTING[lighting].ambient;
+
+        if (handle.ring.visible) {
+          // The scattering model works in the ring's own frame, where the ring plane
+          // is z = 0 and both elevation angles are just z components. So the Sun and
+          // the camera are brought into that frame once per frame here, rather than
+          // the shader undoing a rotation per fragment.
+          const inverse = scratchQuaternion.copy(handle.ring.quaternion).invert();
+
+          scratchSun
+            .set(sun.positionKm.x, sun.positionKm.y, sun.positionKm.z)
+            .sub(
+              scratchBody.set(rebased.positionKm.x, rebased.positionKm.y, rebased.positionKm.z),
+            )
+            .normalize()
+            .applyQuaternion(inverse);
+          uniforms.uSunLocal!.value.copy(scratchSun);
+
+          scratchCamera
+            .copy(camera.position)
+            .sub(handle.group.position)
+            .applyQuaternion(inverse);
+          uniforms.uCameraLocal!.value.copy(scratchCamera);
+        }
+
+        if (!handle.ringRequested && pixelRadius >= TEXTURE_REQUEST_PX) {
+          handle.ringRequested = true;
+          void loadBodyTexture(handle.definition.rings.texture, {
+            anisotropy: gl.capabilities.getMaxAnisotropy(),
+            // u is radius here, not longitude: repeating it would fold the outer
+            // edge of the rings back onto the inner one.
+            wrapS: THREE.ClampToEdgeWrapping,
+          })
+            .then((texture) => {
+              uniforms.uMap!.value = texture;
+            })
+            .catch((error: unknown) => {
+              handle.ringRequested = false;
+              console.error(`Could not load the ring map for ${handle.definition.id}`, error);
+            });
+        }
+      }
 
       // Fetch the surface map the first time this body is worth looking at, and
       // again only if the selected set asks for a different file. Until it arrives

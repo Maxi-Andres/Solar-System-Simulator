@@ -31,6 +31,20 @@ const variants = CATALOG.flatMap((body) =>
   TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures[set.id] })),
 );
 
+/**
+ * Ring maps are a different kind of image and are tested differently.
+ *
+ * A surface map is an opaque equirectangular photograph. A ring map is a radial strip
+ * that is mostly transparent and carries its meaning in the alpha channel. Checks
+ * written for one are wrong for the other: the "no unmapped region" test reads a ring
+ * map's transparent 6% as a hole, and the minimum-file-size floor reads its 10 KB as
+ * a stub. Separating them is not a loosening -- each set gets the check that applies.
+ */
+const surfaceMaps = [...new Set(variants.map((v) => v.file))];
+const ringMaps = [
+  ...new Set(CATALOG.flatMap((body) => (body.rings === null ? [] : [body.rings.texture]))),
+];
+
 describe('the texture files', () => {
   it('gives every body in every set a map that exists', () => {
     for (const v of variants) {
@@ -38,8 +52,18 @@ describe('the texture files', () => {
     }
   });
 
-  it('ships no image that no set uses', () => {
-    const used = new Set(variants.map((v) => v.file));
+  it('gives every ring system a map that exists', () => {
+    for (const file of ringMaps) {
+      expect(files).toContain(file);
+    }
+    // One body with rings, and a test that says so: Jupiter, Uranus and Neptune all
+    // have real ring systems, and all three are far too faint to draw at true
+    // brightness. Saturn's are the only ones this catalog claims.
+    expect(ringMaps).toEqual(['saturn-rings.png']);
+  });
+
+  it('ships no image that nothing uses', () => {
+    const used = new Set([...surfaceMaps, ...ringMaps]);
 
     for (const file of files) {
       expect(used, file).toContain(file);
@@ -67,8 +91,6 @@ describe('the texture files', () => {
     // repository as much as on the page: swapping in 8k maps would be a 40 MB
     // decision, not an accident.
     expect(totalMb).toBeLessThan(8);
-    // And nothing is a stub: the smallest, Uranus, is a 76 KB featureless disc.
-    expect(Math.min(...sizes)).toBeGreaterThan(50_000);
   });
 });
 
@@ -127,7 +149,16 @@ describe('no map has an unfilled gap', () => {
     return black / (pixels.width * pixels.height);
   };
 
-  it.each(files)('leaves no unmapped region in %s', async (file) => {
+  it.each(surfaceMaps)('is not a stub: %s', async (file) => {
+    // The smallest surface map, Uranus, is a 76 KB featureless disc. Ring maps are
+    // excluded: Saturn's is 10 KB and complete, because a radial strip of alpha is
+    // genuinely that little information.
+    const { size } = await stat(join(TEXTURE_DIR, file));
+
+    expect(size).toBeGreaterThan(50_000);
+  });
+
+  it.each(surfaceMaps)('leaves no unmapped region in %s', async (file) => {
     const pixels = decode(await readFile(join(TEXTURE_DIR, file)), { useTArray: true });
 
     // Stray black pixels are normal; a hole is 30% of the image.

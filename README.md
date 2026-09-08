@@ -34,6 +34,12 @@ Everything else is measured:
   is turned the way it is actually turned. Verified against JPL's own sub-solar point for
   all nine planets across 2026: the worst disagreement is **0.0026°**, nine arcseconds.
   Earth's noon falls on Greenwich.
+- **Saturn's rings** at real radii in its real equatorial plane, reusing the same IAU
+  pole the sphere is oriented by — so they open and close over its 29.5-year orbit, as
+  they do. They scatter light as a slab of separated particles (single-scattering, from
+  optical depth read out of the map's alpha) rather than as a flat surface, which is why
+  they stay visible with the Sun near their plane and why the unlit face shows the dense
+  B ring dark against the sparse C ring.
 - **Surface maps registered to that axis**, checked by reading the actual pixels through
   the renderer's own geometry: the Sahara has to come out sand-coloured, the Amazon
   green, the Pacific blue. Which matters, because publishers start their images at
@@ -62,7 +68,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 318 tests across both workspaces
+pnpm test            # 362 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -237,8 +243,8 @@ past a few dozen bodies that should become progressive loading.
 
 ## Roadmap
 
-- **Textures, continued** — Saturn's rings, Earth's clouds and night lights, and a real
-  Milky Way behind the starfield. Surface maps themselves are done.
+- **Textures, continued** — Earth's clouds and night lights, and a real Milky Way behind
+  the starfield. Surface maps and Saturn's rings are done.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
@@ -254,6 +260,12 @@ Stated plainly, since the point of the project is that everything else is not:
 - The **starfield is procedurally generated**, not a catalog. It is the one thing on
   screen that is not real. Phase D replaces it.
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
+- **Saturn's ring radii are fitted, not quoted.** The ring map is a radial strip and its
+  publisher does not say which radii its edges are, so they were measured from the
+  image's alpha profile against surveyed ring boundaries: `r(u) = 69942 + 71938·u`, RMS
+  residual 1365 km. That is wider than the Encke Gap the map draws (325 km), so every
+  division is present and roughly placed and none is at a surveyed radius.
+- **Saturn casts no shadow on its rings**, and the rings cast none on Saturn.
 - **Pluto's southern hemisphere is invented.** New Horizons could not photograph it —
   it was in polar winter during the 2015 flyby — so the original mosaic is black from
   about 36°S down. It is filled with the average colour of the mapped part so it does

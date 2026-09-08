@@ -43,6 +43,24 @@ export interface TextureVariant {
 }
 
 /**
+ * A ring system, drawn as a flat annulus in the body's equatorial plane.
+ *
+ * The texture is a *radial strip*: its horizontal axis runs from the inner radius to
+ * the outer one and it is constant vertically, so `u` maps linearly to radius and `v`
+ * is meaningless. That is why the two radii below are not decoration -- they are the
+ * calibration of the image, and getting them wrong slides every gap to the wrong
+ * place.
+ */
+export interface RingSystem {
+  /** File name under web/public/textures/. Needs an alpha channel. */
+  readonly texture: string;
+  /** Radius at the left edge of the image, km. */
+  readonly innerRadiusKm: number;
+  /** Radius at the right edge of the image, km. */
+  readonly outerRadiusKm: number;
+}
+
+/**
  * A single trigonometric term correcting the IAU rotational elements.
  *
  * `N = angleDeg + rateDegPerCentury * T`, with T in Julian centuries from J2000, and
@@ -153,6 +171,8 @@ export interface BodyDefinition {
    * TEXTURE_SETS below.
    */
   readonly textures: Readonly<Record<TextureSetId, TextureVariant>>;
+  /** Ring system, or null for the nine bodies here that have none worth drawing. */
+  readonly rings: RingSystem | null;
 }
 
 /**

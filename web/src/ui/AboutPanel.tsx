@@ -111,7 +111,9 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does.',
             'Surface maps are composites, not registered cartographic products — NASA imagery with colour and contrast added by its authors, so they read more vividly than a camera would. On the flattened bodies a feature can sit about 1.5° from its true latitude; Saturn is the worst, Earth and Mars are under 0.1°.',
             'Pluto’s southern hemisphere is invented. New Horizons could not photograph it — it was in polar winter during the 2015 flyby — so it is filled with the average colour of the rest rather than left black. Nothing south of about 40°S on Pluto is an observation.',
-            'Saturn has no rings yet, and Earth has no clouds or night lights. Both are coming.',
+            'Saturn’s rings are at real radii, lying in its real equatorial plane — which is why they open and close as it orbits. The ring map is a radial strip whose radii are not published, so they were fitted from the image against surveyed ring boundaries: good to about 1400 km, which is wider than the Encke Gap it draws. Every division is present and roughly placed, none at a surveyed radius.',
+            'The rings scatter light as a slab of particles rather than as a flat surface, so they stay visible when the Sun is near their plane — as it is now — and the unlit face shows the real reversal, with the dense B ring dark and the sparse C ring bright.',
+            'Saturn does not yet cast a shadow on its own rings, nor the rings on Saturn. Earth has no clouds or night lights yet.',
           ]}
         />
 

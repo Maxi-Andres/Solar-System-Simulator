@@ -197,6 +197,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // every published map of it, including this one, is a false-colour convention.
       photometric: { file: 'sun.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'mercury',
@@ -228,6 +229,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // *enhanced* colour, which is further from true than this.
       photometric: { file: 'mercury.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'venus',
@@ -259,6 +261,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // against this one's 44%. Radar is real data and is not what Venus looks like.
       photometric: { file: 'venus.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'earth',
@@ -289,6 +292,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // colour by construction rather than by adjustment.
       photometric: { file: 'earth-photometric.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'mars',
@@ -319,6 +323,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // colour Mars actually is.
       photometric: { file: 'mars-photometric.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'jupiter',
@@ -350,6 +355,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // this one's 14%. Ours is already the paler, less processed option.
       photometric: { file: 'jupiter.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'saturn',
@@ -378,6 +384,33 @@ export const CATALOG: readonly BodyDefinition[] = [
       illustrative: { file: 'saturn.jpg', longitudeOriginDeg: 180 },
       // Kept: Same as Jupiter: the NASA map is enhanced, at 68% saturation against 21%.
       photometric: { file: 'saturn.jpg', longitudeOriginDeg: 180 },
+    },
+    /**
+     * The radii are the *calibration of the texture*, not a quotation of the ring
+     * system, and they were measured rather than guessed.
+     *
+     * Solar System Scope publishes the ring map as a radial strip and does not say
+     * which radii its edges correspond to. So the alpha profile was read off the file
+     * and its structural boundaries -- the C ring's inner edge, the C-to-B step, the
+     * Cassini Division either side, and the A ring's outer edge -- were fitted by
+     * least squares against their surveyed radii, giving
+     *
+     *   r(u) = 69942 + 71938 * u
+     *
+     * with an RMS residual of 1365 km, corroborated independently by the Encke Gap
+     * landing 747 km from its true 133589 km.
+     *
+     * Worth being blunt about what that means: 1365 km is *wider than the Encke Gap
+     * itself*, which is 325 km. Every division is present and roughly placed, and
+     * none is at a surveyed radius. Either the strip is not exactly linear in radius
+     * or it was drawn approximately; either way the image cannot support better, and
+     * quoting 74658 and 136780 here would look more precise while putting every
+     * feature further from where it belongs.
+     */
+    rings: {
+      texture: 'saturn-rings.png',
+      innerRadiusKm: 69942,
+      outerRadiusKm: 141880,
     },
   },
   {
@@ -409,6 +442,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // featureless disc.
       photometric: { file: 'uranus.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'neptune',
@@ -448,6 +482,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // they reprocessed the contrast-stretched Voyager 2 imagery.
       photometric: { file: 'neptune-photometric.jpg', longitudeOriginDeg: 180 },
     },
+    rings: null,
   },
   {
     id: 'pluto',
@@ -493,6 +528,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // product.
       photometric: { file: 'pluto.jpg', longitudeOriginDeg: 0 },
     },
+    rings: null,
   },
 ];
 

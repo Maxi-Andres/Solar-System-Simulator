@@ -15,7 +15,13 @@ import * as THREE from 'three';
  * phase B brings asteroids this needs an eviction policy, not a bigger cache.
  */
 
-/** Deduplicates concurrent and repeat requests for the same file. */
+/**
+ * Deduplicates concurrent and repeat requests for the same file.
+ *
+ * Keyed by URL alone, so the first caller's `TextureOptions` are the ones that stick.
+ * Fine while every file has one use, which is the case today; a file wanted with two
+ * different wrap modes would need the options in the key.
+ */
 const cache = new Map<string, Promise<THREE.Texture>>();
 
 /**
@@ -39,6 +45,14 @@ export interface TextureOptions {
    * its limb, which is exactly the case trilinear filtering smears into mush.
    */
   readonly anisotropy?: number;
+  /**
+   * How the horizontal axis wraps. Defaults to repeating, which is right for an
+   * equirectangular map where u is longitude and 360 degrees meets 0.
+   *
+   * A ring strip must clamp instead: there u is radius, and wrapping it would fold
+   * the outer edge of the rings back onto the inner one.
+   */
+  readonly wrapS?: THREE.Wrapping;
 }
 
 export function loadBodyTexture(
@@ -60,7 +74,7 @@ export function loadBodyTexture(
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = options.anisotropy ?? 1;
         // Equirectangular maps wrap in longitude and must not in latitude.
-        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapS = options.wrapS ?? THREE.RepeatWrapping;
         texture.wrapT = THREE.ClampToEdgeWrapping;
         resolve(texture);
       },

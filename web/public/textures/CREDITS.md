@@ -63,6 +63,7 @@ to prove the check still has teeth.
 | `earth-photometric.jpg` | Earth | [NASA Blue Marble Next Generation](https://visibleearth.nasa.gov/images/73909/december-blue-marble-next-generation-w-topography-and-bathymetry) | Public domain |
 | `mars-photometric.jpg` | Mars | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
 | `neptune-photometric.jpg` | Neptune | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `saturn-rings.png` | Saturn's rings | [Solar System Scope](https://www.solarsystemscope.com/textures/) | CC BY 4.0 |
 
 ## Attribution
 
@@ -120,6 +121,32 @@ clamping at the poles. Nothing south of about 40 S on Pluto is observation.
   Neptune is featureless enough that its longitude origin cannot be verified from the
   pixels, so it inherits its source family's convention — noted here because it is the
   one map whose alignment rests on inference rather than measurement.
+
+## The ring map
+
+`saturn-rings.png` is not a surface map and is not used like one. It is a **radial
+strip**: 2048 px wide by 125 tall, where the horizontal axis runs from the inner ring
+radius to the outer and the image is constant vertically. Its meaning is in the alpha
+channel, which is what cuts the Cassini Division and the Encke Gap out of the disc, and
+about 14% of it is fully transparent — the empty space inside the C ring and outside
+the A ring. So `u` is radius, not longitude, and it must **clamp** rather than repeat:
+wrapping it would fold the outer edge of the rings onto the inner one.
+
+**The radii it is drawn against had to be measured.** Solar System Scope does not
+publish them, so the alpha profile was read off the file and its structural boundaries —
+the C ring's inner edge, the C-to-B step, the Cassini Division either side, and the A
+ring's outer edge — were fitted by least squares against their surveyed radii:
+
+```
+r(u) = 69942 + 71938 * u        RMS residual 1365 km
+```
+
+corroborated independently by the Encke Gap landing 747 km from its true 133,589 km.
+Those are the numbers in `tools/src/catalog.ts`, and the honest reading of them is that
+**1365 km is wider than the Encke Gap itself** (325 km). Every division is present and
+roughly placed; none is at a surveyed radius. The image cannot support better, and
+quoting the textbook 74,658 and 136,780 would look more precise while placing every
+feature further from where it belongs.
 
 ## Other sources, for later phases
 
