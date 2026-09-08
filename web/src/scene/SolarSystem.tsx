@@ -1,4 +1,4 @@
-import type { BodyDefinition, BodyId } from '@sss/tools/types';
+import type { BodyDefinition, BodyId, TextureSetId } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -37,6 +37,18 @@ const MARKER_PIXELS = 11;
 const SPHERE_SEGMENTS = 64;
 
 /**
+ * Which of the catalog's surface-map sets is drawn.
+ *
+ * A picker for this existed briefly and was removed by request: the true-colour set
+ * changes only three bodies and the comparison was not worth a permanent control. Both
+ * sets are still in the catalog and both are still pixel-checked by
+ * textureAlignment.test.ts, so flipping this constant is the whole of re-enabling it,
+ * and restoring the picker means putting `textureSet` back in the view store and the
+ * selector back in LightingPanel.
+ */
+const ACTIVE_TEXTURE_SET: TextureSetId = 'illustrative';
+
+/**
  * On-screen radius, in pixels, at which a body's surface map is worth fetching.
  *
  * Above the marker ring's own size, so the request goes out while the body is still
@@ -62,8 +74,19 @@ interface BodyHandles {
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
   readonly orbit: OrbitLine | null;
-  /** Set once the surface map has been asked for, so it is asked for once. */
-  textureRequested: boolean;
+  /**
+   * Texture bookkeeping, so a map is fetched once per file and the orientation always
+   * matches the image actually on the material.
+   *
+   * `shown` trails `requested` while a load is in flight. That matters because the
+   * orientation depends on where the image starts in longitude: turning the body to
+   * suit a map that has not arrived yet would misalign the one still being displayed.
+   * Both of this project's sets happen to agree on every body's origin, so nothing
+   * currently depends on it -- which is exactly when it is cheap to get right.
+   */
+  requestedFile: string | null;
+  shownFile: string | null;
+  shownOriginDeg: number;
 }
 
 export function SolarSystem({
@@ -137,7 +160,16 @@ export function SolarSystem({
         orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
       }
 
-      return { definition, group, mesh, marker, orbit, textureRequested: false };
+      return {
+        definition,
+        group,
+        mesh,
+        marker,
+        orbit,
+        requestedFile: null,
+        shownFile: null,
+        shownOriginDeg: 0,
+      };
     });
   }, [store]);
 
@@ -185,10 +217,19 @@ export function SolarSystem({
         kmToUnits(rebased.positionKm.z),
       );
 
-      // Point the axis where the IAU says it points and turn the prime meridian to
-      // where it is now. This is one assignment and it carries the axial tilt, the
-      // rotation rate, its direction and the absolute phase all at once.
-      handle.mesh.quaternion.copy(bodyOrientation(jd, handle.definition));
+      const variant = handle.definition.textures[ACTIVE_TEXTURE_SET];
+
+      // Point the axis where the IAU says it points and turn the body so the image
+      // lands where the image belongs. One assignment carrying the axial tilt, the
+      // rotation rate, its direction and the absolute phase. Until a map is on the
+      // material there is nothing to misalign, so the incoming origin is used.
+      handle.mesh.quaternion.copy(
+        bodyOrientation(
+          jd,
+          handle.definition,
+          handle.shownFile === null ? variant.longitudeOriginDeg : handle.shownOriginDeg,
+        ),
+      );
 
       // Distance from the camera, not from the focus: what the camera sees is what
       // decides whether a sphere is big enough to be worth drawing.
@@ -222,27 +263,36 @@ export function SolarSystem({
       meshMaterial.opacity = sphereOpacity;
 
       // Fetch the surface map the first time this body is worth looking at, and
-      // never again. Until it arrives the flat colour keeps showing, so approaching
-      // a planet degrades to the old render rather than to a blank sphere.
-      if (
-        !handle.textureRequested &&
-        handle.definition.texture !== null &&
-        pixelRadius >= TEXTURE_REQUEST_PX
-      ) {
-        handle.textureRequested = true;
-        void loadBodyTexture(handle.definition.texture, {
+      // again only if the selected set asks for a different file. Until it arrives
+      // whatever is already there keeps showing -- the flat colour on first approach,
+      // or the previous set's map when switching -- so nothing ever blanks out.
+      if (handle.requestedFile !== variant.file && pixelRadius >= TEXTURE_REQUEST_PX) {
+        handle.requestedFile = variant.file;
+        const wanted = variant;
+        void loadBodyTexture(wanted.file, {
           anisotropy: gl.capabilities.getMaxAnisotropy(),
         })
           .then((texture) => {
+            // The set may have been switched again while this was in flight; a stale
+            // response must not overwrite a newer choice.
+            if (handle.requestedFile !== wanted.file) {
+              return;
+            }
             meshMaterial.map = texture;
             // The catalog colour was standing in for the surface; left in place it
             // would now tint it.
             meshMaterial.color.set('#ffffff');
             meshMaterial.needsUpdate = true;
+            handle.shownFile = wanted.file;
+            handle.shownOriginDeg = wanted.longitudeOriginDeg;
           })
           .catch((error: unknown) => {
-            // Not fatal, and not silent: the body keeps its colour and stays
-            // usable, but a missing map is a deployment problem worth seeing.
+            // Allow a retry rather than leaving the body stuck on its flat colour.
+            if (handle.requestedFile === wanted.file) {
+              handle.requestedFile = null;
+            }
+            // Not fatal, and not silent: the body stays usable, but a missing map is
+            // a deployment problem worth seeing.
             console.error(`Could not load the surface map for ${handle.definition.id}`, error);
           });
       }

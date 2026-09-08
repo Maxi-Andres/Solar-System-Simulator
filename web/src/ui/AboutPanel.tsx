@@ -109,7 +109,7 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             'The starfield is procedurally generated, not a catalog. It is the one thing on screen that is not real. Gaia data replaces it later.',
             'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
             'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does.',
-            'Surface maps are illustrative composites, not registered cartographic products. On the flattened bodies a feature can sit about 1.5° from its true latitude — Saturn is the worst; Earth and Mars are under 0.1°.',
+            'Surface maps are composites, not registered cartographic products — NASA imagery with colour and contrast added by its authors, so they read more vividly than a camera would. On the flattened bodies a feature can sit about 1.5° from its true latitude; Saturn is the worst, Earth and Mars are under 0.1°.',
             'Pluto’s southern hemisphere is invented. New Horizons could not photograph it — it was in polar winter during the 2015 flyby — so it is filled with the average colour of the rest rather than left black. Nothing south of about 40°S on Pluto is an observation.',
             'Saturn has no rings yet, and Earth has no clouds or night lights. Both are coming.',
           ]}

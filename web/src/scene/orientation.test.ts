@@ -21,6 +21,9 @@ const venus = getBody('venus');
 const uranus = getBody('uranus');
 const mercury = getBody('mercury');
 
+/** Where Earth's illustrative map starts, which is what the orientation is built on. */
+const earthOrigin = earth.textures.illustrative.longitudeOriginDeg;
+
 /** Angle between two vectors, degrees. */
 function angleBetween(a: { x: number; y: number; z: number }, b: typeof a): number {
   const cos = dot(a, b) / (length(a) * length(b));
@@ -185,9 +188,9 @@ describe('bodyOrientation', () => {
     // map happens to start there -- Earth's does not. Assuming it did is what drew
     // every Solar System Scope body half a turn out.
     const jd = J2000_JD + 1234.5;
-    const quaternion = bodyOrientation(jd, earth);
+    const quaternion = bodyOrientation(jd, earth, earthOrigin);
     const pole = poleDirection(jd, earth);
-    const imageStart = longitudeDirection(jd, earth, earth.textureLongitudeOriginDeg);
+    const imageStart = longitudeDirection(jd, earth, earthOrigin);
     const meridian = primeMeridianDirection(jd, earth);
 
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
@@ -207,14 +210,14 @@ describe('bodyOrientation', () => {
     // textureAlignment.test.ts both notice.
     const jd = J2000_JD + 1234.5;
     const pluto = getBody('pluto');
-    const zero = new THREE.Vector3(-1, 0, 0).applyQuaternion(bodyOrientation(jd, pluto));
+    const zero = new THREE.Vector3(-1, 0, 0).applyQuaternion(bodyOrientation(jd, pluto, pluto.textures.illustrative.longitudeOriginDeg));
 
     expect(angleBetween(zero, primeMeridianDirection(jd, pluto))).toBeLessThan(1e-5);
   });
 
   it('is a pure rotation: no scaling, no reflection', () => {
     for (const body of CATALOG) {
-      const quaternion = bodyOrientation(J2000_JD + 4000, body);
+      const quaternion = bodyOrientation(J2000_JD + 4000, body, body.textures.illustrative.longitudeOriginDeg);
       const basis = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
 
       expect(quaternion.length()).toBeCloseTo(1, 12);
@@ -225,8 +228,8 @@ describe('bodyOrientation', () => {
 
   it('turns the body about its axis while the axis barely moves', () => {
     const halfDay = 0.5;
-    const before = bodyOrientation(J2000_JD, earth);
-    const after = bodyOrientation(J2000_JD + halfDay, earth);
+    const before = bodyOrientation(J2000_JD, earth, earthOrigin);
+    const after = bodyOrientation(J2000_JD + halfDay, earth, earthOrigin);
 
     const poleBefore = new THREE.Vector3(0, 1, 0).applyQuaternion(before);
     const poleAfter = new THREE.Vector3(0, 1, 0).applyQuaternion(after);

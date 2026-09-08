@@ -7,17 +7,46 @@ you approach something.
 Every file added here must be recorded below with its source and license.
 `web/src/scene/textures.test.ts` enforces that: an uncredited image fails the build.
 
-All maps are 2048 x 1024 equirectangular, north at the top, longitude increasing east.
+Every map is equirectangular with north at the top and longitude increasing east.
+Resolution varies by source, and is left at whatever the source published: upscaling
+would invent detail the data does not have.
 
-**Where each file starts is not the same for both sources**, and it is recorded per body
-in the catalog as `textureLongitudeOriginDeg`:
+## Two sets, one of them unused
 
-- Solar System Scope centres its maps on the prime meridian, so their left edge is
-  **longitude 180 W**. Greenwich is in the middle of the image.
+There is no single source that is both complete and photometric, so both live here and
+`ACTIVE_TEXTURE_SET` in `web/src/scene/SolarSystem.tsx` chooses. There is no in-app
+picker: one existed briefly and was removed, since the true-colour set changes only
+three bodies and the comparison did not earn a permanent control.
+
+- **Illustrative** — Solar System Scope throughout. NASA imagery with colour and
+  contrast added by its authors. Complete, vivid, and not a measurement. **This is what
+  currently ships.**
+- **True colour** — a calibrated or mission product wherever one has been published.
+  That is **three bodies**: Earth, Mars and Neptune. The other seven fall back to their
+  illustrative map, and the reason is recorded per body in `tools/src/catalog.ts`.
+  Present in the repository, not currently drawn.
+
+Why only three, when NASA publishes maps of more than that: for **Venus** NASA's map is
+the Magellan *radar* mosaic tinted orange, at 93% mean saturation against the
+illustrative map's 44% — radar is real data and is not what Venus looks like. For
+**Jupiter** and **Saturn** the NASA maps are enhanced-colour products, at 65% and 68%
+saturation against 14% and 21%. In all three cases the illustrative map is already the
+less-processed option. **Mercury**, **Uranus** and the **Sun** have no true-colour
+global map at all; the Sun's photosphere is white in visible light, and every published
+map of it, including ours, is a false-colour convention.
+
+## Where each file starts in longitude
+
+Recorded per map in the catalog as `longitudeOriginDeg`, because it differs by
+publisher and getting it wrong turns a body exactly half way round:
+
+- Solar System Scope, NASA Blue Marble and the NASA 3D Resources maps all centre on the
+  prime meridian, so their left edge is **longitude 180 W**.
 - NASA's Pluto mosaic starts at **longitude 0**, with Sputnik Planitia in the middle.
 
-Assuming the first for both, or the second for both, turns a body exactly half way
-round. `web/src/scene/textureAlignment.test.ts` measures it from the pixels.
+`web/src/scene/textureAlignment.test.ts` measures every one of these from the pixels,
+across both sets, and includes a test that deliberately reproduces a 180-degree error
+to prove the check still has teeth.
 
 | File | Body | Source | License |
 |---|---|---|---|
@@ -31,6 +60,9 @@ round. `web/src/scene/textureAlignment.test.ts` measures it from the pixels.
 | `uranus.jpg` | Uranus | [Solar System Scope](https://www.solarsystemscope.com/textures/) | CC BY 4.0 |
 | `neptune.jpg` | Neptune | [Solar System Scope](https://www.solarsystemscope.com/textures/) | CC BY 4.0 |
 | `pluto.jpg` | Pluto | [NASA/JHUAPL/SwRI, PIA11707](https://images.nasa.gov/details/PIA11707) | Public domain |
+| `earth-photometric.jpg` | Earth | [NASA Blue Marble Next Generation](https://visibleearth.nasa.gov/images/73909/december-blue-marble-next-generation-w-topography-and-bathymetry) | Public domain |
+| `mars-photometric.jpg` | Mars | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `neptune-photometric.jpg` | Neptune | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
 
 ## Attribution
 
@@ -70,10 +102,35 @@ clamping at the poles. Nothing south of about 40 S on Pluto is observation.
   composites rather than registered cartographic products, committing to either
   convention would be a false precision.
 
+## The true-colour files
+
+- **`earth-photometric.jpg`** — Blue Marble Next Generation, December 2004, with
+  topography and bathymetry. MODIS radiance, calibrated and mapped to sRGB, so it is
+  true colour by construction rather than by adjustment. Courtesy NASA Earth
+  Observatory (Reto Stöckli). Downscaled from 5400 x 2700 to 2048 x 1024. It measures
+  *more* saturated than the illustrative Earth (64% against 53%) and is still the
+  truer image: deep ocean and vegetation really are that saturated. Saturation was a
+  useful signal for spotting enhancement, never a definition of truth.
+- **`mars-photometric.jpg`** — NASA 3D Resources, Viking-derived, 1440 x 720.
+  Butterscotch rather than orange-red, which is the colour Mars actually is.
+- **`neptune-photometric.jpg`** — NASA 3D Resources, 720 x 360. Pale blue-green. The
+  familiar deep blue is an artifact of contrast-stretched Voyager 2 imagery; the 2024
+  Oxford reprocessing (Irwin et al.) showed the real Neptune is much closer to Uranus.
+  This map is in that direction, at 48% saturation against the illustrative 68%.
+  Neptune is featureless enough that its longitude origin cannot be verified from the
+  pixels, so it inherits its source family's convention — noted here because it is the
+  one map whose alignment rests on inference rather than measurement.
+
 ## Other sources, for later phases
 
 - **[NASA Scientific Visualization Studio](https://svs.gsfc.nasa.gov/)** and
   **[NASA Image and Video Library](https://images.nasa.gov/)** — generally public
   domain, but verify case by case.
 - **[USGS Astrogeology](https://astrogeology.usgs.gov/search)** — high-resolution
-  cartographic mosaics, public domain, planetographically registered.
+  cartographic mosaics, public domain, planetographically registered. The right
+  products for Mars and Mercury, and impractical at present: the Viking colour mosaic
+  is 12 GB and the MESSENGER basemap 759 MB, with no smaller published variant found.
+- **[NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources)** — NASA's own
+  texture library, free of copyright. Beyond the planets it carries the Moon, every
+  major moon of Jupiter, Saturn, Uranus and Neptune, and **Hipparcos, Tycho and Yale
+  star maps** — which are what Phase D needs to replace the procedural starfield.

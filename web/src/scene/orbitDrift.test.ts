@@ -44,6 +44,32 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 const store = await tryLoad();
 const describeWithData = store === null ? describe.skip : describe;
 
+/**
+ * Angle between the orbit normals implied by two sets of elements, in degrees.
+ *
+ * Inclination and ascending node together define one direction -- the orbit's pole --
+ * and comparing that direction is well-conditioned everywhere, including on the nearly
+ * coplanar orbits where the node itself stops being meaningful.
+ */
+function orbitNormalAngleDeg(
+  a: { inclinationDeg: number; ascendingNodeDeg: number },
+  b: typeof a,
+): number {
+  const normal = (e: typeof a): { x: number; y: number; z: number } => {
+    const i = (e.inclinationDeg * Math.PI) / 180;
+    const node = (e.ascendingNodeDeg * Math.PI) / 180;
+    return {
+      x: Math.sin(i) * Math.sin(node),
+      y: -Math.sin(i) * Math.cos(node),
+      z: Math.cos(i),
+    };
+  };
+  const first = normal(a);
+  const second = normal(b);
+  const cosine = first.x * second.x + first.y * second.y + first.z * second.z;
+  return (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI;
+}
+
 /** Perpendicular distance from a point to a line segment. */
 function distanceToSegment(
   p: readonly number[],
@@ -82,12 +108,6 @@ function nonSingular(elements: {
     elements.eccentricity * Math.sin(longitudeOfPeriapsis),
     elements.eccentricity * Math.cos(longitudeOfPeriapsis),
   ];
-}
-
-/** Smallest separation between two angles in degrees, across the 0/360 wrap. */
-function angleDifferenceDeg(a: number, b: number): number {
-  const raw = Math.abs(a - b) % 360;
-  return raw > 180 ? 360 - raw : raw;
 }
 
 /** Nearest distance from a point to a closed polyline, in km. */
@@ -254,11 +274,22 @@ describeWithData('stateToOsculatingElements', () => {
       expect(Math.abs(derived.periodSec / horizons.periodSec - 1)).toBeLessThan(1.5e-3);
       expect(Math.abs(derived.eccentricity - horizons.eccentricity)).toBeLessThan(5e-4);
 
-      // Orientation of the plane: within a hundredth of a degree, tight enough that a
-      // wrong rotation sequence or a sign error could not slip through.
+      // Orientation of the plane, compared as the orbit normal rather than as
+      // inclination and node separately.
+      //
+      // The node is ill-conditioned in exactly the way the argument of periapsis is,
+      // and for the same reason: it is an angle measured within a plane whose own
+      // orientation is barely defined when that plane is nearly the reference plane.
+      // Its error scales as 1/sin(i), so Neptune at i = 1.77 degrees amplifies the
+      // velocity residue about thirtyfold and lands at 0.23 degrees of node error
+      // while its orbit normal is off by 0.009 degrees and its inclination by 0.006.
+      //
+      // A flat threshold on the node is therefore a threshold on conditioning, not on
+      // correctness -- it passed at 0.2 only until a re-fetch moved the elements epoch
+      // and resampled the residue. The normal is the well-conditioned combination and
+      // is what "orientation of the plane" actually means, so it gets the tight bound.
       expect(Math.abs(derived.inclinationDeg - horizons.inclinationDeg)).toBeLessThan(0.01);
-      expect(angleDifferenceDeg(derived.ascendingNodeDeg, horizons.ascendingNodeDeg))
-        .toBeLessThan(0.2);
+      expect(orbitNormalAngleDeg(derived, horizons), id).toBeLessThan(0.02);
 
       // Where periapsis points is compared through the non-singular elements
       // e*cos(w+O) and e*sin(w+O), not through w itself. The argument of periapsis is

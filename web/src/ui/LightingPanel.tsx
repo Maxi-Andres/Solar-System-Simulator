@@ -63,6 +63,7 @@ export function LightingPanel() {
           );
         })}
       </div>
+
     </Panel>
   );
 }

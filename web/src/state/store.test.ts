@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { bodiesDifferingBySet, TEXTURE_SETS } from '@sss/tools/catalog';
+
 import {
   isLayerAvailable,
   LAYERS,
@@ -17,6 +19,25 @@ beforeEach(() => {
     lighting: 'natural',
     openPanel: null,
     zoomImpulse: 1,
+  });
+});
+
+describe('surface map sets', () => {
+  // No picker: it was removed by request, since the true-colour set changes only three
+  // bodies. Both sets stay in the catalog, so these guard the files that are still in
+  // the repository and the constant that chooses between them.
+  it('keeps both sets described, naming what each one is', () => {
+    expect(TEXTURE_SETS.map((set) => set.id)).toEqual(['illustrative', 'photometric']);
+
+    const illustrative = TEXTURE_SETS.find((set) => set.id === 'illustrative');
+    const photometric = TEXTURE_SETS.find((set) => set.id === 'photometric');
+
+    expect(illustrative?.description).toMatch(/not a measurement/i);
+    expect(photometric?.description).toMatch(/Earth, Mars and Neptune/);
+  });
+
+  it('differs on exactly three bodies', () => {
+    expect(bodiesDifferingBySet()).toEqual(['earth', 'mars', 'neptune']);
   });
 });
 

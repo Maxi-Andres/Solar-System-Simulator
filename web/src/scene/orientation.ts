@@ -203,12 +203,20 @@ export function longitudeDirection(
  * were internally fine. textureAlignment.test.ts closes that loop by reading the
  * actual pixels.
  *
+ * Which is why the origin is a parameter and not a property of the body: two map sets
+ * are selectable, and nothing guarantees a body's two maps start at the same
+ * longitude. Passing it in makes the dependency impossible to forget.
+ *
  * Written as a basis rather than a sequence of Euler angles because there is no
  * ordering to get wrong, and because each column is independently checkable.
  */
-export function bodyOrientation(jdTdb: number, body: BodyDefinition): THREE.Quaternion {
+export function bodyOrientation(
+  jdTdb: number,
+  body: BodyDefinition,
+  textureLongitudeOriginDeg: number,
+): THREE.Quaternion {
   const pole = poleDirection(jdTdb, body);
-  const imageStart = longitudeDirection(jdTdb, body, body.textureLongitudeOriginDeg);
+  const imageStart = longitudeDirection(jdTdb, body, textureLongitudeOriginDeg);
   // Right-handed: x cross y = z, and swinging the image's first column 90 degrees
   // east about the pole lands on exactly this.
   const east = cross(pole, imageStart);

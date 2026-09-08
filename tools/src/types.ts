@@ -11,6 +11,38 @@ export type BodyId = string;
 export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'moon' | 'spacecraft';
 
 /**
+ * Which surface-map set a body is being drawn with.
+ *
+ * `illustrative` is the Solar System Scope set: NASA imagery with colour and contrast
+ * added by its authors. Complete, vivid, and not a measurement.
+ *
+ * `photometric` prefers a calibrated or mission product wherever one exists. It only
+ * differs for three bodies, which is not a shortcoming of the effort but the actual
+ * state of what has been published -- Venus, Jupiter and Saturn have NASA maps that
+ * are *more* enhanced than the illustrative ones, and Mercury, Uranus and the Sun have
+ * no true-colour global map at all. Where no better source exists a body keeps its
+ * illustrative map, and the UI says how many bodies actually change.
+ */
+export type TextureSetId = 'illustrative' | 'photometric';
+
+/** One surface map: the file, and where its left edge sits in longitude. */
+export interface TextureVariant {
+  /** File name under web/public/textures/. */
+  readonly file: string;
+  /**
+   * Which longitude sits at the LEFT edge of the image, in degrees east.
+   *
+   * Not a detail, and not a constant: it differs by publisher, and getting it wrong
+   * turns the body 180 degrees without changing anything a self-consistency check
+   * could notice. Solar System Scope, NASA Blue Marble and the NASA 3D Resources maps
+   * all centre on the prime meridian, so their left edge is 180 W; NASA's Pluto
+   * mosaic starts at 0. Every value here is measured from the pixels in
+   * textureAlignment.test.ts rather than taken on trust.
+   */
+  readonly longitudeOriginDeg: number;
+}
+
+/**
  * A single trigonometric term correcting the IAU rotational elements.
  *
  * `N = angleDeg + rateDegPerCentury * T`, with T in Julian centuries from J2000, and
@@ -113,18 +145,14 @@ export interface BodyDefinition {
   readonly color: string;
   /** The Sun has no meaningful orbit to draw around the barycenter. */
   readonly drawOrbit: boolean;
-  /** Texture file name under web/public/textures/, or null if not available yet. */
-  readonly texture: string | null;
   /**
-   * Which longitude sits at the LEFT edge of that image, in degrees east.
+   * Surface maps, one per selectable set. Never null: every body has both.
    *
-   * Not a detail, and not a constant: it differs by publisher, and getting it wrong
-   * turns the body 180 degrees without changing anything a self-consistency check
-   * could notice. Solar System Scope centres its maps on the prime meridian, so their
-   * left edge is 180 W. NASA's Pluto mosaic starts at 0. Both are measured from the
-   * pixels in textureAlignment.test.ts rather than taken on trust.
+   * Two sets exist because there is no single source that is both complete and
+   * photometric, and pretending otherwise would be the dishonest option. See
+   * TEXTURE_SETS below.
    */
-  readonly textureLongitudeOriginDeg: number;
+  readonly textures: Readonly<Record<TextureSetId, TextureVariant>>;
 }
 
 /**

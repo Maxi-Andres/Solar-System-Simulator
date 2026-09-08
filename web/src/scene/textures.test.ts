@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { decode } from 'jpeg-js';
 import { describe, expect, it } from 'vitest';
 
-import { CATALOG } from '@sss/tools/catalog';
+import { CATALOG, TEXTURE_SETS } from '@sss/tools/catalog';
 import { textureUrl } from './textureCache.ts';
 
 /**
@@ -26,16 +26,20 @@ const TEXTURE_DIR = join(import.meta.dirname, '../../public/textures');
 const files = (await readdir(TEXTURE_DIR)).filter((name) => !name.endsWith('.md'));
 const credits = await readFile(join(TEXTURE_DIR, 'CREDITS.md'), 'utf8');
 
+/** Every (body, set) pair, flattened, since both sets ship. */
+const variants = CATALOG.flatMap((body) =>
+  TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures[set.id] })),
+);
+
 describe('the texture files', () => {
-  it('gives every body in the catalog a map that exists', async () => {
-    for (const body of CATALOG) {
-      expect(body.texture, body.id).not.toBeNull();
-      expect(files, body.id).toContain(body.texture);
+  it('gives every body in every set a map that exists', () => {
+    for (const v of variants) {
+      expect(files, `${v.id}/${v.set}`).toContain(v.file);
     }
   });
 
-  it('ships no image that no body uses', () => {
-    const used = new Set(CATALOG.map((body) => body.texture));
+  it('ships no image that no set uses', () => {
+    const used = new Set(variants.map((v) => v.file));
 
     for (const file of files) {
       expect(used, file).toContain(file);
@@ -59,9 +63,10 @@ describe('the texture files', () => {
     );
     const totalMb = sizes.reduce((sum, size) => sum + size, 0) / 1024 / 1024;
 
-    // 4.3 MB today. They are committed, so this is a guard on the repository as much
-    // as on the page: swapping in 8k maps would be a 40 MB decision, not an accident.
-    expect(totalMb).toBeLessThan(6);
+    // 5.0 MB today across both sets. They are committed, so this is a guard on the
+    // repository as much as on the page: swapping in 8k maps would be a 40 MB
+    // decision, not an accident.
+    expect(totalMb).toBeLessThan(8);
     // And nothing is a stub: the smallest, Uranus, is a 76 KB featureless disc.
     expect(Math.min(...sizes)).toBeGreaterThan(50_000);
   });
@@ -91,23 +96,42 @@ describe('textureUrl', () => {
  * rather than shipped.
  */
 describe('no map has an unfilled gap', () => {
-  const nearBlackFraction = (pixels: { data: Uint8Array | Buffer; width: number; height: number }) => {
-    let dark = 0;
+  /**
+   * Fraction of pixels that are *black*, not merely dark.
+   *
+   * The distinction is the whole test, and it took a false positive to see it. The
+   * first version flagged anything under luminance 12, which failed Blue Marble: 20%
+   * of true-colour Earth is deep ocean that genuinely renders that dark. Real dark
+   * data has variation, spreads across latitudes and never reaches zero -- Blue
+   * Marble's darkest pixels sit at luminance 2 to 12 with a standard deviation of 2.
+   * An unmapped region is exactly zero, and survives JPEG as exactly zero, which is
+   * what Pluto's polar night was before it was filled.
+   *
+   * So the threshold is near-zero rather than dark, and it still catches the case it
+   * was written for by a factor of thirty.
+   */
+  const blackFraction = (pixels: {
+    data: Uint8Array | Buffer;
+    width: number;
+    height: number;
+  }) => {
+    let black = 0;
     for (let i = 0; i < pixels.width * pixels.height; i += 1) {
       const o = i * 4;
-      const luminance = 0.299 * pixels.data[o]! + 0.587 * pixels.data[o + 1]! + 0.114 * pixels.data[o + 2]!;
-      if (luminance < 12) {
-        dark += 1;
+      const luminance =
+        0.299 * pixels.data[o]! + 0.587 * pixels.data[o + 1]! + 0.114 * pixels.data[o + 2]!;
+      if (luminance < 2) {
+        black += 1;
       }
     }
-    return dark / (pixels.width * pixels.height);
+    return black / (pixels.width * pixels.height);
   };
 
-  it.each(files)('leaves no black region in %s', async (file) => {
+  it.each(files)('leaves no unmapped region in %s', async (file) => {
     const pixels = decode(await readFile(join(TEXTURE_DIR, file)), { useTArray: true });
 
-    // A percent of stray dark pixels is normal; a hole is not.
-    expect(nearBlackFraction(pixels)).toBeLessThan(0.01);
+    // Stray black pixels are normal; a hole is 30% of the image.
+    expect(blackFraction(pixels)).toBeLessThan(0.01);
   });
 
   it("fills Pluto's polar night with the average of what was mapped", async () => {

@@ -1,4 +1,4 @@
-import type { BodyDefinition } from './types.ts';
+import type { BodyDefinition, TextureSetId } from './types.ts';
 
 /**
  * Body catalog for v1: the Sun, the eight planets and Pluto.
@@ -109,6 +109,59 @@ export const SUN_CENTER = '500@10';
  *    always agree in sign, and that is not a bug -- see Pluto below.
  */
 
+/**
+ * The two selectable surface-map sets, and the honest statement of each.
+ *
+ * There is no single source that is both complete and photometric. That is not a gap
+ * in the search -- it is the state of what has been published. Measured mean
+ * saturation, source against source:
+ *
+ *   body      illustrative (SSS)   NASA alternative   better
+ *   Mars                   60.8%              49.4%   NASA
+ *   Neptune                67.6%              47.7%   NASA
+ *   Earth                  52.6%     64.2% (Blue Marble)   Blue Marble, calibrated
+ *   Venus                  44.3%              92.7%   SSS (NASA's is radar, tinted)
+ *   Jupiter                14.0%              64.7%   SSS (NASA's is enhanced)
+ *   Saturn                 21.4%              68.2%   SSS (NASA's is enhanced)
+ *
+ * Note Earth: Blue Marble is *more* saturated and still the true-colour answer, because
+ * deep ocean and vegetation really are that saturated. Saturation was a useful signal
+ * for spotting enhancement, never a definition of truth.
+ *
+ * So `photometric` differs on three bodies out of ten. Presenting it as a complete
+ * true-colour set would be the dishonest move; the UI states the count.
+ */
+export const TEXTURE_SETS: readonly {
+  readonly id: TextureSetId;
+  readonly label: string;
+  readonly description: string;
+}[] = [
+  {
+    id: 'illustrative',
+    label: 'Illustrative',
+    description:
+      'Solar System Scope. NASA imagery with colour and contrast added by its ' +
+      'authors: complete and vivid, and not a measurement. More saturated than what ' +
+      'a camera would record.',
+  },
+  {
+    id: 'photometric',
+    label: 'True colour',
+    description:
+      'A calibrated or mission product wherever one has been published, which is ' +
+      'Earth, Mars and Neptune. The other seven keep the illustrative map because no ' +
+      'better source exists -- the NASA maps of Venus, Jupiter and Saturn are more ' +
+      'enhanced, not less.',
+  },
+];
+
+/** Bodies whose map actually changes between the two sets. */
+export function bodiesDifferingBySet(): readonly string[] {
+  return CATALOG.filter(
+    (body) => body.textures.illustrative.file !== body.textures.photometric.file,
+  ).map((body) => body.id);
+}
+
 export const CATALOG: readonly BodyDefinition[] = [
   {
     id: 'sun',
@@ -138,8 +191,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     // The Sun's motion about the barycenter is a small wobble, not an orbit worth
     // drawing as a conic.
     drawOrbit: false,
-    texture: 'sun.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'sun.jpg', longitudeOriginDeg: 180 },
+      // Kept: No true-colour global map exists. The photosphere is white in visible light;
+      // every published map of it, including this one, is a false-colour convention.
+      photometric: { file: 'sun.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'mercury',
@@ -165,8 +222,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#a98cd8',
     drawOrbit: true,
-    texture: 'mercury.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'mercury.jpg', longitudeOriginDeg: 180 },
+      // Kept: The MESSENGER global mosaic is 759 MB and the readily available version is
+      // *enhanced* colour, which is further from true than this.
+      photometric: { file: 'mercury.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'venus',
@@ -192,12 +253,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#e8a33d',
     drawOrbit: true,
-    // The atmosphere map, not the radar surface map. Venus is wrapped in opaque
-    // cloud: the surface is real but it is not what is there to see. Its cloud
-    // pattern also moves, so its longitude origin is nominal in a way the solid
-    // bodies' are not.
-    texture: 'venus.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'venus.jpg', longitudeOriginDeg: 180 },
+      // Kept: NASA's map is the Magellan *radar* mosaic tinted orange -- 93% mean saturation
+      // against this one's 44%. Radar is real data and is not what Venus looks like.
+      photometric: { file: 'venus.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'earth',
@@ -222,8 +283,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#3aa8e0',
     drawOrbit: true,
-    texture: 'earth.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'earth.jpg', longitudeOriginDeg: 180 },
+      // NASA Blue Marble Next Generation: calibrated MODIS radiance, so true
+      // colour by construction rather than by adjustment.
+      photometric: { file: 'earth-photometric.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'mars',
@@ -248,8 +313,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#d96c3f',
     drawOrbit: true,
-    texture: 'mars.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'mars.jpg', longitudeOriginDeg: 180 },
+      // NASA 3D Resources, Viking-derived. Butterscotch rather than orange-red, which is the
+      // colour Mars actually is.
+      photometric: { file: 'mars-photometric.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'jupiter',
@@ -275,8 +344,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#d8a05a',
     drawOrbit: true,
-    texture: 'jupiter.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'jupiter.jpg', longitudeOriginDeg: 180 },
+      // Kept: NASA's Cassini map is an enhanced-colour product at 65% saturation against
+      // this one's 14%. Ours is already the paler, less processed option.
+      photometric: { file: 'jupiter.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'saturn',
@@ -301,8 +374,11 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#e0c060',
     drawOrbit: true,
-    texture: 'saturn.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'saturn.jpg', longitudeOriginDeg: 180 },
+      // Kept: Same as Jupiter: the NASA map is enhanced, at 68% saturation against 21%.
+      photometric: { file: 'saturn.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'uranus',
@@ -327,8 +403,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#7fd8d8',
     drawOrbit: true,
-    texture: 'uranus.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'uranus.jpg', longitudeOriginDeg: 180 },
+      // Kept: No global map exists in either set. There is almost nothing to map: it is a
+      // featureless disc.
+      photometric: { file: 'uranus.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'neptune',
@@ -362,8 +442,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     },
     color: '#5a7fd8',
     drawOrbit: true,
-    texture: 'neptune.jpg',
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'neptune.jpg', longitudeOriginDeg: 180 },
+      // NASA 3D Resources. Pale blue-green, the direction Irwin et al. 2024 established when
+      // they reprocessed the contrast-stretched Voyager 2 imagery.
+      photometric: { file: 'neptune-photometric.jpg', longitudeOriginDeg: 180 },
+    },
   },
   {
     id: 'pluto',
@@ -403,8 +487,12 @@ export const CATALOG: readonly BodyDefinition[] = [
     poleNutation: null,
     color: '#b0a090',
     drawOrbit: true,
-    texture: 'pluto.jpg',
-    textureLongitudeOriginDeg: 0,
+    textures: {
+      illustrative: { file: 'pluto.jpg', longitudeOriginDeg: 0 },
+      // Kept: Already the NASA New Horizons mosaic, so both sets point at the same mission
+      // product.
+      photometric: { file: 'pluto.jpg', longitudeOriginDeg: 0 },
+    },
   },
 ];
 

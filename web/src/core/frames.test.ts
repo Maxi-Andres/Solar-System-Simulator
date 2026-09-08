@@ -28,8 +28,10 @@ function body(id: string, parent: string | null): BodyDefinition {
     poleNutation: null,
     color: '#ffffff',
     drawOrbit: true,
-    texture: null,
-    textureLongitudeOriginDeg: 180,
+    textures: {
+      illustrative: { file: 'test.jpg', longitudeOriginDeg: 180 },
+      photometric: { file: 'test.jpg', longitudeOriginDeg: 180 },
+    },
   };
 }
 

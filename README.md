@@ -36,8 +36,9 @@ Everything else is measured:
   Earth's noon falls on Greenwich.
 - **Surface maps registered to that axis**, checked by reading the actual pixels through
   the renderer's own geometry: the Sahara has to come out sand-coloured, the Amazon
-  green, the Pacific blue. Which matters, because the two publishers start their images
-  at different longitudes and assuming otherwise turns a planet half way round.
+  green, the Pacific blue. Which matters, because publishers start their images at
+  different longitudes and assuming otherwise turns a planet half way round. Every map
+  in the repository goes through that check, shipped or not.
 - **Time** converted UTC → TAI → TT → TDB, leap seconds included. Skipping that 69 s
   offset would misplace Earth by 2000 km.
 - **Light time and relative speeds**, computed from the same vectors. The readout
@@ -61,7 +62,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 280 tests across both workspaces
+pnpm test            # 318 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -175,16 +176,43 @@ the `github-pages` environment the deploy job targets, which is why an editor ma
 `web/vite.config.ts` sets `base: '/Solar-System-Simulator/'` for a project site.
 Override with `VITE_BASE` if the repo is renamed, or set it to `/` for a user site.
 
+## Surface maps
+
+What ships is the **Solar System Scope** set (CC BY 4.0) for the Sun and eight planets,
+plus NASA's New Horizons mosaic for Pluto. These are composites: NASA imagery with
+colour and contrast added by their authors, so they read more vividly than a camera
+would.
+
+A **true-colour** alternative also lives in `web/public/textures/`, unused for now.
+`ACTIVE_TEXTURE_SET` in `web/src/scene/SolarSystem.tsx` selects between them; there is
+no in-app picker.
+
+It covers **three bodies out of ten** — Earth, Mars and Neptune — and that is the state
+of what has been published rather than a limit on the search. NASA's Venus map is the
+Magellan *radar* mosaic tinted orange (93% mean saturation against Solar System Scope's
+44%); its Jupiter and Saturn maps are enhanced-colour products (65% and 68% against 14%
+and 21%). In all three the shipped map is already the less-processed option. Mercury,
+Uranus and the Sun have no true-colour global map at all — the Sun's photosphere is
+white in visible light, so every map of it, ours included, is a false-colour convention.
+
+Earth is the instructive case: Blue Marble measures **more** saturated than the shipped
+map (64% against 53%) and is still the truer image, because deep ocean and vegetation
+really are that saturated. Saturation is a useful signal for spotting enhancement, not
+a definition of truth.
+
+Full per-file sources, licences and longitude conventions in
+`web/public/textures/CREDITS.md`.
+
 ## Page weight
 
 About **940 KB gzipped** on first load: 296 KB of application and 647 KB of
 ephemerides. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
 not what crosses the wire.
 
-The 4.3 MB of surface maps is **not** part of that. Each is fetched only when its body
-grows past about six pixels on screen, so looking at the Solar System from outside
-costs nothing, and approaching one planet costs one image — between 76 KB (Uranus) and
-852 KB (Mercury).
+The surface maps are **not** part of that. Each is fetched only when its body grows past
+about six pixels on screen, so looking at the Solar System from outside costs nothing,
+and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
+(Mercury). The unused true-colour files are never requested at all.
 
 | Connection | First load |
 |---|---|
@@ -230,7 +258,7 @@ Stated plainly, since the point of the project is that everything else is not:
   it was in polar winter during the 2015 flyby — so the original mosaic is black from
   about 36°S down. It is filled with the average colour of the mapped part so it does
   not render as a black cap. Nothing south of about 40°S on Pluto is an observation.
-- **Surface maps are illustrative composites**, not cartographic products.
+- **Surface maps are composites**, not cartographic products.
   The Solar System Scope set is built on NASA imagery with colour and detail added by
   its authors; only Pluto's is a mission product. Venus shows its atmosphere, which is
   what is visible, rather than the radar map of the ground beneath.
@@ -253,8 +281,9 @@ Stated plainly, since the point of the project is that everything else is not:
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
 - Satellite orbital data: **CelesTrak**.
-- Planetary surface maps: **Solar System Scope** (CC BY 4.0) for the Sun and the eight
-  planets; **NASA/JHUAPL/SwRI** New Horizons mosaic for Pluto. Full details in
+- Planetary surface maps: **Solar System Scope** (CC BY 4.0); **NASA/JHUAPL/SwRI** New
+  Horizons mosaic for Pluto; **NASA Earth Observatory** Blue Marble and **NASA 3D
+  Resources** for the unused true-colour files. Full details in
   `web/public/textures/CREDITS.md`.
 - Rotational elements: **IAU Working Group on Cartographic Coordinates and Rotational
   Elements**, 2015 report (Archinal et al. 2018).
