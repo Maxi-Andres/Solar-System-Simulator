@@ -36,12 +36,8 @@ Everything else is measured:
   Earth's noon falls on Greenwich.
 - **Saturn's rings** at real radii in its real equatorial plane, reusing the same IAU
   pole the sphere is oriented by — so they open and close over its 29.5-year orbit, as
-  they do. They scatter light as a slab of separated particles (single-scattering, from
-  optical depth read out of the map's alpha) rather than as a flat surface, which is why
-  they stay visible with the Sun near their plane and why the unlit face shows the dense
-  B ring dark against the sparse C ring. Brightness is anchored on Cassini's measured
-  radiance factor for the B ring, so they come out darker than Saturn's disc rather than
-  brighter.
+  they do, with Saturn's own oblate shadow falling across them.
+  **Their brightness, however, is not modelled** — see Known approximations.
 - **Saturn's shadow on the rings**, cast by its real oblate silhouette. Its reach along
   the ring plane is `c / tan(solar elevation)`, so with the Sun near the ring plane it
   crosses the entire system and with the rings wide open it barely touches them.
@@ -73,7 +69,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 379 tests across both workspaces
+pnpm test            # 402 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -272,6 +268,43 @@ Stated plainly, since the point of the project is that everything else is not:
   division is present and roughly placed and none is at a surveyed radius.
 - **The rings cast no shadow back onto Saturn.** Saturn's shadow on the rings is drawn;
   the reverse, a set of dark bands across the planet, is not.
+- **Ring brightness is a constant, and this is the one place the renderer knowingly
+  stops being measured.** The rings are drawn at a fixed radiance factor regardless of
+  where the camera and the Sun are. Their geometry is real — radii, plane, shadow — and
+  their band structure comes from the map's optical depth; only the light model is
+  faked.
+
+  The rings are grey, deliberately. Real ring particles are ice stained by tholins, so a
+  slight red bias is physically right and the shipped map carries one — but at the
+  brightness the rings are drawn at, that small bias reads as brown rather than as
+  off-white, and the reference renders them neutral. The band structure comes from the
+  map's own opacity, which spans 7.4× from the faintest bands to the brightest.
+
+  It was not for lack of trying. A physically-derived model went in and was corrected
+  four times, each round finding a real error: alpha applied twice from the wrong
+  channel, a Lambert term that is wrong for a slab of particles, a radiometric scale
+  that was guessed rather than derived, no multiple scattering (so the shadowed face
+  went black and the lit face ran away), and a phase function pinned at its opposition
+  value when a polar view of the rings is actually 83° of phase.
+
+  What settled it was measuring against NASA Eyes at matched viewpoints. Ring brightness
+  as a fraction of Saturn's:
+
+  | view | NASA Eyes | the model |
+  |---|---|---|
+  | from above the pole | 0.106 | 0.078 |
+  | from near the ring plane | 0.060 | **0.214** |
+
+  NASA's rings do not brighten edge-on. Ours brightened 3.6×, because a slab of
+  particles seen edge-on genuinely does return more light per unit projected area. The
+  prediction is right and the appearance is wrong, which means the gap is no longer a
+  bug to find: closing it needs a measured particle phase curve, a finite-slab multiple
+  scattering solution and the ring's vertical thickness. That is a research problem, and
+  the rings were holding up everything else.
+
+  The model is kept, tested, one constant away — `RING_SHADING` in
+  `web/src/scene/ringMaterial.ts`. It is where a future attempt should start, not
+  something to rebuild. The full reasoning is at the top of that file.
 - **Pluto's southern hemisphere is invented.** New Horizons could not photograph it —
   it was in polar winter during the 2015 flyby — so the original mosaic is black from
   about 36°S down. It is filled with the average colour of the mapped part so it does

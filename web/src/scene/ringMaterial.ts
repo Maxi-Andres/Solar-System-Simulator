@@ -1,6 +1,62 @@
 import * as THREE from 'three';
 
 /**
+ * ## Which shading this file actually uses, and why it is the simple one
+ *
+ * **`RING_SHADING` is `'flat'`.** The rings are drawn at a constant brightness,
+ * independent of where the camera is and where the Sun is. Everything below it in this
+ * file is a physically-derived scattering model that is *not* currently switched on.
+ *
+ * That was a deliberate call, made by Maxi after four rounds of trying to get the
+ * physical model to look right, and the reasoning is worth having in full because the
+ * decision should be revisited.
+ *
+ * **What kept going wrong.** Each round fixed a real error and revealed the next one:
+ * alpha applied twice from the wrong channel; a Lambert term that is wrong for a slab
+ * of particles; a radiometric scale that was guessed rather than derived; no multiple
+ * scattering, so the shadowed face went black and the lit face ran away; a phase
+ * function pinned at its opposition value when a polar view of the rings is actually
+ * 83 degrees of phase. Every one of those was genuinely wrong and genuinely fixed. The
+ * rings still looked wrong from some angles.
+ *
+ * **What the last measurement showed.** Ring brightness as a fraction of Saturn's,
+ * measured off matched screenshots:
+ *
+ *   | view | NASA Eyes | this model |
+ *   |---|---|---|
+ *   | from above the pole | 0.106 | 0.078 |
+ *   | from near the ring plane | 0.060 | **0.214** |
+ *
+ * NASA Eyes' rings do not brighten when seen edge-on. If anything they dim slightly.
+ * Ours brightened by a factor of 3.6, because the model correctly predicts that a slab
+ * of particles seen more edge-on returns more light per unit projected area — and that
+ * prediction, however correct in isolation, is not what the reference does and not what
+ * the reference is trying to show.
+ *
+ * **So the remaining gap is not a bug to find.** It is that a believable ring needs
+ * more than single scattering plus an H-function: a real particle phase curve rather
+ * than a single Henyey-Greenstein lobe (ours peaks 14x at opposition, which is what
+ * makes the brightness swing so violently with camera position), a proper multiple
+ * scattering solution rather than a semi-infinite approximation used on a finite slab,
+ * and the ring's finite vertical thickness. That is a research problem, not an
+ * afternoon.
+ *
+ * **The trade being made.** This project's first principle is that what you see is
+ * measured. A constant-brightness ring breaks that principle, and it is the only place
+ * in the renderer that does so knowingly. It is worth it here because the alternative
+ * on offer was not "realistic" but "wrong in a different way at every camera angle",
+ * and because the rings were blocking everything else.
+ *
+ * **Future work, in the order it should be attempted.** Keep the geometry, which is
+ * right: real radii, the real equatorial plane, the real oblate shadow. Replace the
+ * photometry with a measured phase curve for ring particles and a finite-slab multiple
+ * scattering solution, and validate against Cassini radiance factors at several phase
+ * angles rather than against two screenshots. Flipping `RING_SHADING` back to
+ * `'scattering'` restores everything below, which is tested and correct as far as it
+ * goes; it is the starting point, not something to rebuild.
+ *
+ * ---
+ *
  * How a ring scatters light, which is not how a surface does.
  *
  * The first version of the rings used `MeshStandardMaterial`, so their brightness went
@@ -36,6 +92,48 @@ import * as THREE from 'three';
  *
  * Opacity comes from the same optical depth: `1 - exp(-tau/mu)`. Looking along the ring
  * makes it more opaque, which the flat alpha channel could not express.
+ *
+ * ## Single scattering alone was not enough either
+ *
+ * Shipped with only the terms above, the rings were reported as near-black viewed
+ * edge-on from one side and white from the other. Measured, the lit-to-unlit ratio ran
+ * from 3 looking straight down at the rings to **12,000** looking along them, with the
+ * lit face reaching a radiance factor of 0.95 — brighter than Saturn's own disc.
+ *
+ * Both ends were artefacts of leaving multiple scattering out:
+ *
+ *  - **The lit face ran away** because the effective `omega0 * P / 4` had been fitted at
+ *    one geometry, where multiple scattering was quietly doing part of the work. Used at
+ *    grazing view, where single scattering saturates, that inflated value overshoots.
+ *  - **The unlit face collapsed to zero** because single scattering says a slab of
+ *    optical depth 1.2 lit at 7 degrees extinguishes the beam completely. It does — but
+ *    the light does not vanish, it diffuses. Ring particles are water ice with a
+ *    single-scattering albedo near 0.95, so photons scatter many times and a good
+ *    fraction leaves through the far side. That is precisely why the unlit face of
+ *    Saturn's rings is dim rather than black.
+ *
+ * So the model now carries Hapke's two-term form, which is what the ring photometry
+ * literature uses:
+ *
+ *   I/F = (omega0 / 4) * [ P(g) * single + (H(mu) * H(mu0) - 1) * saturation ]
+ *
+ * The first term is the directional single scattering above, strongly asymmetric between
+ * the two faces. The second is the multiply-scattered field, built from Chandrasekhar's
+ * H-function, which is nearly symmetric because diffuse light has lost its sense of
+ * direction. Adding them bounds the lit face and lifts the unlit one off zero, from one
+ * principle rather than two patches.
+ *
+ * ## And the phase function is not a constant
+ *
+ * The last thing wrong was `P(g)`, which was fixed at its opposition value. That is
+ * wrong here by a factor of five, because this simulator is not normally viewed from
+ * near opposition: with the Sun 7 degrees above the ring plane in 2026, looking down at
+ * the rings from above puts the Sun and camera 83 degrees apart. It is a side-lit ring
+ * being given a back-lit particle's brightness.
+ *
+ * It is now a real Henyey-Greenstein function of the actual per-fragment phase angle,
+ * which the shader already had both vectors for. Verified against a NASA Eyes screenshot
+ * of the same instant and viewpoint, measured pixel by pixel.
  */
 
 /**
@@ -46,6 +144,29 @@ import * as THREE from 'three';
  * solid. This ceiling stops the densest pixels from sending tau to infinity: alpha
  * 0.995 is already tau = 5.3, opaque to any practical viewing angle.
  */
+/**
+ * Which shading path the shader is built with. See the note at the top of this file.
+ *
+ * `'flat'` draws the rings at a constant brightness. `'scattering'` uses the physical
+ * model in the rest of this file. Read at module scope, so the unused path is not even
+ * compiled into the shader.
+ */
+export const RING_SHADING: 'flat' | 'scattering' = 'flat';
+
+/**
+ * Ring brightness in the flat path, as a radiance factor, *before* the map's opacity.
+ *
+ * The displayed brightness of a band is this times its opacity, so the ring's mean comes
+ * out around 0.014 — the map's mean alpha is 0.71. That sits between the two figures
+ * measured off NASA Eyes at matched viewpoints: 0.0135 from above the pole and 0.0085
+ * from near the ring plane. Their two views differ by 1.8x, so no constant reproduces
+ * both.
+ *
+ * Raised from 0.011 after a close-up comparison showed ours too dark: NASA's rings mean
+ * 23.7 of 255 where ours meant 17.3.
+ */
+export const RING_FLAT_RADIANCE_FACTOR = 0.02;
+
 export const MAX_RING_ALPHA = 0.995;
 
 /**
@@ -59,48 +180,104 @@ export const MAX_RING_ALPHA = 0.995;
 export const MIN_ELEVATION_SINE = 0.02;
 
 /**
- * Effective `omega0 * P(alpha) / 4`, the ring's scattering strength.
+ * Single-scattering albedo of a ring particle, and the asymmetry of its phase function.
  *
- * Anchored on measured ring photometry rather than chosen. Cassini puts the B ring's
- * radiance factor at I/F = 0.5 to 0.6 at low phase with the rings well open, around
- * mu0 = mu = 0.4 to 0.5. The model's geometry factor there is 0.44 for an optically
- * thick ring, so I/F = 0.55 requires this to be about 1.2. Taking 1.1 keeps the A and
- * B rings right and leaves the C ring slightly bright — a single effective value cannot
- * fit all three, because it is standing in for multiple scattering as well as single.
+ * These two are fitted **together**, because they trade off against each other, and the
+ * fit has two anchors:
  *
- * It exceeds the first-principles range (omega0 ~ 0.5-0.7 with a backscattering
- * P ~ 2-3 gives 0.25-0.5) for exactly that reason: a pure single-scattering model
- * under-predicts a bright, optically thick ring, and this absorbs the difference.
+ *  1. The dense B ring reaching a radiance factor near 0.55 at opposition with the rings
+ *     well open, which is where published ring photometry sits.
+ *  2. A NASA Eyes screenshot of Saturn at this same instant and viewpoint, measured
+ *     pixel by pixel: its rings read 20/255 against a planet at 139/255. Inverting this
+ *     renderer's own tone curve puts that at a radiance factor of 0.0144.
+ *
+ * A grid search over both parameters lands on omega0 = 0.55 and g = -0.55, which hits
+ * 0.504 and 0.0141 — both anchors at once, from one pair of numbers.
+ *
+ * The first version used 0.95, on the reasoning that ring particles are water ice and
+ * water ice is bright. That is the albedo of *pristine* ice in a laboratory. Real ring
+ * particles are contaminated, and the published range for them is 0.5 to 0.7, so 0.55
+ * is where it should have started. Being wrong here mattered twice over: it set the
+ * brightness directly, and it inflated the multiple-scattering term, which is
+ * proportional to how much light a particle re-emits.
+ *
+ * Worth being clear about the status of this: the geometry — how brightness varies with
+ * solar elevation, viewing elevation, optical depth and phase angle — is physics, and
+ * every one of those dependencies is derived. These two numbers are a two-parameter fit
+ * against one literature value and one measured screenshot, and a better anchor on
+ * either would move them.
  */
-export const RING_ALBEDO_TIMES_PHASE = 1.1;
+export const RING_SINGLE_SCATTERING_ALBEDO = 0.55;
 
 /**
- * Radiance the shader must output per unit of the model's geometry factor.
+ * Henyey-Greenstein asymmetry parameter. Negative is backscattering.
  *
- * This is the step that was wrong, and it was wrong by a factor of six. The first
- * version used 2.0, picked so that "a well-lit ring reads about as bright as Saturn's
- * disc" — which is not a calibration, it is a guess, and it made the lit face of the
- * rings render at 104% of Saturn's own peak brightness. They were brighter than the
- * planet.
+ * Fitted jointly with the albedo above; see that comment for the two anchors. -0.55 is
+ * strongly backscattering, which is what ring particles are, and it gives P(0) = 7.65
+ * against P(83 degrees) = 0.555 — a factor of fourteen between opposition and the
+ * side-lit geometry a polar view actually sits at.
+ *
+ * That this parameter exists at all is the fix for the last thing making the rings too
+ * bright. The phase function used to be a constant 3.0, which is its value near
+ * *opposition*, applied at every phase angle. I had written that off in a comment as an
+ * approximation worth "tens of percent at large phase". It was a factor of five, and the
+ * reason is a geometry that is easy to overlook: with the Sun 7 degrees above the ring
+ * plane in 2026, looking down at the rings from above puts the Sun and the camera 83
+ * degrees apart. A polar view of the rings is a *high* phase angle, exactly when the
+ * rings are most likely to be looked at that way.
+ */
+export const RING_ASYMMETRY = -0.55;
+
+/**
+ * Henyey-Greenstein phase function, as a function of the cosine of the *phase* angle.
+ *
+ * Phase angle is the Sun-ring-observer angle, so `cosPhase = 1` is opposition and the
+ * particle is looking straight back at the Sun. In terms of the scattering angle that
+ * HG is normally written with, `cos(theta) = -cosPhase`, which is where the sign in the
+ * denominator comes from.
+ *
+ * Applied to the single-scattering term only. Multiply-scattered light has bounced
+ * enough times to be effectively isotropic, so giving it a phase function would be
+ * attributing a direction to light that has lost one — and it is the reason the rings
+ * do not go dark at high phase, only dimmer.
+ */
+export function henyeyGreenstein(cosPhase: number, asymmetry = RING_ASYMMETRY): number {
+  const g = asymmetry;
+  return (1 - g * g) / Math.pow(1 + g * g + 2 * g * cosPhase, 1.5);
+}
+
+/** The phase function at opposition, which is the brightness the anchor is set at. */
+export const RING_PHASE_AT_OPPOSITION = henyeyGreenstein(1);
+
+/**
+ * Radiance factor to rendered radiance.
+ *
+ * This is the conversion the first version got wrong, by a factor of six. It used a
+ * constant picked so that "a well-lit ring reads about as bright as Saturn's disc",
+ * which is not a calibration but a guess, and it rendered the lit face at 104% of
+ * Saturn's own peak brightness: the rings outshone the planet.
  *
  * The conversion is not a matter of taste at all. `MeshStandardMaterial` outputs
  * `irradiance * albedo / PI`, so the planets render radiance `L = I_sun * cos(theta) *
  * albedo / PI`. Radiance factor is defined by `L = (I/F) * E / PI` with `E` the
- * irradiance, so a surface whose radiance factor is `(omega0 P / 4) * geometry` must
- * output `I_sun * (omega0 P / 4) * geometry / PI`.
- *
- * Hence the division by PI, and hence the whole scale: 1.1 / PI = 0.350. The rings now
- * land at 60% of the planet's peak on the lit face and 31% on the unlit one, which is
- * the relationship photographs show.
+ * irradiance. So a material that computes a radiance factor must divide by PI, and
+ * that is the whole of this constant.
  */
-export const RING_SCATTERING_SCALE = RING_ALBEDO_TIMES_PHASE / Math.PI;
+export const RADIANCE_FACTOR_TO_RADIANCE = 1 / Math.PI;
 
 /**
  * The rings' colour, sRGB, normalised so its brightest channel is 1.
  *
- * Measured from the dense pixels of the shipped map — those with alpha above 180 —
- * which come out at rgb(113, 105, 102): a slightly warm grey, R > G > B. That is the
- * right direction for ring particles, which are water ice stained by tholins.
+ * **Neutral, to match the reference.** Measured off a NASA Eyes close-up, their rings
+ * are rgb(23.7, 23.7, 23.7) — grey to within a tenth of a count. Ours was rendering at
+ * rgb(17.3, 13.1, 9.9), blue seven counts under red, which reads as brown rather than
+ * as grey ring material.
+ *
+ * The warmth was not invented: the dense bands of the shipped map really do measure
+ * rgb(113, 105, 102), and real ring particles are ice stained by tholins, so a slight
+ * red bias is the physically right direction. At the low brightness the rings are drawn
+ * at, though, that same small bias lands squarely in brown — a warm hue is far more
+ * visible in shadow than in light. Matching the reference wins here; the rings are grey.
  *
  * **The map's own per-pixel RGB is deliberately not used**, and this is the one place
  * where shipped data is being overruled rather than followed, so it deserves the
@@ -118,7 +295,7 @@ export const RING_SCATTERING_SCALE = RING_ALBEDO_TIMES_PHASE / Math.PI;
  * The structure is untouched: every band, the Cassini Division and the Encke Gap all
  * come from the alpha channel, which is the part of the file that is data.
  */
-export const RING_TINT_SRGB: readonly [number, number, number] = [1, 0.934, 0.902];
+export const RING_TINT_SRGB: readonly [number, number, number] = [1, 1, 1];
 
 /**
  * Softness of the shadow edge, as a fraction of Saturn's equatorial radius.
@@ -161,7 +338,63 @@ const VERTEX_SHADER = /* glsl */ `
   }
 `;
 
-const FRAGMENT_SHADER = /* glsl */ `
+/**
+ * The radiance factor, which is the one part of the shader the two paths disagree on.
+ *
+ * Selected at module scope rather than branched at runtime, so the unused path is not
+ * compiled and there is no uniform to get out of sync with the constant.
+ */
+const RADIANCE_FACTOR_BY_PATH = {
+  flat: /* glsl */ `
+    // Flat: constant brightness, independent of camera and Sun. See the note at the
+    // top of this file for why the physical model below is switched off.
+    float radianceFactor = uFlatRadianceFactor;
+`,
+  scattering: /* glsl */ `
+    // Phase angle: the Sun-ring-observer angle, which both of these vectors are
+    // already to hand for. Only the directional term gets it; the diffuse field has
+    // scattered too many times to have a direction left.
+    float cosPhase = dot(uSunLocal, toCamera);
+    float phase = henyeyGreenstein(cosPhase);
+
+    // Hapke's two-term radiance factor.
+    float radianceFactor =
+      uAlbedo * 0.25 * (phase * max(scattered, 0.0) + max(multiple, 0.0));
+`,
+} as const;
+
+/** Both radiance-factor paths, so a test can check the inactive one too. */
+export const RING_RADIANCE_FACTOR_GLSL = RADIANCE_FACTOR_BY_PATH;
+
+/**
+ * Opacity, which is the other thing the two paths disagree on — and the reason the flat
+ * rings first came out with no visible band structure at all.
+ *
+ * With a constant brightness, *all* of the ring's structure has to arrive through
+ * opacity. The scattering path's slant-path opacity, `1 - exp(-tau/mu)`, saturates to 1
+ * for every band as the view goes edge-on, which erased that structure exactly where it
+ * was being looked at: measured against a NASA close-up, their bands span a 5.1x
+ * brightness range and ours spanned 1.7x.
+ *
+ * The flat path uses the map's face-on alpha instead. It carries a 7.4x range from p5
+ * to p95, which is more than enough, and it does not depend on the camera — which is
+ * the whole premise of this path.
+ */
+const OPACITY_BY_PATH = {
+  flat: /* glsl */ `
+    // Straight from the map: view-independent, and the only thing carrying the bands.
+    float opacity = alphaNormal * uFade;
+`,
+  scattering: /* glsl */ `
+    // Apparent opacity grows with the slant path: a ring seen nearly along its plane
+    // blocks far more than the same ring seen face-on.
+    float opacity = (1.0 - exp(-tau / muView)) * uFade;
+`,
+} as const;
+
+export const RING_OPACITY_GLSL = OPACITY_BY_PATH;
+
+const FRAGMENT_SHADER_TEMPLATE = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_fragment>
 
@@ -172,12 +405,39 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uSunIntensity;
   uniform float uAmbient;
   uniform float uFade;
-  uniform float uScatteringScale;
+  uniform float uAlbedo;
+  uniform float uAsymmetry;
+  uniform float uFlatRadianceFactor;
   uniform float uMaxAlpha;
   uniform float uMinElevation;
   uniform float uEquatorialRadius;
   uniform float uPolarRadius;
   uniform float uShadowSoftness;
+
+  /**
+   * Henyey-Greenstein phase function of the cosine of the phase angle.
+   *
+   * cosPhase = 1 is opposition. Ring particles backscatter, so this peaks there and
+   * falls away steeply -- by a factor of five at the 83 degrees a polar view of the
+   * rings actually sits at in 2026.
+   */
+  float henyeyGreenstein(float cosPhase) {
+    float g = uAsymmetry;
+    float denominator = 1.0 + g * g + 2.0 * g * cosPhase;
+    return (1.0 - g * g) * pow(max(denominator, 1.0e-4), -1.5);
+  }
+
+  /**
+   * Chandrasekhar's H-function, in the standard rational approximation.
+   *
+   * H(x) = (1 + 2x) / (1 + 2x * sqrt(1 - omega0)). It is the isotropic-scattering
+   * escape function, and its whole job here is to be *bounded*: H(0) = 1, so the
+   * multiple-scattering term cannot run away at grazing angles the way an unbounded
+   * fit does.
+   */
+  float chandrasekharH(float mu) {
+    return (1.0 + 2.0 * mu) / (1.0 + 2.0 * mu * sqrt(1.0 - uAlbedo));
+  }
 
   /**
    * How much of the Sun reaches a point on the ring, 0 in full shadow to 1 in full sun.
@@ -227,10 +487,15 @@ const FRAGMENT_SHADER = /* glsl */ `
     muSun = max(muSun, uMinElevation);
     muView = max(muView, uMinElevation);
 
+    // Common to both terms: the fraction of the slant column that actually scatters.
+    // This is what keeps a gap a gap and the thin C ring thin.
+    float saturation = 1.0 - exp(-tau * (1.0 / muView + 1.0 / muSun));
+    float projection = muSun / (muSun + muView);
+
     float scattered;
     if (sameSide) {
       // Reflection: saturates as either elevation falls, rather than vanishing.
-      scattered = muSun / (muSun + muView) * (1.0 - exp(-tau * (1.0 / muView + 1.0 / muSun)));
+      scattered = projection * saturation;
     } else {
       // Transmission through the slab. The mu0 == mu case is a removable singularity
       // whose limit is (tau/mu) * exp(-tau/mu), so blend into it near the pole rather
@@ -242,16 +507,22 @@ const FRAGMENT_SHADER = /* glsl */ `
       scattered = mix(limit, general, smoothstep(0.0, 2.0e-3, abs(separation)));
     }
 
+    // The multiply-scattered field. Nearly the same from either face, because light
+    // that has bounced several times no longer remembers which way it came in -- and
+    // that is exactly what stops the unlit face rendering black.
+    float multiple =
+      (chandrasekharH(muView) * chandrasekharH(muSun) - 1.0) * projection * saturation;
+
+    RADIANCE_FACTOR
+
     // Saturn's shadow, the single most recognisable thing about a photograph of the
-    // rings. It falls on the scattered term only: the ambient fill is a legibility aid
+    // rings. It falls on the scattered light only: the ambient fill is a legibility aid
     // rather than sunlight, so it has no business being occluded by a planet.
     float sunlit = sunlitFraction(vRingLocal, uSunLocal);
 
-    float brightness = uScatteringScale * max(scattered, 0.0) * uSunIntensity * sunlit + uAmbient;
+    float brightness = radianceFactor * RECIPROCAL_PI * uSunIntensity * sunlit + uAmbient;
 
-    // Apparent opacity grows with the slant path: a ring seen nearly along its plane
-    // blocks far more than the same ring seen face-on.
-    float opacity = (1.0 - exp(-tau / muView)) * uFade;
+    OPACITY
 
     // Tinted, not textured. See RING_TINT: the map's own RGB carries a blue-violet
     // cast in the faint bands that Saturn's rings do not have, and the radial
@@ -273,6 +544,11 @@ const FRAGMENT_SHADER = /* glsl */ `
  * rings behind the planet from every angle. It is exactly the class of bug that needs a
  * test rather than a careful reader.
  */
+const FRAGMENT_SHADER = FRAGMENT_SHADER_TEMPLATE.replace(
+  '    RADIANCE_FACTOR',
+  RADIANCE_FACTOR_BY_PATH[RING_SHADING],
+).replace('    OPACITY', OPACITY_BY_PATH[RING_SHADING]);
+
 export const RING_SHADERS = { vertex: VERTEX_SHADER, fragment: FRAGMENT_SHADER } as const;
 
 export interface RingMaterialUniforms {
@@ -308,7 +584,9 @@ export function ringMaterial(): THREE.ShaderMaterial {
       uSunIntensity: { value: 1 },
       uAmbient: { value: 0 },
       uFade: { value: 1 },
-      uScatteringScale: { value: RING_SCATTERING_SCALE },
+      uAlbedo: { value: RING_SINGLE_SCATTERING_ALBEDO },
+      uAsymmetry: { value: RING_ASYMMETRY },
+      uFlatRadianceFactor: { value: RING_FLAT_RADIANCE_FACTOR },
       uMaxAlpha: { value: MAX_RING_ALPHA },
       uMinElevation: { value: MIN_ELEVATION_SINE },
       uEquatorialRadius: { value: 1 },
@@ -351,6 +629,84 @@ export function singleScattering(
     return (tau / muView) * Math.exp(-tau / muView);
   }
   return (muSun / separation) * (Math.exp(-tau / muSun) - Math.exp(-tau / muView));
+}
+
+/**
+ * Chandrasekhar's H-function, in the standard rational approximation.
+ *
+ * The escape function for isotropic multiple scattering. Two properties earn it its
+ * place: it is bounded, with H(0) = 1, and it grows with the single-scattering albedo,
+ * so a bright material diffuses more light than a dark one. Both are what the model
+ * needed and neither is true of a fitted constant.
+ */
+export function chandrasekharH(mu: number, albedo = RING_SINGLE_SCATTERING_ALBEDO): number {
+  return (1 + 2 * mu) / (1 + 2 * mu * Math.sqrt(1 - albedo));
+}
+
+/**
+ * The multiply-scattered contribution, in the same geometry factor units as
+ * `singleScattering`.
+ *
+ * Deliberately the same for both faces of the ring: light that has scattered several
+ * times has lost any memory of which side it entered from. That symmetry is the whole
+ * reason the unlit face stops being black.
+ */
+export function multipleScattering(
+  opticalDepth: number,
+  sunElevationSine: number,
+  viewElevationSine: number,
+  albedo = RING_SINGLE_SCATTERING_ALBEDO,
+): number {
+  const muSun = Math.max(Math.abs(sunElevationSine), MIN_ELEVATION_SINE);
+  const muView = Math.max(Math.abs(viewElevationSine), MIN_ELEVATION_SINE);
+  const saturation = 1 - Math.exp(-opticalDepth * (1 / muView + 1 / muSun));
+
+  return (
+    (chandrasekharH(muView, albedo) * chandrasekharH(muSun, albedo) - 1) *
+    (muSun / (muSun + muView)) *
+    saturation
+  );
+}
+
+/**
+ * The ring's radiance factor: what a photometrist would measure, and what the shader
+ * computes.
+ *
+ * Hapke's two-term form. Exported so the model can be checked against published ring
+ * photometry in the units that photometry is published in, which is the only way the
+ * absolute brightness can be held to anything.
+ */
+export function ringRadianceFactor(
+  opticalDepth: number,
+  sunElevationSine: number,
+  viewElevationSine: number,
+  sameSide: boolean,
+  cosPhase = 1,
+  albedo = RING_SINGLE_SCATTERING_ALBEDO,
+): number {
+  const single = Math.max(
+    singleScattering(opticalDepth, sunElevationSine, viewElevationSine, sameSide),
+    0,
+  );
+  const multiple = Math.max(
+    multipleScattering(opticalDepth, sunElevationSine, viewElevationSine, albedo),
+    0,
+  );
+
+  return albedo * 0.25 * (henyeyGreenstein(cosPhase) * single + multiple);
+}
+
+/**
+ * Cosine of the phase angle for a ring seen from directly above, with the Sun at a
+ * given elevation above the ring plane.
+ *
+ * The geometry the screenshots that drove this were taken at, and worth having by name
+ * because it is so counter-intuitive: a polar view of the rings is a *high* phase angle
+ * whenever the Sun is near their plane, which is when the rings are most likely to be
+ * looked at that way.
+ */
+export function cosPhaseFromAbove(sunElevationSine: number): number {
+  return sunElevationSine;
 }
 
 /** Normal optical depth implied by a face-on opacity. */
