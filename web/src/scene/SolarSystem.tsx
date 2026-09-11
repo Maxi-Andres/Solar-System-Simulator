@@ -12,7 +12,14 @@ import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
-import { ringMaterial } from './ringMaterial.ts';
+import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
+import {
+  applyRingShadow,
+  SHADOW_FLOOR,
+  SHADOW_OPACITY_EXPONENT,
+  SHADOW_OPACITY_GAIN,
+  type RingShadowUniforms,
+} from './ringShadow.ts';
 import { LIGHTING } from './shading.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
@@ -102,6 +109,8 @@ interface BodyHandles {
   shownOriginDeg: number;
   /** Set once the ring map has been asked for, so it is asked for once. */
   ringRequested: boolean;
+  /** Uniforms for the shadow the rings throw back onto the planet, if it has any. */
+  readonly ringShadow: RingShadowUniforms | null;
 }
 
 export function SolarSystem({
@@ -167,23 +176,47 @@ export function SolarSystem({
       group.add(marker);
 
       let ring: THREE.Mesh | null = null;
+      let ringShadow: RingShadowUniforms | null = null;
       if (definition.rings !== null) {
+        // The planet learns to be shadowed by its own rings. Only the bodies that have
+        // rings pay for it: everything else keeps the stock material and its cached
+        // program.
+        ringShadow = {
+          uRingShadowMap: { value: null },
+          uRingShadowSunLocal: { value: new THREE.Vector3(0, 1, 0) },
+          uRingShadowInner: { value: kmToUnits(definition.rings.innerRadiusKm) },
+          uRingShadowOuter: { value: kmToUnits(definition.rings.outerRadiusKm) },
+          // Zero until the ring map has loaded, so the shadow fades in with it rather
+          // than appearing between one frame and the next.
+          uRingShadowStrength: { value: 0 },
+          uRingShadowMaxAlpha: { value: MAX_RING_ALPHA },
+          uRingShadowFloor: { value: SHADOW_FLOOR },
+          uRingShadowExponent: { value: SHADOW_OPACITY_EXPONENT },
+          uRingShadowGain: { value: SHADOW_OPACITY_GAIN },
+        };
+        // Safe: only lit bodies get a Standard material, and only a planet has rings.
+        applyRingShadow(
+          material as THREE.MeshStandardMaterial,
+          ringShadow,
+          definition.radiusPolarKm / definition.radiusEquatorialKm,
+        );
+
         // A sibling of the sphere, not a child: the sphere carries the polar
         // flattening scale, and a ring hung off it would be squashed by 9.8% too.
         // A ring is a slab of separated particles, not a surface, so it gets its own
         // scattering model rather than MeshStandardMaterial's Lambert term. See
         // ringMaterial.ts: with Lambert the rings all but vanished, because in 2026
         // the Sun sits 7 degrees above the ring plane.
-        const material = ringMaterial();
+        const ringSurface = ringMaterial();
         // The planet's own shape, so the shader can work out where its shadow falls.
         // Oblate, and it matters: Saturn is 9.8% flatter pole to pole, which narrows
         // the shadow it throws across its rings.
-        material.uniforms.uEquatorialRadius!.value = kmToUnits(definition.radiusEquatorialKm);
-        material.uniforms.uPolarRadius!.value = kmToUnits(definition.radiusPolarKm);
+        ringSurface.uniforms.uEquatorialRadius!.value = kmToUnits(definition.radiusEquatorialKm);
+        ringSurface.uniforms.uPolarRadius!.value = kmToUnits(definition.radiusPolarKm);
 
         ring = new THREE.Mesh(
           ringGeometry(definition.rings.innerRadiusKm, definition.rings.outerRadiusKm),
-          material,
+          ringSurface,
         );
         ring.renderOrder = 1;
         // Spans 2.35 planetary radii, so its own bounding sphere is a poor proxy for
@@ -208,6 +241,7 @@ export function SolarSystem({
         marker,
         orbit,
         ring,
+        ringShadow,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
@@ -357,6 +391,20 @@ export function SolarSystem({
           uniforms.uCameraLocal!.value.copy(scratchCamera);
         }
 
+        if (handle.ringShadow !== null) {
+          // The Sun in the planet's own frame, where its pole is +y and the ring plane
+          // is y = 0. One transform per body per frame, so the shader can answer "does
+          // the ray to the Sun cross the rings" with a single division.
+          scratchSun
+            .set(sun.positionKm.x, sun.positionKm.y, sun.positionKm.z)
+            .sub(
+              scratchBody.set(rebased.positionKm.x, rebased.positionKm.y, rebased.positionKm.z),
+            )
+            .normalize()
+            .applyQuaternion(scratchQuaternion.copy(handle.mesh.quaternion).invert());
+          handle.ringShadow.uRingShadowSunLocal.value.copy(scratchSun);
+        }
+
         if (!handle.ringRequested && pixelRadius >= TEXTURE_REQUEST_PX) {
           handle.ringRequested = true;
           void loadBodyTexture(handle.definition.rings.texture, {
@@ -367,6 +415,12 @@ export function SolarSystem({
           })
             .then((texture) => {
               uniforms.uMap!.value = texture;
+              // The same map serves both: what the rings look like, and what they
+              // block. It is already loaded, so the shadow costs no extra bytes.
+              if (handle.ringShadow !== null) {
+                handle.ringShadow.uRingShadowMap.value = texture;
+                handle.ringShadow.uRingShadowStrength.value = 1;
+              }
             })
             .catch((error: unknown) => {
               handle.ringRequested = false;

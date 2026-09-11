@@ -114,7 +114,8 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             'Saturn’s rings are at real radii, lying in its real equatorial plane — which is why they open and close as it orbits. The ring map is a radial strip whose radii are not published, so they were fitted from the image against surveyed ring boundaries: good to about 1400 km, which is wider than the Encke Gap it draws. Every division is present and roughly placed, none at a surveyed radius.',
             'Saturn’s rings are drawn at a constant brightness — the one place here that is knowingly not measured. Their radii, plane, shadow and band structure are all real; only the light model is faked. A physical one was built and corrected four times and still brightened 3.6× too much seen edge-on, where the reference images do not brighten at all. Getting it right needs a measured particle phase curve and a proper multiple-scattering solution, which is a project of its own.',
             'Saturn casts its real shadow across the rings, from its oblate silhouette. With the Sun near the ring plane, as now, it reaches about 431,000 km and crosses the whole system; with the rings wide open it barely reaches them.',
-            'The rings do not yet cast their shadow back onto Saturn. Earth has no clouds or night lights yet.',
+            'The rings cast their real shadow back onto Saturn, from their own optical depth along the Sun’s path — so the band sweeps across the planet over its 29.5-year year and swaps hemispheres at equinox. How dark it gets is calibrated rather than derived: the light reaching a shadowed point indirectly is one constant standing in for ringshine and diffuse transmission.',
+            'Earth has no clouds or night lights yet.',
           ]}
         />
 

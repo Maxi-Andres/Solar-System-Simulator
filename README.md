@@ -38,6 +38,10 @@ Everything else is measured:
   pole the sphere is oriented by — so they open and close over its 29.5-year orbit, as
   they do, with Saturn's own oblate shadow falling across them.
   **Their brightness, however, is not modelled** — see Known approximations.
+- **Shadows both ways between Saturn and its rings** — the planet's oblate silhouette
+  thrown across the rings, and the rings' own optical depth thrown back across the
+  planet. The second follows the Sun's elevation, so the band sweeps across Saturn over
+  its 29.5-year year and swaps hemispheres at equinox.
 - **Saturn's shadow on the rings**, cast by its real oblate silhouette. Its reach along
   the ring plane is `c / tan(solar elevation)`, so with the Sun near the ring plane it
   crosses the entire system and with the rings wide open it barely touches them.
@@ -69,7 +73,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm test            # 402 tests across both workspaces
+pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
 pnpm preview         # serve the build to verify it before publishing
@@ -266,8 +270,16 @@ Stated plainly, since the point of the project is that everything else is not:
   image's alpha profile against surveyed ring boundaries: `r(u) = 69942 + 71938·u`, RMS
   residual 1365 km. That is wider than the Encke Gap the map draws (325 km), so every
   division is present and roughly placed and none is at a surveyed radius.
-- **The rings cast no shadow back onto Saturn.** Saturn's shadow on the rings is drawn;
-  the reverse, a set of dark bands across the planet, is not.
+- **The depth of the ring shadow on Saturn is calibrated, not derived.** Where the band
+  falls is exact geometry — which latitudes, which hemisphere, how it sweeps with the
+  seasons. How dark it gets is not, for two reasons. The light reaching a shadowed point
+  indirectly is one constant standing in for diffuse transmission through the rings and
+  ringshine from the lit ones, plus a gain setting how dark the darkest part gets. Tuned
+  by eye, it converged at 10.5% of full sunlight — inside the 8–12% measured off the
+  reference, which is a reassuring place for eye-tuning to land. And the map's opacity is an artist's, not an optical
+  depth: it over-states the C ring and the Cassini Division by three to four times, so
+  for shadowing it is corrected by an exponent that recovers the published optical depths
+  of the C, B and A rings from the same image.
 - **Ring brightness is a constant, and this is the one place the renderer knowingly
   stops being measured.** The rings are drawn at a fixed radiance factor regardless of
   where the camera and the Sun are. Their geometry is real — radii, plane, shadow — and
