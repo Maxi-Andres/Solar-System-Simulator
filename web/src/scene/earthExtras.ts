@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import { extinctionUniforms, patchSunlightExtinction } from './atmosphere.ts';
 import { J2000_JD } from '../core/time.ts';
 
 /**
@@ -427,11 +428,15 @@ export interface EarthExtrasUniforms {
   readonly uOceanRoughness: { value: number };
   readonly uWaterStrength: { value: number };
   readonly uSurfaceSaturation: { value: number };
+  /** The air the sunlight came down through. See atmosphere.ts. */
+  readonly uBeta: { value: THREE.Vector3 };
+  readonly uScaleHeight: { value: number };
 }
 
 /** Fresh uniforms for one Earth, with both maps absent and therefore switched off. */
-export function earthExtrasUniforms(): EarthExtrasUniforms {
+export function earthExtrasUniforms(equatorialRadiusKm: number): EarthExtrasUniforms {
   return {
+    ...extinctionUniforms(equatorialRadiusKm),
     uNightMap: { value: null },
     uWaterMask: { value: null },
     uSunLocal: { value: new THREE.Vector3(1, 0, 0) },
@@ -505,6 +510,11 @@ export function applyEarthExtras(
       }
     }
 
+    // The sunlight reaching the ground has crossed an atmosphere on the way down, and
+    // near the terminator it has crossed a great deal of it. Applied first, because it
+    // changes the colour of the light everything below is computed against.
+    patchSunlightExtinction(shader, '0.0');
+
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${EARTH_EXTRAS_GLSL}`)
       .replace(
@@ -540,13 +550,25 @@ export function applyEarthExtras(
  * three.js uses to apply an alpha map, replaced by the exponential. Everything else --
  * the UV plumbing, the `alphaMap` uniform, the lighting -- is stock.
  */
-export function applyCloudDensity(material: THREE.MeshStandardMaterial): void {
+export function applyCloudDensity(
+  material: THREE.MeshStandardMaterial,
+  equatorialRadiusKm: number,
+): void {
+  const extinction = extinctionUniforms(equatorialRadiusKm);
+  const deckAltitude = CLOUD_TOP_ALTITUDE_KM / equatorialRadiusKm;
+
   material.onBeforeCompile = (shader) => {
     if (!shader.fragmentShader.includes(ALPHA_MAP_HOOK)) {
       throw new Error(
         `three.js moved ${ALPHA_MAP_HOOK}; the cloud deck needs a new injection point.`,
       );
     }
+
+    // Clouds redden at sunset too, and more visibly than the ground: they are white and
+    // bright, so the colour of the light falling on them is the colour they turn. It is
+    // the thing the reference render shows most plainly and ours did not have at all.
+    Object.assign(shader.uniforms, extinction);
+    patchSunlightExtinction(shader, deckAltitude.toFixed(8));
 
     shader.uniforms.uCloudOpticalDepthGain = { value: CLOUD_OPTICAL_DEPTH_GAIN };
 

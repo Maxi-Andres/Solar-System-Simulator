@@ -395,7 +395,7 @@ describe('the shader patch', () => {
 
   it('replaces the alpha map line on the deck rather than following it', () => {
     const material = new THREE.MeshStandardMaterial();
-    applyCloudDensity(material);
+    applyCloudDensity(material, earth.radiusEquatorialKm);
 
     const shader = {
       uniforms: {} as Record<string, unknown>,
@@ -414,7 +414,7 @@ describe('the shader patch', () => {
 
   it('injects all three terms and its uniforms', () => {
     const material = new THREE.MeshPhysicalMaterial();
-    const uniforms = earthExtrasUniforms();
+    const uniforms = earthExtrasUniforms(earth.radiusEquatorialKm);
     applyEarthExtras(material, uniforms);
 
     const shader = {
@@ -439,7 +439,7 @@ describe('the shader patch', () => {
 
   it('fails loudly if three.js moves an injection point', () => {
     const material = new THREE.MeshPhysicalMaterial();
-    applyEarthExtras(material, earthExtrasUniforms());
+    applyEarthExtras(material, earthExtrasUniforms(earth.radiusEquatorialKm));
 
     const shader = {
       uniforms: {},
@@ -452,7 +452,7 @@ describe('the shader patch', () => {
   });
 
   it('starts with both features off, because both maps load lazily', () => {
-    const uniforms = earthExtrasUniforms();
+    const uniforms = earthExtrasUniforms(earth.radiusEquatorialKm);
     expect(uniforms.uNightStrength.value).toBe(0);
     expect(uniforms.uWaterStrength.value).toBe(0);
     expect(uniforms.uNightMap.value).toBeNull();

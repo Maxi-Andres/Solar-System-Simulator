@@ -23,6 +23,10 @@ import {
   erfcx,
   ERFCX_SHAPE,
   VIEW_SAMPLES,
+  ATMOSPHERIC_EXTINCTION_GLSL,
+  betaPerPlanetRadius,
+  extinctionUniforms,
+  sunlightTransmittance,
 } from './atmosphere.ts';
 
 /**
@@ -399,5 +403,106 @@ describe('the Chapman function against the integral it replaces', () => {
     const below = chapmanColumn(0.001, -1e-6, scaleHeightRatio);
 
     expect(below / above).toBeCloseTo(1, 4);
+  });
+});
+
+/**
+ * The sunlight that reaches the ground, which is the other half of the same physics.
+ *
+ * In-scattering paints blue onto the sky; this takes the same blue back out of the beam
+ * underneath it. Leaving it out was not merely incomplete, it was **inconsistent**: the
+ * air above a point was attenuated while the surface beneath it was lit by sunlight that
+ * had crossed nothing. The visible consequence was that our terminator cut straight from
+ * white cloud to black, where the reference shows a wide amber band on the lit side.
+ *
+ * No new constant anywhere. It is the same Chapman column, aimed at the Sun.
+ */
+describe('sunlight coming down through the air', () => {
+  const beta = betaPerPlanetRadius(earth.radiusEquatorialKm);
+  const at = (elevationDeg: number) =>
+    sunlightTransmittance(
+      0,
+      Math.sin((elevationDeg * Math.PI) / 180),
+      scaleHeightRatio,
+      beta,
+    );
+
+  it('is already slightly warm at noon, as it is in life', () => {
+    // Overhead sunlight loses 4% of its red and 22% of its blue on the way down. That is
+    // why the Sun looks yellow-white from the ground and not blue-white, and it is the
+    // same blue the sky above is made of.
+    const [r, g, b] = at(90);
+    // Not exact: the erfcx fit puts the zenith column 0.14% under the closed-form H, and
+    // that is the whole of the difference here.
+    expect(r).toBeCloseTo(Math.exp(-zenithOpticalDepth(0)), 3);
+    expect(r).toBeCloseTo(0.96, 2);
+    expect(g).toBeCloseTo(0.907, 2);
+    expect(b).toBeCloseTo(0.784, 2);
+  });
+
+  it('turns amber as the Sun gets low', () => {
+    const [r, g, b] = at(5);
+    // Ten airmasses: two thirds of the red survives, a third of the green, a twelfth of
+    // the blue. rgb(255, 198, 101) once normalised.
+    expect(r).toBeCloseTo(0.66, 2);
+    expect(g).toBeCloseTo(0.37, 2);
+    expect(b).toBeCloseTo(0.085, 2);
+  });
+
+  it('is deep orange at the horizon and still not black', () => {
+    const [r, g, b] = at(0);
+    expect(r).toBeGreaterThan(0.2);
+    expect(b).toBeLessThan(0.001);
+    expect(r / g).toBeGreaterThan(5);
+  });
+
+  it('reddens monotonically all the way down', () => {
+    // No inversion anywhere, so the band sweeps smoothly rather than banding.
+    let previousRatio = 0;
+    for (let elevation = 90; elevation >= 0; elevation -= 1) {
+      const [r, , b] = at(elevation);
+      const ratio = r / Math.max(b, 1e-30);
+      expect(ratio).toBeGreaterThan(previousRatio);
+      previousRatio = ratio;
+    }
+  });
+
+  it('is exactly nothing once the Sun is down, and not a moment before', () => {
+    // The guard cuts strictly below the horizon. Cutting at it instead would put a black
+    // discontinuity exactly where the sunset is -- which is what a `<= 0` did.
+    expect(at(-1)).toEqual([0, 0, 0]);
+    expect(at(0)[0]).toBeGreaterThan(0.2);
+    expect(sunlightTransmittance(0, 0, scaleHeightRatio, beta).every(Number.isFinite)).toBe(
+      true,
+    );
+  });
+
+  it('reddens the cloud deck less than the ground, because it sits above some air', () => {
+    // 5 km up is more than half a scale height, so the deck keeps noticeably more of its
+    // blue at the same solar elevation. Small, and it is the right sign.
+    const cosLow = Math.sin((3 * Math.PI) / 180);
+    const ground = sunlightTransmittance(0, cosLow, scaleHeightRatio, beta);
+    const deck = sunlightTransmittance(5 / earth.radiusEquatorialKm, cosLow, scaleHeightRatio, beta);
+
+    expect(deck[2]).toBeGreaterThan(ground[2]);
+    expect(deck[0]).toBeGreaterThan(ground[0]);
+  });
+
+  it('is shared by every material rather than copied into each', () => {
+    // Three materials ask the same question about the same air: the sky, the surface and
+    // the cloud deck. Duplicating the model per material is how the ground ends up lit by
+    // a different atmosphere from the one drawn above it.
+    expect(ATMOSPHERIC_EXTINCTION_GLSL).toContain('vec3 sunlightTransmittance');
+    expect(ATMOSPHERIC_EXTINCTION_GLSL).toContain('uniform vec3 uBeta');
+    expect(ATMOSPHERE_SHADERS.fragment).toContain('sunlightTransmittance');
+  });
+
+  it('hands each material the same coefficients', () => {
+    const uniforms = extinctionUniforms(earth.radiusEquatorialKm);
+
+    expect(uniforms.uBeta.value.y * uniforms.uScaleHeight.value).toBeCloseTo(
+      PUBLISHED_ZENITH_OPTICAL_DEPTH_550,
+      3,
+    );
   });
 });

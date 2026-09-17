@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { POINT_LIGHT_HOOK } from './ringShadow.ts';
+
 /**
  * Earth's atmosphere: Rayleigh single scattering, ray-marched.
  *
@@ -313,6 +315,102 @@ export function chapmanColumn(
   return 2 * throughPerigee - outward * erfcx(Math.sqrt(0.5 * x) * -cosZenith);
 }
 
+/**
+ * What is left of the sunlight after it has come down through the air, per channel.
+ *
+ * **The other half of the sky, and the one that was missing.** In-scattering paints the
+ * blue on; this takes the same blue back out of the beam that reaches the ground, and
+ * without it the model was inconsistent rather than merely incomplete: the air above a
+ * point was attenuated and the surface beneath it was lit by pure white sunlight, as if
+ * the beam had arrived from space without crossing anything.
+ *
+ * It is also what a sunset *is*. The same Chapman column, evaluated toward the Sun
+ * instead of along the view ray, with no new constant anywhere:
+ *
+ *   sun elevation   airmass   the light that gets through
+ *      90 deg          1.0    rgb(255, 249, 233) at 96%
+ *      15 deg          3.8    rgb(255, 232, 181) at 86%
+ *       5 deg         10.1    rgb(255, 198, 101) at 66%
+ *       0 deg         34.3    rgb(255, 106,   3) at 24%
+ *
+ * So the ground and the clouds go amber as they approach the terminator, which is the
+ * band a reference render shows and ours did not have at all.
+ *
+ * Below the horizon it returns zero, and the boundary is *strictly* below: at exactly
+ * grazing incidence the column is finite and the answer is a deep orange, so cutting at
+ * `<= 0` would put a black discontinuity precisely where the sunset is. Past that the
+ * Chapman branch for a downward ray would look for a perigee inside the planet and
+ * overflow, so the guard is load-bearing rather than tidy.
+ */
+export function sunlightTransmittance(
+  altitude: number,
+  cosSolarZenith: number,
+  scaleHeight: number,
+  betaPerRadius: readonly [number, number, number],
+): [number, number, number] {
+  if (cosSolarZenith < 0) {
+    return [0, 0, 0];
+  }
+  const column = chapmanColumn(altitude, cosSolarZenith, scaleHeight);
+  return [
+    Math.exp(-betaPerRadius[0] * column),
+    Math.exp(-betaPerRadius[1] * column),
+    Math.exp(-betaPerRadius[2] * column),
+  ];
+}
+
+/**
+ * The shared half of the shader: the extinction model, and the uniforms it needs.
+ *
+ * Injected into three materials -- the sky itself, Earth's surface and its cloud deck --
+ * because all three are asking the same question about the same air. Duplicating it per
+ * material is how the surface ends up lit by a different atmosphere from the one drawn
+ * above it.
+ */
+export const ATMOSPHERIC_EXTINCTION_GLSL = /* glsl */ `
+uniform vec3 uBeta;
+uniform float uScaleHeight;
+
+/** exp(y*y) erfc(y). See erfcx in atmosphere.ts for why the textbook form is wrong here. */
+float erfcx(float y) {
+  return 1.0 / (${ERFCX_SHAPE} * y + sqrt(${ERFCX_TAIL} * y * y + 1.0));
+}
+
+/**
+ * Column density from a point out of the atmosphere, in planet radii. The Chapman
+ * function: the integral an inner loop used to march, in closed form and more accurate
+ * than the march was.
+ */
+float chapmanColumn(float altitude, float cosZenith) {
+  float radius = 1.0 + altitude;
+  float x = radius / uScaleHeight;
+  float outward = uScaleHeight * exp(-altitude / uScaleHeight) * sqrt(PI * x * 0.5);
+
+  if (cosZenith >= 0.0) {
+    return outward * erfcx(sqrt(0.5 * x) * cosZenith);
+  }
+
+  // The ray points below the local horizon and still leaves, skimming over the limb.
+  // That is the twilight geometry, not an edge case.
+  float perigeeRadius = radius * sqrt(max(1.0 - cosZenith * cosZenith, 0.0));
+  float throughPerigee = uScaleHeight
+    * exp(-(perigeeRadius - 1.0) / uScaleHeight)
+    * sqrt(PI * (perigeeRadius / uScaleHeight) * 0.5);
+
+  return 2.0 * throughPerigee - outward * erfcx(sqrt(0.5 * x) * -cosZenith);
+}
+
+/** What survives of the sunlight coming down to a point, per channel. */
+vec3 sunlightTransmittance(float altitude, float cosSolarZenith) {
+  // Strictly below, not at: the column at grazing incidence is finite, and cutting it
+  // here would put a black discontinuity exactly where the sunset is.
+  if (cosSolarZenith < 0.0) {
+    return vec3(0.0);
+  }
+  return exp(-uBeta * chapmanColumn(altitude, cosSolarZenith));
+}
+`;
+
 const VERTEX_SHADER = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
@@ -335,11 +433,11 @@ const FRAGMENT_SHADER = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_fragment>
 
+  ${ATMOSPHERIC_EXTINCTION_GLSL}
+
   uniform vec3 uCameraLocal;
   uniform vec3 uSunLocal;
-  uniform vec3 uBeta;
   uniform float uAtmosphereRadius;
-  uniform float uScaleHeight;
   uniform float uFlattening;
   uniform float uSunIntensity;
   uniform float uFade;
@@ -385,35 +483,6 @@ const FRAGMENT_SHADER = /* glsl */ `
       up.x * up.x + up.z * up.z + (up.y * up.y) / (uFlattening * uFlattening)
     );
     return max(radius - surface, 0.0);
-  }
-
-  /** exp(y*y) erfc(y). See erfcx in atmosphere.ts for why the textbook form is wrong here. */
-  float erfcx(float y) {
-    return 1.0 / (${ERFCX_SHAPE} * y + sqrt(${ERFCX_TAIL} * y * y + 1.0));
-  }
-
-  /**
-   * Column density from a point out of the atmosphere, in planet radii. The Chapman
-   * function: the same integral the inner loop used to march, in closed form and more
-   * accurate than the march was.
-   */
-  float chapmanColumn(float altitude, float cosZenith) {
-    float radius = 1.0 + altitude;
-    float x = radius / uScaleHeight;
-    float outward = uScaleHeight * exp(-altitude / uScaleHeight) * sqrt(PI * x * 0.5);
-
-    if (cosZenith >= 0.0) {
-      return outward * erfcx(sqrt(0.5 * x) * cosZenith);
-    }
-
-    // The ray points below the local horizon and still leaves, skimming over the limb.
-    // That is the twilight geometry, not an edge case.
-    float perigeeRadius = radius * sqrt(max(1.0 - cosZenith * cosZenith, 0.0));
-    float throughPerigee = uScaleHeight
-      * exp(-(perigeeRadius - 1.0) / uScaleHeight)
-      * sqrt(PI * (perigeeRadius / uScaleHeight) * 0.5);
-
-    return 2.0 * throughPerigee - outward * erfcx(sqrt(0.5 * x) * -cosZenith);
   }
 
   void main() {
@@ -546,4 +615,69 @@ export function configureAtmosphere(
 /** Radius of the shell, as a ratio of the planet's equatorial radius. */
 export function atmosphereRadiusRatio(equatorialRadiusKm: number): number {
   return 1 + ATMOSPHERE_TOP_KM / equatorialRadiusKm;
+}
+
+/** The scattering coefficient in the units the shader works in: per planet radius. */
+export function betaPerPlanetRadius(equatorialRadiusKm: number): [number, number, number] {
+  const radiusM = equatorialRadiusKm * 1000;
+  return [
+    RAYLEIGH_BETA_PER_M[0] * radiusM,
+    RAYLEIGH_BETA_PER_M[1] * radiusM,
+    RAYLEIGH_BETA_PER_M[2] * radiusM,
+  ];
+}
+
+export interface ExtinctionUniforms {
+  readonly uBeta: { value: THREE.Vector3 };
+  readonly uScaleHeight: { value: number };
+}
+
+/** The two uniforms `ATMOSPHERIC_EXTINCTION_GLSL` needs, for a given body. */
+export function extinctionUniforms(equatorialRadiusKm: number): ExtinctionUniforms {
+  return {
+    uBeta: { value: new THREE.Vector3(...betaPerPlanetRadius(equatorialRadiusKm)) },
+    uScaleHeight: { value: RAYLEIGH_SCALE_HEIGHT_KM / equatorialRadiusKm },
+  };
+}
+
+/**
+ * Teaches a lit material that its sunlight arrived through an atmosphere.
+ *
+ * Patches the direct light only. The ambient fill in the Flood and Shadow modes is a
+ * legibility aid rather than sunlight, so it has no business being reddened -- the same
+ * line the ring shadow draws, at the same injection point.
+ *
+ * `altitude` is a GLSL expression in planet radii: `0.0` for the ground, the deck's own
+ * height for the clouds. The solar zenith angle comes from three.js's own
+ * `geometryNormal` and `directLight.direction`, both already in view space, which avoids
+ * handing every material a Sun vector in its own rotating frame -- and gets the cloud
+ * deck right for free, since its frame is turned away from the surface's by the drift.
+ */
+export function patchSunlightExtinction(
+  shader: { fragmentShader: string },
+  altitude: string,
+): void {
+  const lighting = THREE.ShaderChunk.lights_fragment_begin;
+  if (!lighting.includes(POINT_LIGHT_HOOK)) {
+    throw new Error(
+      'three.js moved the point light hook; sunlight extinction needs a new injection point.',
+    );
+  }
+
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>\n${ATMOSPHERIC_EXTINCTION_GLSL}`)
+    .replace(
+      '#include <lights_fragment_begin>',
+      lighting.replace(
+        POINT_LIGHT_HOOK,
+        `${POINT_LIGHT_HOOK}
+        // The air between here and the Sun. What it takes out of the beam is what the
+        // sky above puts back in, and leaving it out lit the ground with sunlight that
+        // had crossed no atmosphere at all.
+        directLight.color *= sunlightTransmittance(
+          ${altitude},
+          dot(geometryNormal, directLight.direction)
+        );`,
+      ),
+    );
 }

@@ -243,7 +243,7 @@ export function SolarSystem({
 
       let earth: EarthHandles | null = null;
       if (definition.id === EARTH_ID) {
-        const uniforms = earthExtrasUniforms();
+        const uniforms = earthExtrasUniforms(definition.radiusEquatorialKm);
         // Safe: the Sun is the only body with a Basic material, and it is not Earth.
         applyEarthExtras(material as THREE.MeshPhysicalMaterial, uniforms);
 
@@ -264,7 +264,7 @@ export function SolarSystem({
         });
         // The map is a column depth, not a transparency. Reading it as one left the
         // deck thin and gauzy; see earthExtras.ts.
-        applyCloudDensity(cloudMaterial);
+        applyCloudDensity(cloudMaterial, definition.radiusEquatorialKm);
         const cloud = new THREE.Mesh(
           // Four times the planet's tessellation, and that is a correctness
           // requirement rather than polish: at 64 segments a chord sags 7.7 km inside
