@@ -47,9 +47,13 @@ import * as THREE from 'three';
  *
  * ## What it costs
  *
- * 16 samples along the view ray, each with 8 more toward the Sun. That is the honest
- * price of not precomputing lookup tables, and it is paid on one body, only when that
- * body is close enough to be drawn as a sphere.
+ * 16 samples along the view ray, and **nothing along the path to the Sun** -- that one is
+ * the Chapman function, in closed form. It began as a second march of 8 samples inside
+ * the first, 128 density evaluations for every pixel of Earth on screen, and it was slow
+ * enough to notice. Replacing it was not a trade: see `chapmanColumn`, the closed form is
+ * *more* accurate than the march was.
+ *
+ * Paid on one body, and only while that body is close enough to be drawn as a sphere.
  */
 
 /** Wavelengths the three channels are evaluated at, nm. sRGB primaries, roughly. */
@@ -214,8 +218,100 @@ export function integratedDensity(
 
 /** How many points the view ray is sampled at. */
 export const VIEW_SAMPLES = 16;
-/** How many points each sample's path to the Sun is sampled at. */
-export const SUN_SAMPLES = 8;
+
+/**
+ * Tessellation of the shell the sky is drawn on.
+ *
+ * Far coarser than the cloud deck's 256, and for a reason that does not apply here: the
+ * deck floats 5 km up and a 64-segment chord sags 7.7 km, so it needed the resolution to
+ * stay outside the planet. This shell stands 100 km off the ground, twenty times the sag
+ * at 128 segments, so the only thing tessellation buys is a halo edge that is not
+ * visibly polygonal -- and the halo is 1.6% of the radius thick, where 128 segments put
+ * the scallop at 2% of that.
+ */
+export const ATMOSPHERE_SEGMENTS = 128;
+
+/**
+ * Shape parameter of the `erfcx` approximation below.
+ *
+ * One free number, fitted -- and fitted against a function, not against a picture, which
+ * is a different kind of constant from the ring brightness. The form is pinned at both
+ * ends before it is fitted at all: it is exact at zero and has the exact `1/(y sqrt(pi))`
+ * tail, so this only sets the shape in between. The textbook choice of 1 leaves 3.5%
+ * there; 1.164 minimises the worst relative error over the whole range, at 0.34%.
+ */
+export const ERFCX_SHAPE = 1.164;
+
+/** The tail coefficient, forced by the asymptote rather than chosen. */
+const ERFCX_TAIL = (Math.sqrt(Math.PI) - ERFCX_SHAPE) ** 2;
+
+/**
+ * `exp(y^2) erfc(y)`, the scaled complementary error function, for y >= 0.
+ *
+ * **The obvious approximation is a trap and it is worth recording why.** Abramowitz and
+ * Stegun 7.1.26 gives `erfc(y)` as a polynomial times `exp(-y^2)`, so the exponentials
+ * appear to cancel exactly and leave a pure polynomial -- which is both cheaper and
+ * seductive. It is also useless here: that formula is accurate to 1.5e-7 *absolutely*,
+ * and at the y this is called with, `erfc` is around 1e-164. Multiplying by `exp(y^2)`
+ * scales the error up with it. Used in the Chapman function below it came out 12% high
+ * at the zenith, which was how the problem announced itself.
+ *
+ * This form has the right asymptote built in instead, so its error is relative
+ * throughout: 0.34% at worst, and better than 0.05% wherever y is large.
+ */
+export function erfcx(y: number): number {
+  return 1 / (ERFCX_SHAPE * y + Math.sqrt(ERFCX_TAIL * y * y + 1));
+}
+
+/**
+ * Column density along a ray leaving the atmosphere, in planet radii.
+ *
+ * **The Chapman function, and it is what made the sky affordable.** The first version
+ * marched eight samples toward the Sun from each of sixteen along the view ray: 128
+ * density evaluations for every pixel of Earth on screen, and it showed. This is the
+ * same integral in closed form,
+ *
+ *   C = H exp(-h/H) sqrt(pi x / 2) erfcx(sqrt(x/2) cos(chi))
+ *
+ * with `x` the radius in scale heights and `chi` the angle from straight up. It is not
+ * an optimisation that trades accuracy for speed -- it is **more accurate than the march
+ * it replaced**, which was 8.5% low at the zenith where eight samples cannot resolve a
+ * density that falls by a factor of e every 8.5 km.
+ *
+ * Two branches, because a ray can point below the local horizon and still leave: near
+ * the terminator the path to the Sun dips and skims over the limb. That case is the
+ * whole chord through its lowest point, less the part behind where it started, and it is
+ * exactly the geometry that reddens the twilight band -- so it is not an edge case to be
+ * clamped away.
+ *
+ * `altitude` and `scaleHeight` are in planet radii; `cosZenith` is the cosine of the
+ * angle between straight up and the ray.
+ */
+export function chapmanColumn(
+  altitude: number,
+  cosZenith: number,
+  scaleHeight: number,
+): number {
+  const radius = 1 + altitude;
+  const x = radius / scaleHeight;
+  const outward = scaleHeight * Math.exp(-altitude / scaleHeight) * Math.sqrt((Math.PI * x) / 2);
+
+  if (cosZenith >= 0) {
+    return outward * erfcx(Math.sqrt(0.5 * x) * cosZenith);
+  }
+
+  // Written from the radius in planet radii rather than in scale heights: the two differ
+  // by a factor of 750, and subtracting one from the other in float32 to recover an
+  // altitude would throw away most of the digits that matter.
+  const perigeeRadius = radius * Math.sqrt(Math.max(1 - cosZenith * cosZenith, 0));
+  const throughPerigee =
+    scaleHeight *
+    Math.exp(-(perigeeRadius - 1) / scaleHeight) *
+    Math.sqrt((Math.PI * (perigeeRadius / scaleHeight)) / 2);
+
+  // erfcx(0) is 1, so the perigee leg needs no call.
+  return 2 * throughPerigee - outward * erfcx(Math.sqrt(0.5 * x) * -cosZenith);
+}
 
 const VERTEX_SHADER = /* glsl */ `
   #include <common>
@@ -283,11 +379,41 @@ const FRAGMENT_SHADER = /* glsl */ `
     return t > 0.0 ? t : -1.0;
   }
 
-  /** Air density relative to sea level, measured from the ellipsoid rather than a sphere. */
-  float airDensity(vec3 p) {
-    vec3 u = normalize(p);
-    float surface = inversesqrt(u.x * u.x + u.z * u.z + (u.y * u.y) / (uFlattening * uFlattening));
-    return exp(-max(length(p) - surface, 0.0) / uScaleHeight);
+  /** Height above the ellipsoid, in planet radii, given the point and its unit direction. */
+  float altitudeAt(vec3 p, vec3 up, float radius) {
+    float surface = inversesqrt(
+      up.x * up.x + up.z * up.z + (up.y * up.y) / (uFlattening * uFlattening)
+    );
+    return max(radius - surface, 0.0);
+  }
+
+  /** exp(y*y) erfc(y). See erfcx in atmosphere.ts for why the textbook form is wrong here. */
+  float erfcx(float y) {
+    return 1.0 / (${ERFCX_SHAPE} * y + sqrt(${ERFCX_TAIL} * y * y + 1.0));
+  }
+
+  /**
+   * Column density from a point out of the atmosphere, in planet radii. The Chapman
+   * function: the same integral the inner loop used to march, in closed form and more
+   * accurate than the march was.
+   */
+  float chapmanColumn(float altitude, float cosZenith) {
+    float radius = 1.0 + altitude;
+    float x = radius / uScaleHeight;
+    float outward = uScaleHeight * exp(-altitude / uScaleHeight) * sqrt(PI * x * 0.5);
+
+    if (cosZenith >= 0.0) {
+      return outward * erfcx(sqrt(0.5 * x) * cosZenith);
+    }
+
+    // The ray points below the local horizon and still leaves, skimming over the limb.
+    // That is the twilight geometry, not an edge case.
+    float perigeeRadius = radius * sqrt(max(1.0 - cosZenith * cosZenith, 0.0));
+    float throughPerigee = uScaleHeight
+      * exp(-(perigeeRadius - 1.0) / uScaleHeight)
+      * sqrt(PI * (perigeeRadius / uScaleHeight) * 0.5);
+
+    return 2.0 * throughPerigee - outward * erfcx(sqrt(0.5 * x) * -cosZenith);
   }
 
   void main() {
@@ -317,7 +443,10 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     for (int i = 0; i < ${VIEW_SAMPLES}; i++) {
       vec3 p = origin + direction * (near + (float(i) + 0.5) * step);
-      float density = airDensity(p);
+      float radius = length(p);
+      vec3 up = p / radius;
+      float altitude = altitudeAt(p, up, radius);
+      float density = exp(-altitude / uScaleHeight);
       viewDepth += density * step;
 
       // Anything the planet stands in front of gets no sunlight, which is what draws the
@@ -326,15 +455,10 @@ const FRAGMENT_SHADER = /* glsl */ `
         continue;
       }
 
-      float sunExit = raySphere(p, uSunLocal, uAtmosphereRadius).y;
-      float sunStep = sunExit / float(${SUN_SAMPLES});
-      float sunDepth = 0.0;
-      for (int j = 0; j < ${SUN_SAMPLES}; j++) {
-        sunDepth += airDensity(p + uSunLocal * ((float(j) + 0.5) * sunStep)) * sunStep;
-      }
-
-      // Wavelength-dependent on both legs, which is the whole of why the band above the
-      // terminator goes orange: blue is gone by the time that path is that long.
+      // One closed form instead of an eight-sample march. Wavelength-dependent on both
+      // legs, which is the whole of why the band above the terminator goes orange: blue
+      // is gone by the time that path is that long.
+      float sunDepth = chapmanColumn(altitude, dot(up, uSunLocal));
       scattered += density * exp(-uBeta * (viewDepth + sunDepth)) * step;
     }
 

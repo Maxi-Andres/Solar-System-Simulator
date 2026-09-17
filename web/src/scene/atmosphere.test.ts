@@ -18,7 +18,10 @@ import {
   RAYLEIGH_WAVELENGTHS_NM,
   rayleighCoefficient,
   rayleighPhase,
-  SUN_SAMPLES,
+  ATMOSPHERE_SEGMENTS,
+  chapmanColumn,
+  erfcx,
+  ERFCX_SHAPE,
   VIEW_SAMPLES,
 } from './atmosphere.ts';
 
@@ -242,8 +245,159 @@ describe('the material', () => {
     expect(ATMOSPHERE_SHADERS.fragment).toContain('rayPlanet(p, uSunLocal)');
   });
 
-  it('samples enough to march without banding but not so much it is a lookup table', () => {
+  it('marches the view ray only, the Sun path being in closed form', () => {
     expect(VIEW_SAMPLES).toBeGreaterThanOrEqual(12);
-    expect(VIEW_SAMPLES * SUN_SAMPLES).toBeLessThanOrEqual(256);
+    // The inner loop is gone. If one ever comes back, this is where it gets noticed.
+    expect(ATMOSPHERE_SHADERS.fragment).toContain('chapmanColumn(altitude');
+    expect(ATMOSPHERE_SHADERS.fragment).not.toMatch(/for \(int j/);
+  });
+
+  it('draws the shell coarsely, because nothing here needs it fine', () => {
+    // The cloud deck needs 256 to stay outside the planet it floats 5 km above. This
+    // shell stands 100 km off, so the only thing resolution buys is a halo edge that is
+    // not visibly polygonal.
+    expect(ATMOSPHERE_SEGMENTS).toBeLessThan(256);
+    const sag = shellRatio * (1 - Math.cos(Math.PI / ATMOSPHERE_SEGMENTS));
+    const haloThickness = shellRatio - 1;
+    expect(sag / haloThickness).toBeLessThan(0.05);
+  });
+});
+
+describe('the scaled complementary error function', () => {
+  /** erfcx by continued fraction, which is reliable exactly where the fit is hardest. */
+  const reference = (y: number) => {
+    if (y > 4) {
+      let f = 0;
+      for (let n = 60; n >= 1; n -= 1) {
+        f = n / 2 / (y + f);
+      }
+      return 1 / Math.sqrt(Math.PI) / (y + f);
+    }
+    let sum = 0;
+    let term = y;
+    for (let n = 0; n < 200; n += 1) {
+      sum += term / (2 * n + 1);
+      term *= (-y * y) / (n + 1);
+    }
+    return Math.exp(y * y) * (1 - (2 / Math.sqrt(Math.PI)) * sum);
+  };
+
+  it('is pinned at both ends before it is fitted in the middle', () => {
+    // erfcx(0) = 1 exactly, and the tail is 1/(y sqrt(pi)) exactly. Only the shape in
+    // between is fitted, which is what keeps one free number from being a free hand.
+    expect(erfcx(0)).toBe(1);
+    for (const y of [50, 200, 1000]) {
+      expect(erfcx(y) * y * Math.sqrt(Math.PI)).toBeCloseTo(1, 2);
+    }
+  });
+
+  it('holds to better than half a percent everywhere', () => {
+    let worst = 0;
+    for (let y = 0; y <= 40; y += 0.01) {
+      worst = Math.max(worst, Math.abs(erfcx(y) - reference(y)) / reference(y));
+    }
+    expect(worst).toBeLessThan(0.005);
+  });
+
+  it('beats the textbook form, which is unusable here', () => {
+    // Abramowitz and Stegun 7.1.26 is accurate to 1.5e-7 *absolutely* in erfc, and this
+    // is called where erfc is around 1e-164. Scaling that error by exp(y^2) is what put
+    // the Chapman function 12% high at the zenith.
+    const textbook = (y: number) => {
+      const t = 1 / (1 + 0.3275911 * y);
+      return (
+        t *
+        (0.254829592 +
+          t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+      );
+    };
+    const y = 19.37; // sqrt(X / 2) at Earth's surface, looking straight up
+    expect(Math.abs(textbook(y) - reference(y)) / reference(y)).toBeGreaterThan(0.1);
+    expect(Math.abs(erfcx(y) - reference(y)) / reference(y)).toBeLessThan(0.001);
+  });
+
+  it('keeps its shape parameter where the fit put it', () => {
+    expect(ERFCX_SHAPE).toBeCloseTo(1.164, 3);
+  });
+});
+
+describe('the Chapman function against the integral it replaces', () => {
+  /** The same geometry, expressed the way integratedDensity wants it. */
+  const brute = (altitude: number, cosZenith: number, samples: number) =>
+    integratedDensity(
+      [0, 0, 1 + altitude],
+      [Math.sqrt(Math.max(0, 1 - cosZenith * cosZenith)), 0, cosZenith],
+      scaleHeightRatio,
+      // Effectively unbounded: Chapman integrates to infinity, and the difference is the
+      // eight parts per million of atmosphere above the 100 km shell.
+      1 + 400 / earth.radiusEquatorialKm,
+      samples,
+    );
+
+  /**
+   * Whether the ray runs into the planet before it can leave.
+   *
+   * The shader skips those samples outright -- they are in shadow -- so they are not
+   * geometries this has to agree on, and comparing them would be comparing a full column
+   * against the stub of path before the ground.
+   */
+  const hitsGround = (altitude: number, cosZenith: number) =>
+    cosZenith < 0 && (1 + altitude) * Math.sqrt(1 - cosZenith * cosZenith) < 1;
+
+  it('agrees with a brute-force march across every geometry that reaches the Sun', () => {
+    let worst = 0;
+    for (const altitudeKm of [0, 1, 5, 20, 40, 60]) {
+      const altitude = altitudeKm / earth.radiusEquatorialKm;
+      for (let deg = 0; deg <= 110; deg += 2) {
+        const cosZenith = Math.cos((deg * Math.PI) / 180);
+        if (hitsGround(altitude, cosZenith)) {
+          continue;
+        }
+        const reference = brute(altitude, cosZenith, 20000);
+        if (reference === 0) {
+          continue;
+        }
+        const closed = chapmanColumn(altitude, cosZenith, scaleHeightRatio);
+        worst = Math.max(worst, Math.abs(closed - reference) / reference);
+      }
+    }
+    expect(worst).toBeLessThan(0.01);
+  });
+
+  it('is more accurate than the eight-sample march it replaced, not less', () => {
+    // The point worth keeping: this was a performance change that improved the physics.
+    // Eight samples cannot resolve a density that falls by a factor of e every 8.5 km,
+    // and looking straight up is where it is worst.
+    const reference = brute(0, 1, 200000);
+    const eightSamples = brute(0, 1, 8);
+    const closed = chapmanColumn(0, 1, scaleHeightRatio);
+
+    expect(Math.abs(eightSamples - reference) / reference).toBeGreaterThan(0.05);
+    expect(Math.abs(closed - reference) / reference).toBeLessThan(0.005);
+  });
+
+  it('is exact at the horizon, where the airmass is largest', () => {
+    // sqrt(pi X / 2) is the closed form for a grazing ray, and the approximation lands on
+    // it exactly because erfcx(0) is exactly 1.
+    const horizon = chapmanColumn(0, 0, scaleHeightRatio) / scaleHeightRatio;
+
+    expect(horizon).toBeCloseTo(Math.sqrt(Math.PI / scaleHeightRatio / 2), 2);
+  });
+
+  it('handles a ray that points below the horizon and still leaves', () => {
+    // Near the terminator the path to the Sun dips and skims over the limb. Clamping that
+    // away would flatten the twilight band, which is the part the whole feature is for.
+    const skimming = chapmanColumn(0.01, -0.05, scaleHeightRatio);
+
+    expect(skimming).toBeGreaterThan(chapmanColumn(0.01, 0, scaleHeightRatio));
+    expect(Number.isFinite(skimming)).toBe(true);
+  });
+
+  it('is continuous across the horizon', () => {
+    // The two branches meet there, and a seam would draw a hard line across the sky.
+    const above = chapmanColumn(0.001, 1e-6, scaleHeightRatio);
+    const below = chapmanColumn(0.001, -1e-6, scaleHeightRatio);
+
+    expect(below / above).toBeCloseTo(1, 4);
   });
 });

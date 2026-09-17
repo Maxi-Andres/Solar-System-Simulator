@@ -8,6 +8,7 @@ import type { LightingMode } from '../state/store.ts';
 import type { SimClock } from '../core/time.ts';
 import { stateToOsculatingElements } from '../core/kepler.ts';
 import {
+  ATMOSPHERE_SEGMENTS,
   atmosphereMaterial,
   atmosphereRadiusRatio,
   configureAtmosphere,
@@ -288,10 +289,12 @@ export function SolarSystem({
         const sky = atmosphereMaterial();
         configureAtmosphere(sky, definition.radiusEquatorialKm, definition.radiusPolarKm);
         const atmosphere = new THREE.Mesh(
+          // Coarser than the cloud deck, which needed its resolution to stay outside
+          // the planet. This shell stands 100 km off the ground; see ATMOSPHERE_SEGMENTS.
           new THREE.SphereGeometry(
             atmosphereRadiusRatio(definition.radiusEquatorialKm),
-            CLOUD_SEGMENTS,
-            CLOUD_SEGMENTS / 2,
+            ATMOSPHERE_SEGMENTS,
+            ATMOSPHERE_SEGMENTS / 2,
           ),
           sky,
         );
