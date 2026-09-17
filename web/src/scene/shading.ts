@@ -43,7 +43,7 @@ import type { LightingMode } from '../state/store.ts';
  * exposure.
  */
 export const LIGHTING: Record<LightingMode, { sun: number; ambient: number }> = {
-  flood: { sun: 0.39, ambient: 3.55 },
+  flood: { sun: 0.39, ambient: 1.55 },
   shadow: { sun: 5.0, ambient: 0.08 },
   natural: { sun: 5.0, ambient: 0 },
 };
