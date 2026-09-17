@@ -53,6 +53,16 @@ export interface TextureOptions {
    * the outer edge of the rings back onto the inner one.
    */
   readonly wrapS?: THREE.Wrapping;
+  /**
+   * How the file's values are encoded. Defaults to sRGB, which is right for anything
+   * that is a picture.
+   *
+   * A map that is *data* rather than a picture must say so. Earth's land/water mask and
+   * its cloud opacities are numbers the shader uses directly, and putting them through
+   * an sRGB decode would bend them by up to 2.2 -- a half-water texel would come back
+   * as a fifth of one.
+   */
+  readonly colorSpace?: THREE.ColorSpace;
 }
 
 export function loadBodyTexture(
@@ -70,8 +80,9 @@ export function loadBodyTexture(
       url,
       (texture) => {
         // The maps are authored in sRGB; loading them as linear washes every
-        // surface out and makes the terminator land in the wrong place.
-        texture.colorSpace = THREE.SRGBColorSpace;
+        // surface out and makes the terminator land in the wrong place. Masks pass
+        // NoColorSpace, because they are measurements and not pictures.
+        texture.colorSpace = options.colorSpace ?? THREE.SRGBColorSpace;
         texture.anisotropy = options.anisotropy ?? 1;
         // Equirectangular maps wrap in longitude and must not in latitude.
         texture.wrapS = options.wrapS ?? THREE.RepeatWrapping;

@@ -64,6 +64,9 @@ to prove the check still has teeth.
 | `mars-photometric.jpg` | Mars | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
 | `neptune-photometric.jpg` | Neptune | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
 | `saturn-rings.png` | Saturn's rings | [Solar System Scope](https://www.solarsystemscope.com/textures/) | CC BY 4.0 |
+| `earth-night.jpg` | Earth, city lights | [NASA Earth Observatory, Earth at Night 2012 (VIIRS DNB)](https://visibleearth.nasa.gov/images/79765/night-lights-2012-flat-map) | Public domain |
+| `earth-clouds.jpg` | Earth, cloud deck | [NASA Visible Earth, Blue Marble clouds (MODIS)](https://visibleearth.nasa.gov/images/57747/blue-marble-clouds) | Public domain |
+| `earth-water.png` | Earth, land/water mask | [NASA Visible Earth, Blue Marble land surface, shallow water and shaded topography](https://visibleearth.nasa.gov/images/57752/blue-marble-land-surface-shallow-water-and-shaded-topography) | Public domain |
 
 ## Attribution
 
@@ -147,6 +150,85 @@ Those are the numbers in `tools/src/catalog.ts`, and the honest reading of them 
 roughly placed; none is at a surveyed radius. The image cannot support better, and
 quoting the textbook 74,658 and 136,780 would look more precise while placing every
 feature further from where it belongs.
+
+## Earth's three extras
+
+None of these is a surface map, and none is used like one. They are the only files here
+that belong to a single body, and the reason is simply that Earth is the only body
+anyone has flown a night-light survey over.
+
+- **`earth-night.jpg`** — the 2012 *Earth at Night* composite, from the VIIRS
+  Day/Night Band on Suomi NPP: cloud-free radiance assembled from 312 orbits in April
+  and October 2012. Courtesy **NASA Earth Observatory / NOAA NGDC** (Miguel Román,
+  Chris Elvidge, Robert Simmon). Downscaled from 3600 x 1800 to 2048 x 1024.
+
+  **It was processed, and here is exactly how.** The published image draws a dark blue
+  land-and-sea base layer *under* the lights, which is fine for a wall map and wrong for
+  this: used as emission it would make the whole night side glow. The base is deep blue
+  and the lights are near-white, so the **red channel alone is the lights** — the ocean
+  sits at red 0 and the land base at exactly red 15. Reproduce it by taking the red
+  channel, subtracting 15, clamping at zero, rescaling to full range, and then
+  downscaling by area average. 96% of the result is black, which is what a night side
+  should be.
+
+  **The colour on screen is not in this file.** The DNB is a single broad panchromatic
+  channel, so the composite carries radiance and no colour whatever. The amber the
+  renderer tints it with starts from the chromaticity of a 2000 K blackbody —
+  high-pressure sodium — taken half way to neutral white, because sodium was never the
+  whole story: mercury vapour, fluorescent and metal halide lit a large share of the
+  world in 2012 and are all far whiter. Pure sodium was tried first and rendered every
+  city red. It is a convention with a shelf life either way, since cities are converting
+  to 3000-4000 K LEDs. See `earthExtras.ts`.
+
+- **`earth-clouds.jpg`** — the Blue Marble cloud composite, MODIS, already 2048 x 1024
+  at the source. Converted to grey and re-encoded; nothing else was done to it. Used as
+  an **opacity map** on its own sphere 5 km up, so what the image says is how much cloud
+  is there, not what colour it is.
+
+  It is read as an **optical depth**, not as an alpha: the opacity drawn is
+  `1 − exp(−3.2 · v)`. The map measures how much cloud is in the column, and taking that
+  for how much light gets through it left the deck gauzy where the reference shows solid
+  weather systems. Same conversion the ring strip gets, for the same reason. The gain is
+  calibrated against a number read off NASA Eyes rather than by eye: 17.3% of their
+  Earth's disc is bright cloud, against 6.6% of ours before, and 3.2 is the gain that
+  puts the same 17.3% of this map past opacity 0.8.
+
+  Two things about it are worth knowing. It is a **fixed composite** assembled from
+  passes over weeks in 2001, so it is never the weather on the simulated date and the
+  slow westward drift the renderer gives it does not change that. And MODIS cloud
+  detection over snow and ice is famously ambiguous, so the bright polar caps in this
+  image are partly cloud and partly ground.
+
+- **`earth-water.png`** — **derived, not published**, and the derivation is the whole of
+  it. NASA's *land surface, shallow water and shaded topography* map fills deep water
+  with a single flat colour, **rgb(10, 10, 50)**, and paints everything else from
+  imagery. So the mask is the distance from that fill.
+
+  **It is a coverage fraction, not a yes/no, and that is the second version.** The first
+  was binary — inside a tolerance or outside it — and it showed: a texel here is 20 km,
+  nothing about a coastline is 20 km wide, and a hard edge drew the coast as the
+  staircase the *grid* makes. Since roughness jumps across that edge, every shore came
+  out visibly blocky wherever the Sun caught the water.
+
+  The fix was to stop throwing information away. The source is a JPEG, so its own
+  antialiasing has already blended the flat ocean colour with the land beside it — which
+  means **how far a coastal texel sits from the fill colour is how much of that texel is
+  sea**. Reproduce it from `land_shallow_topo_2048.jpg`: take the Euclidean RGB distance
+  from rgb(10, 10, 50), map distance 10 to fully water and 45 to fully land with a linear
+  ramp between, then one 1‑2‑1 binomial pass wrapping in longitude and clamping at the
+  poles. 160 KB, about 5% of it partial values.
+
+  **It comes out at 69.7% water against the published 70.8%, and the point of difference
+  is explained rather than mysterious**: the source *draws* the shallow continental
+  shelves instead of filling them, so a rim of every coast reads as land. The binary
+  version managed 68.6%, so reading the blend bought a point of accuracy as well as a
+  shoreline that is not made of squares. Inland water is included — the Caspian, the
+  Great Lakes and the Black Sea all classify correctly. The thresholds come from the
+  encoder's noise and the gap in the distance histogram, not from raising them until the
+  total matched 70.8%, which is why the test asserts where it actually lands.
+
+  It drives one thing: roughness. Water gets 0.444, from Cox and Munk's sun-glitter
+  measurement of sea-surface slope at 7 m/s of wind; land keeps 1.
 
 ## Other sources, for later phases
 

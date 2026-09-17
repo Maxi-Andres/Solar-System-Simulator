@@ -7,6 +7,19 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { LightingMode } from '../state/store.ts';
 import type { SimClock } from '../core/time.ts';
 import { stateToOsculatingElements } from '../core/kepler.ts';
+import {
+  applyCloudDensity,
+  applyEarthExtras,
+  cloudDriftDeg,
+  CLOUD_SEGMENTS,
+  CLOUD_TOP_ALTITUDE_KM,
+  EARTH_CLOUD_MAP,
+  EARTH_NIGHT_MAP,
+  EARTH_WATER_MASK,
+  earthExtrasUniforms,
+  WATER_IOR,
+  type EarthExtrasUniforms,
+} from './earthExtras.ts';
 import { rebaseFrame } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
@@ -42,11 +55,19 @@ import {
 
 /** Scratch objects for the frame loop, which must not allocate. */
 const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
+/** The rotation axis in a body's own frame: SphereGeometry puts its poles on +/-y. */
+const BODY_LOCAL_POLE = new THREE.Vector3(0, 1, 0);
 const scratchPole = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchBody = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
 const scratchQuaternion = new THREE.Quaternion();
+const scratchDrift = new THREE.Quaternion();
+
+const DEG = Math.PI / 180;
+
+/** The one body with night lights, clouds and oceans. See earthExtras.ts. */
+const EARTH_ID = 'earth';
 
 /** Marker diameter on screen, in CSS pixels. Matches the NASA Eyes look. */
 const MARKER_PIXELS = 11;
@@ -86,6 +107,31 @@ export interface SolarSystemProps {
   readonly visibleKinds: ReadonlySet<string>;
 }
 
+/**
+ * Earth's own bits, absent on every other body.
+ *
+ * A nullable field rather than a subclass or a second list: the frame loop already
+ * walks one array of handles, and a body that has something extra is the same shape as
+ * a body that has rings.
+ */
+interface EarthHandles {
+  readonly uniforms: EarthExtrasUniforms;
+  /** The cloud deck, a sibling of the surface sphere and slightly larger. */
+  readonly cloud: THREE.Mesh;
+  readonly cloudMaterial: THREE.MeshStandardMaterial;
+  /** Equatorial radius the deck sits at, km. Sets its drift rate. */
+  readonly deckRadiusKm: number;
+  /**
+   * Until the cloud map arrives the deck is an opaque white sphere that would swallow
+   * the planet, so it stays hidden rather than starting transparent: the alpha lives
+   * in the map, and there is no alpha without it.
+   */
+  cloudReady: boolean;
+  nightRequested: boolean;
+  waterRequested: boolean;
+  cloudRequested: boolean;
+}
+
 interface BodyHandles {
   readonly definition: BodyDefinition;
   readonly group: THREE.Group;
@@ -111,6 +157,8 @@ interface BodyHandles {
   ringRequested: boolean;
   /** Uniforms for the shadow the rings throw back onto the planet, if it has any. */
   readonly ringShadow: RingShadowUniforms | null;
+  /** Night lights, clouds and oceans. Non-null for exactly one body. */
+  readonly earth: EarthHandles | null;
 }
 
 export function SolarSystem({
@@ -141,15 +189,25 @@ export function SolarSystem({
       const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
       const geometry = new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
-      // The Sun emits rather than receives, so it gets an unlit material.
+      // The Sun emits rather than receives, so it gets an unlit material. Earth gets
+      // the physical one, for one reason: `ior`, which only exists there, and which is
+      // what stops its oceans reflecting twice as much light as water does. Everything
+      // else is a rough diffuse surface with no specular worth paying for.
       const material =
         definition.kind === 'star'
           ? new THREE.MeshBasicMaterial({ color: definition.color })
-          : new THREE.MeshStandardMaterial({
-              color: definition.color,
-              roughness: 1,
-              metalness: 0,
-            });
+          : definition.id === EARTH_ID
+            ? new THREE.MeshPhysicalMaterial({
+                color: definition.color,
+                roughness: 1,
+                metalness: 0,
+                ior: WATER_IOR,
+              })
+            : new THREE.MeshStandardMaterial({
+                color: definition.color,
+                roughness: 1,
+                metalness: 0,
+              });
 
       const mesh = new THREE.Mesh(geometry, material);
       // Polar flattening: Saturn is 9.8% shorter pole to pole than across.
@@ -174,6 +232,60 @@ export function SolarSystem({
       // means tens of thousands of scene units; leave culling to the mesh.
       marker.frustumCulled = false;
       group.add(marker);
+
+      let earth: EarthHandles | null = null;
+      if (definition.id === EARTH_ID) {
+        const uniforms = earthExtrasUniforms();
+        // Safe: the Sun is the only body with a Basic material, and it is not Earth.
+        applyEarthExtras(material as THREE.MeshPhysicalMaterial, uniforms);
+
+        // A sibling of the surface sphere, not a child, for the same reason the rings
+        // are: the surface carries the polar flattening as a scale, and the deck needs
+        // its own -- 5 km added to both radii flattens slightly less, not more.
+        const deckRadiusKm = definition.radiusEquatorialKm + CLOUD_TOP_ALTITUDE_KM;
+        const cloudMaterial = new THREE.MeshStandardMaterial({
+          // White, because a cloud is white. The map is opacity, not colour: it goes
+          // in as alphaMap, so what varies across the deck is how much of it there is.
+          color: '#ffffff',
+          roughness: 1,
+          metalness: 0,
+          transparent: true,
+          // Clouds are drawn over the surface they float above; writing depth would
+          // make the thin edges of the deck cut holes in the planet behind them.
+          depthWrite: false,
+        });
+        // The map is a column depth, not a transparency. Reading it as one left the
+        // deck thin and gauzy; see earthExtras.ts.
+        applyCloudDensity(cloudMaterial);
+        const cloud = new THREE.Mesh(
+          // Four times the planet's tessellation, and that is a correctness
+          // requirement rather than polish: at 64 segments a chord sags 7.7 km inside
+          // the sphere, the deck floats 5 km above it, and the drift rotation stops
+          // the two grids lining up -- so the clouds sank into the planet in vertical
+          // stripes, one per facet. See CLOUD_SEGMENTS.
+          new THREE.SphereGeometry(kmToUnits(deckRadiusKm), CLOUD_SEGMENTS, CLOUD_SEGMENTS / 2),
+          cloudMaterial,
+        );
+        cloud.scale.set(
+          1,
+          (definition.radiusPolarKm + CLOUD_TOP_ALTITUDE_KM) / deckRadiusKm,
+          1,
+        );
+        cloud.renderOrder = 1;
+        cloud.visible = false;
+        group.add(cloud);
+
+        earth = {
+          uniforms,
+          cloud,
+          cloudMaterial,
+          deckRadiusKm,
+          cloudReady: false,
+          nightRequested: false,
+          waterRequested: false,
+          cloudRequested: false,
+        };
+      }
 
       let ring: THREE.Mesh | null = null;
       let ringShadow: RingShadowUniforms | null = null;
@@ -242,6 +354,7 @@ export function SolarSystem({
         orbit,
         ring,
         ringShadow,
+        earth,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
@@ -426,6 +539,88 @@ export function SolarSystem({
               handle.ringRequested = false;
               console.error(`Could not load the ring map for ${handle.definition.id}`, error);
             });
+        }
+      }
+
+      const earth = handle.earth;
+      if (earth !== null && sun !== undefined) {
+        // The Sun in Earth's own frame, where the shader can compare it against the
+        // sphere's parametric normal and know how far past sunset a point is. Same
+        // transform the ring shadow uses, for the same reason: one per body per frame
+        // here beats undoing a rotation per fragment there.
+        scratchSun
+          .set(sun.positionKm.x, sun.positionKm.y, sun.positionKm.z)
+          .sub(scratchBody.set(rebased.positionKm.x, rebased.positionKm.y, rebased.positionKm.z))
+          .normalize()
+          .applyQuaternion(scratchQuaternion.copy(handle.mesh.quaternion).invert());
+        earth.uniforms.uSunLocal.value.copy(scratchSun);
+
+        // The deck follows the surface's orientation and then slips west on top of it.
+        // Tied to the sphere's own fade, like the rings, so planet and clouds appear
+        // and disappear together rather than the deck outliving the body.
+        earth.cloud.visible = earth.cloudReady && sphereOpacity > 0.005;
+        earth.cloudMaterial.opacity = sphereOpacity;
+        if (earth.cloud.visible) {
+          earth.cloud.quaternion
+            .copy(handle.mesh.quaternion)
+            .multiply(
+              scratchDrift.setFromAxisAngle(
+                BODY_LOCAL_POLE,
+                cloudDriftDeg(jd, earth.deckRadiusKm) * DEG,
+              ),
+            );
+        }
+
+        if (pixelRadius >= TEXTURE_REQUEST_PX) {
+          const anisotropy = gl.capabilities.getMaxAnisotropy();
+
+          if (!earth.nightRequested) {
+            earth.nightRequested = true;
+            void loadBodyTexture(EARTH_NIGHT_MAP, { anisotropy })
+              .then((texture) => {
+                earth.uniforms.uNightMap.value = texture;
+                earth.uniforms.uNightStrength.value = 1;
+              })
+              .catch((error: unknown) => {
+                earth.nightRequested = false;
+                console.error('Could not load the night lights map', error);
+              });
+          }
+
+          if (!earth.waterRequested) {
+            earth.waterRequested = true;
+            // NoColorSpace: this one is a measurement, not a picture. An sRGB decode
+            // would bend a mask that is meant to be read at face value.
+            void loadBodyTexture(EARTH_WATER_MASK, {
+              anisotropy,
+              colorSpace: THREE.NoColorSpace,
+            })
+              .then((texture) => {
+                earth.uniforms.uWaterMask.value = texture;
+                earth.uniforms.uWaterStrength.value = 1;
+              })
+              .catch((error: unknown) => {
+                earth.waterRequested = false;
+                console.error('Could not load the land/water mask', error);
+              });
+          }
+
+          if (!earth.cloudRequested) {
+            earth.cloudRequested = true;
+            void loadBodyTexture(EARTH_CLOUD_MAP, {
+              anisotropy,
+              colorSpace: THREE.NoColorSpace,
+            })
+              .then((texture) => {
+                earth.cloudMaterial.alphaMap = texture;
+                earth.cloudMaterial.needsUpdate = true;
+                earth.cloudReady = true;
+              })
+              .catch((error: unknown) => {
+                earth.cloudRequested = false;
+                console.error('Could not load the cloud map', error);
+              });
+          }
         }
       }
 
