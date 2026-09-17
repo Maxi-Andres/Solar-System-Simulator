@@ -348,12 +348,18 @@ describe('the cloud deck', () => {
 });
 
 describe('the surface colour correction', () => {
-  it('is the ratio measured between the two renders, not a round number', () => {
-    // NASA Eyes' open sea measures 0.368 mean HSV saturation against ours at 0.454, and
-    // ours already had a fifth taken off when that was measured. Comparing the pixels
-    // that read as sea rather than the whole disc is what makes it a fair number: it does
-    // not care how much land or cloud happened to be in either frame.
-    expect(SURFACE_SATURATION).toBeCloseTo(0.8 * (0.368 / 0.454), 2);
+  it('was set against a render that has a sky in it', () => {
+    // It was 0.65 for a while, from the ratio measured between the two discs -- their open
+    // sea at 0.368 mean saturation against ours at 0.454. That number was real and the
+    // conclusion drawn from it was not: the same measurement found no land pixels at all
+    // in their frame, because their atmosphere hazes the globe. Chasing it here would have
+    // gone on forever, a little more with every screenshot, because saturation was never
+    // the missing thing. atmosphere.ts is.
+    //
+    // 0.7 is a judgement, chosen by eye once the sky existed -- which is the comparison
+    // that can actually be about how vivid a map is, because both pictures now contain
+    // the same physics.
+    expect(SURFACE_SATURATION).toBe(0.7);
   });
 
   it('leaves the map recognisably Earth rather than washing it out', () => {

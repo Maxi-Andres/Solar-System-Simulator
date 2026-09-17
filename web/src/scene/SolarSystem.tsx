@@ -8,6 +8,11 @@ import type { LightingMode } from '../state/store.ts';
 import type { SimClock } from '../core/time.ts';
 import { stateToOsculatingElements } from '../core/kepler.ts';
 import {
+  atmosphereMaterial,
+  atmosphereRadiusRatio,
+  configureAtmosphere,
+} from './atmosphere.ts';
+import {
   applyCloudDensity,
   applyEarthExtras,
   cloudDriftDeg,
@@ -121,6 +126,8 @@ interface EarthHandles {
   readonly cloudMaterial: THREE.MeshStandardMaterial;
   /** Equatorial radius the deck sits at, km. Sets its drift rate. */
   readonly deckRadiusKm: number;
+  /** The sky, on a shell of its own outside everything else. */
+  readonly atmosphere: THREE.Mesh;
   /**
    * Until the cloud map arrives the deck is an opaque white sphere that would swallow
    * the planet, so it stays hidden rather than starting transparent: the alpha lives
@@ -275,11 +282,31 @@ export function SolarSystem({
         cloud.visible = false;
         group.add(cloud);
 
+        // The sky. Built in units of the planet's own radius and then scaled to it, so
+        // the ray marching inside runs in a range float32 is comfortable in however far
+        // away the camera happens to be.
+        const sky = atmosphereMaterial();
+        configureAtmosphere(sky, definition.radiusEquatorialKm, definition.radiusPolarKm);
+        const atmosphere = new THREE.Mesh(
+          new THREE.SphereGeometry(
+            atmosphereRadiusRatio(definition.radiusEquatorialKm),
+            CLOUD_SEGMENTS,
+            CLOUD_SEGMENTS / 2,
+          ),
+          sky,
+        );
+        atmosphere.scale.setScalar(kmToUnits(definition.radiusEquatorialKm));
+        // After the surface and the clouds: it is the air in front of both of them.
+        atmosphere.renderOrder = 2;
+        atmosphere.visible = false;
+        group.add(atmosphere);
+
         earth = {
           uniforms,
           cloud,
           cloudMaterial,
           deckRadiusKm,
+          atmosphere,
           cloudReady: false,
           nightRequested: false,
           waterRequested: false,
@@ -554,6 +581,24 @@ export function SolarSystem({
           .normalize()
           .applyQuaternion(scratchQuaternion.copy(handle.mesh.quaternion).invert());
         earth.uniforms.uSunLocal.value.copy(scratchSun);
+
+        // The sky shares the surface's orientation -- it needs the pole, for the
+        // oblateness -- and reuses the Sun direction already computed in that frame.
+        earth.atmosphere.visible = sphereOpacity > 0.005;
+        if (earth.atmosphere.visible) {
+          const sky = (earth.atmosphere.material as THREE.ShaderMaterial).uniforms;
+          earth.atmosphere.quaternion.copy(handle.mesh.quaternion);
+          sky.uSunLocal!.value.copy(scratchSun);
+          sky.uSunIntensity!.value = LIGHTING[lighting].sun;
+          sky.uFade!.value = sphereOpacity;
+          // The camera in the same frame and the same units the shell is built in:
+          // planet radii, measured from the planet's centre.
+          sky.uCameraLocal!.value
+            .copy(camera.position)
+            .sub(handle.group.position)
+            .applyQuaternion(scratchQuaternion.copy(handle.mesh.quaternion).invert())
+            .divideScalar(kmToUnits(handle.definition.radiusEquatorialKm));
+        }
 
         // The deck follows the surface's orientation and then slips west on top of it.
         // Tied to the sphere's own fade, like the rings, so planet and clouds appear

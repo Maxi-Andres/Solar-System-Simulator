@@ -121,13 +121,6 @@ export const NIGHT_LIGHT_COLOR: readonly [number, number, number] = NIGHT_LIGHT_
  * The shipped Earth map is an illustrative composite -- NASA imagery with colour and
  * contrast added by its authors -- and it reads more vividly than Earth does.
  *
- * **Measured against NASA Eyes rather than guessed, and the first guess was wrong.** A
- * fifth off looked about right and was not enough. Taking screenshots of both at the
- * same hemisphere and comparing the pixels that read as open sea -- which sidesteps how
- * much land or cloud happened to be in each frame -- their ocean has mean HSV saturation
- * 0.368 against ours at 0.454. That ratio, 0.811, applied to the 0.8 that was already
- * there, is this.
- *
  * Applied in the shader rather than to the file. That keeps the published image on disk
  * exactly as published, which is what makes the credit line and the alignment test mean
  * anything, and keeps the amount a number somebody can check instead of pixels nobody
@@ -136,13 +129,27 @@ export const NIGHT_LIGHT_COLOR: readonly [number, number, number] = NIGHT_LIGHT_
  * Earth only. The other maps have the same bias and no reference to correct them
  * against, and guessing per body would be worse than leaving them alone.
  *
- * **It is also not the whole of why their Earth looks paler than ours, and the
- * measurement is what showed that.** Classifying their disc by colour finds *no land
- * pixels at all* -- not one pixel where green beats blue -- because their render puts an
- * atmosphere over the whole globe and it turns the continents blue-grey. Saturation can
- * be matched; that cannot, and it is a separate piece of work rather than a constant.
+ * ## Three values, and only the last one was set against the right picture
+ *
+ * It began at 0.8, went to 0.65, and settled here. The middle step is the instructive
+ * one, because it was arrived at by measurement and was still wrong.
+ *
+ * Measured against NASA Eyes, their open sea sits at 0.368 mean HSV saturation against
+ * ours at 0.454, and that ratio said 0.65. The same measurement said why not to use it,
+ * if anyone had read it rather than acted on it: classifying their disc by colour turns
+ * up **no land pixels at all**, not one where green beats blue, because their whole globe
+ * is hazed by an atmosphere. So the ratio was charging the map for something the map was
+ * not responsible for, and it would have kept going -- each new screenshot asking for a
+ * little more -- because the missing thing was never saturation. It was `atmosphere.ts`.
+ *
+ * **0.7 is a judgement rather than a measurement, and it is worth being clear which.**
+ * With the sky in place, Maxi set it by eye against the reference. That is a fair way to
+ * choose it and the earlier ratio was not, for one reason: this comparison is between two
+ * pictures that contain the same physics, so what is left to judge really is how vivid
+ * the map is. The number happens to land near where the contaminated measurement pointed;
+ * it does not inherit its authority from it.
  */
-export const SURFACE_SATURATION = 0.65;
+export const SURFACE_SATURATION = 0.7;
 
 /**
  * How bright the lights are rendered, as linear emissive radiance at the brightest
