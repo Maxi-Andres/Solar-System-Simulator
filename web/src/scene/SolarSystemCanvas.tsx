@@ -8,7 +8,7 @@ import type { RefObject } from 'react';
 
 import { CameraRig } from './CameraRig.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
-import { kmToUnits } from './scale.ts';
+import { FOV_DEG, kmToUnits } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
 
@@ -28,8 +28,7 @@ import { Starfield } from './Starfield.tsx';
  * the focused body there.
  */
 
-/** Vertical field of view, degrees. Kept in sync with the marker sizing maths. */
-export const FOV_DEG = 50;
+export { FOV_DEG };
 
 export interface SolarSystemCanvasProps {
   readonly store: EphemerisStore;
@@ -88,6 +87,9 @@ export function SolarSystemCanvas({
       />
       <CameraRig
         focusKey={focus}
+        // Not left to the `camera` prop above, which r3f reads only when it first
+        // creates the camera and silently ignores afterwards. See CameraRig.
+        fovDeg={FOV_DEG}
         // Framing relative to the body's own radius, so switching from the Sun to
         // Pluto -- six orders of magnitude apart -- arrives at the same apparent
         // size instead of burying the camera or losing the body entirely.

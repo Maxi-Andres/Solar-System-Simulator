@@ -1,7 +1,11 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   angularRadiusPixels,
+  FOV_DEG,
   KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
@@ -16,7 +20,7 @@ import {
 } from './scale.ts';
 
 const AU_KM = 149_597_870.7;
-const FOV = 50;
+const FOV = FOV_DEG;
 const HEIGHT = 1080;
 
 describe('scene units', () => {
@@ -53,8 +57,9 @@ describe('scene units', () => {
  *
  * Perspective projection is linear in the TANGENT of the angle, not in the angle
  * itself, so dividing pixels by viewport height and scaling by the FOV is wrong by
- * tan(fov/2)/(fov/2) -- about 6.9% at a 50 degree FOV. Undoing the projection
- * properly is what lets these tests assert real published apparent sizes.
+ * tan(fov/2)/(fov/2) -- about 1.9% at this field of view, and 6.9% at the 50 degrees it
+ * used to be. Undoing the projection properly is what lets these tests assert real
+ * published apparent sizes.
  */
 function pixelsToAngularDiameterDeg(pixels: number): number {
   const halfFovRad = (FOV * Math.PI) / 360;
@@ -101,11 +106,15 @@ describe('angularRadiusPixels', () => {
   });
 
   it('explains why markers are needed at all', () => {
-    // Earth viewed from the Sun's distance: comfortably sub-pixel. Drawing it as a
+    // Earth viewed from the Sun's distance: a tenth of a pixel. Drawing it as a
     // true-scale sphere would render nothing at all.
-    expect(angularRadiusPixels(6378.1366, AU_KM, HEIGHT, FOV)).toBeLessThan(0.06);
+    //
+    // The bound moves with the field of view -- a narrower one magnifies everything, so
+    // it was 0.06 px at the 50 degrees this used to be -- and the conclusion does not.
+    // Nothing here is within two orders of magnitude of being visible.
+    expect(angularRadiusPixels(6378.1366, AU_KM, HEIGHT, FOV)).toBeLessThan(0.15);
     // Pluto from Earth is worse by another two orders of magnitude.
-    expect(angularRadiusPixels(1188.3, 5.9e9, HEIGHT, FOV)).toBeLessThan(0.001);
+    expect(angularRadiusPixels(1188.3, 5.9e9, HEIGHT, FOV)).toBeLessThan(0.002);
   });
 
   it('treats a zero distance as filling the view', () => {
@@ -200,5 +209,100 @@ describe('pixelsToWorldSize', () => {
     const far = pixelsToWorldSize(11, 1000, HEIGHT, FOV);
 
     expect(far / near).toBeCloseTo(10, 9);
+  });
+});
+
+/**
+ * The field of view, which is the one camera setting that changes what the scene *looks*
+ * like rather than what it contains.
+ *
+ * Reported as a fisheye: a planet filling the frame was being seen from 8,700 km up,
+ * because that is where 50 degrees puts you. Nothing about the projection was wrong --
+ * which is exactly why this needs a test with numbers in it rather than an opinion.
+ */
+describe('the field of view', () => {
+  /** How far from a planet's centre you stand when it fills the frame, in its radii. */
+  const framingDistance = (fovDeg: number) => 1 / Math.sin((fovDeg * Math.PI) / 360);
+
+  /** Fraction of a sphere's surface visible from that distance. */
+  const visibleSurface = (fovDeg: number) => (1 - 1 / framingDistance(fovDeg)) / 2;
+
+  it('is the vertical field of a 50 mm lens on 35 mm film', () => {
+    // The photographic definition of a normal lens: the focal length that renders
+    // perspective without wide-angle exaggeration. A derived value, not a preference.
+    const normalLens = (2 * Math.atan(12 / 50) * 180) / Math.PI;
+
+    expect(FOV_DEG).toBeCloseTo(normalLens, 0);
+    expect(normalLens).toBeCloseTo(26.99, 2);
+  });
+
+  it('stands far enough back that a planet is nearly orthographic', () => {
+    // A real image of a planet is taken from far away through a narrow field, so it is
+    // very nearly an orthographic projection and shows half the sphere. This is the
+    // measure of how close to that the render gets.
+    expect(framingDistance(FOV_DEG)).toBeGreaterThan(4);
+    expect(visibleSurface(FOV_DEG)).toBeGreaterThan(0.38);
+  });
+
+  it('shows a third more of a planet than the wide angle it replaced', () => {
+    // The defect, in the units that make it a defect. At 50 degrees a full-frame Earth
+    // was seen from 8,700 km and everything past 65 degrees from the sub-camera point
+    // was crushed into the rim.
+    expect(framingDistance(50)).toBeCloseTo(2.37, 2);
+    expect(visibleSurface(50)).toBeCloseTo(0.289, 3);
+    expect(visibleSurface(FOV_DEG) / visibleSurface(50)).toBeGreaterThan(1.3);
+  });
+
+  it('is still wide enough to navigate with', () => {
+    // The trade is real: a narrower field means standing further back to see the same
+    // thing, and the zoom range is finite. Past about 15 degrees this stops being a
+    // camera and starts being a telescope.
+    expect(FOV_DEG).toBeGreaterThan(15);
+    expect(FOV_DEG).toBeLessThan(40);
+  });
+});
+
+/**
+ * That the field of view actually reaches the camera.
+ *
+ * A source-text test, like the favicon one, and for the same reason: this is wiring, and
+ * no unit test can reach it -- there is no renderer here to ask what the camera is doing.
+ *
+ * It exists because the obvious way to set a field of view **does not work and does not
+ * complain**. react-three-fiber configures the camera inside `if (!state.camera || ...)`,
+ * so the object literal on `<Canvas camera={{ fov }}>` is read exactly once, when the
+ * camera does not yet exist, and every later change to it is ignored. The constant was
+ * moved from 27 to 90 -- a third of a turn, impossible to miss -- and the picture did not
+ * change at all.
+ */
+describe('the field of view reaches the camera', () => {
+  const read = (file: string) => readFile(join(import.meta.dirname, file), 'utf8');
+
+  it('is set imperatively by the rig, not only handed to the Canvas', async () => {
+    const canvas = await read('SolarSystemCanvas.tsx');
+    const rig = await read('CameraRig.tsx');
+
+    // Still passed to the Canvas, so the very first frame is already right.
+    expect(canvas).toMatch(/camera=\{\{\s*fov: FOV_DEG/);
+    // And owned by the rig, so every later change to it lands.
+    expect(canvas).toContain('fovDeg={FOV_DEG}');
+    expect(rig).toContain('perspective.fov = fovDeg');
+    expect(rig).toContain('perspective.updateProjectionMatrix()');
+  });
+
+  it('reacts to the value rather than only to the camera', async () => {
+    // The dependency that makes it a live setting instead of a one-off: without fovDeg
+    // in it, editing the constant would again change nothing until a full reload.
+    const rig = await read('CameraRig.tsx');
+
+    expect(rig).toMatch(/\}, \[camera, fovDeg\]\)/);
+  });
+
+  it('leaves the aspect ratio to react-three-fiber', async () => {
+    // Setting camera.manual would take over the frustum entirely, including the aspect
+    // handling on resize, which works and is not ours to break.
+    const rig = await read('CameraRig.tsx');
+
+    expect(rig).not.toContain('manual = true');
   });
 });

@@ -22,6 +22,8 @@ import { useViewStore } from '../state/store.ts';
  */
 
 export interface CameraRigProps {
+  /** Vertical field of view, degrees. Owned here; see the effect below for why. */
+  readonly fovDeg: number;
   /** Distance to settle at when the focus changes, in scene units. */
   readonly framingDistance: number;
   /** Never let the camera closer than this, in scene units. */
@@ -37,12 +39,40 @@ const ZOOM_PER_WHEEL_NOTCH = 0.0012;
 const DAMPING = 0.18;
 
 export function CameraRig({
+  fovDeg,
   framingDistance,
   minDistance,
   maxDistance,
   focusKey,
 }: CameraRigProps) {
   const { camera, gl } = useThree();
+
+  /**
+   * The field of view, set on the camera itself rather than left to the `camera` prop.
+   *
+   * **That prop is creation-only, and it fails silently.** react-three-fiber configures
+   * the camera inside `if (!state.camera || ...)` -- so the object literal on `<Canvas>`
+   * is read exactly once, when the camera does not yet exist, and every later change to
+   * it is ignored. Nothing warns. The symptom is a field of view that can be edited from
+   * 27 to 90 with no visible effect at all until the page is reloaded from scratch, which
+   * is precisely how it was found.
+   *
+   * Owning it here makes it a normal reactive value: it follows the prop, it survives a
+   * hot reload, and `updateProjectionMatrix` is called explicitly rather than being
+   * inherited from whichever resize happened to fire next.
+   *
+   * `camera.manual` is deliberately left alone. Setting it -- which r3f does if the
+   * camera prop carries `aspect` -- would also switch off its handling of the aspect
+   * ratio on resize, and that part works.
+   */
+  useEffect(() => {
+    const perspective = camera as THREE.PerspectiveCamera;
+    if (!perspective.isPerspectiveCamera || perspective.fov === fovDeg) {
+      return;
+    }
+    perspective.fov = fovDeg;
+    perspective.updateProjectionMatrix();
+  }, [camera, fovDeg]);
 
   // Current and target state. The target is what input writes to; the camera eases
   // toward it each frame, which is what makes dragging feel continuous.

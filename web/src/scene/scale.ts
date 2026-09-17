@@ -29,6 +29,41 @@ import type { Vec3 } from '../core/vec3.ts';
  */
 export const KM_PER_UNIT = 1000;
 
+/**
+ * Vertical field of view of the camera, degrees.
+ *
+ * **It was 50, and 50 is a wide-angle lens.** A perspective camera is not wrong at any
+ * field of view -- nothing about the projection is incorrect -- but the field decides
+ * where you end up standing when a planet fills the frame, and that is what the eye
+ * reads as distortion.
+ *
+ * The arithmetic, since it is what settles the argument. A planet filling the frame
+ * height sits at `1 / sin(fov / 2)` of its own radii from its centre, and from there you
+ * can see `(1 - sin(fov / 2)) / 2` of its surface:
+ *
+ *   50 deg   2.37 radii   8,700 km over Earth    28.9% of the surface visible
+ *   35 deg   3.33 radii   14,800 km              35.0%
+ *   27 deg   4.28 radii   20,900 km              38.3%
+ *   15 deg   7.66 radii   42,500 km              43.5%
+ *   0        infinity     orthographic           50%
+ *
+ * At 50 degrees a full-frame Earth is seen from 8,700 km up, and everything past about
+ * 65 degrees from the point under the camera is crushed into the rim. **That is not what
+ * a photograph of a planet looks like**, and the reason is physical rather than
+ * aesthetic: real planetary images are taken from far away through narrow fields, so
+ * they are very nearly orthographic. Reference renders look the way they do because they
+ * are standing much further back.
+ *
+ * 27 degrees is not a taste value either. It is the vertical field of a 50 mm lens on 35
+ * mm film -- the photographic definition of a normal lens, the focal length that renders
+ * perspective without wide-angle exaggeration. `2 * atan(12 / 50)`.
+ *
+ * Nothing needs to be kept in sync with this by hand: every place that converts between
+ * angles and pixels takes the live `camera.fov`, so the marker sizes, the label
+ * projection and the mesh fade all follow it.
+ */
+export const FOV_DEG = 27;
+
 export function kmToUnits(km: number): number {
   return km / KM_PER_UNIT;
 }
