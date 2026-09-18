@@ -182,3 +182,69 @@ export function pixelsToWorldSize(
   const halfFovRad = (fovDeg * Math.PI) / 360;
   return (pixels / viewportHeightPx) * 2 * distanceUnits * Math.tan(halfFovRad);
 }
+
+/**
+ * When the focused body's own orbit stops being drawn.
+ *
+ * Expressed as the body's on-screen radius against the viewport's half-height, so it is
+ * the same rule for Pluto and for Jupiter: **1 is a body whose disc exactly fills the
+ * frame height.**
+ *
+ * The rule, rather than the numbers: *an orbit is context while you can see the body it
+ * belongs to.* Once the body is larger than the view, the visible piece of its orbit is a
+ * straight line crossing the picture — it has stopped saying where the body goes and
+ * become something drawn over it. Other bodies' orbits are untouched, because those are
+ * still telling you where things are relative to the one you are at.
+ *
+ * **Both ends were measured off screenshots, twice, and both times they were too late.**
+ * The first version held full strength until the body filled the frame and then took the
+ * line away over a short approach, which reads as it being switched off rather than as it
+ * receding. The second still had the orbit at full strength in a shot where it was plainly
+ * in the way: the body covered 39% of the frame height there, so that is the number the
+ * far end is set against.
+ *
+ * Then the pair moved out twice more on the same report — right in character, still too
+ * close — settling where **the orbit is gone by twenty-five of the body's own radii**.
+ * Both ends moved together each time, rather than only the far one: scaling the pair moves
+ * where the fade happens and keeps its shape, where moving one end alone would have made
+ * it steeper as well as earlier.
+ *
+ * Distance is how it was asked for and apparent size is how it is stored, because
+ * converting one into the other needs a field of view and this has to survive someone
+ * changing that. Twenty-five radii at 27 degrees is a body covering a sixth of the frame
+ * height, and it is that ratio which stays true.
+ *
+ * The two ends in plain terms: **fully drawn while the body is under a twentieth of the
+ * frame's height, gone by the time it is a sixth of it** — untouched beyond about ninety
+ * of the body's own radii, gone inside twenty-five.
+ *
+ * The consequence worth stating, because it reverses an earlier decision: at the 8 radii
+ * `CameraRig` settles at, a body covers about half the frame and its own orbit is
+ * therefore **already gone**. Selecting a body no longer shows you its orbit. That is the
+ * point rather than a side effect — the moment you are close enough to look at something,
+ * its own orbit has stopped being information about it and become a line drawn over it.
+ * Every other orbit is still there, and those are what say where you are.
+ */
+export const FOCUS_ORBIT_FULL = 0.045;
+
+/**
+ * Gone by here: a sixth of the frame height, which is twenty-five radii out.
+ *
+ * The last digit is not spare precision. A body at exactly twenty-five of its own radii
+ * covers 0.16663 of the frame at a 27 degree field, so rounding this to 0.167 would leave
+ * a sliver of orbit still drawn at the distance the threshold was asked for -- and the
+ * test that checks it would fail for a reason that looks like arithmetic noise.
+ */
+export const FOCUS_ORBIT_GONE = 0.1666;
+
+/**
+ * How visible the focused body's own orbit should be, 1 to 0.
+ *
+ * `pixelRadius` is the body's on-screen radius from `angularRadiusPixels`.
+ */
+export function focusOrbitOpacity(pixelRadius: number, viewportHeightPx: number): number {
+  if (viewportHeightPx <= 0) {
+    return 1;
+  }
+  return ramp(pixelRadius / (viewportHeightPx / 2), FOCUS_ORBIT_FULL, FOCUS_ORBIT_GONE);
+}

@@ -33,6 +33,14 @@ import { KM_PER_UNIT } from './scale.ts';
  * radii off its own orbit, Pluto 4400. The ellipse is now recomputed from the body's
  * current state, which by definition passes through it — see `setElements`.
  */
+/**
+ * How solid an orbit line is drawn, before any fade.
+ *
+ * Named because the focused body's own orbit is faded out against it when you get close
+ * enough that the body overflows the frame; see `focusOrbitOpacity`.
+ */
+export const ORBIT_OPACITY = 0.55;
+
 export class OrbitLine {
   readonly line: THREE.LineLoop;
   /** Authoritative points, heliocentric, km, float64. */
@@ -66,7 +74,7 @@ export class OrbitLine {
       new THREE.LineBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.55,
+        opacity: ORBIT_OPACITY,
         depthWrite: false,
       }),
     );

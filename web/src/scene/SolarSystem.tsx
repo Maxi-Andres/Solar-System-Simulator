@@ -42,8 +42,10 @@ import {
 import { LIGHTING } from './shading.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
+import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
+  focusOrbitOpacity,
   kmToUnits,
   markerOpacity,
   meshOpacity,
@@ -708,7 +710,15 @@ export function SolarSystem({
       }
 
       if (handle.orbit !== null) {
-        handle.orbit.line.visible = showOrbits && sun !== undefined;
+        // The focused body's own orbit fades out once the body overflows the frame. By
+        // then the visible piece of it is a straight line drawn across the picture rather
+        // than anything that says where the body goes. Every other orbit stays: those are
+        // still saying where things are relative to the one you are standing at.
+        const fade =
+          handle.definition.id === focus ? focusOrbitOpacity(pixelRadius, size.height) : 1;
+        (handle.orbit.line.material as THREE.LineBasicMaterial).opacity = ORBIT_OPACITY * fade;
+
+        handle.orbit.line.visible = showOrbits && sun !== undefined && fade > 0.005;
         if (sun !== undefined) {
           // Re-derive the ellipse from where the body actually is right now. Elements
           // frozen at one epoch drift off the real path as perturbations accumulate;

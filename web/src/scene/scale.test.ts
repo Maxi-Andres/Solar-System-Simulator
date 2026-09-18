@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   angularRadiusPixels,
+  FOCUS_ORBIT_FULL,
+  FOCUS_ORBIT_GONE,
+  focusOrbitOpacity,
   FOV_DEG,
   KM_PER_UNIT,
   kmToUnits,
@@ -304,5 +307,96 @@ describe('the field of view reaches the camera', () => {
     const rig = await read('CameraRig.tsx');
 
     expect(rig).not.toContain('manual = true');
+  });
+});
+
+/**
+ * The focused body's own orbit, which stops being drawn once you are close to it.
+ *
+ * A legibility rule rather than a physical one, and the part worth pinning is what it is
+ * tied to: the body's apparent size, not a distance in kilometres. That is what makes it
+ * the same rule for Pluto and for Jupiter.
+ */
+describe('focusOrbitOpacity', () => {
+  const HEIGHT_PX = 1080;
+  /** On-screen radius of a body seen from a given number of its own radii. */
+  const atRadii = (radii: number) => angularRadiusPixels(1, radii, HEIGHT_PX, FOV_DEG);
+  /** The fraction of the frame height a body's disc covers, which is the measure used. */
+  const covering = (fraction: number) => (fraction * HEIGHT_PX) / 2;
+
+  it('is fully drawn while the body is a small disc among others', () => {
+    expect(focusOrbitOpacity(0, HEIGHT_PX)).toBe(1);
+    expect(focusOrbitOpacity(covering(FOCUS_ORBIT_FULL), HEIGHT_PX)).toBe(1);
+  });
+
+  it('is gone well before the screenshot that reported it', () => {
+    // The report was a frame with the body covering 38.7% of the height and its orbit
+    // still at full strength, so that measurement is the anchor. It is not the threshold:
+    // setting the far end there left it right in character and still too close, and it
+    // moved 40% further out again. The orbit is gone by two thirds of that frame's size.
+    expect(focusOrbitOpacity(covering(0.387), HEIGHT_PX)).toBe(0);
+    expect(focusOrbitOpacity(covering(0.18), HEIGHT_PX)).toBe(0);
+    expect(focusOrbitOpacity(covering(FOCUS_ORBIT_GONE), HEIGHT_PX)).toBe(0);
+    expect(focusOrbitOpacity(HEIGHT_PX * 5, HEIGHT_PX)).toBe(0);
+  });
+
+  it('is already gone by the time the camera has framed the body', () => {
+    // This reverses an earlier decision deliberately. `CameraRig` settles at 8 radii,
+    // where a body covers about half the frame: close enough to be looking *at* it, which
+    // is exactly when its own orbit has stopped being information about it.
+    expect(focusOrbitOpacity(atRadii(8), HEIGHT_PX)).toBe(0);
+    expect(focusOrbitOpacity(atRadii(1.05), HEIGHT_PX)).toBe(0);
+  });
+
+  it('is well on its way out long before that', () => {
+    // The correction that mattered, three times over: the fade has to happen while the
+    // body is still small, not once it already dominates the frame. At forty of its own
+    // radii a body is a small disc with plenty of room around it, and the orbit is already
+    // half gone.
+    expect(focusOrbitOpacity(atRadii(60), HEIGHT_PX)).toBeLessThan(0.9);
+    expect(focusOrbitOpacity(atRadii(40), HEIGHT_PX)).toBeLessThan(0.7);
+    expect(focusOrbitOpacity(atRadii(40), HEIGHT_PX)).toBeGreaterThan(0.3);
+    expect(focusOrbitOpacity(atRadii(30), HEIGHT_PX)).toBeLessThan(0.35);
+  });
+
+  it("is gone by twenty-five of the body's own radii", () => {
+    // The distance the threshold was actually asked for in. It is stored as an apparent
+    // size, because converting one into the other needs a field of view and this has to
+    // survive someone changing that — so this is the test that keeps the two agreeing.
+    expect(focusOrbitOpacity(atRadii(25), HEIGHT_PX)).toBe(0);
+    expect(focusOrbitOpacity(atRadii(28), HEIGHT_PX)).toBeGreaterThan(0);
+  });
+
+  it('takes tens of radii rather than a moment', () => {
+    // Count the radii over which it is neither fully there nor fully gone. This is the
+    // test the first version failed: it had the whole fade inside a two-radius approach.
+    const partial: number[] = [];
+    for (let radii = 200; radii >= 1.05; radii -= 0.1) {
+      const opacity = focusOrbitOpacity(atRadii(radii), HEIGHT_PX);
+      if (opacity > 0.01 && opacity < 0.99) {
+        partial.push(radii);
+      }
+    }
+
+    expect(Math.max(...partial) - Math.min(...partial)).toBeGreaterThan(20);
+  });
+
+  it('only ever fades as you approach', () => {
+    let previous = 1.0001;
+    for (let radii = 200; radii >= 1.05; radii -= 0.25) {
+      const opacity = focusOrbitOpacity(atRadii(radii), HEIGHT_PX);
+      expect(opacity).toBeLessThanOrEqual(previous + 1e-9);
+      expect(opacity).toBeGreaterThanOrEqual(0);
+      previous = opacity;
+    }
+  });
+
+  it('is the same rule at any viewport height', () => {
+    // Tied to apparent size, so a taller window does not change when the orbit goes.
+    for (const height of [400, 1080, 2160]) {
+      expect(
+        focusOrbitOpacity(angularRadiusPixels(1, 16, height, FOV_DEG), height),
+      ).toBeCloseTo(focusOrbitOpacity(angularRadiusPixels(1, 16, 1080, FOV_DEG), 1080), 6);
+    }
   });
 });
