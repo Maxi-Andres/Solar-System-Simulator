@@ -28,6 +28,14 @@ export interface LabelProjectorProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly visible: boolean;
+  /**
+   * Body kinds currently switched on in the layers panel.
+   *
+   * The labels are DOM, not scene objects, so switching a kind off in the panel hid the
+   * spheres and the orbits and left the names floating over empty space. Nothing else
+   * knew: the scene walks its own list and never told this one.
+   */
+  readonly visibleKinds: ReadonlySet<string>;
   /** Label elements, keyed by body id, owned by the overlay outside the canvas. */
   readonly elements: RefObject<Map<BodyId, HTMLElement | null>>;
 }
@@ -45,6 +53,7 @@ export function LabelProjector({
   clock,
   focus,
   visible,
+  visibleKinds,
   elements,
 }: LabelProjectorProps) {
   const { camera, size } = useThree();
@@ -72,6 +81,11 @@ export function LabelProjector({
     const projected: Projected[] = [];
 
     for (const body of store.bodies) {
+      // A kind that is switched off has nothing on screen to be labelled.
+      if (!visibleKinds.has(body.kind)) {
+        continue;
+      }
+
       const rebased = snapshot.bodies.get(body.id);
       if (rebased === undefined) {
         continue;

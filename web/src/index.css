@@ -23,6 +23,88 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A region that scrolls without drawing a scrollbar.
+   The About screen shows its own progress ring instead: a browser scrollbar on a
+   full-bleed dark overlay is a bright vertical rule down the edge of a page that is
+   otherwise all thin greys, and it tells you where you are without telling you that
+   there is more to read. Needs real CSS rather than an inline style, because the
+   WebKit pseudo-element cannot be set from the style attribute. */
+.scroll-hidden {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Every control in the overlay answers to the pointer the same way.
+
+   Written in `filter` and an inset `box-shadow` rather than in `background` and `color`,
+   and that is the whole trick: this interface is styled with inline `style` objects, and
+   an inline declaration beats a class rule even on `:hover`. Nothing sets these two
+   inline, so they compose with whatever a control already looks like — a transparent
+   toolbar button picks up a tint, a selected blue one simply brightens, and neither
+   needs its own rule.
+
+   `#root button` rather than a class, so a control added later cannot be left out of it
+   by forgetting a className. `.ui-press` is the opt-in for the clickable things that are
+   not buttons: a layer row is a label, and a body row is a table row. */
+#root button,
+.ui-press {
+  transition:
+    filter 130ms ease,
+    box-shadow 130ms ease;
+}
+
+#root button:hover:not(:disabled),
+.ui-press:hover:not([aria-disabled='true']) {
+  filter: brightness(1.45);
+  box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.06);
+}
+
+#root button:active:not(:disabled),
+.ui-press:active:not([aria-disabled='true']) {
+  filter: brightness(1.75);
+  box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.13);
+  /* A press has to land instantly; it is the release that should ease back. */
+  transition-duration: 30ms;
+}
+
+/* The give under a press, for everything that owns its own transform.
+
+   Two exclusions, and both are bugs that shipped. A transform on a `tr` makes it a
+   containing block and the column widths jump. And `.tracks-scene` is anything the frame
+   loop positions by writing `transform` — the body labels — where transitioning it made
+   the names swim after the planets whenever the camera moved, and replacing it on a press
+   would fling the label to the top-left corner. Those keep the brightness; they cannot
+   have the scale. */
+#root button:not(.tracks-scene),
+.ui-press:not(.tracks-scene) {
+  transition:
+    filter 130ms ease,
+    box-shadow 130ms ease,
+    transform 130ms ease;
+}
+
+#root button:active:not(:disabled):not(.tracks-scene),
+.ui-press:active:not([aria-disabled='true']):not(tr):not(.tracks-scene) {
+  transform: scale(0.94);
+}
+
+/* Keyboard users get the affordance the pointer gets. */
+#root button:focus-visible,
+.ui-press:focus-visible {
+  outline: 1px solid #6a6a6a;
+  outline-offset: 2px;
+}
+
+/* A control that cannot be used must not answer as though it could. */
+#root button:disabled,
+.ui-press[aria-disabled='true'] {
+  cursor: default;
+}
+
 /* The WebGL canvas must never start a text selection while dragging. */
 canvas {
   display: block;

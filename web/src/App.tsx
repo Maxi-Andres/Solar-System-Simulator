@@ -99,6 +99,9 @@ export function App() {
           <button
             key={body.id}
             type="button"
+            // The frame loop writes this element's transform sixty times a second, so the
+            // stylesheet must keep its hands off that property. See index.css.
+            className="tracks-scene"
             ref={(element) => {
               labelElements.current.set(body.id, element);
             }}
@@ -197,6 +200,7 @@ export function App() {
               jd={jd}
               distanceMode={distanceMode}
               onDistanceMode={setDistanceMode}
+              visibleKinds={visibleKinds}
               tick={frame}
             />
           )}

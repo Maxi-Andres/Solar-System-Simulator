@@ -44,7 +44,12 @@ function LayerRow({ layer, checked, onToggle }: LayerRowProps) {
         <div style={{ height: 1, background: '#242424', margin: '0.55rem 0' }} />
       )}
       <label
+        className="ui-press"
+        // The stylesheet keys the hover and press off this rather than off the input's
+        // own disabled attribute, because the row is what the pointer is over.
+        aria-disabled={disabled}
         style={{
+          borderRadius: '0.2rem',
           display: 'flex',
           alignItems: 'center',
           gap: '0.6rem',

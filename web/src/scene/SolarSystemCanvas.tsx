@@ -83,6 +83,7 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         visible={showLabels}
+        visibleKinds={visibleKinds}
         elements={labelElements}
       />
       <CameraRig
