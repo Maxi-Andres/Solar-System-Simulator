@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { StarCatalog } from '@sss/tools/types';
+
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { useViewStore } from '../state/store.ts';
 
@@ -26,7 +28,7 @@ import { useViewStore } from '../state/store.ts';
  *    on a page of thin greys is a bright vertical rule down one edge, and it answers
  *    "where am I" without ever answering "is there more".
  */
-export function AboutPanel({ store }: { store: EphemerisStore }) {
+export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: StarCatalog }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -146,7 +148,7 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
               'Sunsets, from the same physics rather than from a colour ramp. The sunlight reaching the ground and the clouds is attenuated by the air it came down through, so it loses a fifth of its blue at noon and almost all of it near the terminator: the light there is rgb(255, 106, 3) at a quarter of its strength. That is what turns the clouds amber on the daylit side of the line.',
               'Earth’s oceans are as rough as Cox and Munk measured the sea to be from its sun glitter, and reflect at water’s refractive index rather than the generic one every renderer assumes. That is what puts a real glint on the water and none on the land.',
               'Orbits drawn as osculating ellipses, heliocentric, recomputed each deploy.',
-              'The Milky Way is a real all-sky photograph, hung on the galactic frame rather than at a convenient angle: the galaxy’s plane crosses the ecliptic where it actually crosses it, at about 60°. Checked by converting catalogued objects — Sagittarius A*, Andromeda, the Magellanic Clouds — into the frame and comparing against their published coordinates.',
+              `The sky is the ESA Hipparcos catalogue: every one of the ${stars.count.toLocaleString('en-US')} stars down to magnitude ${stars.magnitudeLimit} is a real star, at its own right ascension and declination, moving at its own proper motion, and coloured from its own measured B−V through Planck’s law and the CIE observer — so Betelgeuse is orange because it is 3,600 K. The check is Orion’s belt: nobody arranged those three stars, and if the epoch shift and the rotation into the ecliptic are right they land in a row on their own. They do, with Alnilam 0.09° off the line across a 2.74° span, which is the sky’s own figure.`,
             'Light time and relative speeds, computed from the same vectors.',
             ]}
           />
@@ -154,7 +156,9 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
           <Section>What is approximated</Section>
           <List
             items={[
-              'The starfield is procedurally generated, not a catalog. It is the one thing on screen that is not real. A real photograph of the Milky Way was tried here and taken out again: a photograph is the wrong instrument for a sky, because its stars arrive already blurred and can never be points. Real star positions, magnitudes and colours replace these next.',
+              `How bright a star is drawn is compressed, and that is this picture’s exposure. The sky spans about thirteen orders of magnitude and a screen has three, so every image of space chooses which three to show; here the brightest star in the catalogue is white, the faintest at magnitude ${stars.magnitudeLimit} is at 2% of it — five code values out of 255, which is what a limiting magnitude already means — and the response between them is linear in magnitude — the eye’s own scale, which is what the magnitude system was built from. Sirius outshines a magnitude ${stars.magnitudeLimit} star by nearly six thousand to one in the sky and by fifty to one here. Size is not a separate setting: each star is a Gaussian 0.54 pixels wide, and how big it looks is where that falls below the darkest step a display can show — a width measured by reading this render and a NASA Eyes frame of the same view pixel by pixel, where the median star is 2.26 pixels across.`,
+              'Stars sit on a sphere rather than at their real distances, so there is no parallax. The nearest star drawn would move 0.742 arcseconds from one side of Earth’s orbit to the other, which is under a hundredth of a pixel. Real distances come with the nearby-star work, not here.',
+              'A photographic Milky Way panorama was tried behind the stars and taken out again. It was correctly placed — on the galactic frame, checked against Sagittarius A*, Andromeda and both Magellanic Clouds — and still wrong: a photograph’s stars arrive already blurred by an atmosphere and a lens, so no resolution turns them back into points. It lit 31.8% of the sky where the reference lights 0.9%.',
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does.',
               'Surface maps are composites, not registered cartographic products — NASA imagery with colour and contrast added by its authors, so they read more vividly than a camera would. On the flattened bodies a feature can sit about 1.5° from its true latitude; Saturn is the worst, Earth and Mars are under 0.1°.',
@@ -189,6 +193,13 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
             {store.generatedAt.toISOString().slice(0, 10)}. Exact coverage runs{' '}
             {windowInfo.startUtc.slice(0, 10)} to {windowInfo.stopUtc.slice(0, 10)}; outside that
             range positions are propagated and flagged. Frame is barycentric, ecliptic of J2000.
+          </Prose>
+
+          <Prose>
+            Stars from the <Strong>ESA Hipparcos catalogue</Strong> (ESA 1997), read through the{' '}
+            <Strong>VizieR</Strong> service at CDS Strasbourg: {stars.count.toLocaleString('en-US')}{' '}
+            stars complete to magnitude {stars.magnitudeLimit}, positions at J2000 and carried to
+            the date on screen by their own proper motions.
           </Prose>
 
           <Prose>

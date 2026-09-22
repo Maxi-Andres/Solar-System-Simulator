@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { getBody } from '@sss/tools/catalog';
+
+import { blackbodyChromaticity } from './blackbody.ts';
 import {
   ALPHA_MAP_HOOK,
   applyCloudDensity,
@@ -126,54 +128,15 @@ describe('how rough the sea is', () => {
 
 describe('the colour of the lights', () => {
   /**
-   * Planck's law against the CIE 1931 observer, to linear sRGB.
+   * The integral moved out.
    *
-   * Here rather than in the module because it is a derivation, not a runtime need: the
-   * shader wants three numbers, and this is where they have to be shown to be the right
-   * three. The colour-matching functions are the multi-lobe Gaussian fits from Wyman,
-   * Sloan and Shirley (2013), which are within a percent of the tabulated values.
+   * It lived here, because this is where three numbers had to be shown to be the right
+   * three. Step 6f needed the same arithmetic for 25,000 stars, so it became
+   * `blackbody.ts` -- and this test now checks the shipped constant against that module
+   * rather than against a copy of it, which is the only version of this test that can
+   * still fail for a real reason.
    */
-  function blackbodyLinearSrgb(kelvin: number): [number, number, number] {
-    const lobe = (x: number, mean: number, low: number, high: number) => {
-      const t = (x - mean) / (x < mean ? low : high);
-      return Math.exp(-0.5 * t * t);
-    };
-    const xBar = (w: number) =>
-      1.056 * lobe(w, 599.8, 37.9, 31.0) +
-      0.362 * lobe(w, 442.0, 16.0, 26.7) -
-      0.065 * lobe(w, 501.1, 20.4, 26.2);
-    const yBar = (w: number) => 0.821 * lobe(w, 568.8, 46.9, 40.5) + 0.286 * lobe(w, 530.9, 16.3, 31.1);
-    const zBar = (w: number) => 1.217 * lobe(w, 437.0, 11.8, 36.0) + 0.681 * lobe(w, 459.0, 26.0, 13.8);
-
-    const h = 6.62607015e-34;
-    const c = 299792458;
-    const k = 1.380649e-23;
-    const planck = (nm: number) => {
-      const m = nm * 1e-9;
-      return (2 * h * c * c) / m ** 5 / Math.expm1((h * c) / (m * k * kelvin));
-    };
-
-    let X = 0;
-    let Y = 0;
-    let Z = 0;
-    for (let w = 360; w <= 830; w += 1) {
-      const s = planck(w);
-      X += s * xBar(w);
-      Y += s * yBar(w);
-      Z += s * zBar(w);
-    }
-    X /= Y;
-    Z /= Y;
-    Y = 1;
-
-    const rgb: [number, number, number] = [
-      3.2406 * X - 1.5372 * Y - 0.4986 * Z,
-      -0.9689 * X + 1.8758 * Y + 0.0415 * Z,
-      0.0557 * X - 0.204 * Y + 1.057 * Z,
-    ];
-    const peak = Math.max(...rgb);
-    return rgb.map((v) => Math.max(0, v / peak)) as [number, number, number];
-  }
+  const blackbodyLinearSrgb = blackbodyChromaticity;
 
   it('starts from high-pressure sodium, computed rather than picked', () => {
     const [r, g, b] = blackbodyLinearSrgb(NIGHT_LIGHT_TEMPERATURE_K);

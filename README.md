@@ -105,16 +105,22 @@ time, never from a visitor's browser.
 
 ## Generated data
 
-`pnpm fetch:data` writes about 1.5 MB of JSON, covering 20 years — ten back and ten
-forward from the day it runs:
+`pnpm fetch:data` writes about 2.9 MB of JSON, covering 20 years — ten back and ten
+forward from the day it runs — plus the sky:
 
 ```
 web/public/data/
 ├─ manifest.json          # generation time, frame, covered window, body list
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
+├─ stars.json             # 41,359 Hipparcos stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
+
+The star catalogue comes from a second service, ESA's Hipparcos through VizieR at CDS,
+and is fetched in the same run. Unlike the ephemerides it does not go stale — Hipparcos
+was published in 1997 and is finished — but it is regenerated anyway rather than
+committed, for the same reason: generated data does not belong in the repository.
 
 Two things about the reference frames are worth knowing, because getting them wrong
 produces numbers that look fine and are not:
@@ -216,8 +222,8 @@ Full per-file sources, licences and longitude conventions in
 
 ## Page weight
 
-About **940 KB gzipped** on first load: 296 KB of application and 647 KB of
-ephemerides. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
+About **1.42 MB gzipped** on first load: 296 KB of application, 647 KB of
+ephemerides and 472 KB of sky. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
 not what crosses the wire.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
@@ -227,10 +233,10 @@ and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
 
 | Connection | First load |
 |---|---|
-| Fibre / good wifi (50 Mbps) | 0.15 s |
-| Typical broadband (20 Mbps) | 0.4 s |
-| 4G mobile (10 Mbps) | 0.8 s |
-| 3G mobile (1.6 Mbps) | 4.7 s |
+| Fibre / good wifi (50 Mbps) | 0.23 s |
+| Typical broadband (20 Mbps) | 0.6 s |
+| 4G mobile (10 Mbps) | 1.1 s |
+| 3G mobile (1.6 Mbps) | 7.1 s |
 
 Everything is cached after the first visit, so this is a first-load cost only. The
 app does wait for all ten bodies before rendering, since a partially-populated Solar
@@ -242,28 +248,56 @@ past a few dozen bodies that should become progressive loading.
 | Source | Used for |
 |---|---|
 | [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft |
+| [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index for every star drawn |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
 ## Roadmap
 
-- **Textures, continued** — Earth's clouds and night lights, and a real Milky Way behind
-  the starfield. Surface maps and Saturn's rings are done.
+- **Textures and the sky** — done. Surface maps, Saturn's rings, Earth's clouds, night
+  lights and atmosphere, and a real star catalogue. A photographic Milky Way panorama
+  was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
-- **Phase D** — nearby stars from Gaia, replacing the placeholder starfield, out to
-  Alpha Centauri.
+- **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to
+  Alpha Centauri. The stars are already real; what phase D adds is depth.
 
 ## Known approximations
 
 Stated plainly, since the point of the project is that everything else is not:
 
-- The **starfield is procedurally generated**, not a catalog. It is the one thing on
-  screen that is not real. Phase D replaces it.
+- **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
+  Which stars are there is a measurement: all 41,359 Hipparcos stars to that limit, at
+  their own positions, moving at their own proper motions, coloured from their own B−V.
+  The limit is a measurement too — it is where Hipparcos stops being complete. Stars per
+  unit solid angle near the galactic plane against those near its poles hold at 2.2–2.3
+  from magnitude 6.5 through 8.0, then fall to 2.04 at 8.5 and 1.82 at 9.0, which is the
+  survey losing the crowded plane rather than the sky thinning.
+
+  How bright they look is not a measurement. The sky spans about thirteen orders of
+  magnitude and a screen has three, so every picture of space chooses which three to
+  show. Here the brightest star in the catalogue is white, the faintest is at 2% of that
+  — five code values out of 255, which is what "limiting magnitude" already means — and
+  the response between them is linear in magnitude, the eye's own scale, since that is
+  what the magnitude system was built from. So Sirius outshines a magnitude 8 star by
+  nearly six thousand to one in the sky and by fifty to one on screen.
+
+  A star's size is not a separate setting: each is a Gaussian 0.54 pixels wide, and how
+  big it looks is where that falls below the darkest step the display can show. That
+  width is measured, by reading both this render and a NASA Eyes frame of the same view
+  pixel by pixel: theirs draws stars with a median equivalent diameter of 2.26 px and a
+  90th percentile of 2.99, and this reproduces them. The same comparison says the
+  reference draws to about magnitude 8.2, which Hipparcos cannot supply completely —
+  that is the one place the sky here is thinner than theirs, and the reason is the
+  survey rather than the exposure.
+
+  Stars sit on a sphere rather than at their real distances, so there is no parallax.
+  The nearest star here would move 0.742 arcseconds across Earth's orbit, which is under
+  a hundredth of a pixel. Real distances are phase D.
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
 - **Saturn's ring radii are fitted, not quoted.** The ring map is a radial strip and its
   publisher does not say which radii its edges are, so they were measured from the
@@ -343,6 +377,9 @@ Stated plainly, since the point of the project is that everything else is not:
 ## Credits
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
+- Star positions, proper motions, magnitudes and colours: the **ESA Hipparcos
+  catalogue** (ESA 1997, ESA SP-1200), accessed through the **VizieR** service at CDS,
+  Strasbourg (Ochsenbein, Bauer & Marcout 2000, A&AS 143, 23).
 - Satellite orbital data: **CelesTrak**.
 - Planetary surface maps: **Solar System Scope** (CC BY 4.0); **NASA/JHUAPL/SwRI** New
   Horizons mosaic for Pluto; **NASA Earth Observatory** Blue Marble and **NASA 3D

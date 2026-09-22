@@ -7,7 +7,13 @@ import {
   TIME_DECIMALS,
   VELOCITY_DECIMALS,
 } from './config.ts';
-import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
+import type {
+  BodyDefinition,
+  Manifest,
+  OsculatingElements,
+  StarCatalog,
+  VectorTable,
+} from './types.ts';
 
 /**
  * Rounds to a fixed number of decimals.
@@ -65,6 +71,16 @@ export async function writeVectors(table: VectorTable): Promise<void> {
 
 export async function writeElements(elements: OsculatingElements): Promise<void> {
   await writeJson(join(OUTPUT_DIR, 'elements', `${elements.id}.json`), elements);
+}
+
+/**
+ * The star catalogue: 25,000 rows of six columns, so compact JSON like the vectors.
+ *
+ * Already rounded by `buildStarCatalog`, which does it against a pixel rather than
+ * against a byte count -- so there is nothing left to trim here.
+ */
+export async function writeStars(stars: StarCatalog): Promise<void> {
+  await writeCompactJson(join(OUTPUT_DIR, 'stars.json'), stars);
 }
 
 export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<void> {

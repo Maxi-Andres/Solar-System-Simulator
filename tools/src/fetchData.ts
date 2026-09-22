@@ -4,8 +4,13 @@
  * Runs locally (`pnpm fetch:data`) and in CI before the build. Output goes to
  * `web/public/data/` and is never committed: it is regenerated on every deploy.
  *
- * Source: JPL Horizons API -- https://ssd.jpl.nasa.gov/api/horizons.api
- * Ephemerides courtesy of NASA/JPL-Caltech.
+ * Two sources, both official and both queried at build time:
+ *
+ *   JPL Horizons API -- https://ssd.jpl.nasa.gov/api/horizons.api
+ *     Positions and velocities for every body. Courtesy of NASA/JPL-Caltech.
+ *
+ *   ESA Hipparcos, via VizieR TAP at CDS Strasbourg
+ *     Position, proper motion, magnitude and colour index for every star drawn.
  */
 
 import { CATALOG, SSB_CENTER } from './catalog.ts';
@@ -23,12 +28,15 @@ import { callHorizons } from './horizons/client.ts';
 import { fetchVectors } from './horizons/fetchVectors.ts';
 import { parseElements } from './horizons/parseElements.ts';
 import { elementsQuery, fromJulianDay } from './horizons/queries.ts';
+import { buildStarCatalog } from './stars/buildStarCatalog.ts';
+import { fetchHipparcos } from './stars/vizier.ts';
 import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
 import {
   prepareOutputDir,
   writeCatalog,
   writeElements,
   writeManifest,
+  writeStars,
   writeVectors,
 } from './writeOutput.ts';
 
@@ -114,8 +122,23 @@ async function main(): Promise<void> {
   console.log(`[fetch-data] Window ${start.toISOString()} .. ${stop.toISOString()}`);
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
-  const results = await mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) =>
-    fetchBody(body, start, stop, epoch),
+  // Two independent services, so they run together. The sky is one request against
+  // VizieR and comes back long before Horizons has finished with the planets.
+  const [results, starRows] = await Promise.all([
+    mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) =>
+      fetchBody(body, start, stop, epoch),
+    ),
+    fetchHipparcos(),
+  ]);
+
+  const stars = buildStarCatalog(starRows, new Date().toISOString());
+  console.log(
+    `[fetch-data] stars    ${String(stars.count).padStart(5)} to magnitude ` +
+      `${stars.magnitudeLimit}` +
+      (stars.dropped.noColorIndex + stars.dropped.noPosition > 0
+        ? ` (${stars.dropped.noColorIndex} dropped for no B-V, ` +
+          `${stars.dropped.noPosition} for no position)`
+        : ''),
   );
 
   // Nothing is written until every body has come back clean, so a mid-run failure
@@ -130,6 +153,7 @@ async function main(): Promise<void> {
   }
 
   await writeCatalog(CATALOG);
+  await writeStars(stars);
 
   // The window every body can answer for: the intersection of all the tables, not
   // the range we asked for. Publishing the request instead would claim coverage the
@@ -174,8 +198,11 @@ async function main(): Promise<void> {
 
   await writeManifest(manifest);
 
-  console.log(`[fetch-data] Wrote ${results.length} bodies to ${OUTPUT_DIR}`);
+  console.log(
+    `[fetch-data] Wrote ${results.length} bodies and ${stars.count} stars to ${OUTPUT_DIR}`,
+  );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
+  console.log('[fetch-data] Star positions from the ESA Hipparcos catalogue, via VizieR (CDS).');
 }
 
 await main();

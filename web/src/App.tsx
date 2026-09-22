@@ -30,7 +30,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
 };
 
 export function App() {
-  const { store, clock, error, frame } = useSimulation();
+  const { store, stars, clock, error, frame } = useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -61,13 +61,13 @@ export function App() {
       <Centered>
         <p style={{ color: '#e06c5a', maxWidth: '32rem', textAlign: 'center' }}>{error}</p>
         <p style={{ color: '#6a6a6a', fontSize: '0.8rem' }}>
-          Run <code>pnpm fetch:data</code> to generate the ephemerides.
+          Run <code>pnpm fetch:data</code> to generate the ephemerides and the sky.
         </p>
       </Centered>
     );
   }
 
-  if (store === null) {
+  if (store === null || stars === null) {
     return (
       <Centered>
         <p style={{ letterSpacing: '0.2em', color: '#6a6a6a' }}>LOADING EPHEMERIDES</p>
@@ -83,6 +83,7 @@ export function App() {
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <SolarSystemCanvas
         store={store}
+        stars={stars}
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
@@ -207,7 +208,7 @@ export function App() {
         </>
       )}
 
-      {openPanel === 'about' && <AboutPanel store={store} />}
+      {openPanel === 'about' && <AboutPanel store={store} stars={stars} />}
 
       {/* The only way back once the interface is switched off. */}
       {!uiVisible && (

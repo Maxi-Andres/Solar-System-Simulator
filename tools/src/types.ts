@@ -261,3 +261,48 @@ export interface Manifest {
   readonly window: WindowInfo;
   readonly bodies: readonly BodyId[];
 }
+
+/**
+ * The star catalogue, stored column-wise like the vector tables and for the same
+ * reason: 25,000 stars as an array of objects is twice the bytes for nothing.
+ *
+ * Every column is a measurement. Nothing here is modelled, fitted or invented -- the
+ * decisions about how a magnitude becomes a pixel live in the renderer, where they can
+ * be read as numbers, and not in the data.
+ */
+export interface StarCatalog {
+  readonly source: {
+    readonly name: string;
+    readonly table: string;
+    readonly url: string;
+    readonly queriedAt: string;
+  };
+  /** Equinox and epoch of `ra`/`dec`. ICRS, positions moved to J2000. */
+  readonly epoch: string;
+  /** Faintest V magnitude included. */
+  readonly magnitudeLimit: number;
+  readonly count: number;
+  /**
+   * Stars inside the magnitude limit that were left out, and why.
+   *
+   * Published rather than swallowed. A star with no measured colour index has nothing
+   * to be drawn from, and inventing one is the single thing this project does not do --
+   * so it is dropped, and the count says how many.
+   */
+  readonly dropped: {
+    readonly noPosition: number;
+    readonly noColorIndex: number;
+  };
+  /** Right ascension, degrees, ICRS at J2000. */
+  readonly ra: readonly number[];
+  /** Declination, degrees, ICRS at J2000. */
+  readonly dec: readonly number[];
+  /** Johnson V magnitude. */
+  readonly mag: readonly number[];
+  /** Johnson B-V colour index. */
+  readonly bv: readonly number[];
+  /** Proper motion in right ascension, already multiplied by cos(dec). mas/yr. */
+  readonly pmRa: readonly number[];
+  /** Proper motion in declination, mas/yr. */
+  readonly pmDec: readonly number[];
+}

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
+import type { StarCatalog } from '@sss/tools/types';
+
 import { EphemerisStore, httpFetcher, loadEphemerisStore } from './ephemerisStore.ts';
+import { loadStarCatalog } from './starCatalog.ts';
 import { SimClock } from './time.ts';
 
 /**
@@ -15,6 +18,11 @@ import { SimClock } from './time.ts';
 
 export interface Simulation {
   readonly store: EphemerisStore | null;
+  /**
+   * The sky. Loaded with the ephemerides rather than behind them, because it is a
+   * fifth of their weight and a sky that appears a second late reads as a bug.
+   */
+  readonly stars: StarCatalog | null;
   readonly clock: SimClock;
   readonly error: string | null;
   /** Bumped on each UI refresh, so consumers re-render at the readout cadence. */
@@ -26,6 +34,7 @@ export function useSimulation(refreshHz = 10): Simulation {
   clockRef.current ??= new SimClock();
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
+  const [stars, setStars] = useState<StarCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
 
@@ -33,16 +42,22 @@ export function useSimulation(refreshHz = 10): Simulation {
     let cancelled = false;
 
     // BASE_URL carries the GitHub Pages prefix; a hardcoded '/' would 404 there.
-    loadEphemerisStore(httpFetcher, import.meta.env.BASE_URL)
-      .then((loaded) => {
+    const base = import.meta.env.BASE_URL;
+
+    // Both or neither. The data directory is generated in one run and published as
+    // one artifact, so a missing star catalogue means the generator did not finish --
+    // which is exactly what the error screen is for.
+    Promise.all([loadEphemerisStore(httpFetcher, base), loadStarCatalog(httpFetcher, base)])
+      .then(([loadedStore, loadedStars]) => {
         if (!cancelled) {
-          setStore(loaded);
+          setStore(loadedStore);
+          setStars(loadedStars);
         }
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
           setError(
-            cause instanceof Error ? cause.message : 'Failed to load ephemerides.',
+            cause instanceof Error ? cause.message : 'Failed to load the published data.',
           );
         }
       });
@@ -82,5 +97,5 @@ export function useSimulation(refreshHz = 10): Simulation {
     };
   }, [refreshHz]);
 
-  return { store, clock: clockRef.current, error, frame };
+  return { store, stars, clock: clockRef.current, error, frame };
 }
