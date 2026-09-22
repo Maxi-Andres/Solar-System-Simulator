@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { HIPPARCOS_TABLE } from '../config.ts';
-import { hipparcosQuery, parseHipparcosCsv, splitCsvLine } from './vizier.ts';
+import {
+  hipparcosQuery,
+  parseHipparcosCsv,
+  parseTycho2Csv,
+  splitCsvLine,
+  tycho2Query,
+} from './vizier.ts';
 
 /**
  * The reader for VizieR's CSV.
@@ -70,8 +76,8 @@ describe('reading the rows', () => {
     const sirius = rows[0]!;
     expect(sirius.hip).toBe(32349);
     // The catalogue's own epoch, J1991.25, not J2000. Moving it is the next file's job.
-    expect(sirius.raIcrsDeg).toBeCloseTo(101.28854105, 8);
-    expect(sirius.decIcrsDeg).toBeCloseTo(-16.71314306, 8);
+    expect(sirius.raDeg).toBeCloseTo(101.28854105, 8);
+    expect(sirius.decDeg).toBeCloseTo(-16.71314306, 8);
     expect(sirius.vMag).toBe(-1.44);
     expect(sirius.colorIndex).toBe(0.009);
     expect(sirius.pmRaMasPerYear).toBe(-546.01);
@@ -81,7 +87,7 @@ describe('reading the rows', () => {
     // HIP 55203 is xi Ursae Majoris: no ICRS solution because it is a known multiple,
     // and naked-eye at magnitude 3.79. Reading only the ICRS column loses it.
     const flagged = rows[1]!;
-    expect(flagged.raIcrsDeg).toBeNull();
+    expect(flagged.raDeg).toBeNull();
     expect(flagged.pmRaMasPerYear).toBeNull();
     // The sexagesimal position survives, which is the whole reason it is queried.
     expect(flagged.raHms).toBe('11 18 11.24');
@@ -95,5 +101,44 @@ describe('reading the rows', () => {
 
   it('refuses a value that is not a number', () => {
     expect(() => parseHipparcosCsv(SAMPLE.replace('-1.44', 'bright'))).toThrow(/Vmag/);
+  });
+});
+
+/** Verbatim Tycho-2 rows, including one star that Hipparcos also has. */
+const TYCHO_SAMPLE = `HIP,RAmdeg,DEmdeg,pmRA,pmDE,BTmag,VTmag
+13989,45.03415577,0.23542402,45.4,-8.1,9.526,8.411
+,45.16496332,0.20028265,9.6,-55.8,11.503,10.807
+,45.08615644,0.24885425,6.6,-0.5,11.205,10.722
+`;
+
+describe('Tycho-2', () => {
+  it('cuts on the transformed magnitude, not on VT', () => {
+    // VT is not V. For a red star the two differ by more than a tenth of a magnitude,
+    // which at the faint end of a sky is a visible number of stars.
+    const query = tycho2Query(8.25);
+    expect(query).toContain('VTmag - 0.09 * (BTmag - VTmag) <= 8.25');
+    expect(query).toContain('I/259/tyc2');
+  });
+
+  it('transforms BT and VT into the Johnson system', () => {
+    const rows = parseTycho2Csv(TYCHO_SAMPLE);
+    const first = rows[0]!;
+    // BT 9.526, VT 8.411 -> BT-VT = 1.115
+    //   V   = 8.411 - 0.090 * 1.115 = 8.3106
+    //   B-V = 0.850 * 1.115         = 0.9478
+    expect(first.vMag).toBeCloseTo(8.3106, 4);
+    expect(first.colorIndex).toBeCloseTo(0.9478, 4);
+  });
+
+  it('carries the HIP number, which is how the two catalogues are joined', () => {
+    const rows = parseTycho2Csv(TYCHO_SAMPLE);
+    expect(rows[0]!.hip).toBe(13989);
+    expect(rows[1]!.hip).toBeNull();
+  });
+
+  it('has no sexagesimal fallback, because its positions are already J2000', () => {
+    const rows = parseTycho2Csv(TYCHO_SAMPLE);
+    expect(rows[0]!.raHms).toBeNull();
+    expect(rows[0]!.raDeg).toBeCloseTo(45.03415577, 8);
   });
 });

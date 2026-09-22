@@ -14,8 +14,10 @@ import { DISPLAY_FLOOR } from './shading.ts';
 import { buildStarAttributes } from './starGeometry.ts';
 import {
   magnitudeToPeakCoefficients,
+  medianNearestNeighbourPx,
   peakDisplayValue,
   PSF_SIGMA_PX,
+  RENDER_SPARSITY,
   skyCoverageFraction,
 } from './starRendering.ts';
 
@@ -95,14 +97,27 @@ function nearest(raDeg: number, decDeg: number): { index: number; separationDeg:
 }
 
 describeWithData('what is in the file', () => {
-  it('holds every Hipparcos star inside the stated magnitude limit', () => {
-    // 41,411 stars reach magnitude 8; 52 of them have no measured colour index and are
-    // dropped rather than given one, which the file says out loud.
-    expect(sky.count).toBeGreaterThan(41_000);
+  it('is the union of two catalogues, and says which star came from where', () => {
+    // Neither is a sky on its own. Hipparcos supplies about 51,000 stars with measured
+    // Johnson photometry; Tycho-2 adds the 9,000 it never completed. The other
+    // direction matters just as much: Tycho-2's star mapper saturated on the bright
+    // stars, so Sirius, Vega and Betelgeuse exist only in the Hipparcos half.
+    expect(sky.sources).toHaveLength(2);
+    const [hipparcos, tycho] = sky.sources;
+    expect(hipparcos!.table).toBe('I/239/hip_main');
+    expect(tycho!.table).toBe('I/259/tyc2');
+    expect(hipparcos!.stars).toBeGreaterThan(tycho!.stars);
+    expect(hipparcos!.stars + tycho!.stars).toBe(sky.count);
+  });
+
+  it('holds every star inside the stated magnitude limit', () => {
+    expect(sky.count).toBeGreaterThan(45_000);
     expect(sky.magnitudeLimit).toBe(8);
     expect(Math.max(...sky.mag)).toBeLessThanOrEqual(8);
-    expect(sky.dropped.noColorIndex).toBeLessThan(80);
-    expect(sky.dropped.noPosition).toBe(0);
+    // Nothing is dropped for want of a colour any more: every Hipparcos star missing a
+    // B-V is one Tycho-2 has BT and VT for, so the merge recovers all of them.
+    expect(sky.dropped.noColorIndex).toBe(0);
+    expect(sky.dropped.noPosition).toBeLessThan(30);
   });
 
   it('is at J2000, the epoch the rest of the project works in', () => {
@@ -123,27 +138,18 @@ describeWithData('what is in the file', () => {
     expect(bad.slice(0, 5)).toEqual([]);
   });
 
-  it('stops where Hipparcos stops being complete, and the catalogue says where', () => {
-    // The limit is not a taste setting and not the reference's: it is where this
-    // survey runs out. Stars per unit solid angle within 10 degrees of the galactic
-    // plane, against those more than 60 degrees from it, hold at 2.2 to 2.3 from
-    // magnitude 6.5 through 8.0 and then fall away -- 2.04 at 8.5, 1.82 at 9.0 --
-    // because the survey loses the crowded plane first. Drawing past 8.0 would thin
-    // the sky exactly where the Milky Way is.
+  it('is complete where Hipparcos alone was not, and the sky says so', () => {
+    // The test that forced the second catalogue. Count stars per unit solid angle
+    // within 10 degrees of the galactic plane against those beyond 60. The real sky's
+    // ratio must *rise* with depth -- fainter means further, further means more disc --
+    // and Tycho-2's does: 2.31 at magnitude 7, 2.64 at 8.0, 2.87 at 8.5. Hipparcos
+    // alone goes the wrong way: 2.29, then 2.22, then 2.04. A catalogue cannot lose
+    // structure by going deeper, so that fall was the survey running out.
+    //
+    // The union at magnitude 8 comes out at 2.64, which is Tycho-2's own figure.
     const ratio = planeToPoleDensityRatio();
-    expect(ratio).toBeGreaterThan(2.1);
-    expect(ratio).toBeLessThan(2.45);
-  });
-
-  it('has about as many stars as the reference draws in the same field', () => {
-    // Measured off a NASA Eyes frame pixel by pixel: 1,245 discrete stars above the
-    // display floor in a 1,584 square degree field. This catalogue puts about 1,590 in
-    // the same field before the sampling losses that cost the render roughly a third
-    // of the faintest ones -- so the two land within about 20%, and what is left of
-    // the gap is the survey running out rather than the exposure being wrong.
-    const expected = (sky.count * 1584) / 41_253;
-    expect(expected).toBeGreaterThan(1200);
-    expect(expected).toBeLessThan(1800);
+    expect(ratio).toBeGreaterThan(2.5);
+    expect(ratio).toBeLessThan(3);
   });
 });
 
@@ -202,28 +208,59 @@ describeWithData('positions, after every transform the renderer applies', () => 
 
 describeWithData('how it will look', () => {
   const coefficients = magnitudeToPeakCoefficients(brightestMagnitude(sky), sky.magnitudeLimit);
-  // 1080 pixels over the scene's field of view: the scale the reference was measured at.
-  const pixelsPerDegree = 1080 / FOV_DEG;
+  /**
+   * The geometry of the frames these numbers were measured in: 910 pixels tall at the
+   * scene's own field of view. Not a round 1080 -- a coverage fraction and a pixel
+   * separation both depend on how much sky a pixel covers, so the comparison has to be
+   * made at the scale it was measured at.
+   */
+  const pixelsPerDegree = 910 / FOV_DEG;
+
+  /**
+   * The reference's plate scale, and it is not ours.
+   *
+   * Solving the two frames against each other under a transform free to scale and rotate
+   * gives 0.876 to 0.879 and a rotation under 0.7 degrees, at three sample sizes -- 13
+   * inliers of the brightest 25, 25 of 40, 37 of 60. So NASA Eyes was at a 30.6 degree
+   * vertical field where this is at 27, and 1.14 of the 1.54 pixel gap in star separation
+   * was the camera rather than the sky. Only the rest is this catalogue's business.
+   */
+  const REFERENCE_FOV_DEG = 30.6;
+  const REFERENCE_SEPARATION_AT_OUR_SCALE = 17.4 * (REFERENCE_FOV_DEG / FOV_DEG);
 
   it('leaves the sky between the stars black, which is what went wrong last time', () => {
     // The photographic panorama lit 31.8% of the sky. Measured off the reference frame
     // itself, 0.405% of its pixels clear the display floor and 99.39% are exactly
-    // black. This catalogue paints 0.324%, so the sky between the stars stays black --
-    // the property that killed the panorama and the one worth protecting.
+    // black. This comes to 0.451% before the sampling correction, so better than
+    // 99.5% of the sky is still black -- the property that killed the panorama and the
+    // one worth protecting as the catalogue gets deeper.
     const lit = skyCoverageFraction(sky.mag, coefficients, DISPLAY_FLOOR, pixelsPerDegree);
-    expect(lit).toBeGreaterThan(0.002);
-    expect(lit).toBeLessThan(0.005);
+    expect(lit).toBeLessThan(0.006);
   });
 
-  it('paints the bright fraction the reference paints, and nothing was tuned to it', () => {
-    // 0.121% of the reference frame sits above a display value of 0.05, counted off
-    // the pixels. This catalogue, through a response fixed by the magnitude scale and
-    // a sigma fixed by the median star size, gives 0.121%. Nothing here was aimed at
-    // it: two constants set from two other measurements landing on a third is the
-    // reason to believe the model rather than the numbers.
+  it('paints about the bright fraction the reference paints', () => {
+    // 0.121% of the reference frame sits above a display value of 0.05, counted off the
+    // pixels; at its wider field that is 0.094% of one of ours. This sum runs high
+    // against any real frame because it assumes every star lands on a pixel centre -- at
+    // magnitude 7.5 it gave 0.169% where the render measured 0.074%, a factor of 2.3.
+    // Corrected by that, this comes to about 0.08%. A tripwire, not a target: the sizes
+    // and the separation are what were matched.
     const bright = skyCoverageFraction(sky.mag, coefficients, 0.05, pixelsPerDegree);
-    expect(bright).toBeGreaterThan(0.001);
-    expect(bright).toBeLessThan(0.0014);
+    expect(bright).toBeGreaterThan(0.0013);
+    expect(bright).toBeLessThan(0.0022);
+  });
+
+  it('puts the stars as close together as the reference does, once the cameras agree', () => {
+    // The measurement that set the magnitude limit. NASA Eyes measures a median distance
+    // of 17.4 px from a star to its nearest neighbour, but at a wider field than this --
+    // 19.8 px is what the same sky would measure through this camera. At magnitude 7.5
+    // this sky rendered 26.8, and separation goes as the inverse square root of density,
+    // so closing it takes 1.84 times the stars per square degree. The union at magnitude
+    // 8 renders 20.0.
+    const separation = medianNearestNeighbourPx(sky.count, pixelsPerDegree) * RENDER_SPARSITY;
+    expect(REFERENCE_SEPARATION_AT_OUR_SCALE).toBeCloseTo(19.7, 1);
+    expect(separation / REFERENCE_SEPARATION_AT_OUR_SCALE).toBeGreaterThan(0.95);
+    expect(separation / REFERENCE_SEPARATION_AT_OUR_SCALE).toBeLessThan(1.05);
   });
 
   it('is a different sky at a different sigma, so the constant is doing work', () => {

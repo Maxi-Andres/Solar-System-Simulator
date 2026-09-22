@@ -199,6 +199,34 @@ export function profileDisplayValue(
 }
 
 /**
+ * Median distance from a star to its nearest neighbour, in pixels, for a uniform sky.
+ *
+ * **The observable behind "their stars are closer together".** For points scattered at
+ * random with density lambda, the distance to the nearest one has the distribution
+ * 1 - exp(-pi lambda r^2), so the median is sqrt(ln 2 / (pi lambda)) -- no simulation
+ * needed, and no dependence on the field of view, which is what makes it the right thing
+ * to hold two screenshots against when the two cameras cannot be shown to match.
+ *
+ * It is the catalogue's separation, not the render's. A rendered frame comes out a third
+ * sparser, because a star whose profile lands between pixel centres does not clear the
+ * display floor at all -- that factor is measured, not assumed, and pinned in the test.
+ */
+export function medianNearestNeighbourPx(starCount: number, pixelsPerDegree: number): number {
+  const perPixel = starCount / (41_253 * pixelsPerDegree * pixelsPerDegree);
+  return Math.sqrt(Math.LN2 / (Math.PI * perPixel));
+}
+
+/**
+ * How much sparser a rendered frame is than the catalogue behind it.
+ *
+ * Measured rather than modelled: in a 910-pixel frame at 27 degrees, a magnitude 7.5
+ * catalogue's median separation computes to 20.06 px and the render measured 26.8.
+ * Sub-pixel sampling is the whole of it -- sigma is half a pixel, so whether a star
+ * clears the display floor depends on how close its centre falls to a pixel's.
+ */
+export const RENDER_SPARSITY = 1.336;
+
+/**
  * Fraction of the whole sky this catalogue paints above a given display value.
  *
  * The measurement the reference is held against. Each star contributes the disc inside

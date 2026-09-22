@@ -7,28 +7,37 @@ import {
   STAR_MAGNITUDE_DECIMALS,
   STAR_MAGNITUDE_LIMIT,
   STAR_PROPER_MOTION_DECIMALS,
+  TYCHO2_TABLE,
   VIZIER_TAP_URL,
 } from '../config.ts';
 import type { StarCatalog } from '../types.ts';
-import type { HipparcosRow } from './vizier.ts';
+import type { CatalogRow } from './vizier.ts';
 
 /**
- * Turns Hipparcos rows into the columns the renderer reads.
+ * Turns two catalogues into the columns the renderer reads.
  *
- * Three things happen here and they are all arithmetic on published numbers:
+ * **Hipparcos is authoritative; Tycho-2 fills in what it does not have.** The join is
+ * exact rather than positional: every Tycho-2 row carries the HIP number of the star it
+ * is, or nothing, so a star is added only when Hipparcos did not supply it. That matters
+ * because the overlap is most of the sky, and in the overlap Hipparcos has directly
+ * measured Johnson magnitudes where Tycho-2 has transformed ones.
  *
- *  1. **Two kinds of position.** Most stars have an ICRS solution, given at J1991.25 --
- *     the mean epoch of Hipparcos's own observations, not a round number by accident.
- *     A handful have none, because their astrometric solution was flagged as a double
- *     or a problem case, and for those the catalogue still publishes the sexagesimal
- *     J2000 position. Ten stars inside our magnitude limit fall in that second group
- *     and one of them, HIP 55203, is naked-eye at magnitude 3.79, so reading only the
- *     ICRS column would quietly lose a star anybody can see.
+ * Three things then happen, and they are all arithmetic on published numbers:
  *
- *  2. **Proper motion to J2000.** Everything else in this project is J2000 -- the
- *     obliquity, the IAU pole elements, the galactic frame -- so the ICRS positions are
- *     moved the 8.75 years to meet it. That is up to 62 arcseconds for the fastest star
- *     in the set, which is most of a pixel, and it is free to get right.
+ *  1. **Two kinds of position, in Hipparcos.** Most stars have an ICRS solution given at
+ *     J1991.25 -- the mean epoch of Hipparcos's own observations, not a round number by
+ *     accident. A handful have none, because their astrometric solution was flagged as a
+ *     double or a problem case, and for those the catalogue still publishes the
+ *     sexagesimal J2000 position. Ten stars inside our magnitude limit fall in that
+ *     second group and one of them, HIP 55203, is naked-eye at magnitude 3.79, so
+ *     reading only the ICRS column would quietly lose a star anybody can see.
+ *
+ *     Tycho-2 has neither problem: its mean positions are published at J2000 already.
+ *
+ *  2. **Proper motion to J2000**, for the Hipparcos rows that need it. That is up to 62
+ *     arcseconds for the fastest star in the set, which is most of a pixel, and it is
+ *     free to get right. The check is Sirius, which lands on its published J2000
+ *     position to under a milliarcsecond.
  *
  *  3. **Rounding**, against a pixel rather than by habit. See config.ts.
  *
@@ -100,11 +109,7 @@ export function applyProperMotion(
   const direction = [cosDec * Math.cos(ra), cosDec * Math.sin(ra), Math.sin(dec)] as const;
   // East is the direction of increasing right ascension; north completes the pair.
   const east = [-Math.sin(ra), Math.cos(ra), 0] as const;
-  const north = [
-    -Math.sin(dec) * Math.cos(ra),
-    -Math.sin(dec) * Math.sin(ra),
-    cosDec,
-  ] as const;
+  const north = [-Math.sin(dec) * Math.cos(ra), -Math.sin(dec) * Math.sin(ra), cosDec] as const;
 
   const alongEast = pmRaMasPerYear * MAS_PER_YEAR_TO_RAD * years;
   const alongNorth = pmDecMasPerYear * MAS_PER_YEAR_TO_RAD * years;
@@ -121,7 +126,7 @@ export function applyProperMotion(
   const z = (moved[2] as number) / norm;
 
   return {
-    raDeg: ((Math.atan2(y, x) / DEG) + 360) % 360,
+    raDeg: (Math.atan2(y, x) / DEG + 360) % 360,
     decDeg: Math.asin(Math.max(-1, Math.min(1, z))) / DEG,
   };
 }
@@ -141,22 +146,28 @@ interface ResolvedStar {
   readonly pmDecMasPerYear: number;
 }
 
-function resolve(row: HipparcosRow): ResolvedStar | 'no-position' | 'no-color-index' {
-  if (row.colorIndex === null) {
+type Resolution = ResolvedStar | 'no-position' | 'no-color-index';
+
+/**
+ * Resolves one row to a drawable star.
+ *
+ * `epochShiftYears` is what separates the two catalogues: Hipparcos publishes at
+ * J1991.25 and needs 8.75 years of proper motion applied, Tycho-2 publishes at J2000
+ * and needs none.
+ */
+function resolve(row: CatalogRow, epochShiftYears: number): Resolution {
+  if (row.colorIndex === null || !Number.isFinite(row.colorIndex)) {
     return 'no-color-index';
   }
 
   const pmRa = row.pmRaMasPerYear ?? 0;
   const pmDec = row.pmDecMasPerYear ?? 0;
 
-  if (row.raIcrsDeg !== null && row.decIcrsDeg !== null) {
-    const moved = applyProperMotion(
-      row.raIcrsDeg,
-      row.decIcrsDeg,
-      pmRa,
-      pmDec,
-      EPOCH_SHIFT_YEARS,
-    );
+  if (row.raDeg !== null && row.decDeg !== null) {
+    const moved =
+      epochShiftYears === 0
+        ? { raDeg: row.raDeg, decDeg: row.decDeg }
+        : applyProperMotion(row.raDeg, row.decDeg, pmRa, pmDec, epochShiftYears);
     return {
       raDeg: moved.raDeg,
       decDeg: moved.decDeg,
@@ -184,26 +195,67 @@ function resolve(row: HipparcosRow): ResolvedStar | 'no-position' | 'no-color-in
   };
 }
 
-export function buildStarCatalog(
-  rows: readonly HipparcosRow[],
-  queriedAt: string,
+export interface BuildInput {
+  readonly hipparcos: readonly CatalogRow[];
+  readonly tycho2: readonly CatalogRow[];
+  readonly queriedAt: string;
+  readonly magnitudeLimit?: number;
+}
+
+export function buildStarCatalog({
+  hipparcos,
+  tycho2,
+  queriedAt,
   magnitudeLimit = STAR_MAGNITUDE_LIMIT,
-): StarCatalog {
+}: BuildInput): StarCatalog {
   const stars: ResolvedStar[] = [];
   let noPosition = 0;
   let noColorIndex = 0;
+  let fromHipparcos = 0;
 
-  for (const row of rows) {
+  /** HIP numbers Hipparcos actually supplied, which is what Tycho-2 defers to. */
+  const supplied = new Set<number>();
+
+  for (const row of hipparcos) {
     if (row.vMag > magnitudeLimit) {
       continue;
     }
-    const resolved = resolve(row);
+    const resolved = resolve(row, EPOCH_SHIFT_YEARS);
+    if (resolved === 'no-position') {
+      noPosition += 1;
+    } else if (resolved === 'no-color-index') {
+      // Not counted as a loss yet: Tycho-2 may have the same star with a colour, and
+      // recovering it there is better than dropping a real star for want of one column.
+      noColorIndex += 1;
+    } else {
+      stars.push(resolved);
+      fromHipparcos += 1;
+      if (row.hip !== null) {
+        supplied.add(row.hip);
+      }
+    }
+  }
+
+  let fromTycho2 = 0;
+  for (const row of tycho2) {
+    if (row.vMag > magnitudeLimit) {
+      continue;
+    }
+    if (row.hip !== null && supplied.has(row.hip)) {
+      continue;
+    }
+    const resolved = resolve(row, 0);
     if (resolved === 'no-position') {
       noPosition += 1;
     } else if (resolved === 'no-color-index') {
       noColorIndex += 1;
     } else {
       stars.push(resolved);
+      fromTycho2 += 1;
+      if (row.hip !== null) {
+        // A star Hipparcos dropped for want of a colour index, recovered here.
+        noColorIndex -= 1;
+      }
     }
   }
 
@@ -217,16 +269,26 @@ export function buildStarCatalog(
   stars.sort((a, b) => a.vMag - b.vMag);
 
   return {
-    source: {
-      name: 'ESA Hipparcos catalogue (ESA 1997), via VizieR TAP at CDS Strasbourg',
-      table: HIPPARCOS_TABLE,
-      url: VIZIER_TAP_URL,
-      queriedAt,
-    },
+    sources: [
+      {
+        name: 'ESA Hipparcos catalogue (ESA 1997)',
+        table: HIPPARCOS_TABLE,
+        stars: fromHipparcos,
+        note: 'Johnson V and B-V as measured. Positions at J1991.25, moved to J2000.',
+      },
+      {
+        name: 'Tycho-2 (Hog et al. 2000)',
+        table: TYCHO2_TABLE,
+        stars: fromTycho2,
+        note: 'V and B-V transformed from BT and VT. Positions already at J2000.',
+      },
+    ],
+    via: VIZIER_TAP_URL,
+    queriedAt,
     epoch: `ICRS, J${STAR_EPOCH_JULIAN_YEAR.toFixed(1)}`,
     magnitudeLimit,
     count: stars.length,
-    dropped: { noPosition, noColorIndex },
+    dropped: { noPosition, noColorIndex: Math.max(0, noColorIndex) },
     ra: stars.map((star) => round(star.raDeg, STAR_ANGLE_DECIMALS)),
     dec: stars.map((star) => round(star.decDeg, STAR_ANGLE_DECIMALS)),
     mag: stars.map((star) => round(star.vMag, STAR_MAGNITUDE_DECIMALS)),

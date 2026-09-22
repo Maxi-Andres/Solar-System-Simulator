@@ -271,12 +271,23 @@ export interface Manifest {
  * be read as numbers, and not in the data.
  */
 export interface StarCatalog {
-  readonly source: {
+  /**
+   * Where the stars came from, in the order they were taken.
+   *
+   * Two, because neither catalogue is a sky on its own: Hipparcos has the bright stars
+   * Tycho-2's star mapper saturated on, and Tycho-2 has the faint ones Hipparcos never
+   * completed. The split is published rather than hidden, because the second entry's
+   * photometry is transformed and the first entry's is not.
+   */
+  readonly sources: readonly {
     readonly name: string;
     readonly table: string;
-    readonly url: string;
-    readonly queriedAt: string;
-  };
+    readonly stars: number;
+    readonly note: string;
+  }[];
+  /** The service both were read through. */
+  readonly via: string;
+  readonly queriedAt: string;
   /** Equinox and epoch of `ra`/`dec`. ICRS, positions moved to J2000. */
   readonly epoch: string;
   /** Faintest V magnitude included. */

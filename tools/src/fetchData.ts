@@ -9,7 +9,7 @@
  *   JPL Horizons API -- https://ssd.jpl.nasa.gov/api/horizons.api
  *     Positions and velocities for every body. Courtesy of NASA/JPL-Caltech.
  *
- *   ESA Hipparcos, via VizieR TAP at CDS Strasbourg
+ *   ESA Hipparcos and Tycho-2, via VizieR TAP at CDS Strasbourg
  *     Position, proper motion, magnitude and colour index for every star drawn.
  */
 
@@ -29,7 +29,7 @@ import { fetchVectors } from './horizons/fetchVectors.ts';
 import { parseElements } from './horizons/parseElements.ts';
 import { elementsQuery, fromJulianDay } from './horizons/queries.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
-import { fetchHipparcos } from './stars/vizier.ts';
+import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
 import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
 import {
   prepareOutputDir,
@@ -122,18 +122,28 @@ async function main(): Promise<void> {
   console.log(`[fetch-data] Window ${start.toISOString()} .. ${stop.toISOString()}`);
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
-  // Two independent services, so they run together. The sky is one request against
+  // Two independent services, so they run together. The sky is two requests against
   // VizieR and comes back long before Horizons has finished with the planets.
-  const [results, starRows] = await Promise.all([
+  const [results, hipparcosRows, tycho2Rows] = await Promise.all([
     mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) =>
       fetchBody(body, start, stop, epoch),
     ),
     fetchHipparcos(),
+    fetchTycho2(),
   ]);
 
-  const stars = buildStarCatalog(starRows, new Date().toISOString());
+  const stars = buildStarCatalog({
+    hipparcos: hipparcosRows,
+    tycho2: tycho2Rows,
+    queriedAt: new Date().toISOString(),
+  });
+  for (const source of stars.sources) {
+    console.log(
+      `[fetch-data] ${source.table.padEnd(14)} ${String(source.stars).padStart(6)} stars`,
+    );
+  }
   console.log(
-    `[fetch-data] stars    ${String(stars.count).padStart(5)} to magnitude ` +
+    `[fetch-data] stars   ${String(stars.count).padStart(7)} to magnitude ` +
       `${stars.magnitudeLimit}` +
       (stars.dropped.noColorIndex + stars.dropped.noPosition > 0
         ? ` (${stars.dropped.noColorIndex} dropped for no B-V, ` +
@@ -202,7 +212,7 @@ async function main(): Promise<void> {
     `[fetch-data] Wrote ${results.length} bodies and ${stars.count} stars to ${OUTPUT_DIR}`,
   );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
-  console.log('[fetch-data] Star positions from the ESA Hipparcos catalogue, via VizieR (CDS).');
+  console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
 }
 
 await main();

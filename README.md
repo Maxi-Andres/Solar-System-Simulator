@@ -112,15 +112,21 @@ forward from the day it runs — plus the sky:
 web/public/data/
 ├─ manifest.json          # generation time, frame, covered window, body list
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
-├─ stars.json             # 41,359 Hipparcos stars: ra, dec, V, B−V, proper motion
+├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
-The star catalogue comes from a second service, ESA's Hipparcos through VizieR at CDS,
-and is fetched in the same run. Unlike the ephemerides it does not go stale — Hipparcos
-was published in 1997 and is finished — but it is regenerated anyway rather than
-committed, for the same reason: generated data does not belong in the repository.
+The star catalogue comes from a second service — ESA's **Hipparcos** and **Tycho-2**
+through VizieR at CDS — and is fetched in the same run. Two catalogues, because neither
+is a sky on its own: Tycho-2 goes six times deeper and is *missing the brightest stars
+entirely*, since their light saturated its star mapper, while Hipparcos has those and
+never completed the faint ones. Hipparcos wins wherever both have a star, because its
+photometry is measured in the Johnson system rather than transformed into it.
+
+Unlike the ephemerides the sky does not go stale — both catalogues are finished — but it
+is regenerated anyway rather than committed, for the same reason: generated data does
+not belong in the repository.
 
 Two things about the reference frames are worth knowing, because getting them wrong
 produces numbers that look fine and are not:
@@ -248,7 +254,8 @@ past a few dozen bodies that should become progressive loading.
 | Source | Used for |
 |---|---|
 | [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft |
-| [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index for every star drawn |
+| [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
+| [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
@@ -271,29 +278,48 @@ past a few dozen bodies that should become progressive loading.
 Stated plainly, since the point of the project is that everything else is not:
 
 - **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
-  Which stars are there is a measurement: all 41,359 Hipparcos stars to that limit, at
-  their own positions, moving at their own proper motions, coloured from their own B−V.
-  The limit is a measurement too — it is where Hipparcos stops being complete. Stars per
-  unit solid angle near the galactic plane against those near its poles hold at 2.2–2.3
-  from magnitude 6.5 through 8.0, then fall to 2.04 at 8.5 and 1.82 at 9.0, which is the
-  survey losing the crowded plane rather than the sky thinning.
+  Which stars are there is a measurement: 46,071 real stars at their own positions,
+  moving at their own proper motions, coloured from their own B−V. Where the limit sits
+  is not — it is this picture's exposure, and it was set by measuring the reference
+  rather than by taste.
 
-  How bright they look is not a measurement. The sky spans about thirteen orders of
-  magnitude and a screen has three, so every picture of space chooses which three to
-  show. Here the brightest star in the catalogue is white, the faintest is at 2% of that
-  — five code values out of 255, which is what "limiting magnitude" already means — and
-  the response between them is linear in magnitude, the eye's own scale, since that is
-  what the magnitude system was built from. So Sirius outshines a magnitude 8 star by
-  nearly six thousand to one in the sky and by fifty to one on screen.
+  Both frames were read pixel by pixel, and then solved against each other under a
+  transform free to scale and rotate. It solves the same way at three sample sizes — 13
+  of the brightest 25, 25 of 40, 37 of 60, at a mean error of two to three pixels — which
+  gives the missing number: **NASA Eyes was at a 30.6° vertical field where this is at
+  27°**. That splits the 1.54× gap in star separation into 1.14× of camera and 1.36× of
+  sky. Only the second is the catalogue's business: their sky holds 1.84× the stars
+  per square degree, which magnitude 8 delivers to within 3%.
+
+  The camera half is left alone on purpose. 27° is the vertical field of a 50 mm lens on
+  35 mm film — the photographic definition of a normal lens — and it was chosen for what
+  it does to a planet filling the frame: at 27° you are standing 4.3 radii out and seeing
+  38% of the surface, where a wide field crushes everything past 65° of latitude into the
+  rim. Widening it to 30.6° would undo that to make the sky read 14% tighter.
+
+  **About 41,000 of those keep measured Johnson magnitudes, from Hipparcos. The other
+  5,000 are transformed** from Tycho's own BT and VT by the relation published with that
+  catalogue (`V = VT − 0.090(BT−VT)`, `B−V = 0.850(BT−VT)`), which is a first-order fit
+  valid over 97% of the stars here. It is the one place this project's photometry is
+  converted rather than observed.
+
+  How bright they look is not a measurement either. The sky spans about thirteen orders
+  of magnitude and a screen has three, so every picture of space chooses which three to
+  show. Here the brightest star is white, the faintest is at 2% of that — five code
+  values out of 255, which is what "limiting magnitude" already means — and the response
+  between them is linear in magnitude, the eye's own scale, since that is what the
+  magnitude system was built from. So Sirius outshines a magnitude 8 star by nearly six
+  thousand to one in the sky and by fifty to one on screen.
 
   A star's size is not a separate setting: each is a Gaussian 0.54 pixels wide, and how
   big it looks is where that falls below the darkest step the display can show. That
-  width is measured, by reading both this render and a NASA Eyes frame of the same view
-  pixel by pixel: theirs draws stars with a median equivalent diameter of 2.26 px and a
-  90th percentile of 2.99, and this reproduces them. The same comparison says the
-  reference draws to about magnitude 8.2, which Hipparcos cannot supply completely —
-  that is the one place the sky here is thinner than theirs, and the reason is the
-  survey rather than the exposure.
+  width is measured the same way: the reference draws stars with a median equivalent
+  diameter of 2.26 px and a 90th percentile of 2.99, and this reproduces both.
+
+  The one thing still visibly different is the bright end. The reference's brightest
+  star saturates and spreads over 13.5 px; here it reaches 0.71 and 4.4. A single
+  Gaussian cannot do a wide halo and a two-pixel median at once — that needs a core plus
+  power-law wings, which is what a real optical system has.
 
   Stars sit on a sphere rather than at their real distances, so there is no parallax.
   The nearest star here would move 0.742 arcseconds across Earth's orbit, which is under
@@ -378,8 +404,9 @@ Stated plainly, since the point of the project is that everything else is not:
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
 - Star positions, proper motions, magnitudes and colours: the **ESA Hipparcos
-  catalogue** (ESA 1997, ESA SP-1200), accessed through the **VizieR** service at CDS,
-  Strasbourg (Ochsenbein, Bauer & Marcout 2000, A&AS 143, 23).
+  catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),
+  accessed through the **VizieR** service at CDS, Strasbourg (Ochsenbein, Bauer &
+  Marcout 2000, A&AS 143, 23).
 - Satellite orbital data: **CelesTrak**.
 - Planetary surface maps: **Solar System Scope** (CC BY 4.0); **NASA/JHUAPL/SwRI** New
   Horizons mosaic for Pluto; **NASA Earth Observatory** Blue Marble and **NASA 3D

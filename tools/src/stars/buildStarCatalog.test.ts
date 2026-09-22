@@ -7,7 +7,7 @@ import {
   parseSexagesimalDegrees,
   parseSexagesimalHours,
 } from './buildStarCatalog.ts';
-import { parseHipparcosCsv, type HipparcosRow } from './vizier.ts';
+import { parseHipparcosCsv, parseTycho2Csv, type CatalogRow } from './vizier.ts';
 
 /**
  * The transform from catalogue rows to the columns the renderer reads.
@@ -103,9 +103,31 @@ describe('the sexagesimal fallback', () => {
   });
 });
 
+/**
+ * Tycho-2 rows for the merge: one duplicate of a Hipparcos star by HIP number, one
+ * rescue of the star Hipparcos has no colour for, and one star Hipparcos never had.
+ */
+const TYCHO_SAMPLE = `HIP,RAmdeg,DEmdeg,pmRA,pmDE,BTmag,VTmag
+32349,101.28715,-16.71612,-546.01,-1223.08,9.000,8.000
+26220,83.81592896,-5.38731536,-0.92,0.13,5.200,4.980
+,120.00000000,10.00000000,1.0,2.0,8.500,8.100
+`;
+
 describe('building the catalogue', () => {
-  const rows: HipparcosRow[] = parseHipparcosCsv(SAMPLE);
-  const catalog = buildStarCatalog(rows, '2026-01-01T00:00:00.000Z');
+  const rows: CatalogRow[] = parseHipparcosCsv(SAMPLE);
+  const tycho: CatalogRow[] = parseTycho2Csv(TYCHO_SAMPLE);
+  const catalog = buildStarCatalog({
+    hipparcos: rows,
+    tycho2: [],
+    queriedAt: '2026-01-01T00:00:00.000Z',
+    magnitudeLimit: 8.25,
+  });
+  const merged = buildStarCatalog({
+    hipparcos: rows,
+    tycho2: tycho,
+    queriedAt: '2026-01-01T00:00:00.000Z',
+    magnitudeLimit: 8.25,
+  });
 
   it('keeps the star with no ICRS solution, by its J2000 sexagesimal position', () => {
     expect(catalog.count).toBe(3);
@@ -114,8 +136,8 @@ describe('building the catalogue', () => {
     const index = catalog.mag.indexOf(3.79);
     expect(index).toBeGreaterThanOrEqual(0);
     // Already J2000, so it is used as published rather than moved another 8.75 years.
-    expect(catalog.ra[index]).toBeCloseTo(169.54683, 4);
-    expect(catalog.dec[index]).toBeCloseTo(31.53078, 4);
+    expect(catalog.ra[index]).toBeCloseTo(169.54683, 3);
+    expect(catalog.dec[index]).toBeCloseTo(31.53078, 3);
   });
 
   it('drops the star with no measured colour, and says how many', () => {
@@ -132,20 +154,42 @@ describe('building the catalogue', () => {
   });
 
   it('rounds against a pixel, not against a byte count', () => {
-    // Four decimals of a degree is 0.36 arcseconds; one pixel at the scene's field of
-    // view is 90. Proper motions are whole milliarcseconds per year, which over two
-    // centuries is a tenth of an arcsecond.
+    // Three decimals of a degree is 3.6 arcseconds; one pixel at the scene’s field of
+    // view is 90, so this is a 25th of one. Proper motions are whole milliarcseconds
+    // per year, which over two centuries is a tenth of an arcsecond.
     for (const value of [...catalog.ra, ...catalog.dec]) {
-      expect(value).toBe(Math.round(value * 1e4) / 1e4);
+      expect(value).toBe(Math.round(value * 1e3) / 1e3);
     }
     for (const value of [...catalog.pmRa, ...catalog.pmDec]) {
       expect(Number.isInteger(value)).toBe(true);
     }
   });
 
-  it('carries its own provenance', () => {
-    expect(catalog.source.name).toContain('Hipparcos');
-    expect(catalog.source.table).toBe('I/239/hip_main');
-    expect(catalog.source.queriedAt).toBe('2026-01-01T00:00:00.000Z');
+  it('carries its own provenance, split by catalogue', () => {
+    expect(catalog.sources).toHaveLength(2);
+    expect(catalog.sources[0]!.name).toContain('Hipparcos');
+    expect(catalog.sources[0]!.table).toBe('I/239/hip_main');
+    expect(catalog.sources[1]!.table).toBe('I/259/tyc2');
+    expect(catalog.queriedAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('lets Hipparcos win the overlap, because its photometry is not transformed', () => {
+    // Sirius is in both samples. Tycho-2 would give it V = 7.91 from its saturated
+    // star mapper; Hipparcos measured -1.44, and that is what has to survive.
+    expect(Math.min(...merged.mag)).toBe(-1.44);
+    expect(merged.sources[0]!.stars).toBe(3);
+  });
+
+  it('recovers a star Hipparcos had no colour for, rather than losing it', () => {
+    // HIP 26220 is magnitude 4.98 with no B-V in Hipparcos, so it is dropped there.
+    // Tycho-2 has BT and VT for it, which is a measurement, so it comes back.
+    expect(catalog.dropped.noColorIndex).toBe(1);
+    expect(merged.dropped.noColorIndex).toBe(0);
+    expect(merged.count).toBe(catalog.count + 2);
+  });
+
+  it('adds the Tycho-2 stars Hipparcos never had', () => {
+    expect(merged.sources[1]!.stars).toBe(2);
+    expect(merged.ra).toContain(120);
   });
 });
