@@ -57,6 +57,7 @@ const ringMaps = [
  */
 const earthExtras = [EARTH_NIGHT_MAP, EARTH_CLOUD_MAP, EARTH_WATER_MASK];
 
+
 describe('the texture files', () => {
   it('gives every body in every set a map that exists', () => {
     for (const v of variants) {
@@ -105,11 +106,13 @@ describe('the texture files', () => {
     );
     const totalMb = sizes.reduce((sum, size) => sum + size, 0) / 1024 / 1024;
 
-    // 5.7 MB today: both map sets, the ring strip, and Earth's three extras. They are
-    // committed, so this is a guard on the repository as much as on the page: swapping
-    // in 8k maps would be a 40 MB decision, not an accident.
+    // 5.9 MB today: both map sets, the ring strip and Earth's three extras. It briefly
+    // held a 3.8 MB sky panorama as well, which is why this number went to 12 and back.
+    // The guard is on the repository as much as on the page: swapping in 8k body maps
+    // would be a 40 MB decision, not an accident.
     expect(totalMb).toBeLessThan(8);
   });
+
 });
 
 describe('textureUrl', () => {

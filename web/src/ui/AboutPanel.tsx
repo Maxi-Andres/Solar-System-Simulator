@@ -146,14 +146,15 @@ export function AboutPanel({ store }: { store: EphemerisStore }) {
               'Sunsets, from the same physics rather than from a colour ramp. The sunlight reaching the ground and the clouds is attenuated by the air it came down through, so it loses a fifth of its blue at noon and almost all of it near the terminator: the light there is rgb(255, 106, 3) at a quarter of its strength. That is what turns the clouds amber on the daylit side of the line.',
               'Earth’s oceans are as rough as Cox and Munk measured the sea to be from its sun glitter, and reflect at water’s refractive index rather than the generic one every renderer assumes. That is what puts a real glint on the water and none on the land.',
               'Orbits drawn as osculating ellipses, heliocentric, recomputed each deploy.',
-              'Light time and relative speeds, computed from the same vectors.',
+              'The Milky Way is a real all-sky photograph, hung on the galactic frame rather than at a convenient angle: the galaxy’s plane crosses the ecliptic where it actually crosses it, at about 60°. Checked by converting catalogued objects — Sagittarius A*, Andromeda, the Magellanic Clouds — into the frame and comparing against their published coordinates.',
+            'Light time and relative speeds, computed from the same vectors.',
             ]}
           />
 
           <Section>What is approximated</Section>
           <List
             items={[
-              'The starfield is procedurally generated, not a catalog. It is the one thing on screen that is not real. Gaia data replaces it later.',
+              'The starfield is procedurally generated, not a catalog. It is the one thing on screen that is not real. A real photograph of the Milky Way was tried here and taken out again: a photograph is the wrong instrument for a sky, because its stars arrive already blurred and can never be points. Real star positions, magnitudes and colours replace these next.',
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does.',
               'Surface maps are composites, not registered cartographic products — NASA imagery with colour and contrast added by its authors, so they read more vividly than a camera would. On the flattened bodies a feature can sit about 1.5° from its true latitude; Saturn is the worst, Earth and Mars are under 0.1°.',

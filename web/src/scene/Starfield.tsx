@@ -7,9 +7,19 @@ import * as THREE from 'three';
  *
  * PLACEHOLDER, and worth being explicit about it in a project whose whole premise is
  * real data: these stars are procedurally generated, not a catalog. They are the one
- * thing on screen that is not physically real. Phase D replaces them with Gaia DR3 /
- * Hipparcos positions and magnitudes, at which point Alpha Centauri will actually be
- * where Alpha Centauri is.
+ * thing on screen that is not physically real.
+ *
+ * **A photographic Milky Way panorama lived here briefly and was taken out again**, which
+ * is worth recording where the next person will look. It was correctly placed — the
+ * galactic frame in `galactic.ts` is checked against catalogued objects — and it still
+ * looked wrong, because a photograph is the wrong instrument for a sky. Measured against
+ * the reference: theirs is 90% *exactly* black with discrete, individually coloured stars,
+ * and ours was a continuous grey wash with 31.8% of the sky lit against their 0.9%. A
+ * photograph's stars arrive already blurred by an atmosphere and a lens and are then
+ * magnified about twice over; no resolution or exposure turns that into points.
+ *
+ * Step 6f replaces these with a real catalogue — Hipparcos positions, magnitudes and
+ * colours — which is the other instrument and the one the reference is using.
  *
  * The generator is seeded, so the sky at least stays the same sky between reloads.
  */
@@ -24,6 +34,8 @@ const STAR_COUNT = 4000;
  * light years away is the correct behaviour.
  */
 const SPHERE_RADIUS = 1e9;
+
+
 
 /** Deterministic PRNG (mulberry32) so the sky does not reshuffle on every reload. */
 function seededRandom(seed: number): () => number {
