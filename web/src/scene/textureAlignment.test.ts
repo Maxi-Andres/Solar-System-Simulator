@@ -307,6 +307,22 @@ describe('the catalog says where every image starts', () => {
     expect(startingAtZero.length + startingAt180.length).toBe(variants.length);
   });
 
+  it('starts every map of a triaxial body at 0 or 180 degrees, where its long axis stays put', () => {
+    // The renderer stretches a triaxial moon along the mesh's local x axis, and the
+    // orientation puts the image's first column on local -x. Only a map starting on the
+    // prime meridian or its antipode leaves the long axis on the prime meridian -- on
+    // the planet. Any other origin would draw Mimas stretched sideways.
+    for (const body of CATALOG) {
+      if (body.triaxialRadiiKm === null || body.textures === null) {
+        continue;
+      }
+      for (const setId of SET_IDS) {
+        const origin = body.textures[setId as TextureSetId].longitudeOriginDeg;
+        expect(origin % 180, `${body.id}/${setId}`).toBe(0);
+      }
+    }
+  });
+
   it('places the north pole at the top of every file', () => {
     // uv.y = 1 at local +y, which the orientation maps to the IAU north pole, and
     // flipY puts uv.y = 1 on the first row of the image. Equirectangular maps are

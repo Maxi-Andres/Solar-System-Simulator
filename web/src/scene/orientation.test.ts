@@ -16,8 +16,9 @@ import {
   primeMeridianDirection,
 } from './orientation.ts';
 
-// Only the bodies with rotational elements: the moons get theirs with their maps.
-const CATALOG = FULL_CATALOG.filter((body) => body.rotation !== null);
+// The Sun, the planets and Pluto. The moons are checked in moonRotation.test.ts, against
+// the planet they face rather than the Sun.
+const CATALOG = FULL_CATALOG.filter((body) => body.parent === null);
 
 const earth = getBody('earth');
 const venus = getBody('venus');
@@ -93,7 +94,7 @@ describe('poleDirection', () => {
     // The whole reason seasons exist: the axis must not follow the orbit round.
     const fixed = CATALOG.filter(
       (body) =>
-        body.rotation!.poleNutation === null &&
+        body.rotation!.periodicTerms.length === 0 &&
         body.rotation!.poleRaRateDegPerCentury === 0 &&
         body.rotation!.poleDecRateDegPerCentury === 0,
     );

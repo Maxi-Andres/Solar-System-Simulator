@@ -52,10 +52,43 @@ describe('CATALOG', () => {
       expect(body.radiusEquatorialKm).toBeGreaterThan(0);
       // A rotating body bulges at the equator; it never bulges at the poles.
       expect(body.radiusPolarKm).toBeLessThanOrEqual(body.radiusEquatorialKm);
-      // Flattening stays under 0.1 even for Saturn, the most oblate body here.
-      const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
-      expect(flattening).toBeLessThan(0.1);
+      // Flattening stays under 0.1 even for Saturn, the most oblate body pulled round.
+      // Phobos and Deimos are not round at all -- 0.30 and 0.35 -- and are exempt.
+      if (body.parent !== 'mars') {
+        const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
+        expect(flattening, body.id).toBeLessThan(0.1);
+      }
     }
+  });
+
+  it('carries three radii exactly where the equator is not round, longest first', () => {
+    for (const body of CATALOG) {
+      const radii = body.triaxialRadiiKm;
+      if (radii === null) {
+        continue;
+      }
+      const [a, b, c] = radii;
+      // The long axis points at the planet and the short one along the pole, which is
+      // what tides do to a locked moon.
+      expect(a, body.id).toBeGreaterThan(b);
+      expect(b, body.id).toBeGreaterThanOrEqual(c);
+      expect(body.radiusEquatorialKm, body.id).toBe(a);
+      expect(body.radiusPolarKm, body.id).toBe(c);
+    }
+    expect(CATALOG.filter((body) => body.triaxialRadiiKm !== null).map((body) => body.id)).toEqual([
+      'phobos',
+      'deimos',
+      'io',
+      'europa',
+      'mimas',
+      'enceladus',
+      'tethys',
+      'dione',
+      'rhea',
+      'titan',
+      'miranda',
+      'ariel',
+    ]);
   });
 
   it('orders bodies by mass the way the Solar System does', () => {
@@ -72,12 +105,26 @@ describe('CATALOG', () => {
     expect(gm('mercury')).toBeGreaterThan(gm('pluto'));
   });
 
-  it('marks Venus, Uranus and Pluto as retrograde rotators', () => {
+  it('marks Venus, Uranus and Pluto as retrograde rotators, and the moons that turn with them', () => {
     const retrograde = CATALOG.filter((body) => body.rotationPeriodHours < 0).map(
       (body) => body.id,
     );
 
-    expect(retrograde).toEqual(['venus', 'uranus', 'pluto']);
+    // Uranus's five turn with Uranus, Charon with Pluto, and Triton against Neptune on
+    // its retrograde orbit. Checked against JPL, which reports their longitudes
+    // east-positive for exactly this reason: see moonRotation.test.ts.
+    expect(retrograde).toEqual([
+      'venus',
+      'uranus',
+      'pluto',
+      'miranda',
+      'ariel',
+      'umbriel',
+      'titania',
+      'oberon',
+      'triton',
+      'charon',
+    ]);
   });
 
   it('uses six-digit hex colors, which the renderer and the CSS both accept', () => {
@@ -170,17 +217,20 @@ describe('the moons', () => {
     }
   });
 
-  it('turn once per orbit, in the sense they orbit', () => {
+  it('turn at the rate the IAU gives, which is the rate they orbit at', () => {
+    // Two independent sources: the period is the sidereal orbital period, and the rate
+    // is the IAU's W, read out of the PCK by script. Locked means they agree.
     for (const body of moons) {
-      expect(body.rotationPeriodHours, body.id).toBeGreaterThan(0);
+      const fromRate = Math.abs(360 / body.rotation!.rotationRateDegPerDay) * 24;
+      expect(Math.abs(fromRate / Math.abs(body.rotationPeriodHours) - 1), body.id).toBeLessThan(
+        5e-4,
+      );
     }
   });
 
-  it('carry neither a rotation model nor a surface map yet, and say so with null', () => {
-    // Both arrive together in the next step; a map with no orientation would be a
-    // picture of the right place turned the wrong way.
+  it('all carry their IAU rotation, and none a surface map yet', () => {
     for (const body of moons) {
-      expect(body.rotation, body.id).toBeNull();
+      expect(body.rotation, body.id).not.toBeNull();
       expect(body.textures, body.id).toBeNull();
     }
   });

@@ -259,7 +259,18 @@ export function SolarSystem({
       // Polar flattening: Saturn is 9.8% shorter pole to pole than across.
       // Applied in the body's own frame, where local y is the rotation axis, so it
       // stays correct once orientation.ts turns that frame to the real pole.
-      mesh.scale.set(1, definition.radiusPolarKm / definition.radiusEquatorialKm, 1);
+      //
+      // A triaxial moon is stretched on the third axis too, and the orientation below is
+      // what makes that right: it puts local -x on the prime meridian, which for a locked
+      // moon is the long axis pointing at its planet, and local +z ninety degrees east of
+      // it. That holds for an image starting at 0 or 180 degrees; any other origin would
+      // swing the long axis off the planet, which textureAlignment.test.ts rules out.
+      const triaxial = definition.triaxialRadiiKm;
+      mesh.scale.set(
+        1,
+        definition.radiusPolarKm / definition.radiusEquatorialKm,
+        triaxial === null ? 1 : triaxial[1] / triaxial[0],
+      );
       group.add(mesh);
 
       const marker = new THREE.Sprite(

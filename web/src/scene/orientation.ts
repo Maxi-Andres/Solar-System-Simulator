@@ -81,27 +81,35 @@ export interface IauElements {
  *
  * With both in place every body's sub-solar latitude matches JPL's to under 0.03
  * degrees across 2026.
+ *
+ * The moons need the rest of the model: every periodic term, and for Phobos the
+ * quadratic in W. It is the form NAIF's PCK evaluates, term for term.
  */
 export function iauElementsAt(jdTdb: number, body: BodyDefinition): IauElements {
   const rotation = rotationOf(body);
   const days = jdTdb - J2000_JD;
-  const w = rotation.primeMeridianDeg + rotation.rotationRateDegPerDay * days;
+  let wDeg =
+    rotation.primeMeridianDeg +
+    rotation.rotationRateDegPerDay * days +
+    rotation.primeMeridianAccelDegPerDay2 * days * days;
 
   const centuries = days / DAYS_PER_CENTURY;
-  const raDeg = rotation.poleRaDeg + rotation.poleRaRateDegPerCentury * centuries;
-  const decDeg = rotation.poleDecDeg + rotation.poleDecRateDegPerCentury * centuries;
+  let raDeg = rotation.poleRaDeg + rotation.poleRaRateDegPerCentury * centuries;
+  let decDeg = rotation.poleDecDeg + rotation.poleDecRateDegPerCentury * centuries;
 
-  const nutation = rotation.poleNutation;
-  if (nutation === null) {
-    return { raDeg, decDeg, wDeg: w };
+  for (const term of rotation.periodicTerms) {
+    const n =
+      (term.angleDeg +
+        term.rateDegPerCentury * centuries +
+        term.accelDegPerCentury2 * centuries * centuries) *
+      DEG;
+    const sin = Math.sin(n);
+    raDeg += term.raSinCoeffDeg * sin;
+    decDeg += term.decCosCoeffDeg * Math.cos(n);
+    wDeg += term.wSinCoeffDeg * sin;
   }
 
-  const n = (nutation.angleDeg + nutation.rateDegPerCentury * centuries) * DEG;
-  return {
-    raDeg: raDeg + nutation.raSinCoeffDeg * Math.sin(n),
-    decDeg: decDeg + nutation.decCosCoeffDeg * Math.cos(n),
-    wDeg: w + nutation.wSinCoeffDeg * Math.sin(n),
-  };
+  return { raDeg, decDeg, wDeg };
 }
 
 /**

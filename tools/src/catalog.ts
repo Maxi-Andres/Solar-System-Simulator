@@ -1,3 +1,4 @@
+import { MOON_ORIENTATION } from './moonRotation.ts';
 import type { BodyDefinition, TextureSetId } from './types.ts';
 
 /**
@@ -182,7 +183,6 @@ interface MoonSpec {
   readonly parentHorizonsId: string;
   readonly stepDays: number;
   readonly vectorWindow: 'full' | 'short';
-  readonly radiusKm: number;
   readonly gmKm3S2: number;
   readonly rotationPeriodHours: number;
   readonly axialTiltDeg: number | null;
@@ -190,16 +190,17 @@ interface MoonSpec {
 }
 
 /**
- * A moon, as the catalog carries it in phase A's first step.
+ * A moon: its orbit from JPL, its shape and rotation from the IAU.
  *
- * Positions and orbits are real from the start; the body itself is deliberately plain.
- * It is a sphere at the IAU **mean** radius, in flat colour, with no rotational
- * elements -- and those three go together. Most of these moons are triaxial rather
- * than oblate (Mimas is 207.8 x 196.7 x 190.6 km, its long axis locked toward Saturn),
- * so drawing the real shape means knowing which way the body faces, and that is the
- * rotation. A spheroid flattened about the wrong axis would be a guess dressed as a
- * measurement. Shape, rotation and surface map arrive together, and are checked
- * against JPL together.
+ * Shape and rotation come together from moonRotation.ts, and they have to. Most of
+ * these moons are triaxial rather than oblate -- Mimas is 207.8 x 196.7 x 190.6 km, its
+ * long axis locked toward Saturn -- so drawing the real shape means knowing which way
+ * the body faces, and a body stretched along the wrong axis would be a guess dressed as
+ * a measurement.
+ *
+ * `radiusEquatorialKm` is the long axis a, not the mean radius: it is what the camera's
+ * closest approach and the marker's size are measured against, and a camera allowed
+ * inside Phobos's long end would be inside Phobos.
  *
  * Vectors are requested against the planet's body center, not the barycenter: that
  * makes each table the parent-relative state the frame tree sums, and it is what the
@@ -207,6 +208,11 @@ interface MoonSpec {
  */
 function moon(spec: MoonSpec): BodyDefinition {
   const center = `500@${spec.parentHorizonsId}`;
+  const orientation = MOON_ORIENTATION[spec.id];
+  if (orientation === undefined) {
+    throw new Error(`No IAU orientation for ${spec.id}.`);
+  }
+  const [a, b, c] = orientation.radiiKm;
   return {
     id: spec.id,
     name: spec.name,
@@ -217,13 +223,16 @@ function moon(spec: MoonSpec): BodyDefinition {
     elementsCenter: center,
     parent: spec.parent,
     kind: 'moon',
-    radiusEquatorialKm: spec.radiusKm,
-    radiusPolarKm: spec.radiusKm,
+    radiusEquatorialKm: a,
+    radiusPolarKm: c,
+    // A spheroid needs only the two radii above; three are carried only when the
+    // equator itself is not round.
+    triaxialRadiiKm: a === b ? null : [a, b, c],
     gmKm3S2: spec.gmKm3S2,
     gmBodyOnlyKm3S2: spec.gmKm3S2,
     rotationPeriodHours: spec.rotationPeriodHours,
     axialTiltDeg: spec.axialTiltDeg,
-    rotation: null,
+    rotation: orientation.rotation,
     color: spec.color,
     drawOrbit: true,
     textures: null,
@@ -236,12 +245,16 @@ function moon(spec: MoonSpec): BodyDefinition {
  * Mars's two. Mimas, at 198 km, is the smallest body known to have done so.
  *
  * Sources:
- *   - Horizons ids, GM and mean radius: JPL SSD planetary satellite physical
- *     parameters (ssd.jpl.nasa.gov/sats/phys_par). GM from each system's own
- *     satellite ephemeris -- DE440, MAR097, JUP365, SAT441, URA111, NEP097, PLU060 --
- *     and mean radii from the IAU 2015 report the planets' radii come from.
+ *   - Horizons ids and GM: JPL SSD planetary satellite physical parameters
+ *     (ssd.jpl.nasa.gov/sats/phys_par), GM from each system's own satellite
+ *     ephemeris -- DE440, MAR097, JUP365, SAT441, URA111, NEP097, PLU060.
+ *   - Shapes: the IAU 2015 triaxial radii, in moonRotation.ts. The error column below
+ *     is against the IAU mean radius, R, which the step was chosen by.
  *   - Rotation: every one of these is tidally locked, which Horizons states as
  *     "Rotational period = Synchronous", so the period is the sidereal orbital period.
+ *     Negative, as for the planets, where the moon turns backwards against the IAU pole:
+ *     Uranus's five, Triton and Charon. The full IAU elements and the shapes are in
+ *     moonRotation.ts.
  *   - The Moon's 6.67 deg obliquity: the Horizons physical data sheet.
  *
  * **Sample spacing, measured against JPL.** Each moon's ephemeris was downloaded over
@@ -294,7 +307,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '399',
     stepDays: 1,
     vectorWindow: 'full',
-    radiusKm: 1737.4,
     gmKm3S2: 4902.800066,
     rotationPeriodHours: 655.7199,
     axialTiltDeg: 6.67,
@@ -308,7 +320,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '499',
     stepDays: minutes(15),
     vectorWindow: 'short',
-    radiusKm: 11.08,
     gmKm3S2: 0.0007087,
     rotationPeriodHours: 7.6538,
     axialTiltDeg: null,
@@ -322,7 +333,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '499',
     stepDays: minutes(45),
     vectorWindow: 'short',
-    radiusKm: 6.2,
     gmKm3S2: 0.0000962,
     rotationPeriodHours: 30.2986,
     axialTiltDeg: null,
@@ -336,7 +346,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '599',
     stepDays: minutes(120),
     vectorWindow: 'short',
-    radiusKm: 1821.49,
     gmKm3S2: 5959.91547,
     rotationPeriodHours: 42.4593,
     axialTiltDeg: null,
@@ -350,7 +359,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '599',
     stepDays: minutes(240),
     vectorWindow: 'short',
-    radiusKm: 1560.8,
     gmKm3S2: 3202.7121,
     rotationPeriodHours: 85.2283,
     axialTiltDeg: null,
@@ -364,7 +372,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '599',
     stepDays: minutes(480),
     vectorWindow: 'short',
-    radiusKm: 2631.2,
     gmKm3S2: 9887.83275,
     rotationPeriodHours: 171.7093,
     axialTiltDeg: null,
@@ -378,7 +385,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '599',
     stepDays: minutes(960),
     vectorWindow: 'short',
-    radiusKm: 2410.3,
     gmKm3S2: 7179.2834,
     rotationPeriodHours: 400.5364,
     axialTiltDeg: null,
@@ -392,7 +398,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(45),
     vectorWindow: 'short',
-    radiusKm: 198.2,
     gmKm3S2: 2.50349,
     rotationPeriodHours: 22.6181,
     axialTiltDeg: null,
@@ -406,7 +411,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(75),
     vectorWindow: 'short',
-    radiusKm: 252.1,
     gmKm3S2: 7.21037,
     rotationPeriodHours: 32.8852,
     axialTiltDeg: null,
@@ -420,7 +424,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(120),
     vectorWindow: 'short',
-    radiusKm: 531.1,
     gmKm3S2: 41.21353,
     rotationPeriodHours: 45.3072,
     axialTiltDeg: null,
@@ -434,7 +437,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(150),
     vectorWindow: 'short',
-    radiusKm: 561.4,
     gmKm3S2: 73.11607,
     rotationPeriodHours: 65.686,
     axialTiltDeg: null,
@@ -448,7 +450,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(240),
     vectorWindow: 'short',
-    radiusKm: 763.5,
     gmKm3S2: 153.94175,
     rotationPeriodHours: 108.42,
     axialTiltDeg: null,
@@ -462,7 +463,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: minutes(960),
     vectorWindow: 'short',
-    radiusKm: 2574.76,
     gmKm3S2: 8978.1371,
     rotationPeriodHours: 382.6908,
     axialTiltDeg: null,
@@ -476,7 +476,6 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '699',
     stepDays: 1.5,
     vectorWindow: 'short',
-    radiusKm: 734.3,
     gmKm3S2: 120.51511,
     rotationPeriodHours: 1903.944,
     axialTiltDeg: null,
@@ -490,9 +489,8 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '799',
     stepDays: minutes(90),
     vectorWindow: 'short',
-    radiusKm: 235.8,
     gmKm3S2: 4.3,
-    rotationPeriodHours: 33.9235,
+    rotationPeriodHours: -33.9235,
     axialTiltDeg: null,
     color: '#b4b4b4',
   }),
@@ -504,9 +502,8 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '799',
     stepDays: minutes(180),
     vectorWindow: 'short',
-    radiusKm: 578.9,
     gmKm3S2: 83.5,
-    rotationPeriodHours: 60.4891,
+    rotationPeriodHours: -60.4891,
     axialTiltDeg: null,
     color: '#ccc8c2',
   }),
@@ -518,9 +515,8 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '799',
     stepDays: minutes(240),
     vectorWindow: 'short',
-    radiusKm: 584.7,
     gmKm3S2: 85.1,
-    rotationPeriodHours: 99.4602,
+    rotationPeriodHours: -99.4602,
     axialTiltDeg: null,
     color: '#8e8a86',
   }),
@@ -532,9 +528,8 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '799',
     stepDays: minutes(480),
     vectorWindow: 'short',
-    radiusKm: 788.9,
     gmKm3S2: 226.9,
-    rotationPeriodHours: 208.9409,
+    rotationPeriodHours: -208.9409,
     axialTiltDeg: null,
     color: '#b6aea6',
   }),
@@ -546,9 +541,8 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '799',
     stepDays: minutes(720),
     vectorWindow: 'short',
-    radiusKm: 761.4,
     gmKm3S2: 205.3,
-    rotationPeriodHours: 323.1177,
+    rotationPeriodHours: -323.1177,
     axialTiltDeg: null,
     color: '#a69e96',
   }),
@@ -560,13 +554,13 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '899',
     stepDays: minutes(420),
     vectorWindow: 'short',
-    radiusKm: 1352.6,
     gmKm3S2: 1428.49546,
-    // Positive although Triton orbits backwards. Locked rotation turns the same way as
-    // the orbit, so it is prograde about its own orbital axis -- which is what the sign
-    // means here. The retrograde orbit shows up where it belongs, as an inclination
-    // over 90 degrees in its elements.
-    rotationPeriodHours: 141.0445,
+    // Negative, like Uranus and its moons: turning backwards against the IAU pole, which
+    // is what the sign means across this catalog. A first version made it positive on
+    // the grounds that a locked moon turns the way it orbits -- true, and the wrong
+    // question. JPL settled it: measured the other way, Triton's sub-Neptune longitude
+    // came out 5.5 degrees from Horizons on every date, exactly twice its own value.
+    rotationPeriodHours: -141.0445,
     axialTiltDeg: null,
     color: '#d6cac2',
   }),
@@ -578,10 +572,9 @@ const MOONS: readonly BodyDefinition[] = [
     parentHorizonsId: '999',
     stepDays: minutes(720),
     vectorWindow: 'short',
-    radiusKm: 606,
     gmKm3S2: 106.1,
     // Pluto's own day, within seconds: the two are locked to each other.
-    rotationPeriodHours: 153.2935,
+    rotationPeriodHours: -153.2935,
     axialTiltDeg: null,
     color: '#aca49a',
   }),
@@ -603,6 +596,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'star',
     radiusEquatorialKm: 695700,
     radiusPolarKm: 695700,
+    triaxialRadiiKm: null,
     gmKm3S2: 132712440041.279419,
     gmBodyOnlyKm3S2: 132712440041.279419,
     rotationPeriodHours: 609.12,
@@ -614,7 +608,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: 0,
       primeMeridianDeg: 84.176,
       rotationRateDegPerDay: 14.1844,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#ffd24a',
     // The Sun's motion about the barycenter is a small wobble, not an orbit worth
@@ -641,6 +636,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 2440.53,
     radiusPolarKm: 2438.26,
+    triaxialRadiiKm: null,
     gmKm3S2: 22031.868551,
     gmBodyOnlyKm3S2: 22031.868551,
     rotationPeriodHours: 1407.6,
@@ -652,7 +648,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: -0.0049,
       primeMeridianDeg: 329.5988,
       rotationRateDegPerDay: 6.1385108,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#a98cd8',
     drawOrbit: true,
@@ -676,6 +673,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 6051.8,
     radiusPolarKm: 6051.8,
+    triaxialRadiiKm: null,
     gmKm3S2: 324858.592,
     gmBodyOnlyKm3S2: 324858.592,
     // Retrograde rotation, hence the negative period.
@@ -688,7 +686,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: 0,
       primeMeridianDeg: 160.2,
       rotationRateDegPerDay: -1.4813688,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#e8a33d',
     drawOrbit: true,
@@ -712,6 +711,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 6378.1366,
     radiusPolarKm: 6356.7519,
+    triaxialRadiiKm: null,
     gmKm3S2: 398600.435507,
     // Already Earth alone: DE440 publishes Earth and the Moon separately.
     gmBodyOnlyKm3S2: 398600.435507,
@@ -724,7 +724,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: -0.557,
       primeMeridianDeg: 190.147,
       rotationRateDegPerDay: 360.9856235,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#3aa8e0',
     drawOrbit: true,
@@ -748,6 +749,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 3396.19,
     radiusPolarKm: 3376.2,
+    triaxialRadiiKm: null,
     gmKm3S2: 42828.375816,
     // The planet alone, as Horizons publishes it; the value above includes its moons.
     gmBodyOnlyKm3S2: 42828.375662,
@@ -760,7 +762,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: -0.0609,
       primeMeridianDeg: 176.63,
       rotationRateDegPerDay: 350.891982443297,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#d96c3f',
     drawOrbit: true,
@@ -785,6 +788,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 71492,
     radiusPolarKm: 66854,
+    triaxialRadiiKm: null,
     gmKm3S2: 126712764.1,
     // The planet alone, as Horizons publishes it; the value above includes its moons.
     gmBodyOnlyKm3S2: 126686531.9,
@@ -797,7 +801,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: 0.002413,
       primeMeridianDeg: 284.95,
       rotationRateDegPerDay: 870.536,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#d8a05a',
     drawOrbit: true,
@@ -821,6 +826,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 60268,
     radiusPolarKm: 54364,
+    triaxialRadiiKm: null,
     gmKm3S2: 37940584.8418,
     // The planet alone, as Horizons publishes it; the value above includes its moons.
     gmBodyOnlyKm3S2: 37931206.234,
@@ -833,7 +839,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: -0.004,
       primeMeridianDeg: 38.9,
       rotationRateDegPerDay: 810.7939024,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#e0c060',
     drawOrbit: true,
@@ -882,6 +889,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 25559,
     radiusPolarKm: 24973,
+    triaxialRadiiKm: null,
     gmKm3S2: 5794556.4,
     // The planet alone, as Horizons publishes it; the value above includes its moons.
     gmBodyOnlyKm3S2: 5793950.6103,
@@ -894,7 +902,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: 0,
       primeMeridianDeg: 203.81,
       rotationRateDegPerDay: -501.1600928,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#7fd8d8',
     drawOrbit: true,
@@ -918,6 +927,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'planet',
     radiusEquatorialKm: 24764,
     radiusPolarKm: 24341,
+    triaxialRadiiKm: null,
     gmKm3S2: 6836527.10058,
     // The planet alone, as Horizons publishes it; the value above includes its moons.
     gmBodyOnlyKm3S2: 6835099.97,
@@ -952,16 +962,20 @@ export const CATALOG: readonly BodyDefinition[] = [
       // out on average. See `orientationSky.test.ts`.
       primeMeridianDeg: 249.978,
       rotationRateDegPerDay: 541.1397757,
-      // The only body here whose periodic term is large enough to see. Leaving it out
+      primeMeridianAccelDegPerDay2: 0,
+      // The only planet whose periodic term is large enough to see. Leaving it out
       // puts the sub-solar latitude 0.278 deg from JPL's; including it lands within
       // 0.004 deg. Measured against Horizons across 2026, not assumed.
-      poleNutation: {
-        angleDeg: 357.85,
-        rateDegPerCentury: 52.316,
-        raSinCoeffDeg: 0.7,
-        decCosCoeffDeg: -0.51,
-        wSinCoeffDeg: -0.48,
-      },
+      periodicTerms: [
+        {
+          angleDeg: 357.85,
+          rateDegPerCentury: 52.316,
+          accelDegPerCentury2: 0,
+          raSinCoeffDeg: 0.7,
+          decCosCoeffDeg: -0.51,
+          wSinCoeffDeg: -0.48,
+        },
+      ],
     },
     color: '#5a7fd8',
     drawOrbit: true,
@@ -986,6 +1000,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'dwarf-planet',
     radiusEquatorialKm: 1188.3,
     radiusPolarKm: 1188.3,
+    triaxialRadiiKm: null,
     gmKm3S2: 869.613817,
     // Pluto alone, from PLU060 as Horizons publishes it. The value above is Pluto
     // alone too, from an older solution -- not the system, which would be ~975 -- and
@@ -1015,7 +1030,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       poleDecRateDegPerCentury: 0,
       primeMeridianDeg: 302.695,
       rotationRateDegPerDay: 56.3625225,
-      poleNutation: null,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
     },
     color: '#b0a090',
     drawOrbit: true,

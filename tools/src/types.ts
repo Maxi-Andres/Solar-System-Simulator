@@ -61,17 +61,22 @@ export interface RingSystem {
 }
 
 /**
- * A single trigonometric term correcting the IAU rotational elements.
+ * One trigonometric term of the IAU rotational elements.
  *
- * `N = angleDeg + rateDegPerCentury * T`, with T in Julian centuries from J2000, and
- * then alpha0 += raSinCoeffDeg * sin(N), delta0 += decCosCoeffDeg * cos(N),
- * W += wSinCoeffDeg * sin(N). That is exactly the shape the report publishes for
- * Neptune. Several moons need more than one term -- Triton's pole swings by 32
- * degrees -- so this becomes a list when their rotation lands.
+ * `N = angleDeg + rateDegPerCentury * T + accelDegPerCentury2 * T^2`, with T in Julian
+ * centuries from J2000, and then alpha0 += raSinCoeffDeg * sin(N),
+ * delta0 += decCosCoeffDeg * cos(N), W += wSinCoeffDeg * sin(N).
+ *
+ * That is exactly the form NAIF's text PCK carries the IAU 2015 report in, where each
+ * planetary system shares a list of angles and each body weights them. Here every term
+ * carries its own angle, so a body's entry reads on its own. The quadratic term exists
+ * for Mars's system alone: the angle driving Phobos's largest libration accelerates,
+ * because Phobos is spiralling in.
  */
-export interface PoleNutation {
+export interface PeriodicTerm {
   readonly angleDeg: number;
   readonly rateDegPerCentury: number;
+  readonly accelDegPerCentury2: number;
   readonly raSinCoeffDeg: number;
   readonly decCosCoeffDeg: number;
   readonly wSinCoeffDeg: number;
@@ -110,15 +115,25 @@ export interface RotationalElements {
    */
   readonly rotationRateDegPerDay: number;
   /**
-   * The one periodic term large enough to matter, or null where there is none.
+   * d²W/dt², degrees per day squared. Zero everywhere but Phobos.
    *
-   * The IAU report gives trigonometric corrections to the pole and to W for several
-   * bodies. Almost all are under 0.01 degrees and are dropped. Neptune's is not: it
-   * swings its pole by up to 0.7 degrees, and leaving it out puts the sub-solar
-   * latitude 0.28 degrees from JPL's own value where including it lands within
-   * 0.004. See catalog.ts.
+   * Phobos is spiralling into Mars, so its orbit -- and its locked rotation -- speed up.
+   * The term is 9.5e-9 deg/day², which sounds like nothing and is 0.9 degrees by 2026.
    */
-  readonly poleNutation: PoleNutation | null;
+  readonly primeMeridianAccelDegPerDay2: number;
+  /**
+   * The periodic terms, or empty where none matters.
+   *
+   * For the planets the IAU report gives several, and almost all are under 0.01 degrees
+   * and are dropped. Neptune's is not: it swings its pole by up to 0.7 degrees, and
+   * leaving it out puts the sub-solar latitude 0.28 degrees from JPL's own value where
+   * including it lands within 0.004.
+   *
+   * For the moons they are carried whole, because several are anything but small:
+   * Triton's pole swings by 32 degrees, and Mimas's W by 45 -- that one is the
+   * Mimas-Tethys resonance, dragging Mimas along its orbit and its face with it.
+   */
+  readonly periodicTerms: readonly PeriodicTerm[];
 }
 
 /**
@@ -213,15 +228,23 @@ export interface BodyDefinition {
    */
   readonly axialTiltDeg: number | null;
   /**
-   * The IAU rotational elements, or null where they are not in the catalog yet.
+   * The IAU rotational elements, or null for a body that has none.
    *
-   * Null for the moons, deliberately and for now. A flat-coloured sphere looks the same
-   * whichever way it is turned, so nothing on screen could check them -- and the
-   * planets' own values needed three corrections that only a comparison against JPL
-   * found. They land with the moons' surface maps, which is when they become visible
-   * and testable at the same moment.
+   * Every body in the catalog has them today; the type allows null so that one added
+   * without them is drawn unturned rather than turned by an invented axis.
    */
   readonly rotation: RotationalElements | null;
+  /**
+   * Three radii for a body that is not a spheroid, or null for one that is.
+   *
+   * `[a, b, c]`: a along the prime meridian, b ninety degrees east of it, c along the
+   * pole. For a locked moon the prime meridian faces the planet, so a is the long axis
+   * the tides stretched toward it -- Mimas is 207.8 x 196.7 x 190.6 km. Where this is
+   * set, `radiusEquatorialKm` is a and `radiusPolarKm` is c.
+   *
+   * Source: IAU 2015, as carried in NAIF's pck00011.tpc.
+   */
+  readonly triaxialRadiiKm: readonly [number, number, number] | null;
   /** Hex color used for the orbit line, the marker and the label. */
   readonly color: string;
   /** The Sun has no meaningful orbit to draw around the barycenter. */

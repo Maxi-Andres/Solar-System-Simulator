@@ -328,12 +328,11 @@ two, never drawn somewhere approximate and then moved.
 
 Stated plainly, since the point of the project is that everything else is not:
 
-- **The moons are spheres at their mean radius, in flat colour, turned no particular
-  way.** Their positions and orbits are JPL's; their bodies are placeholders, stated as
-  such. Most are triaxial — Mimas is 208 × 197 × 191 km, its long axis locked toward
-  Saturn — and drawing the shape honestly needs to know which way each one faces. So
-  their rotation, shapes and maps arrive together, checked against JPL the way the
-  planets' were.
+- **The moons are drawn in flat colour.** Their surface maps come next. Everything else
+  about them is measured: their shapes are the IAU's triaxial radii, and their rotation
+  is the IAU model with every periodic term, read by script out of NAIF's `pck00011.tpc`
+  rather than typed. Against JPL, all twenty-one poles land within 0.002° and the face
+  each moon turns to its planet within 0.007°.
 - **The fast moons are exact for two years, not twenty.** A year either side of the
   build, by budget: see *Sample spacing*.
 

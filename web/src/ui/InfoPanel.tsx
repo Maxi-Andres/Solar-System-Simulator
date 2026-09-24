@@ -83,16 +83,31 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
 
         <Divider />
 
-        <Row label="Equatorial radius">
-          {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
-        </Row>
-        {flattening > 0.0005 && (
-          <Row label="Polar flattening">{`${(flattening * 100).toFixed(2)} %`}</Row>
+        {body.triaxialRadiiKm === null ? (
+          <>
+            <Row label="Equatorial radius">
+              {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
+            </Row>
+            {flattening > 0.0005 && (
+              <Row label="Polar flattening">{`${(flattening * 100).toFixed(2)} %`}</Row>
+            )}
+          </>
+        ) : (
+          // Three radii, long axis first: the one that points at the planet.
+          <Row label="Radii">
+            {`${body.triaxialRadiiKm.map((radius) => radius.toLocaleString('en-US')).join(' × ')} km`}
+          </Row>
         )}
         <Row label="GM">{`${body.gmKm3S2.toLocaleString('en-US')} km³/s²`}</Row>
         <Row label="Rotation period">
           {`${Math.abs(body.rotationPeriodHours).toFixed(2)} h${
-            body.rotationPeriodHours < 0 ? ' (retrograde)' : isMoon ? ' (synchronous)' : ''
+            isMoon
+              ? body.rotationPeriodHours < 0
+                ? ' (synchronous, retrograde)'
+                : ' (synchronous)'
+              : body.rotationPeriodHours < 0
+                ? ' (retrograde)'
+                : ''
           }`}
         </Row>
         {body.axialTiltDeg !== null && (

@@ -198,9 +198,9 @@ describeWithData('axial tilt, from two independent sources', () => {
     const jd = dateToTdb(new Date('2026-01-01T00:00:00Z'));
 
     for (const body of loaded.bodies) {
-      // The moons carry no pole yet, and their tilt is to their planet's orbit plane,
-      // not the Sun's; both arrive with their maps.
-      if (body.id === 'sun' || body.rotation === null) {
+      // A moon's tilt is to its orbit about its planet, not the Sun's; the Moon's is
+      // checked that way in moonRotation.test.ts.
+      if (body.id === 'sun' || body.parent !== null) {
         continue;
       }
       const heliocentric = loaded.stateRelativeTo(body.id, 'sun', jd);
