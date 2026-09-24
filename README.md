@@ -31,9 +31,24 @@ Everything else is measured:
 - **Rotation** at each body's real sidereal rate, retrograde for Venus, Uranus and
   Pluto.
 - **Axis direction and prime meridian** from the IAU rotational elements, so every body
-  is turned the way it is actually turned. Verified against JPL's own sub-solar point for
-  all nine planets across 2026: the worst disagreement is **0.0026°**, nine arcseconds.
-  Earth's noon falls on Greenwich.
+  is turned the way it is actually turned — and so that the face you are looking at is the
+  face that is really there. Verified against JPL's own sub-solar point for all nine
+  planets across 2026, in **both** coordinates: latitude to **0.0026°**, nine arcseconds,
+  and longitude to **0.02°**. Earth's noon falls on Greenwich.
+
+  Checking the longitude needs two things the latitude never did. **Light time**, because
+  Horizons reports where the Sun stood when the light we see left the body — Neptune is
+  four light hours away and turns 90° in that time. And **the sign convention**, which the
+  IAU measures opposite to the rotation, so it runs west-positive on a prograde body and
+  east-positive on Venus, Uranus and Pluto.
+
+  **Neptune is drawn in a different rotation system from the one its fact sheet quotes,
+  and that is not a slip.** The IAU publishes System III for it, the 16.11-hour rotation
+  of the magnetic field — the interior. But a surface map of Neptune is a map of *clouds*,
+  and for cartography the IAU gives System II, `W = 249.978 + 541.1397757 d`. It is the
+  only one of the four giants where the two differ, and taking the obvious set costs
+  **4.83° a day**: a full turn every 75 days, which is enough to put the Great Dark Spot
+  a quarter of the planet from where it belongs.
 - **Saturn's rings** at real radii in its real equatorial plane, reusing the same IAU
   pole the sphere is oriented by — so they open and close over its 29.5-year orbit, as
   they do, with Saturn's own oblate shadow falling across them.
@@ -105,16 +120,31 @@ time, never from a visitor's browser.
 
 ## Generated data
 
-`pnpm fetch:data` writes about 1.5 MB of JSON, covering 20 years — ten back and ten
-forward from the day it runs:
+`pnpm fetch:data` writes about 20 MB of JSON: 20 years of the planets and the Moon —
+ten back and ten forward from the day it runs — two years of the other twenty moons,
+and the sky. Only about 3 MB of it is loaded up front; the moons arrive in pieces as
+they are needed.
 
 ```
 web/public/data/
-├─ manifest.json          # generation time, frame, covered window, body list
+├─ manifest.json          # generation time, frame, window, and each body's coverage
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
+├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
+├─ vectors/<id>/<n>.json  # the same, for a fast moon, split into ~1500-sample chunks
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
+
+The star catalogue comes from a second service — ESA's **Hipparcos** and **Tycho-2**
+through VizieR at CDS — and is fetched in the same run. Two catalogues, because neither
+is a sky on its own: Tycho-2 goes six times deeper and is *missing the brightest stars
+entirely*, since their light saturated its star mapper, while Hipparcos has those and
+never completed the faint ones. Hipparcos wins wherever both have a star, because its
+photometry is measured in the Johnson system rather than transformed into it.
+
+Unlike the ephemerides the sky does not go stale — both catalogues are finished — but it
+is regenerated anyway rather than committed, for the same reason: generated data does
+not belong in the repository.
 
 Two things about the reference frames are worth knowing, because getting them wrong
 produces numbers that look fine and are not:
@@ -126,6 +156,12 @@ produces numbers that look fine and are not:
   the dominating mass at its focus. Requesting barycentric elements puts Mercury's
   semi-major axis 2% off and its period 3% off; against the Sun's center the same
   request lands within 0.01%.
+- **A moon's vectors and elements are both taken against its planet's body center**
+  (`CENTER='500@599'` for Io). That makes each table exactly the parent-relative state
+  the frame tree adds to the planet's, and puts the planet at the focus of the ellipse.
+  The orbit is drawn with the planet's *own* mass, not the system value DE440 gives the
+  giants: for Io the difference is 2.1 × 10⁻⁴, which would bend the drawn ellipse about
+  175 km off Io's path.
 
 Positions come from vectors, so they are exact DE441 values regardless. The elements
 only shape the drawn orbit line and the out-of-window fallback.
@@ -144,10 +180,26 @@ spacing that still lands well inside its own radius:
 | Pluto | 2 days | 0.07 — limited by Charon, not by its orbit |
 | Venus, Earth | 4 days | < 0.01 |
 | Sun, Mars | 8 days | < 0.01 |
-| Jupiter, Saturn, Uranus, Neptune | 64 days | 0.02 |
+| Jupiter, Saturn, Uranus, Neptune | 32 days | 0.01 — see below |
+| The Moon | 1 day | 0.0024 |
+| The other twenty moons | 15 minutes (Phobos) to 1.5 days (Iapetus) | < 0.01 each |
 
-That is why a 20-year window costs less than the 6-year one that used a flat one-day
-step: 16,900 samples against 21,900.
+That is why a 20-year window of the planets costs less than the 6-year one that used a
+flat one-day step: 16,900 samples against 21,900.
+
+The moons turn that around. About 24 samples an orbit keeps nearly every one of them
+inside a hundredth of its radius, and their orbits are short: a year of all twenty is
+99,700 samples, six times the whole planetary set, a third of it Phobos. So the fast
+moons take a narrower window — a year either side of the build — and ship in chunks,
+and a visitor fetches one chunk per moon, only once that moon's system has opened up on
+screen. The full measurement, moon by moon, is in `tools/src/catalog.ts`.
+
+One thing the moons exposed about the planets: **Jupiter's own table is 0.013 of its
+radius out at worst**, 956 km across 2026 at six-hour spacing, slightly more than the
+table above says. The Galileans swing Jupiter's centre about the system's barycentre by
+around 200 km every few days, and one sample a month cannot follow that — the same
+effect that limits Pluto, smaller. It moves the whole Jovian system together, so Io
+against Jupiter is still exact.
 
 ### Freshness
 
@@ -157,7 +209,9 @@ either side. The weekly CI run re-centres that window on the present; it does no
 correct drift.
 
 Outside the downloaded window the app falls back to Keplerian propagation and says
-**APPROXIMATE** while it does.
+**APPROXIMATE** while it does. For the fast moons that window is two years, so warping
+further than a year from the build makes them approximate while the planets are still
+exact; the indicator only counts the bodies that are switched on.
 
 Two caveats worth knowing:
 
@@ -216,54 +270,175 @@ Full per-file sources, licences and longitude conventions in
 
 ## Page weight
 
-About **940 KB gzipped** on first load: 296 KB of application and 647 KB of
-ephemerides. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
-not what crosses the wire.
+About **1.72 MB gzipped** on first load: 296 KB of application, 938 KB of
+ephemerides and 484 KB of sky. GitHub Pages serves both compressed, so the 2.2 MB of
+JSON on disk is not what crosses the wire. The Moon is 244 KB of that, shipped with the
+planets because at one sample a day its twenty years are cheap.
+
+The other twenty moons are **not** part of it. Their tables are split into chunks of
+about 1500 samples — 51 KB each, compressed — and a chunk is fetched only once its moon's
+system has opened up on screen: from the default view of the Sun, not one. Approaching
+Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
 and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
-(Mercury). The unused true-colour files are never requested at all.
+(Mercury). The unused true-colour files are never requested at all. The moons' maps work
+the same way: 38 KB (Umbriel) to 731 KB (Dione), each fetched only when that moon is on
+screen. They bring the committed texture set to 12.4 MB.
 
 | Connection | First load |
 |---|---|
-| Fibre / good wifi (50 Mbps) | 0.15 s |
-| Typical broadband (20 Mbps) | 0.4 s |
-| 4G mobile (10 Mbps) | 0.8 s |
-| 3G mobile (1.6 Mbps) | 4.7 s |
+| Fibre / good wifi (50 Mbps) | 0.28 s |
+| Typical broadband (20 Mbps) | 0.7 s |
+| 4G mobile (10 Mbps) | 1.4 s |
+| 3G mobile (1.6 Mbps) | 8.6 s |
 
 Everything is cached after the first visit, so this is a first-load cost only. The
-app does wait for all ten bodies before rendering, since a partially-populated Solar
-System would be worse than a moment of "LOADING EPHEMERIDES". If the catalog grows
-past a few dozen bodies that should become progressive loading.
+app waits for the planets and the Moon before rendering, since a partially-populated
+Solar System would be worse than a moment of "LOADING EPHEMERIDES". The other moons
+load progressively: one whose chunk has not arrived is simply absent for a frame or
+two, never drawn somewhere approximate and then moved.
 
 ## Data sources
 
 | Source | Used for |
 |---|---|
 | [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft |
+| [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
+| [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
 ## Roadmap
 
-- **Textures, continued** — Earth's clouds and night lights, and a real Milky Way behind
-  the starfield. Surface maps and Saturn's rings are done.
+- **Textures and the sky** — done. Surface maps, Saturn's rings, Earth's clouds, night
+  lights and atmosphere, and a real star catalogue. A photographic Milky Way panorama
+  was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
+  The twenty-one major moons are in, with real positions and orbits; their rotation,
+  shapes and surface maps are next, then planet-centred views, then spacecraft.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
-- **Phase D** — nearby stars from Gaia, replacing the placeholder starfield, out to
-  Alpha Centauri.
+- **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to
+  Alpha Centauri. The stars are already real; what phase D adds is depth.
 
 ## Known approximations
 
 Stated plainly, since the point of the project is that everything else is not:
 
-- The **starfield is procedurally generated**, not a catalog. It is the one thing on
-  screen that is not real. Phase D replaces it.
+- **The moons are mostly greyscale**, because that is what exists: Galileo, Cassini and
+  Voyager mapped them through clear filters, and the colour products are enhanced into
+  the ultraviolet and infrared. The Moon is natural colour; Titan is 938 nm, its surface
+  through the haze; Io and Triton carry uncalibrated mission colour. Maps are USGS,
+  NASA SVS and NASA 3D Resources, each placed in longitude from its ISIS label and
+  checked against Gazetteer features (`web/public/textures/CREDITS.md`).
+- **Half of several moons was never photographed**, and is filled as Pluto's south is —
+  Uranus's five and Triton in the north, Charon in the south. Not observation.
+- **Deimos has no map.** Its one global map cannot be placed in longitude, so it stays
+  flat rather than possibly half a turn out.
+- The moons' shapes and rotation *are* measured: the IAU's triaxial radii, and the IAU
+  model with every periodic term, read by script out of NAIF's `pck00011.tpc` rather
+  than typed. Against JPL, all twenty-one poles land within 0.002° and the face each moon
+  turns to its planet within 0.007°.
+- **The fast moons are exact for two years, not twenty.** A year either side of the
+  build, by budget: see *Sample spacing*.
+
+- **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
+  Which stars are there is a measurement: 46,071 real stars at their own positions,
+  moving at their own proper motions, coloured from their own B−V. Where the limit sits
+  is not — it is this picture's exposure, and it was set by measuring the reference
+  rather than by taste.
+
+  Both frames were read pixel by pixel, and then solved against each other under a
+  transform free to scale and rotate. It solves the same way at three sample sizes — 13
+  of the brightest 25, 25 of 40, 37 of 60, at a mean error of two to three pixels — which
+  gives the missing number: **NASA Eyes was at a 30.6° vertical field where this is at
+  27°**. That splits the 1.54× gap in star separation into 1.14× of camera and 1.36× of
+  sky. Only the second is the catalogue's business: their sky holds 1.84× the stars
+  per square degree, which magnitude 8 delivers to within 3%.
+
+  The camera half is left alone on purpose. 27° is the vertical field of a 50 mm lens on
+  35 mm film — the photographic definition of a normal lens — and it was chosen for what
+  it does to a planet filling the frame: at 27° you are standing 4.3 radii out and seeing
+  38% of the surface, where a wide field crushes everything past 65° of latitude into the
+  rim. Widening it to 30.6° would undo that to make the sky read 14% tighter.
+
+  **About 41,000 of those keep measured Johnson magnitudes, from Hipparcos. The other
+  5,000 are transformed** from Tycho's own BT and VT by the relation published with that
+  catalogue (`V = VT − 0.090(BT−VT)`, `B−V = 0.850(BT−VT)`), which is a first-order fit
+  valid over 97% of the stars here. It is the one place this project's photometry is
+  converted rather than observed.
+
+  How bright they look is not a measurement either. The sky spans about thirteen orders
+  of magnitude and a screen has three, so every picture of space chooses which three to
+  show. Here the brightest star is white, the faintest is at 2% of that — five code
+  values out of 255, which is what "limiting magnitude" already means — and the response
+  between them is linear in magnitude, the eye's own scale, since that is what the
+  magnitude system was built from. So Sirius outshines a magnitude 8 star by nearly six
+  thousand to one in the sky and by fifty to one on screen.
+
+  A star's size is not a separate setting: it is where its point spread falls below the
+  darkest step the display can show. That spread is a **Gaussian core 0.54 pixels wide
+  plus a power-law tail**, `1/(1 + (r/σ)²)`, carrying a tenth of the star's light — the
+  same shape as the Sun's glare, and for the same reason: every real optical system
+  scatters a few percent of a source into a halo, and a Gaussian alone cannot.
+
+  Both numbers are measured off the reference. The core reproduces its median equivalent
+  diameter of 2.26 px and its 90th percentile of 2.99; the tail's share was solved from
+  its brightest blob, 13.5 px across, which a Gaussian at this σ could not exceed 4.2 for
+  however bright the star. Here the same star draws 13.2. The cost is a slightly less
+  black sky — 0.57% of pixels above the floor against 0.45% without the tail, and the
+  reference's own 0.41%.
+
+  Stars sit on a sphere rather than at their real distances, so there is no parallax.
+  The nearest star here would move 0.742 arcseconds across Earth's orbit, which is under
+  a hundredth of a pixel. Real distances are phase D.
+- **The Sun's glare is real in shape and calibrated in brightness.** Most of what you
+  see around the Sun is its light scattered sideways inside whatever is looking at it,
+  and that scatter is measured: the CIE disability-glare equation (CIE 135/1-1999, from
+  Vos and van den Berg) gives the veil as `10/θ³ + 5/θ²` with θ in degrees. That is the
+  profile used here, and it follows the inverse square law on its own — the halo is 3.9°
+  wide from Mercury's orbit, 1.8° from Earth's, 0.34° from Saturn's, with nothing
+  animating it. Its colour is the Sun's own, from the same Planck-and-CIE path the stars
+  use.
+
+  **There is no free constant in it.** The veil's brightness is the illuminance the disc
+  delivers — `E = L·π·sin²θ_R`, the inverse square law written without assuming the source
+  is a point — so it is tied to whatever exposure the disc is drawn at and cannot drift
+  away from it. An earlier version anchored the veil independently and then the disc was
+  overexposed by 45; the glare did not follow, and the halo went from plausible to
+  invisible beside its own source.
+
+  What does not match the reference is the far profile — theirs falls as θ^-3.5 where the
+  eye's equation is between θ^-3 and θ^-2, so at Earth's distance their glow ends at 1.72°
+  and this one reaches 3.6°. Theirs is tighter because an optical instrument is tighter
+  than an eye: most of the eye's veil is scattered inside the eye itself, and a lens has no
+  retina. Matching it would mean replacing a published measurement with a fitted exponent.
+
+  The veil is drawn outside the photosphere only, because the disc is already clipped.
+
+- **The Sun's disc is overexposed, and that is the physical answer rather than a stylistic
+  one.** Its photosphere radiates `σT⁴/π`, which at 5,772 K is 2.0×10⁷ W/m²/sr against the
+  130 that sunlit Earth returns — so the Sun is **154,000× brighter than the brightest
+  thing this exposure can hold**, and a correct render of it is a flat white circle with
+  nothing in it at all.
+
+  It is drawn at **45× full scale**, which is still three and a half thousand times *under*
+  the true value. The factor was chosen so red clips across the whole map, leaving what
+  survives of the granulation in the blue channel — the only one with headroom left. The
+  disc then averages **255, 249, 60** on screen. Reading NASA's own render of the Sun pixel
+  by pixel gives **255, 249, 59**: one code value per channel, from a number that was not
+  fitted to it.
+
+  The overexposure is also what flattens the map. Across NASA's disc the green channel runs
+  244 to 253 — a spread of 9 out of 255. Drawn at unity ours ran 52 to 205, a spread of
+  153; at 45 it is about 21. That flatness is not a filter applied to the texture, it is
+  what happens to any texture pushed against the ceiling.
+
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
 - **Saturn's ring radii are fitted, not quoted.** The ring map is a radial strip and its
   publisher does not say which radii its edges are, so they were measured from the
@@ -343,6 +518,10 @@ Stated plainly, since the point of the project is that everything else is not:
 ## Credits
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
+- Star positions, proper motions, magnitudes and colours: the **ESA Hipparcos
+  catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),
+  accessed through the **VizieR** service at CDS, Strasbourg (Ochsenbein, Bauer &
+  Marcout 2000, A&AS 143, 23).
 - Satellite orbital data: **CelesTrak**.
 - Planetary surface maps: **Solar System Scope** (CC BY 4.0); **NASA/JHUAPL/SwRI** New
   Horizons mosaic for Pluto; **NASA Earth Observatory** Blue Marble and **NASA 3D

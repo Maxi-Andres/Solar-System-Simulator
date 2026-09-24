@@ -23,6 +23,211 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A region that scrolls without drawing a scrollbar.
+   The About screen shows its own progress ring instead: a browser scrollbar on a
+   full-bleed dark overlay is a bright vertical rule down the edge of a page that is
+   otherwise all thin greys, and it tells you where you are without telling you that
+   there is more to read. Needs real CSS rather than an inline style, because the
+   WebKit pseudo-element cannot be set from the style attribute. */
+.scroll-hidden {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Every control in the overlay answers to the pointer the same way.
+
+   Written in `filter` and an inset `box-shadow` rather than in `background` and `color`,
+   and that is the whole trick: this interface is styled with inline `style` objects, and
+   an inline declaration beats a class rule even on `:hover`. Nothing sets these two
+   inline, so they compose with whatever a control already looks like — a transparent
+   toolbar button picks up a tint, a selected blue one simply brightens, and neither
+   needs its own rule.
+
+   `#root button` rather than a class, so a control added later cannot be left out of it
+   by forgetting a className. `.ui-press` is the opt-in for the clickable things that are
+   not buttons: a layer row is a label, and a body row is a table row. */
+#root button,
+.ui-press {
+  transition:
+    filter 130ms ease,
+    box-shadow 130ms ease;
+}
+
+#root button:hover:not(:disabled),
+.ui-press:hover:not([aria-disabled='true']) {
+  filter: brightness(1.45);
+  box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.06);
+}
+
+#root button:active:not(:disabled),
+.ui-press:active:not([aria-disabled='true']) {
+  filter: brightness(1.75);
+  box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.13);
+  /* A press has to land instantly; it is the release that should ease back. */
+  transition-duration: 30ms;
+}
+
+/* The give under a press, for everything that owns its own transform.
+
+   Two exclusions, and both are bugs that shipped. A transform on a `tr` makes it a
+   containing block and the column widths jump. And `.tracks-scene` is anything the frame
+   loop positions by writing `transform` — the body labels — where transitioning it made
+   the names swim after the planets whenever the camera moved, and replacing it on a press
+   would fling the label to the top-left corner. Those keep the brightness; they cannot
+   have the scale. */
+#root button:not(.tracks-scene),
+.ui-press:not(.tracks-scene) {
+  transition:
+    filter 130ms ease,
+    box-shadow 130ms ease,
+    transform 130ms ease;
+}
+
+#root button:active:not(:disabled):not(.tracks-scene),
+.ui-press:active:not([aria-disabled='true']):not(tr):not(.tracks-scene) {
+  transform: scale(0.94);
+}
+
+/* Keyboard users get the affordance the pointer gets. */
+#root button:focus-visible,
+.ui-press:focus-visible {
+  outline: 1px solid #6a6a6a;
+  outline-offset: 2px;
+}
+
+/* A control that cannot be used must not answer as though it could. */
+#root button:disabled,
+.ui-press[aria-disabled='true'] {
+  cursor: default;
+}
+
+/* The slide-over panels ease in from the toolbar side and back out again.
+
+   Small on purpose: ten pixels and under a fifth of a second, so it reads as the panel
+   arriving rather than as something to wait for. Out is quicker than in, because a
+   closing panel is something the person has already finished with.
+
+   The vertical centring lives in the keyframes, not only in the inline style, because an
+   animation overrides an inline `transform` for as long as it runs -- leave it out and
+   the panel would drop by half its own height while it slid. The duration of
+   `panel-out` must match PANEL_EXIT_MS in Presence.tsx, which keeps the panel mounted
+   exactly that long. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translate(10px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(10px, -50%);
+  }
+}
+
+/* The About screen covers everything, so it only fades: sliding a whole page reads as
+   the page moving, not as it opening. */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* The body list drops from the breadcrumb, so it travels down rather than sideways. */
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdown-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.dropdown-enter {
+  animation: dropdown-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.dropdown-exit {
+  animation: dropdown-out 160ms ease both;
+  pointer-events: none;
+}
+
+.panel-enter {
+  animation: panel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.panel-exit {
+  animation: panel-out 160ms ease both;
+  pointer-events: none;
+}
+
+.overlay-enter {
+  animation: overlay-in 180ms ease-out both;
+}
+
+.overlay-exit {
+  animation: overlay-out 160ms ease both;
+  pointer-events: none;
+}
+
+/* Someone who has asked for less motion gets the panels without the travel: the same
+   fade, in place. Reduced motion means no movement, not no change -- and the first
+   version, which cut both animations to a millisecond, made closing a panel look exactly
+   like the panel vanishing, on the one machine this was tried on, whose Windows had
+   animation effects switched off. */
+@media (prefers-reduced-motion: reduce) {
+  .panel-enter,
+  .dropdown-enter {
+    animation-name: overlay-in;
+  }
+
+  .panel-exit,
+  .dropdown-exit {
+    animation-name: overlay-out;
+  }
+
+  /* overlay-in and overlay-out only touch opacity, so the panel's own inline transform
+     keeps it centred. */
+}
+
 /* The WebGL canvas must never start a text selection while dragging. */
 canvas {
   display: block;

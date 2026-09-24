@@ -1,14 +1,16 @@
 import type { BodyId } from '@sss/tools/types';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DistanceMode } from './core/ephemerisStore.ts';
 import { useSimulation } from './core/useSimulation.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
+import { BodyPicker } from './ui/BodyPicker.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
+import { Presence } from './ui/Presence.tsx';
 import { ReadoutPanel } from './ui/ReadoutPanel.tsx';
 import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
@@ -30,7 +32,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
 };
 
 export function App() {
-  const { store, clock, error, frame } = useSimulation();
+  const { store, stars, clock, error, frame } = useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -56,18 +58,30 @@ export function App() {
     return kinds;
   }, [layers]);
 
+  // Switching a layer off while standing on one of its bodies would leave the camera
+  // orbiting something that is no longer drawn. Step back to what it orbits.
+  useEffect(() => {
+    if (store === null) {
+      return;
+    }
+    const body = store.body(focus);
+    if (!visibleKinds.has(body.kind) && body.parent !== null) {
+      setFocus(body.parent);
+    }
+  }, [store, focus, visibleKinds, setFocus]);
+
   if (error !== null) {
     return (
       <Centered>
         <p style={{ color: '#e06c5a', maxWidth: '32rem', textAlign: 'center' }}>{error}</p>
         <p style={{ color: '#6a6a6a', fontSize: '0.8rem' }}>
-          Run <code>pnpm fetch:data</code> to generate the ephemerides.
+          Run <code>pnpm fetch:data</code> to generate the ephemerides and the sky.
         </p>
       </Centered>
     );
   }
 
-  if (store === null) {
+  if (store === null || stars === null) {
     return (
       <Centered>
         <p style={{ letterSpacing: '0.2em', color: '#6a6a6a' }}>LOADING EPHEMERIDES</p>
@@ -76,13 +90,19 @@ export function App() {
   }
 
   const jd = clock.tdbJulianDay;
-  const exact = store.isExactAt(jd);
+  // Exact for what is on screen. The moons' window is two years and the planets'
+  // twenty, so the answer depends on whether the moons are shown at all.
+  const exact = store.isExactAt(
+    jd,
+    store.bodies.filter((body) => visibleKinds.has(body.kind)).map((body) => body.id),
+  );
   const uiVisible = layers.userInterface;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <SolarSystemCanvas
         store={store}
+        stars={stars}
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
@@ -99,6 +119,9 @@ export function App() {
           <button
             key={body.id}
             type="button"
+            // The frame loop writes this element's transform sixty times a second, so the
+            // stylesheet must keep its hands off that property. See index.css.
+            className="tracks-scene"
             ref={(element) => {
               labelElements.current.set(body.id, element);
             }}
@@ -130,54 +153,13 @@ export function App() {
 
       {uiVisible && (
         <>
-          {/* Top-left: breadcrumb and body picker. */}
-          <div style={{ position: 'absolute', top: '1rem', left: '1.25rem' }}>
-            <div
-              style={{
-                letterSpacing: '0.22em',
-                fontSize: '0.78rem',
-                color: '#c8c8c8',
-                textTransform: 'uppercase',
-              }}
-            >
-              Solar System <span style={{ color: '#4a4a4a' }}>&rsaquo;</span>{' '}
-              <span style={{ color: '#fff' }}>{store.body(focus).name}</span>
-            </div>
-            <div
-              style={{
-                marginTop: '0.6rem',
-                display: 'flex',
-                gap: '0.3rem',
-                flexWrap: 'wrap',
-                maxWidth: '28rem',
-              }}
-            >
-              {store.bodies
-                .filter((body) => visibleKinds.has(body.kind))
-                .map((body) => (
-                  <button
-                    key={body.id}
-                    type="button"
-                    onClick={() => setFocus(body.id)}
-                    style={{
-                      background: body.id === focus ? '#1e2a24' : 'rgba(0,0,0,0.4)',
-                      border: `1px solid ${body.id === focus ? '#3ddc84' : '#2a2a2a'}`,
-                      color: body.id === focus ? '#3ddc84' : '#8a8a8a',
-                      padding: '0.24rem 0.55rem',
-                      fontSize: '0.68rem',
-                      letterSpacing: '0.06em',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      borderRadius: '0.2rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span style={{ color: body.color, marginRight: '0.35rem' }}>&#9679;</span>
-                    {body.name}
-                  </button>
-                ))}
-            </div>
-          </div>
+          {/* Top-left: where you are, and the list of everywhere else. */}
+          <BodyPicker
+            store={store}
+            focus={focus}
+            onFocus={setFocus}
+            visibleKinds={visibleKinds}
+          />
 
           {/* Bottom-left: time. */}
           <div style={{ position: 'absolute', bottom: '1.25rem', left: '1.25rem' }}>
@@ -186,24 +168,32 @@ export function App() {
 
           <Toolbar />
 
-          {openPanel === 'body' && (
+          {/* Each panel stays mounted for its closing animation; see Presence.tsx. */}
+          <Presence show={openPanel === 'body'}>
             <InfoPanel store={store} jd={jd} distanceMode={distanceMode} tick={frame} />
-          )}
-          {openPanel === 'layers' && <LayersPanel />}
-          {openPanel === 'lighting' && <LightingPanel />}
-          {openPanel === 'readout' && (
+          </Presence>
+          <Presence show={openPanel === 'layers'}>
+            <LayersPanel />
+          </Presence>
+          <Presence show={openPanel === 'lighting'}>
+            <LightingPanel />
+          </Presence>
+          <Presence show={openPanel === 'readout'}>
             <ReadoutPanel
               store={store}
               jd={jd}
               distanceMode={distanceMode}
               onDistanceMode={setDistanceMode}
+              visibleKinds={visibleKinds}
               tick={frame}
             />
-          )}
+          </Presence>
         </>
       )}
 
-      {openPanel === 'about' && <AboutPanel store={store} />}
+      <Presence show={openPanel === 'about'}>
+        <AboutPanel store={store} stars={stars} />
+      </Presence>
 
       {/* The only way back once the interface is switched off. */}
       {!uiVisible && (

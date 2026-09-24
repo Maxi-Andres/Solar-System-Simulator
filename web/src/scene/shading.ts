@@ -41,10 +41,17 @@ import type { LightingMode } from '../state/store.ts';
  * ambient purely as a floor under the night side. `flood` keeps its old nine-to-one
  * ambient dominance, scaled by the same factor so the three modes sit at a comparable
  * exposure.
+ *
+ * Shadow's floor was 0.08, and it did not do its job: it put Earth's night side at 1 of
+ * 255, which is black, so the mode read almost exactly like Natural. It is 0.39 now,
+ * solved so the brightest night side -- Venus, Saturn -- sits twenty points of the
+ * display higher than it did, 13 of 255 to 64. Earth's goes from 1 to 15, Mars's from 2
+ * to 25. The lit side barely moves, because the sun is 5.0 against it: noon on Earth
+ * goes from 136 to 141.
  */
 export const LIGHTING: Record<LightingMode, { sun: number; ambient: number }> = {
   flood: { sun: 0.39, ambient: 1.55 },
-  shadow: { sun: 5.0, ambient: 0.08 },
+  shadow: { sun: 5.0, ambient: 0.39 },
   natural: { sun: 5.0, ambient: 0 },
 };
 

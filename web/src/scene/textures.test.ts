@@ -28,9 +28,11 @@ const TEXTURE_DIR = join(import.meta.dirname, '../../public/textures');
 const files = (await readdir(TEXTURE_DIR)).filter((name) => !name.endsWith('.md'));
 const credits = await readFile(join(TEXTURE_DIR, 'CREDITS.md'), 'utf8');
 
-/** Every (body, set) pair, flattened, since both sets ship. */
+/** Every (body, set) pair, flattened, since both sets ship. Moons have no maps yet. */
 const variants = CATALOG.flatMap((body) =>
-  TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures[set.id] })),
+  body.textures === null
+    ? []
+    : TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures![set.id] })),
 );
 
 /**
@@ -56,6 +58,7 @@ const ringMaps = [
  * two values that is complete. They get the checks that do apply, below.
  */
 const earthExtras = [EARTH_NIGHT_MAP, EARTH_CLOUD_MAP, EARTH_WATER_MASK];
+
 
 describe('the texture files', () => {
   it('gives every body in every set a map that exists', () => {
@@ -105,11 +108,15 @@ describe('the texture files', () => {
     );
     const totalMb = sizes.reduce((sum, size) => sum + size, 0) / 1024 / 1024;
 
-    // 5.7 MB today: both map sets, the ring strip, and Earth's three extras. They are
-    // committed, so this is a guard on the repository as much as on the page: swapping
-    // in 8k maps would be a 40 MB decision, not an accident.
-    expect(totalMb).toBeLessThan(8);
+    // 12.4 MB today: both map sets, the ring strip, Earth's three extras, and twenty moon
+    // maps at 6.5 MB -- most of them grainy greyscale mosaics that JPEG cannot squeeze
+    // much (quality 80 saved only a tenth). It briefly held a 3.8 MB sky panorama as
+    // well. A visitor pays for none of it up front: each map is fetched only when its
+    // body is on screen. The guard is on the repository as much as on the page:
+    // swapping in 8k body maps would be a 40 MB decision, not an accident.
+    expect(totalMb).toBeLessThan(14);
   });
+
 });
 
 describe('textureUrl', () => {
@@ -168,12 +175,13 @@ describe('no map has an unfilled gap', () => {
   };
 
   it.each(surfaceMaps)('is not a stub: %s', async (file) => {
-    // The smallest surface map, Uranus, is a 76 KB featureless disc. Ring maps are
-    // excluded: Saturn's is 10 KB and complete, because a radial strip of alpha is
-    // genuinely that little information.
+    // The smallest surface map is Umbriel, 38 KB: 1440 px wide, and 59% of it the one
+    // flat value filling the hemisphere Voyager never saw. Ring maps are excluded:
+    // Saturn's is 10 KB and complete, because a radial strip of alpha is genuinely that
+    // little information.
     const { size } = await stat(join(TEXTURE_DIR, file));
 
-    expect(size).toBeGreaterThan(50_000);
+    expect(size).toBeGreaterThan(30_000);
   });
 
   it.each(surfaceMaps)('leaves no unmapped region in %s', async (file) => {

@@ -53,7 +53,6 @@ describe('layer catalog', () => {
     // These are listed so the panel doubles as a roadmap; if one ships, its entry
     // must lose the badge or the UI lies about what it can do.
     expect(pending).toEqual([
-      'moons',
       'asteroids',
       'comets',
       'constellations',
@@ -81,6 +80,11 @@ describe('layer catalog', () => {
     for (const id of on) {
       expect(isLayerAvailable(id)).toBe(true);
     }
+  });
+
+  it('shows the moons from the start, now that they are real', () => {
+    expect(isLayerAvailable('moons')).toBe(true);
+    expect(INITIAL.layers.moons).toBe(true);
   });
 });
 

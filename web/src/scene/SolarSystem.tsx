@@ -26,7 +26,7 @@ import {
   WATER_IOR,
   type EarthExtrasUniforms,
 } from './earthExtras.ts';
-import { rebaseFrame } from './floatingOrigin.ts';
+import { bodiesToResolve } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
@@ -40,10 +40,24 @@ import {
   type RingShadowUniforms,
 } from './ringShadow.ts';
 import { LIGHTING } from './shading.ts';
+import {
+  glareLevel,
+  glareRadiusDeg,
+  glareWorldRadius,
+  SOLAR_GLARE_FRAGMENT_SHADER,
+  SOLAR_GLARE_VERTEX_SHADER,
+  sunAngularRadiusDeg,
+  SUN_COLOR_INDEX,
+  SUN_OVEREXPOSURE,
+} from './solarGlare.ts';
+import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
+import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
+import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
+  focusOrbitOpacity,
   kmToUnits,
   markerOpacity,
   meshOpacity,
@@ -146,6 +160,18 @@ interface BodyHandles {
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
   readonly orbit: OrbitLine | null;
+  /**
+   * What the orbit is drawn around: the Sun for a planet, the planet for a moon.
+   *
+   * Along with the two fields below, it is the whole of what makes a moon's orbit
+   * different from a planet's. The line is the same class, re-derived from the same
+   * kind of live state; only the frame and the mass at the focus change.
+   */
+  readonly orbitParent: BodyId;
+  /** Two-body mu for the orbit, G(M + m) with M the parent alone. */
+  readonly orbitMu: number;
+  /** Horizons center code of the parent, carried on the derived elements. */
+  readonly orbitCenter: string;
   /** Ring system mesh, for the one body here that has one. */
   readonly ring: THREE.Mesh | null;
   /**
@@ -167,6 +193,14 @@ interface BodyHandles {
   readonly ringShadow: RingShadowUniforms | null;
   /** Night lights, clouds and oceans. Non-null for exactly one body. */
   readonly earth: EarthHandles | null;
+  /**
+   * The veil of scattered light around the Sun. Non-null for exactly one body.
+   *
+   * A billboard rather than anything attached to the sphere, because glare is not a
+   * property of the Sun at all -- it is what the Sun does inside the eye looking at it.
+   * See `solarGlare.ts`.
+   */
+  readonly glare: THREE.Mesh | null;
 }
 
 export function SolarSystem({
@@ -197,13 +231,17 @@ export function SolarSystem({
       const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
       const geometry = new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
-      // The Sun emits rather than receives, so it gets an unlit material. Earth gets
-      // the physical one, for one reason: `ior`, which only exists there, and which is
-      // what stops its oceans reflecting twice as much light as water does. Everything
-      // else is a rough diffuse surface with no specular worth paying for.
+      // The Sun emits rather than receives, so it gets an unlit material -- and one
+      // driven far past full scale, because a light source is not a lit surface. See
+      // SUN_OVEREXPOSURE. Earth gets the physical material, for one reason: `ior`, which
+      // only exists there, and which is what stops its oceans reflecting twice as much
+      // light as water does. Everything else is a rough diffuse surface with no specular
+      // worth paying for.
       const material =
         definition.kind === 'star'
-          ? new THREE.MeshBasicMaterial({ color: definition.color })
+          ? new THREE.MeshBasicMaterial({
+              color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
+            })
           : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
                 color: definition.color,
@@ -221,7 +259,18 @@ export function SolarSystem({
       // Polar flattening: Saturn is 9.8% shorter pole to pole than across.
       // Applied in the body's own frame, where local y is the rotation axis, so it
       // stays correct once orientation.ts turns that frame to the real pole.
-      mesh.scale.set(1, definition.radiusPolarKm / definition.radiusEquatorialKm, 1);
+      //
+      // A triaxial moon is stretched on the third axis too, and the orientation below is
+      // what makes that right: it puts local -x on the prime meridian, which for a locked
+      // moon is the long axis pointing at its planet, and local +z ninety degrees east of
+      // it. That holds for an image starting at 0 or 180 degrees; any other origin would
+      // swing the long axis off the planet, which textureAlignment.test.ts rules out.
+      const triaxial = definition.triaxialRadiiKm;
+      mesh.scale.set(
+        1,
+        definition.radiusPolarKm / definition.radiusEquatorialKm,
+        triaxial === null ? 1 : triaxial[1] / triaxial[0],
+      );
       group.add(mesh);
 
       const marker = new THREE.Sprite(
@@ -376,15 +425,59 @@ export function SolarSystem({
         orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
       }
 
+      // A planet orbits the Sun; a moon orbits its planet -- and orbits the planet
+      // alone, not the planet plus every other moon. See `gmBodyOnlyKm3S2`.
+      const orbitParent = definition.parent ?? 'sun';
+      const parentDefinition = store.body(orbitParent);
+      const orbitMu = parentDefinition.gmBodyOnlyKm3S2 + definition.gmKm3S2;
+      const orbitCenter = `500@${parentDefinition.horizonsId}`;
+
+      let glare: THREE.Mesh | null = null;
+      if (definition.kind === 'star') {
+        // The Sun's own colour, from its colour index through the same Planck and CIE
+        // path the stars use: scattered sunlight is still sunlight.
+        const [red, green, blue] = starColor(SUN_COLOR_INDEX);
+        glare = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.ShaderMaterial({
+            uniforms: {
+              uLevel: { value: 0 },
+              uTanRadius: { value: 1 },
+              uSunRadiusDeg: { value: 0.27 },
+              uColor: { value: new THREE.Color(red, green, blue) },
+            },
+            vertexShader: SOLAR_GLARE_VERTEX_SHADER,
+            fragmentShader: SOLAR_GLARE_FRAGMENT_SHADER,
+            // Light adds. Depth is read, so a planet crossing in front of the Sun hides
+            // the halo behind it, and never written, because a veil has no surface.
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            // The exposure is already chosen and stated, as it is for the stars.
+            toneMapped: false,
+          }),
+        );
+        // Over the photosphere, under the markers.
+        glare.renderOrder = 5;
+        // The quad is scaled to an angle, which at Neptune's distance is a very large
+        // number of scene units; leave culling to the sphere it sits on.
+        glare.frustumCulled = false;
+        group.add(glare);
+      }
+
       return {
         definition,
         group,
         mesh,
         marker,
         orbit,
+        orbitParent,
+        orbitMu,
+        orbitCenter,
         ring,
         ringShadow,
         earth,
+        glare,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
@@ -395,6 +488,12 @@ export function SolarSystem({
 
   const { size, camera, gl } = useThree();
 
+  // Hidden layers are not resolved at all, which for the moons means not fetched.
+  const wanted = useMemo(
+    () => bodiesToResolve(store, visibleKinds, focus),
+    [store, visibleKinds, focus],
+  );
+
   useFrame(() => {
     const root = rootRef.current;
     if (root === null) {
@@ -402,10 +501,17 @@ export function SolarSystem({
     }
 
     const jd = clock.tdbJulianDay;
-    const snapshot = rebaseFrame(store, focus, jd);
-    const focusRadiusKm = store.body(focus).radiusEquatorialKm;
-    const sunGm = store.body('sun').gmKm3S2;
     const fov = (camera as THREE.PerspectiveCamera).fov;
+    const snapshot = rebaseVisibleFrame(
+      store,
+      focus,
+      jd,
+      wanted,
+      camera.position,
+      size.height,
+      fov,
+    );
+    const focusRadiusKm = store.body(focus).radiusEquatorialKm;
     const cameraDistanceUnits = camera.position.length();
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
@@ -454,19 +560,27 @@ export function SolarSystem({
         kmToUnits(rebased.positionKm.z),
       );
 
-      const variant = handle.definition.textures[ACTIVE_TEXTURE_SET];
+      const variant = handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null;
 
       // Point the axis where the IAU says it points and turn the body so the image
       // lands where the image belongs. One assignment carrying the axial tilt, the
       // rotation rate, its direction and the absolute phase. Until a map is on the
       // material there is nothing to misalign, so the incoming origin is used.
-      handle.mesh.quaternion.copy(
-        bodyOrientation(
-          jd,
-          handle.definition,
-          handle.shownFile === null ? variant.longitudeOriginDeg : handle.shownOriginDeg,
-        ),
-      );
+      //
+      // A body with no rotational elements -- the moons, for now -- is left unturned.
+      // It is a sphere in flat colour, so every orientation of it looks the same, and
+      // that is exactly why none is invented for it.
+      if (handle.definition.rotation !== null) {
+        handle.mesh.quaternion.copy(
+          bodyOrientation(
+            jd,
+            handle.definition,
+            handle.shownFile === null
+              ? (variant?.longitudeOriginDeg ?? 0)
+              : handle.shownOriginDeg,
+          ),
+        );
+      }
 
       // Distance from the camera, not from the focus: what the camera sees is what
       // decides whether a sphere is big enough to be worth drawing.
@@ -479,9 +593,22 @@ export function SolarSystem({
         size.height,
         fov,
       );
+      // A moon's marker and orbit wait until its system has opened up on screen, so
+      // they do not bury the planet's own marker from far away. The sphere is not
+      // faded: at that range it is far below a pixel anyway, and when it is not, it is
+      // really there. See satellites.ts.
+      const satellite = satelliteVisibility(
+        store,
+        snapshot,
+        handle.definition,
+        camera.position,
+        size.height,
+        fov,
+      );
+
       // Ring and sphere are independent: they overlap rather than swapping, so
       // nothing pops at any distance. See scale.ts.
-      const ringOpacity = markerOpacity(pixelRadius);
+      const ringOpacity = markerOpacity(pixelRadius) * satellite;
       const sphereOpacity = meshOpacity(pixelRadius);
 
       handle.marker.visible = showIcons && ringOpacity > 0.005;
@@ -490,6 +617,31 @@ export function SolarSystem({
         // Constant on-screen size, whatever the distance.
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         handle.marker.scale.setScalar(worldSize);
+      }
+
+      if (handle.glare !== null) {
+        // Everything the veil does follows from one distance: how bright it is, how far
+        // it reaches, and where the disc masks it. See solarGlare.ts.
+        const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm);
+        handle.glare.visible = radiusDeg > 0;
+        if (handle.glare.visible) {
+          const uniforms = (handle.glare.material as THREE.ShaderMaterial).uniforms;
+          uniforms.uLevel!.value = glareLevel(
+            handle.definition.radiusEquatorialKm,
+            distanceKm,
+          );
+          // The tangent, not the angle: a fragment's angle is the arctangent of its
+          // offset over the distance, and close to the Sun the difference is 40%.
+          uniforms.uTanRadius!.value = Math.tan((radiusDeg * Math.PI) / 180);
+          uniforms.uSunRadiusDeg!.value = sunAngularRadiusDeg(
+            handle.definition.radiusEquatorialKm,
+            distanceKm,
+          );
+          handle.glare.scale.setScalar(2 * glareWorldRadius(distanceUnits, radiusDeg));
+          // A billboard: the group carries position only, so the camera's own rotation
+          // is the one that turns the quad to face it.
+          handle.glare.quaternion.copy(camera.quaternion);
+        }
       }
 
       handle.mesh.visible = sphereOpacity > 0.005;
@@ -676,7 +828,11 @@ export function SolarSystem({
       // again only if the selected set asks for a different file. Until it arrives
       // whatever is already there keeps showing -- the flat colour on first approach,
       // or the previous set's map when switching -- so nothing ever blanks out.
-      if (handle.requestedFile !== variant.file && pixelRadius >= TEXTURE_REQUEST_PX) {
+      if (
+        variant !== null &&
+        handle.requestedFile !== variant.file &&
+        pixelRadius >= TEXTURE_REQUEST_PX
+      ) {
         handle.requestedFile = variant.file;
         const wanted = variant;
         void loadBodyTexture(wanted.file, {
@@ -690,8 +846,17 @@ export function SolarSystem({
             }
             meshMaterial.map = texture;
             // The catalog colour was standing in for the surface; left in place it
-            // would now tint it.
-            meshMaterial.color.set('#ffffff');
+            // would now tint it. **Except on the Sun**, where the colour is not a
+            // stand-in at all: it is the exposure. Resetting it here is what silently
+            // undid the overexposure the first time -- the disc went back to unity the
+            // moment its map arrived, which is exactly when anybody would be looking.
+            if (handle.definition.kind === 'star') {
+              meshMaterial.color
+                .set(handle.definition.color)
+                .multiplyScalar(SUN_OVEREXPOSURE);
+            } else {
+              meshMaterial.color.set('#ffffff');
+            }
             meshMaterial.needsUpdate = true;
             handle.shownFile = wanted.file;
             handle.shownOriginDeg = wanted.longitudeOriginDeg;
@@ -708,22 +873,37 @@ export function SolarSystem({
       }
 
       if (handle.orbit !== null) {
-        handle.orbit.line.visible = showOrbits && sun !== undefined;
-        if (sun !== undefined) {
+        // The focused body's own orbit fades out once the body overflows the frame. By
+        // then the visible piece of it is a straight line drawn across the picture rather
+        // than anything that says where the body goes. Every other orbit stays: those are
+        // still saying where things are relative to the one you are standing at. A moon's
+        // orbit also waits for its system to open up, with its marker.
+        const fade =
+          (handle.definition.id === focus ? focusOrbitOpacity(pixelRadius, size.height) : 1) *
+          satellite;
+        (handle.orbit.line.material as THREE.LineBasicMaterial).opacity = ORBIT_OPACITY * fade;
+
+        // Orbits live in their parent's frame, so they follow the parent's rebased
+        // position: the Sun's for a planet, the planet's for a moon.
+        const parent = snapshot.bodies.get(handle.orbitParent);
+        handle.orbit.line.visible = showOrbits && parent !== undefined && fade > 0.005;
+        // A hidden line is left as it is. It re-derives itself on the first frame it is
+        // shown again, and twenty moon orbits a frame is not free.
+        if (parent !== undefined && handle.orbit.line.visible) {
           // Re-derive the ellipse from where the body actually is right now. Elements
           // frozen at one epoch drift off the real path as perturbations accumulate;
           // the osculating ellipse of this instant passes through the body by
           // definition. OrbitLine throttles the rebuild internally.
-          const heliocentric = store.stateRelativeTo(handle.definition.id, 'sun', jd);
-          if (heliocentric !== null) {
+          const relative = store.stateRelativeTo(handle.definition.id, handle.orbitParent, jd);
+          if (relative !== null) {
             const live = stateToOsculatingElements(
-              heliocentric,
+              relative,
               // Two-body mu is G(M + m); the planet's own mass shifts Jupiter's
               // period by ~0.05%, which is small but free to include.
-              sunGm + handle.definition.gmKm3S2,
+              handle.orbitMu,
               jd,
               handle.definition.id,
-              '500@10',
+              handle.orbitCenter,
             );
             if (live !== null) {
               handle.orbit.setElements(live);
@@ -733,7 +913,7 @@ export function SolarSystem({
           // Rebuild tolerance scales with the focused body's radius: that is the
           // smallest thing on screen worth resolving, so drifting by less than that
           // cannot be seen.
-          handle.orbit.update(sun.positionKm, focusRadiusKm * 0.25);
+          handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25);
         }
       }
     }

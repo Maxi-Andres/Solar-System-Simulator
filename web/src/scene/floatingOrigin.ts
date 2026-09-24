@@ -45,19 +45,26 @@ export interface FrameSnapshot {
 /**
  * Computes one frame's worth of rebased positions.
  *
- * Allocates a Map per frame, which at ten bodies is not worth optimising away; when
- * phase C brings tens of thousands of satellites, that path will want typed arrays
+ * Allocates a Map per frame, which at thirty-one bodies is not worth optimising away;
+ * when phase C brings tens of thousands of satellites, that path will want typed arrays
  * and a worker instead. Keeping this a plain function makes that swap local.
+ *
+ * `include`, when given, limits the frame to those bodies. Leaving one out is not only
+ * cheaper: for a moon it means its data is never fetched. See `bodiesToResolve`.
  */
 export function rebaseFrame(
   store: EphemerisStore,
   focus: BodyId,
   jd: number,
+  include: ReadonlySet<BodyId> | null = null,
 ): FrameSnapshot {
   const bodies = new Map<BodyId, RebasedBody>();
   let approximate = false;
 
   for (const body of store.bodies) {
+    if (include !== null && !include.has(body.id)) {
+      continue;
+    }
     const state = store.stateRelativeTo(body.id, focus, jd);
     if (state === null) {
       continue;
@@ -76,6 +83,32 @@ export function rebaseFrame(
   }
 
   return { focus, jd, bodies, approximate };
+}
+
+/**
+ * The bodies a frame has to resolve: every visible one, and whatever they hang off.
+ *
+ * Not simply the visible ones. A moon's orbit is drawn around its planet, so the planet
+ * must be resolved even with the planets switched off; the Sun lights everything; and
+ * the focus is the origin itself. Skipping the rest is not about arithmetic, which is
+ * cheap -- it is that resolving a moon fetches its data, and a layer that is switched
+ * off should cost nothing.
+ */
+export function bodiesToResolve(
+  store: EphemerisStore,
+  visibleKinds: ReadonlySet<string>,
+  focus: BodyId,
+): Set<BodyId> {
+  const wanted = new Set<BodyId>(['sun', focus, ...store.tree.ancestorsOf(focus)]);
+  for (const body of store.bodies) {
+    if (visibleKinds.has(body.kind)) {
+      wanted.add(body.id);
+      for (const ancestor of store.tree.ancestorsOf(body.id)) {
+        wanted.add(ancestor);
+      }
+    }
+  }
+  return wanted;
 }
 
 /**

@@ -6,6 +6,7 @@ import type {
   VectorTable,
 } from '@sss/tools/types';
 
+import { ChunkedTable, type ChunkLoader } from './chunkedTable.ts';
 import { FrameTree } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
@@ -20,6 +21,11 @@ import type { StateVector, Vec3 } from './vec3.ts';
  *  2. Keplerian propagation from the osculating elements, for anything outside it.
  *     Approximate, and flagged as such so the UI can say so rather than quietly
  *     showing a planet in the wrong place.
+ *
+ * The tables come two ways. A planet's is one file, loaded at startup. A fast moon's is
+ * split into chunks fetched as the clock reaches them -- see chunkedTable.ts -- and
+ * while one is on its way the moon has no state at all, which is different from having
+ * an approximate one.
  */
 
 /**
@@ -48,8 +54,11 @@ export interface BodyState extends StateVector {
 export interface EphemerisData {
   readonly manifest: Manifest;
   readonly bodies: readonly BodyDefinition[];
+  /** The tables shipped whole, loaded up front. */
   readonly vectors: ReadonlyMap<BodyId, VectorTable>;
   readonly elements: ReadonlyMap<BodyId, OsculatingElements>;
+  /** Fetches one chunk of a chunked table, or null where nothing may be fetched. */
+  readonly loadChunk: ChunkLoader | null;
 }
 
 /** Fetch-like function, injected so the store is testable without a browser. */
@@ -68,10 +77,20 @@ export async function loadEphemerisData(
   const manifest = (await fetcher(`${basePath}data/manifest.json`)) as Manifest;
   const bodies = (await fetcher(`${basePath}data/bodies.json`)) as BodyDefinition[];
 
-  // All bodies in parallel: they are independent files and this is the app's
-  // slowest startup step.
+  // Data generated before the moons has no table index. Say so plainly, rather than
+  // failing later on a file that was never going to exist.
+  if (typeof manifest.tables !== 'object' || manifest.tables === null) {
+    throw new Error(
+      'The published data predates the moons and has no table index. Regenerate it.',
+    );
+  }
+
+  // Only the tables shipped whole; the chunked ones are fetched as they are needed.
+  // All in parallel: they are independent files and this is the app's slowest
+  // startup step.
+  const whole = manifest.bodies.filter((id) => manifest.tables[id]?.chunks === null);
   const vectorList = await Promise.all(
-    manifest.bodies.map(
+    whole.map(
       async (id) => [id, (await fetcher(`${basePath}data/vectors/${id}.json`)) as VectorTable] as const,
     ),
   );
@@ -89,19 +108,28 @@ export async function loadEphemerisData(
     bodies,
     vectors: new Map(vectorList),
     elements: new Map(elementList),
+    loadChunk: async (id, index) =>
+      (await fetcher(`${basePath}data/vectors/${id}/${index}.json`)) as VectorTable,
   };
 }
 
 export class EphemerisStore {
   readonly #data: EphemerisData;
   readonly #tree: FrameTree;
+  readonly #chunked = new Map<BodyId, ChunkedTable>();
 
   constructor(data: EphemerisData) {
     this.#data = data;
     this.#tree = new FrameTree(data.bodies);
 
     for (const id of data.manifest.bodies) {
-      if (!data.vectors.has(id)) {
+      const info = data.manifest.tables[id];
+      if (info === undefined) {
+        throw new Error(`Manifest lists "${id}" but has no table entry for it.`);
+      }
+      if (info.chunks !== null) {
+        this.#chunked.set(id, new ChunkedTable(id, info, data.loadChunk));
+      } else if (!data.vectors.has(id)) {
         throw new Error(`Manifest lists "${id}" but no vector table was loaded.`);
       }
     }
@@ -132,10 +160,33 @@ export class EphemerisStore {
     return this.#data.elements.get(id) ?? null;
   }
 
-  /** True when `jd` falls inside the downloaded vector window. */
-  isExactAt(jd: number): boolean {
-    const { startJd, stopJd } = this.#data.manifest.window;
-    return jd >= startJd && jd <= stopJd;
+  /** The span a body's vectors cover, or null for a body with no table. */
+  coverage(id: BodyId): { readonly startJd: number; readonly stopJd: number } | null {
+    return this.#data.manifest.tables[id] ?? null;
+  }
+
+  /**
+   * True when every one of `ids` has exact vectors at `jd`.
+   *
+   * Per body, because the bodies no longer share one window: the fast moons cover two
+   * years, the planets twenty. Asked about the bodies actually on screen, this is what
+   * decides whether the interface says APPROXIMATE.
+   */
+  isExactAt(jd: number, ids: readonly BodyId[] = this.#data.manifest.bodies): boolean {
+    return ids.every((id) => {
+      const span = this.coverage(id);
+      return span !== null && jd >= span.startJd && jd <= span.stopJd;
+    });
+  }
+
+  /**
+   * Resolves once every chunked table among `ids` has the chunk covering `jd`.
+   *
+   * The app never waits on this -- a moon whose chunk is still coming is simply absent
+   * for a frame or two. It exists for tests, which need an answer rather than a frame.
+   */
+  async whenLoadedAt(jd: number, ids: readonly BodyId[] = this.#data.manifest.bodies): Promise<void> {
+    await Promise.all(ids.map((id) => this.#chunked.get(id)?.whenLoadedAt(jd)));
   }
 
   /**
@@ -153,8 +204,18 @@ export class EphemerisStore {
       }
     }
 
-    // Outside the window. Keplerian propagation is heliocentric, so it is only a
-    // valid stand-in for bodies whose parent frame is effectively the Sun.
+    const chunked = this.#chunked.get(id);
+    if (chunked?.covers(jd) === true) {
+      // Inside the table: either the exact answer, or none yet while its chunk is on
+      // the way. Never the propagated one, which would draw the moon somewhere
+      // plausible and then jump it to where it actually is.
+      const interpolated = chunked.stateAt(jd);
+      return interpolated === null ? null : { ...interpolated, approximate: false };
+    }
+
+    // Outside the window. The elements were requested against the same center as the
+    // vectors -- the Sun for a planet, the planet for a moon -- so propagating them
+    // gives a state in the frame the tree expects either way.
     const elements = this.#data.elements.get(id);
     if (elements) {
       return { ...propagate(elements, jd), approximate: true };

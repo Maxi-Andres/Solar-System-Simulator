@@ -27,12 +27,19 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
   const body = store.body(focus);
   const elements = store.elementsFor(focus);
 
+  // What the body orbits. A moon's orbital speed, period and apsides are about its
+  // planet; quoting its speed against the Sun would mostly be the planet's.
+  const primary = store.body(body.parent ?? 'sun');
+  const isMoon = body.parent !== null;
+
   const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
-  const speed = store.speedRelativeTo(focus, 'sun', jd);
+  const fromPrimary = isMoon ? store.distanceBetween(focus, primary.id, jd, distanceMode) : null;
+  const speed = store.speedRelativeTo(focus, primary.id, jd);
   const lightTime = store.lightTimeSeconds(focus, 'sun', jd, distanceMode);
   const fromEarth = focus === 'earth' ? null : store.distanceBetween(focus, 'earth', jd, distanceMode);
 
   const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
+  const periodDays = elements === null ? null : elements.periodSec / 86_400;
 
   return (
     <Panel title={body.name} onClose={closePanel} width="17.5rem">
@@ -59,7 +66,14 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
         <Row label="">
           {fromSun === null ? '' : `${Math.round(fromSun).toLocaleString('en-US')} km`}
         </Row>
-        <Row label="Orbital speed">{speed === null ? '--' : `${speed.toFixed(3)} km/s`}</Row>
+        {isMoon && (
+          <Row label={`From ${primary.name}`}>
+            {fromPrimary === null ? '--' : `${Math.round(fromPrimary).toLocaleString('en-US')} km`}
+          </Row>
+        )}
+        <Row label={isMoon ? `Speed around ${primary.name}` : 'Orbital speed'}>
+          {speed === null ? '--' : `${speed.toFixed(3)} km/s`}
+        </Row>
         <Row label="Light time">
           {lightTime === null || focus === 'sun' ? '--' : formatLightTime(lightTime)}
         </Row>
@@ -69,30 +83,65 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
 
         <Divider />
 
-        <Row label="Equatorial radius">
-          {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
-        </Row>
-        {flattening > 0.0005 && (
-          <Row label="Polar flattening">{`${(flattening * 100).toFixed(2)} %`}</Row>
+        {body.triaxialRadiiKm === null ? (
+          <>
+            <Row label="Equatorial radius">
+              {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
+            </Row>
+            {flattening > 0.0005 && (
+              <Row label="Polar flattening">{`${(flattening * 100).toFixed(2)} %`}</Row>
+            )}
+          </>
+        ) : (
+          // Three radii, long axis first: the one that points at the planet.
+          <Row label="Radii">
+            {`${body.triaxialRadiiKm.map((radius) => radius.toLocaleString('en-US')).join(' × ')} km`}
+          </Row>
         )}
         <Row label="GM">{`${body.gmKm3S2.toLocaleString('en-US')} km³/s²`}</Row>
         <Row label="Rotation period">
           {`${Math.abs(body.rotationPeriodHours).toFixed(2)} h${
-            body.rotationPeriodHours < 0 ? ' (retrograde)' : ''
+            isMoon
+              ? body.rotationPeriodHours < 0
+                ? ' (synchronous, retrograde)'
+                : ' (synchronous)'
+              : body.rotationPeriodHours < 0
+                ? ' (retrograde)'
+                : ''
           }`}
         </Row>
-        <Row label="Axial tilt">{`${body.axialTiltDeg.toFixed(2)}°`}</Row>
+        {body.axialTiltDeg !== null && (
+          <Row label="Axial tilt">{`${body.axialTiltDeg.toFixed(2)}°`}</Row>
+        )}
 
-        {elements !== null && (
+        {elements !== null && periodDays !== null && (
           <>
             <Divider />
             <Row label="Orbital period">
-              {`${(elements.periodSec / 86_400 / 365.25).toFixed(3)} yr`}
+              {isMoon ? `${periodDays.toFixed(3)} d` : `${(periodDays / 365.25).toFixed(3)} yr`}
             </Row>
             <Row label="Eccentricity">{elements.eccentricity.toFixed(5)}</Row>
-            <Row label="Inclination">{`${elements.inclinationDeg.toFixed(3)}°`}</Row>
-            <Row label="Perihelion">{`${(elements.periapsisKm / AU_KM).toFixed(4)} AU`}</Row>
-            <Row label="Aphelion">{`${(elements.apoapsisKm / AU_KM).toFixed(4)} AU`}</Row>
+            {/* Against the ecliptic, like every element here -- which for a moon is not
+                the plane it orbits in. Io is 2.2 degrees out by this measure and 0.04
+                from Jupiter's equator. Labelled, rather than quietly converted. */}
+            <Row label={isMoon ? 'Inclination (ecliptic)' : 'Inclination'}>
+              {`${elements.inclinationDeg.toFixed(3)}°`}
+            </Row>
+            {isMoon ? (
+              <>
+                <Row label="Periapsis">
+                  {`${Math.round(elements.periapsisKm).toLocaleString('en-US')} km`}
+                </Row>
+                <Row label="Apoapsis">
+                  {`${Math.round(elements.apoapsisKm).toLocaleString('en-US')} km`}
+                </Row>
+              </>
+            ) : (
+              <>
+                <Row label="Perihelion">{`${(elements.periapsisKm / AU_KM).toFixed(4)} AU`}</Row>
+                <Row label="Aphelion">{`${(elements.apoapsisKm / AU_KM).toFixed(4)} AU`}</Row>
+              </>
+            )}
           </>
         )}
       </dl>

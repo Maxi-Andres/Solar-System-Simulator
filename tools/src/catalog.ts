@@ -1,7 +1,8 @@
+import { MOON_ORIENTATION } from './moonRotation.ts';
 import type { BodyDefinition, TextureSetId } from './types.ts';
 
 /**
- * Body catalog for v1: the Sun, the eight planets and Pluto.
+ * Body catalog: the Sun, the eight planets, Pluto, and their major moons.
  *
  * Physical constants are hard-coded rather than scraped from Horizons' OBJ_DATA
  * block, which is free-form prose and differs per body. These values do not change,
@@ -13,9 +14,12 @@ import type { BodyDefinition, TextureSetId } from './types.ts';
  *   - GM: JPL DE440/DE441 planetary ephemeris. For the giant planets these are
  *     system values (planet + satellites), which is how DE44x publishes them.
  *   - Rotation periods and axial tilts: NASA/JPL planetary fact sheets.
+ *   - Moons: see MOONS below, which has its own sources and measurements.
  *
- * Adding a moon later means one more entry with `parent` set and `center` pointing
- * at the parent's Horizons body center, e.g. Io: parent 'jupiter', center '500@599'.
+ * A moon is an entry with `parent` set and `center` pointing at the parent's Horizons
+ * body center, e.g. Io: parent 'jupiter', center '500@599'. The frame tree does the
+ * rest; nothing in the renderer knows which bodies are moons except to decide how
+ * much of them to show.
  *
  * The web app does NOT read this file at runtime: it reads `bodies.json`, which the
  * generator writes from it, so the published site and the data it ships can never
@@ -24,7 +28,7 @@ import type { BodyDefinition, TextureSetId } from './types.ts';
  * imports, so nothing from the generator can reach the browser bundle through it.
  */
 
-/** Solar System barycenter: the frame every v1 state vector is measured against. */
+/** Solar System barycenter: the frame every top-level state vector is measured against. */
 export const SSB_CENTER = '500@0';
 
 /**
@@ -79,8 +83,8 @@ export const SSB_CENTER = '500@0';
 export const SUN_CENTER = '500@10';
 
 /**
- * IAU rotational elements: `poleRaDeg`, `poleDecDeg`, `primeMeridianDeg` and
- * `rotationRateDegPerDay`.
+ * IAU rotational elements, carried in each body's `rotation`: `poleRaDeg`,
+ * `poleDecDeg`, `primeMeridianDeg` and `rotationRateDegPerDay`.
  *
  * Source: IAU WGCCRE 2015 report (Archinal et al., Celest Mech Dyn Astr 130:22,
  * 2018) -- the same report the radii come from. They answer two questions a bare
@@ -158,9 +162,459 @@ export const TEXTURE_SETS: readonly {
 /** Bodies whose map actually changes between the two sets. */
 export function bodiesDifferingBySet(): readonly string[] {
   return CATALOG.filter(
-    (body) => body.textures.illustrative.file !== body.textures.photometric.file,
+    (body) =>
+      body.textures !== null &&
+      body.textures.illustrative.file !== body.textures.photometric.file,
   ).map((body) => body.id);
 }
+
+/** A sub-day sample spacing, written the way it is measured. */
+function minutes(count: number): number {
+  return count / 1440;
+}
+
+/** What differs from one moon to the next; everything else follows from it. */
+interface MoonSpec {
+  readonly id: string;
+  readonly name: string;
+  readonly horizonsId: string;
+  readonly parent: string;
+  /** The parent's Horizons body id: the center its vectors and elements are taken at. */
+  readonly parentHorizonsId: string;
+  readonly stepDays: number;
+  readonly vectorWindow: 'full' | 'short';
+  readonly gmKm3S2: number;
+  readonly rotationPeriodHours: number;
+  readonly axialTiltDeg: number | null;
+  readonly color: string;
+  /**
+   * The surface map, or null for a moon drawn in flat colour.
+   *
+   * One map serves both sets: for no moon is there a calibrated product *and* an
+   * illustrative one to choose between, so the choice would be a pretence. Most are
+   * greyscale -- clear-filter mission mosaics -- because that is what exists. The origin
+   * is measured from the pixels against a named feature, per moon, in
+   * textureAlignment.test.ts.
+   */
+  readonly map: { readonly file: string; readonly longitudeOriginDeg: number } | null;
+}
+
+/**
+ * A moon: its orbit from JPL, its shape and rotation from the IAU.
+ *
+ * Shape and rotation come together from moonRotation.ts, and they have to. Most of
+ * these moons are triaxial rather than oblate -- Mimas is 207.8 x 196.7 x 190.6 km, its
+ * long axis locked toward Saturn -- so drawing the real shape means knowing which way
+ * the body faces, and a body stretched along the wrong axis would be a guess dressed as
+ * a measurement.
+ *
+ * `radiusEquatorialKm` is the long axis a, not the mean radius: it is what the camera's
+ * closest approach and the marker's size are measured against, and a camera allowed
+ * inside Phobos's long end would be inside Phobos.
+ *
+ * Vectors are requested against the planet's body center, not the barycenter: that
+ * makes each table the parent-relative state the frame tree sums, and it is what the
+ * osculating elements need at their focus.
+ */
+function moon(spec: MoonSpec): BodyDefinition {
+  const center = `500@${spec.parentHorizonsId}`;
+  const orientation = MOON_ORIENTATION[spec.id];
+  if (orientation === undefined) {
+    throw new Error(`No IAU orientation for ${spec.id}.`);
+  }
+  const [a, b, c] = orientation.radiiKm;
+  return {
+    id: spec.id,
+    name: spec.name,
+    horizonsId: spec.horizonsId,
+    stepDays: spec.stepDays,
+    vectorWindow: spec.vectorWindow,
+    center,
+    elementsCenter: center,
+    parent: spec.parent,
+    kind: 'moon',
+    radiusEquatorialKm: a,
+    radiusPolarKm: c,
+    // A spheroid needs only the two radii above; three are carried only when the
+    // equator itself is not round.
+    triaxialRadiiKm: a === b ? null : [a, b, c],
+    gmKm3S2: spec.gmKm3S2,
+    gmBodyOnlyKm3S2: spec.gmKm3S2,
+    rotationPeriodHours: spec.rotationPeriodHours,
+    axialTiltDeg: spec.axialTiltDeg,
+    rotation: orientation.rotation,
+    color: spec.color,
+    drawOrbit: true,
+    textures: spec.map === null ? null : { illustrative: spec.map, photometric: spec.map },
+    rings: null,
+  };
+}
+
+/**
+ * The major moons: the nineteen massive enough to have pulled themselves round, plus
+ * Mars's two. Mimas, at 198 km, is the smallest body known to have done so.
+ *
+ * Sources:
+ *   - Horizons ids and GM: JPL SSD planetary satellite physical parameters
+ *     (ssd.jpl.nasa.gov/sats/phys_par), GM from each system's own satellite
+ *     ephemeris -- DE440, MAR097, JUP365, SAT441, URA111, NEP097, PLU060.
+ *   - Shapes: the IAU 2015 triaxial radii, in moonRotation.ts. The error column below
+ *     is against the IAU mean radius, R, which the step was chosen by.
+ *   - Rotation: every one of these is tidally locked, which Horizons states as
+ *     "Rotational period = Synchronous", so the period is the sidereal orbital period.
+ *     Negative, as for the planets, where the moon turns backwards against the IAU pole:
+ *     Uranus's five, Triton and Charon. The full IAU elements and the shapes are in
+ *     moonRotation.ts.
+ *   - The Moon's 6.67 deg obliquity: the Horizons physical data sheet.
+ *
+ * **Sample spacing, measured against JPL.** Each moon's ephemeris was downloaded over
+ * three orbits at a fifteenth of the step below, decimated to the step, and
+ * re-interpolated with the app's own Hermite. Worst position error:
+ *
+ *   moon        step   per orbit   error        per year
+ *   Moon        1 d       27.3      4.23 km  0.0024 R      365
+ *   Phobos     15 m       30.6     0.048 km  0.0044 R   35,064
+ *   Deimos     45 m       40.4     0.036 km  0.0057 R   11,688
+ *   Io          2 h       21.2      8.62 km  0.0047 R    4,383
+ *   Europa      4 h       21.3     14.08 km  0.0090 R    2,192
+ *   Ganymede    8 h       21.5     20.68 km  0.0079 R    1,096
+ *   Callisto   16 h       25.0     21.94 km  0.0091 R      548
+ *   Mimas      45 m       30.2      1.06 km  0.0053 R   11,688
+ *   Enceladus  75 m       26.3      2.07 km  0.0082 R    7,013
+ *   Tethys      2 h       22.7      4.50 km  0.0085 R    4,383
+ *   Dione     150 m       26.3      3.24 km  0.0058 R    3,506
+ *   Rhea        4 h       27.1      3.96 km  0.0052 R    2,192
+ *   Titan      16 h       23.9     18.84 km  0.0073 R      548
+ *   Iapetus   1.5 d       52.9      2.87 km  0.0039 R      244
+ *   Miranda    90 m       22.6      2.02 km  0.0086 R    5,844
+ *   Ariel       3 h       20.2      4.66 km  0.0081 R    2,922
+ *   Umbriel     4 h       24.9      2.90 km  0.0050 R    2,192
+ *   Titania     8 h       26.1      3.82 km  0.0048 R    1,096
+ *   Oberon     12 h       26.9      4.58 km  0.0060 R      731
+ *   Triton      7 h       20.1      8.65 km  0.0064 R    1,252
+ *   Charon     12 h       12.8      2.95 km  0.0049 R      731
+ *
+ * The rule is the planets' own: under a hundredth of the body's radius. What falls
+ * out is that about 24 samples an orbit does it for nearly everything, because
+ * Hermite error goes as (step x angular rate)^4 and a moon's radius is a similar
+ * fraction of its orbit across the whole set. Two need more. Deimos and Phobos are
+ * so small against their orbits that 40 and 31 samples are needed to hold 60 m and
+ * 50 m. Iapetus needs 53 because the Sun perturbs its distant orbit hard enough to
+ * bend it within a revolution. Charon, the other way, gets by on 13: it is large
+ * against an orbit only 33 Pluto radii across.
+ *
+ * That sums to 99,700 samples a year -- six times the entire twenty-year planetary
+ * set -- which is why the fast moons carry the short window and ship in chunks. The
+ * Moon is the exception: at one sample a day its twenty years cost less than
+ * Mercury's, so it takes the full window like a planet.
+ */
+const MOONS: readonly BodyDefinition[] = [
+  moon({
+    id: 'moon',
+    name: 'Moon',
+    horizonsId: '301',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    vectorWindow: 'full',
+    gmKm3S2: 4902.800066,
+    rotationPeriodHours: 655.7199,
+    axialTiltDeg: 6.67,
+    color: '#b8b8b8',
+    map: { file: 'moon.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'phobos',
+    name: 'Phobos',
+    horizonsId: '401',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: minutes(15),
+    vectorWindow: 'short',
+    gmKm3S2: 0.0007087,
+    rotationPeriodHours: 7.6538,
+    axialTiltDeg: null,
+    color: '#a08a78',
+    map: { file: 'phobos.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'deimos',
+    name: 'Deimos',
+    horizonsId: '402',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: minutes(45),
+    vectorWindow: 'short',
+    gmKm3S2: 0.0000962,
+    rotationPeriodHours: 30.2986,
+    axialTiltDeg: null,
+    color: '#b8a48c',
+    // Left in flat colour on purpose. The one global map (Stooke, from Viking) cannot
+    // be placed: its USGS world file puts longitude 0 at the left edge, the author's
+    // own guide puts it in the middle, and Deimos's only named craters -- Voltaire and
+    // Swift, 1 to 2 km across -- cannot be picked out of it to settle which. Half a turn
+    // wrong would look exactly as plausible as right.
+    map: null,
+  }),
+  moon({
+    id: 'io',
+    name: 'Io',
+    horizonsId: '501',
+    parent: 'jupiter',
+    parentHorizonsId: '599',
+    stepDays: minutes(120),
+    vectorWindow: 'short',
+    gmKm3S2: 5959.91547,
+    rotationPeriodHours: 42.4593,
+    axialTiltDeg: null,
+    color: '#e6d45c',
+    map: { file: 'io.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'europa',
+    name: 'Europa',
+    horizonsId: '502',
+    parent: 'jupiter',
+    parentHorizonsId: '599',
+    stepDays: minutes(240),
+    vectorWindow: 'short',
+    gmKm3S2: 3202.7121,
+    rotationPeriodHours: 85.2283,
+    axialTiltDeg: null,
+    color: '#d2c2a0',
+    map: { file: 'europa.jpg', longitudeOriginDeg: 0 },
+  }),
+  moon({
+    id: 'ganymede',
+    name: 'Ganymede',
+    horizonsId: '503',
+    parent: 'jupiter',
+    parentHorizonsId: '599',
+    stepDays: minutes(480),
+    vectorWindow: 'short',
+    gmKm3S2: 9887.83275,
+    rotationPeriodHours: 171.7093,
+    axialTiltDeg: null,
+    color: '#aca296',
+    map: { file: 'ganymede.jpg', longitudeOriginDeg: 0 },
+  }),
+  moon({
+    id: 'callisto',
+    name: 'Callisto',
+    horizonsId: '504',
+    parent: 'jupiter',
+    parentHorizonsId: '599',
+    stepDays: minutes(960),
+    vectorWindow: 'short',
+    gmKm3S2: 7179.2834,
+    rotationPeriodHours: 400.5364,
+    axialTiltDeg: null,
+    color: '#8a7e70',
+    map: { file: 'callisto.jpg', longitudeOriginDeg: 0 },
+  }),
+  moon({
+    id: 'mimas',
+    name: 'Mimas',
+    horizonsId: '601',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(45),
+    vectorWindow: 'short',
+    gmKm3S2: 2.50349,
+    rotationPeriodHours: 22.6181,
+    axialTiltDeg: null,
+    color: '#c4c4c4',
+    map: { file: 'mimas.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'enceladus',
+    name: 'Enceladus',
+    horizonsId: '602',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(75),
+    vectorWindow: 'short',
+    gmKm3S2: 7.21037,
+    rotationPeriodHours: 32.8852,
+    axialTiltDeg: null,
+    color: '#eef2f6',
+    map: { file: 'enceladus.jpg', longitudeOriginDeg: 0 },
+  }),
+  moon({
+    id: 'tethys',
+    name: 'Tethys',
+    horizonsId: '603',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(120),
+    vectorWindow: 'short',
+    gmKm3S2: 41.21353,
+    rotationPeriodHours: 45.3072,
+    axialTiltDeg: null,
+    color: '#dcdcd4',
+    map: { file: 'tethys.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'dione',
+    name: 'Dione',
+    horizonsId: '604',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(150),
+    vectorWindow: 'short',
+    gmKm3S2: 73.11607,
+    rotationPeriodHours: 65.686,
+    axialTiltDeg: null,
+    color: '#c8c8c0',
+    map: { file: 'dione.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'rhea',
+    name: 'Rhea',
+    horizonsId: '605',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(240),
+    vectorWindow: 'short',
+    gmKm3S2: 153.94175,
+    rotationPeriodHours: 108.42,
+    axialTiltDeg: null,
+    color: '#bcb8b0',
+    map: { file: 'rhea.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'titan',
+    name: 'Titan',
+    horizonsId: '606',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: minutes(960),
+    vectorWindow: 'short',
+    gmKm3S2: 8978.1371,
+    rotationPeriodHours: 382.6908,
+    axialTiltDeg: null,
+    color: '#dca84e',
+    map: { file: 'titan.jpg', longitudeOriginDeg: 0 },
+  }),
+  moon({
+    id: 'iapetus',
+    name: 'Iapetus',
+    horizonsId: '608',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: 1.5,
+    vectorWindow: 'short',
+    gmKm3S2: 120.51511,
+    rotationPeriodHours: 1903.944,
+    axialTiltDeg: null,
+    color: '#a8987f',
+    map: { file: 'iapetus.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'miranda',
+    name: 'Miranda',
+    horizonsId: '705',
+    parent: 'uranus',
+    parentHorizonsId: '799',
+    stepDays: minutes(90),
+    vectorWindow: 'short',
+    gmKm3S2: 4.3,
+    rotationPeriodHours: -33.9235,
+    axialTiltDeg: null,
+    color: '#b4b4b4',
+    map: { file: 'miranda.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'ariel',
+    name: 'Ariel',
+    horizonsId: '701',
+    parent: 'uranus',
+    parentHorizonsId: '799',
+    stepDays: minutes(180),
+    vectorWindow: 'short',
+    gmKm3S2: 83.5,
+    rotationPeriodHours: -60.4891,
+    axialTiltDeg: null,
+    color: '#ccc8c2',
+    map: { file: 'ariel.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'umbriel',
+    name: 'Umbriel',
+    horizonsId: '702',
+    parent: 'uranus',
+    parentHorizonsId: '799',
+    stepDays: minutes(240),
+    vectorWindow: 'short',
+    gmKm3S2: 85.1,
+    rotationPeriodHours: -99.4602,
+    axialTiltDeg: null,
+    color: '#8e8a86',
+    map: { file: 'umbriel.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'titania',
+    name: 'Titania',
+    horizonsId: '703',
+    parent: 'uranus',
+    parentHorizonsId: '799',
+    stepDays: minutes(480),
+    vectorWindow: 'short',
+    gmKm3S2: 226.9,
+    rotationPeriodHours: -208.9409,
+    axialTiltDeg: null,
+    color: '#b6aea6',
+    map: { file: 'titania.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'oberon',
+    name: 'Oberon',
+    horizonsId: '704',
+    parent: 'uranus',
+    parentHorizonsId: '799',
+    stepDays: minutes(720),
+    vectorWindow: 'short',
+    gmKm3S2: 205.3,
+    rotationPeriodHours: -323.1177,
+    axialTiltDeg: null,
+    color: '#a69e96',
+    map: { file: 'oberon.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'triton',
+    name: 'Triton',
+    horizonsId: '801',
+    parent: 'neptune',
+    parentHorizonsId: '899',
+    stepDays: minutes(420),
+    vectorWindow: 'short',
+    gmKm3S2: 1428.49546,
+    // Negative, like Uranus and its moons: turning backwards against the IAU pole, which
+    // is what the sign means across this catalog. A first version made it positive on
+    // the grounds that a locked moon turns the way it orbits -- true, and the wrong
+    // question. JPL settled it: measured the other way, Triton's sub-Neptune longitude
+    // came out 5.5 degrees from Horizons on every date, exactly twice its own value.
+    rotationPeriodHours: -141.0445,
+    axialTiltDeg: null,
+    color: '#d6cac2',
+    map: { file: 'triton.jpg', longitudeOriginDeg: 180 },
+  }),
+  moon({
+    id: 'charon',
+    name: 'Charon',
+    horizonsId: '901',
+    parent: 'pluto',
+    parentHorizonsId: '999',
+    stepDays: minutes(720),
+    vectorWindow: 'short',
+    gmKm3S2: 106.1,
+    // Pluto's own day, within seconds: the two are locked to each other.
+    rotationPeriodHours: -153.2935,
+    axialTiltDeg: null,
+    color: '#aca49a',
+    map: { file: 'charon.jpg', longitudeOriginDeg: 180 },
+  }),
+];
 
 export const CATALOG: readonly BodyDefinition[] = [
   {
@@ -169,6 +623,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     horizonsId: '10',
     // reference for every heliocentric distance, so kept tight
     stepDays: 8,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     // Never used: drawOrbit is false, since the Sun's barycentric motion is a
     // wobble rather than an orbit.
@@ -177,16 +632,21 @@ export const CATALOG: readonly BodyDefinition[] = [
     kind: 'star',
     radiusEquatorialKm: 695700,
     radiusPolarKm: 695700,
+    triaxialRadiiKm: null,
     gmKm3S2: 132712440041.279419,
+    gmBodyOnlyKm3S2: 132712440041.279419,
     rotationPeriodHours: 609.12,
     axialTiltDeg: 7.25,
-    poleRaDeg: 286.13,
-    poleDecDeg: 63.87,
-    poleRaRateDegPerCentury: 0,
-    poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 84.176,
-    rotationRateDegPerDay: 14.1844,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 286.13,
+      poleDecDeg: 63.87,
+      poleRaRateDegPerCentury: 0,
+      poleDecRateDegPerCentury: 0,
+      primeMeridianDeg: 84.176,
+      rotationRateDegPerDay: 14.1844,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#ffd24a',
     // The Sun's motion about the barycenter is a small wobble, not an orbit worth
     // drawing as a conic.
@@ -205,22 +665,28 @@ export const CATALOG: readonly BodyDefinition[] = [
     horizonsId: '199',
     // fastest body at 47 km/s; anything wider is visibly off
     stepDays: 1,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 2440.53,
     radiusPolarKm: 2438.26,
+    triaxialRadiiKm: null,
     gmKm3S2: 22031.868551,
+    gmBodyOnlyKm3S2: 22031.868551,
     rotationPeriodHours: 1407.6,
     axialTiltDeg: 0.034,
-    poleRaDeg: 281.0103,
-    poleDecDeg: 61.4155,
-    poleRaRateDegPerCentury: -0.0328,
-    poleDecRateDegPerCentury: -0.0049,
-    primeMeridianDeg: 329.5988,
-    rotationRateDegPerDay: 6.1385108,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 281.0103,
+      poleDecDeg: 61.4155,
+      poleRaRateDegPerCentury: -0.0328,
+      poleDecRateDegPerCentury: -0.0049,
+      primeMeridianDeg: 329.5988,
+      rotationRateDegPerDay: 6.1385108,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#a98cd8',
     drawOrbit: true,
     textures: {
@@ -236,23 +702,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Venus',
     horizonsId: '299',
     stepDays: 4,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 6051.8,
     radiusPolarKm: 6051.8,
+    triaxialRadiiKm: null,
     gmKm3S2: 324858.592,
+    gmBodyOnlyKm3S2: 324858.592,
     // Retrograde rotation, hence the negative period.
     rotationPeriodHours: -5832.5,
     axialTiltDeg: 177.36,
-    poleRaDeg: 272.76,
-    poleDecDeg: 67.16,
-    poleRaRateDegPerCentury: 0,
-    poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 160.2,
-    rotationRateDegPerDay: -1.4813688,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 272.76,
+      poleDecDeg: 67.16,
+      poleRaRateDegPerCentury: 0,
+      poleDecRateDegPerCentury: 0,
+      primeMeridianDeg: 160.2,
+      rotationRateDegPerDay: -1.4813688,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#e8a33d',
     drawOrbit: true,
     textures: {
@@ -268,22 +740,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Earth',
     horizonsId: '399',
     stepDays: 4,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 6378.1366,
     radiusPolarKm: 6356.7519,
+    triaxialRadiiKm: null,
     gmKm3S2: 398600.435507,
+    // Already Earth alone: DE440 publishes Earth and the Moon separately.
+    gmBodyOnlyKm3S2: 398600.435507,
     rotationPeriodHours: 23.9344695,
     axialTiltDeg: 23.4392911,
-    poleRaDeg: 0.0,
-    poleDecDeg: 90.0,
-    poleRaRateDegPerCentury: -0.641,
-    poleDecRateDegPerCentury: -0.557,
-    primeMeridianDeg: 190.147,
-    rotationRateDegPerDay: 360.9856235,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 0.0,
+      poleDecDeg: 90.0,
+      poleRaRateDegPerCentury: -0.641,
+      poleDecRateDegPerCentury: -0.557,
+      primeMeridianDeg: 190.147,
+      rotationRateDegPerDay: 360.9856235,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#3aa8e0',
     drawOrbit: true,
     textures: {
@@ -299,22 +778,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Mars',
     horizonsId: '499',
     stepDays: 8,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 3396.19,
     radiusPolarKm: 3376.2,
+    triaxialRadiiKm: null,
     gmKm3S2: 42828.375816,
+    // The planet alone, as Horizons publishes it; the value above includes its moons.
+    gmBodyOnlyKm3S2: 42828.375662,
     rotationPeriodHours: 24.622962,
     axialTiltDeg: 25.19,
-    poleRaDeg: 317.68143,
-    poleDecDeg: 52.8865,
-    poleRaRateDegPerCentury: -0.1061,
-    poleDecRateDegPerCentury: -0.0609,
-    primeMeridianDeg: 176.63,
-    rotationRateDegPerDay: 350.891982443297,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 317.68143,
+      poleDecDeg: 52.8865,
+      poleRaRateDegPerCentury: -0.1061,
+      poleDecRateDegPerCentury: -0.0609,
+      primeMeridianDeg: 176.63,
+      rotationRateDegPerDay: 350.891982443297,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#d96c3f',
     drawOrbit: true,
     textures: {
@@ -331,22 +817,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     horizonsId: '599',
     // a 12-year orbit needs nothing finer
     stepDays: 32,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 71492,
     radiusPolarKm: 66854,
+    triaxialRadiiKm: null,
     gmKm3S2: 126712764.1,
+    // The planet alone, as Horizons publishes it; the value above includes its moons.
+    gmBodyOnlyKm3S2: 126686531.9,
     rotationPeriodHours: 9.92496,
     axialTiltDeg: 3.13,
-    poleRaDeg: 268.056595,
-    poleDecDeg: 64.495303,
-    poleRaRateDegPerCentury: -0.006499,
-    poleDecRateDegPerCentury: 0.002413,
-    primeMeridianDeg: 284.95,
-    rotationRateDegPerDay: 870.536,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 268.056595,
+      poleDecDeg: 64.495303,
+      poleRaRateDegPerCentury: -0.006499,
+      poleDecRateDegPerCentury: 0.002413,
+      primeMeridianDeg: 284.95,
+      rotationRateDegPerDay: 870.536,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#d8a05a',
     drawOrbit: true,
     textures: {
@@ -362,22 +855,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Saturn',
     horizonsId: '699',
     stepDays: 32,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 60268,
     radiusPolarKm: 54364,
+    triaxialRadiiKm: null,
     gmKm3S2: 37940584.8418,
+    // The planet alone, as Horizons publishes it; the value above includes its moons.
+    gmBodyOnlyKm3S2: 37931206.234,
     rotationPeriodHours: 10.656,
     axialTiltDeg: 26.73,
-    poleRaDeg: 40.589,
-    poleDecDeg: 83.537,
-    poleRaRateDegPerCentury: -0.036,
-    poleDecRateDegPerCentury: -0.004,
-    primeMeridianDeg: 38.9,
-    rotationRateDegPerDay: 810.7939024,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 40.589,
+      poleDecDeg: 83.537,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 38.9,
+      rotationRateDegPerDay: 810.7939024,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#e0c060',
     drawOrbit: true,
     textures: {
@@ -418,22 +918,29 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Uranus',
     horizonsId: '799',
     stepDays: 32,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 25559,
     radiusPolarKm: 24973,
+    triaxialRadiiKm: null,
     gmKm3S2: 5794556.4,
+    // The planet alone, as Horizons publishes it; the value above includes its moons.
+    gmBodyOnlyKm3S2: 5793950.6103,
     rotationPeriodHours: -17.24,
     axialTiltDeg: 97.77,
-    poleRaDeg: 257.311,
-    poleDecDeg: -15.175,
-    poleRaRateDegPerCentury: 0,
-    poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 203.81,
-    rotationRateDegPerDay: -501.1600928,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 257.311,
+      poleDecDeg: -15.175,
+      poleRaRateDegPerCentury: 0,
+      poleDecRateDegPerCentury: 0,
+      primeMeridianDeg: 203.81,
+      rotationRateDegPerDay: -501.1600928,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#7fd8d8',
     drawOrbit: true,
     textures: {
@@ -449,30 +956,62 @@ export const CATALOG: readonly BodyDefinition[] = [
     name: 'Neptune',
     horizonsId: '899',
     stepDays: 32,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'planet',
     radiusEquatorialKm: 24764,
     radiusPolarKm: 24341,
+    triaxialRadiiKm: null,
     gmKm3S2: 6836527.10058,
+    // The planet alone, as Horizons publishes it; the value above includes its moons.
+    gmBodyOnlyKm3S2: 6835099.97,
+    // 16.11 hours is System III, the magnetic field, and it is what a person means by
+    // "how long is a day on Neptune" -- so it is what the interface shows. The map turns
+    // at the System II rate above instead, because the map is of clouds. The two are a
+    // fact about Neptune rather than a disagreement in the catalog; see the note on
+    // `primeMeridianDeg`.
     rotationPeriodHours: 16.11,
     axialTiltDeg: 28.32,
-    poleRaDeg: 299.36,
-    poleDecDeg: 43.46,
-    poleRaRateDegPerCentury: 0,
-    poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 253.18,
-    rotationRateDegPerDay: 536.3128492,
-    // The only body here whose periodic term is large enough to see. Leaving it out
-    // puts the sub-solar latitude 0.278 deg from JPL's; including it lands within
-    // 0.004 deg. Measured against Horizons across 2026, not assumed.
-    poleNutation: {
-      angleDeg: 357.85,
-      rateDegPerCentury: 52.316,
-      raSinCoeffDeg: 0.7,
-      decCosCoeffDeg: -0.51,
-      wSinCoeffDeg: -0.48,
+    rotation: {
+      poleRaDeg: 299.36,
+      poleDecDeg: 43.46,
+      poleRaRateDegPerCentury: 0,
+      poleDecRateDegPerCentury: 0,
+      // **Neptune has two rotations, and the map turns with the wrong one if you take
+      // the obvious set.** The IAU publishes System III for it -- the 16.11 hour rotation
+      // of the magnetic field, which is the interior -- and that is what the fact sheets
+      // quote and what this catalog carried at first: W = 253.18 + 536.3128492 d.
+      //
+      // But a surface map of Neptune is a map of *clouds*, and clouds do not turn with the
+      // magnetic field. For cartography the IAU 2015 report gives **System II**, the
+      // rotation of optically observed features: W = 249.978 + 541.1397757 d. Horizons
+      // says so in the header of every Neptune ephemeris it prints, and it is the only
+      // body of the four giants where the two differ -- Jupiter, Saturn and Uranus are all
+      // cartographed in System III.
+      //
+      // The cost of the wrong one is not subtle: 4.83 deg/day, a full turn every 75 days,
+      // which put the Great Dark Spot a quarter of the planet away from where NASA draws
+      // it. Measured against Horizons across the whole ephemeris window with the light
+      // time taken out, these values land within 0.011 deg and the old ones were 90 deg
+      // out on average. See `orientationSky.test.ts`.
+      primeMeridianDeg: 249.978,
+      rotationRateDegPerDay: 541.1397757,
+      primeMeridianAccelDegPerDay2: 0,
+      // The only planet whose periodic term is large enough to see. Leaving it out
+      // puts the sub-solar latitude 0.278 deg from JPL's; including it lands within
+      // 0.004 deg. Measured against Horizons across 2026, not assumed.
+      periodicTerms: [
+        {
+          angleDeg: 357.85,
+          rateDegPerCentury: 52.316,
+          accelDegPerCentury2: 0,
+          raSinCoeffDeg: 0.7,
+          decCosCoeffDeg: -0.51,
+          wSinCoeffDeg: -0.48,
+        },
+      ],
     },
     color: '#5a7fd8',
     drawOrbit: true,
@@ -490,13 +1029,20 @@ export const CATALOG: readonly BodyDefinition[] = [
     horizonsId: '999',
     // limited by Charon, not by its 248-year orbit
     stepDays: 2,
+    vectorWindow: 'full',
     center: SSB_CENTER,
     elementsCenter: SUN_CENTER,
     parent: null,
     kind: 'dwarf-planet',
     radiusEquatorialKm: 1188.3,
     radiusPolarKm: 1188.3,
+    triaxialRadiiKm: null,
     gmKm3S2: 869.613817,
+    // Pluto alone, from PLU060 as Horizons publishes it. The value above is Pluto
+    // alone too, from an older solution -- not the system, which would be ~975 -- and
+    // the two differ by 0.03%. This one is the current fit, and it is what Charon's
+    // orbit is drawn about, plus Charon's own mass.
+    gmBodyOnlyKm3S2: 869.326,
     rotationPeriodHours: -153.2928,
     // 119.591, not the 122.53 the NASA fact sheet publishes. That figure comes from
     // Pluto's pre-2009 IAU pole, which sits 2.9 deg from the one adopted since --
@@ -513,13 +1059,16 @@ export const CATALOG: readonly BodyDefinition[] = [
     // it spins against its own orbital motion. Both statements describe the same
     // rotation. The texture below is drawn against this same IAU pole, so using it
     // is what puts Sputnik Planitia where Sputnik Planitia is.
-    poleRaDeg: 132.993,
-    poleDecDeg: -6.163,
-    poleRaRateDegPerCentury: 0,
-    poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 302.695,
-    rotationRateDegPerDay: 56.3625225,
-    poleNutation: null,
+    rotation: {
+      poleRaDeg: 132.993,
+      poleDecDeg: -6.163,
+      poleRaRateDegPerCentury: 0,
+      poleDecRateDegPerCentury: 0,
+      primeMeridianDeg: 302.695,
+      rotationRateDegPerDay: 56.3625225,
+      primeMeridianAccelDegPerDay2: 0,
+      periodicTerms: [],
+    },
     color: '#b0a090',
     drawOrbit: true,
     textures: {
@@ -530,6 +1079,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     },
     rings: null,
   },
+  ...MOONS,
 ];
 
 /** Look up a body by id. Throws rather than returning undefined: ids are ours. */

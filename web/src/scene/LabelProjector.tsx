@@ -1,11 +1,12 @@
 import type { BodyId } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
-import type { RefObject } from 'react';
+import { useMemo, type RefObject } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
-import { rebaseFrame } from './floatingOrigin.ts';
+import { bodiesToResolve } from './floatingOrigin.ts';
+import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
 
 /**
@@ -28,6 +29,14 @@ export interface LabelProjectorProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly visible: boolean;
+  /**
+   * Body kinds currently switched on in the layers panel.
+   *
+   * The labels are DOM, not scene objects, so switching a kind off in the panel hid the
+   * spheres and the orbits and left the names floating over empty space. Nothing else
+   * knew: the scene walks its own list and never told this one.
+   */
+  readonly visibleKinds: ReadonlySet<string>;
   /** Label elements, keyed by body id, owned by the overlay outside the canvas. */
   readonly elements: RefObject<Map<BodyId, HTMLElement | null>>;
 }
@@ -38,6 +47,8 @@ interface Projected {
   readonly y: number;
   readonly depth: number;
   readonly offset: number;
+  /** True for a body with a parent, which yields a contested spot to one without. */
+  readonly satellite: boolean;
 }
 
 export function LabelProjector({
@@ -45,10 +56,15 @@ export function LabelProjector({
   clock,
   focus,
   visible,
+  visibleKinds,
   elements,
 }: LabelProjectorProps) {
   const { camera, size } = useThree();
   const scratch = new THREE.Vector3();
+  const wanted = useMemo(
+    () => bodiesToResolve(store, visibleKinds, focus),
+    [store, visibleKinds, focus],
+  );
 
   useFrame(() => {
     const map = elements.current;
@@ -66,14 +82,36 @@ export function LabelProjector({
     }
 
     const jd = clock.tdbJulianDay;
-    const snapshot = rebaseFrame(store, focus, jd);
     const fov = (camera as THREE.PerspectiveCamera).fov;
+    const snapshot = rebaseVisibleFrame(
+      store,
+      focus,
+      jd,
+      wanted,
+      camera.position,
+      size.height,
+      fov,
+    );
 
     const projected: Projected[] = [];
 
     for (const body of store.bodies) {
+      // A kind that is switched off has nothing on screen to be labelled.
+      if (!visibleKinds.has(body.kind)) {
+        continue;
+      }
+
       const rebased = snapshot.bodies.get(body.id);
       if (rebased === undefined) {
+        continue;
+      }
+
+      // The same rule the marker follows, so a name never floats where no marker is.
+      // Half-way through the marker's fade is where the label goes.
+      if (
+        body.id !== focus &&
+        satelliteVisibility(store, snapshot, body, camera.position, size.height, fov) < 0.5
+      ) {
         continue;
       }
 
@@ -105,12 +143,19 @@ export function LabelProjector({
         y: (-scratch.y * 0.5 + 0.5) * size.height,
         depth: distanceUnits,
         offset: Math.min(pixelRadius, size.height * 0.4) + LABEL_GAP_PX,
+        satellite: body.parent !== null,
       });
     }
 
     // Declutter: nearest body wins a contested spot. Sorting by depth means the
     // thing you are looking at keeps its name when a distant body drifts behind it.
-    projected.sort((a, b) => a.depth - b.depth);
+    //
+    // Except that a moon never takes a spot from a planet. A moon on the near side of
+    // Jupiter is closer to the camera than Jupiter is, and by depth alone it would
+    // take the name of the planet it is there to be seen around.
+    projected.sort((a, b) =>
+      a.satellite === b.satellite ? a.depth - b.depth : a.satellite ? 1 : -1,
+    );
 
     const placed: Projected[] = [];
     const shown = new Set<BodyId>();

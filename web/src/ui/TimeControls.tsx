@@ -49,7 +49,9 @@ export interface TimeControlsProps {
 export function TimeControls({ clock, exact, tick }: TimeControlsProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [open, setOpen] = useState(true);
+  // Folded until asked for. LIVE and the date stay on screen, which is what most visits
+  // need; the rates and transport buttons are one click on the chevron away.
+  const [open, setOpen] = useState(false);
 
   // Keep the field in sync while the clock runs, without fighting typing.
   useEffect(() => {

@@ -2,7 +2,7 @@ import { MAX_SAMPLES_PER_REQUEST } from '../config.ts';
 import type { BodyDefinition, VectorTable } from '../types.ts';
 import { callHorizons } from './client.ts';
 import { parseVectors } from './parseVectors.ts';
-import { addDays, vectorQuery } from './queries.ts';
+import { addMinutes, stepMinutes, vectorQuery } from './queries.ts';
 
 /**
  * Fetches a body's state vectors, splitting the window when it would be too large.
@@ -18,15 +18,23 @@ import { addDays, vectorQuery } from './queries.ts';
  * is asserted by a test.
  */
 
-/** Time spans to request, in order, covering [start, stop]. */
+/**
+ * Time spans to request, in order, covering [start, stop].
+ *
+ * Planned in whole minutes rather than days. A fifteen-minute step is 0.0104166...
+ * days, and a boundary computed from that picks up float error in the last digit --
+ * enough to land a millisecond off the grid, which Horizons would then round onto a
+ * grid of its own.
+ */
 export function planChunks(
   start: Date,
   stop: Date,
   stepDays: number,
   maxSamples = MAX_SAMPLES_PER_REQUEST,
 ): { start: Date; stop: Date }[] {
-  const totalDays = (stop.getTime() - start.getTime()) / 86_400_000;
-  const samples = Math.floor(totalDays / stepDays) + 1;
+  const step = stepMinutes(stepDays);
+  const totalMinutes = (stop.getTime() - start.getTime()) / 60_000;
+  const samples = Math.floor(totalMinutes / step) + 1;
 
   if (samples <= maxSamples) {
     return [{ start, stop }];
@@ -35,12 +43,12 @@ export function planChunks(
   // Whole steps per chunk, so every boundary lands on the sampling grid and the
   // seams cannot introduce an off-grid sample.
   const stepsPerChunk = Math.max(1, maxSamples - 1);
-  const chunkDays = stepsPerChunk * stepDays;
+  const chunkMinutes = stepsPerChunk * step;
 
   const chunks: { start: Date; stop: Date }[] = [];
-  for (let offset = 0; offset < totalDays; offset += chunkDays) {
-    const chunkStart = addDays(start, offset);
-    const chunkStop = addDays(start, Math.min(offset + chunkDays, totalDays));
+  for (let offset = 0; offset < totalMinutes; offset += chunkMinutes) {
+    const chunkStart = addMinutes(start, offset);
+    const chunkStop = addMinutes(start, Math.min(offset + chunkMinutes, totalMinutes));
     chunks.push({ start: chunkStart, stop: chunkStop });
     if (chunkStop >= stop) {
       break;
@@ -106,12 +114,23 @@ export function concatTables(parts: readonly VectorTable[]): VectorTable {
   };
 }
 
-/** Fetches one body's vectors over the window, chunking if necessary. */
+/**
+ * Fetches one body's vectors over the window, chunking if necessary.
+ *
+ * Returns the stitched table and the pieces it was stitched from. The pieces are what
+ * a short-window moon ships as: already a sensible size, already on the grid, and each
+ * already carrying both of its boundary samples.
+ */
 export async function fetchVectors(
   body: BodyDefinition,
   start: Date,
   stop: Date,
-): Promise<{ table: VectorTable; sourceVersion: string; chunks: number }> {
+): Promise<{
+  table: VectorTable;
+  parts: readonly VectorTable[];
+  sourceVersion: string;
+  chunks: number;
+}> {
   // One extra step past the window, applied once to the whole span before it is
   // divided. Horizons stops at the last whole step before STOP_TIME, so without this
   // a 32-day step left the giants eight days short of the advertised window, where
@@ -120,7 +139,7 @@ export async function fetchVectors(
   // It has to be added here rather than inside the query builder: doing it per
   // request made every chunk overrun into the next one, and the stitched series went
   // backwards in time at each seam.
-  const paddedStop = addDays(stop, body.stepDays);
+  const paddedStop = addMinutes(stop, stepMinutes(body.stepDays));
   const chunks = planChunks(start, paddedStop, body.stepDays);
 
   const parts: VectorTable[] = [];
@@ -139,5 +158,5 @@ export async function fetchVectors(
     sourceVersion = response.signature.version;
   }
 
-  return { table: concatTables(parts), sourceVersion, chunks: chunks.length };
+  return { table: concatTables(parts), parts, sourceVersion, chunks: chunks.length };
 }

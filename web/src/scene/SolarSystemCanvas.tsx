@@ -1,4 +1,4 @@
-import type { BodyId } from '@sss/tools/types';
+import type { BodyId, StarCatalog } from '@sss/tools/types';
 import { Canvas } from '@react-three/fiber';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -32,6 +32,7 @@ export { FOV_DEG };
 
 export interface SolarSystemCanvasProps {
   readonly store: EphemerisStore;
+  readonly stars: StarCatalog;
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
@@ -44,6 +45,7 @@ export interface SolarSystemCanvasProps {
 
 export function SolarSystemCanvas({
   store,
+  stars,
   clock,
   focus,
   showOrbits,
@@ -68,7 +70,7 @@ export function SolarSystemCanvas({
       camera={{ fov: FOV_DEG, near: 1e-6, far: 1e11 }}
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
-      <Starfield />
+      <Starfield catalog={stars} clock={clock} />
       <SolarSystem
         store={store}
         clock={clock}
@@ -83,6 +85,7 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         visible={showLabels}
+        visibleKinds={visibleKinds}
         elements={labelElements}
       />
       <CameraRig

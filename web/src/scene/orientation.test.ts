@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 
-import { CATALOG, getBody } from '@sss/tools/catalog';
+import { CATALOG as FULL_CATALOG, getBody } from '@sss/tools/catalog';
 import { J2000_JD } from '../core/time.ts';
 import { dot, length, vec3 } from '../core/vec3.ts';
 import {
@@ -16,13 +16,17 @@ import {
   primeMeridianDirection,
 } from './orientation.ts';
 
+// The Sun, the planets and Pluto. The moons are checked in moonRotation.test.ts, against
+// the planet they face rather than the Sun.
+const CATALOG = FULL_CATALOG.filter((body) => body.parent === null);
+
 const earth = getBody('earth');
 const venus = getBody('venus');
 const uranus = getBody('uranus');
 const mercury = getBody('mercury');
 
 /** Where Earth's illustrative map starts, which is what the orientation is built on. */
-const earthOrigin = earth.textures.illustrative.longitudeOriginDeg;
+const earthOrigin = earth.textures!.illustrative.longitudeOriginDeg;
 
 /** Angle between two vectors, degrees. */
 function angleBetween(a: { x: number; y: number; z: number }, b: typeof a): number {
@@ -74,7 +78,7 @@ describe('poleDirection', () => {
     const fromEclipticNorth = angleBetween(pole, vec3(0, 0, 1));
 
     expect(fromEclipticNorth).toBeCloseTo(82.28, 1);
-    expect(180 - fromEclipticNorth).toBeCloseTo(uranus.axialTiltDeg, 0);
+    expect(180 - fromEclipticNorth).toBeCloseTo(uranus.axialTiltDeg!, 0);
   });
 
   it('points Mercury straight up out of its own orbit', () => {
@@ -90,9 +94,9 @@ describe('poleDirection', () => {
     // The whole reason seasons exist: the axis must not follow the orbit round.
     const fixed = CATALOG.filter(
       (body) =>
-        body.poleNutation === null &&
-        body.poleRaRateDegPerCentury === 0 &&
-        body.poleDecRateDegPerCentury === 0,
+        body.rotation!.periodicTerms.length === 0 &&
+        body.rotation!.poleRaRateDegPerCentury === 0 &&
+        body.rotation!.poleDecRateDegPerCentury === 0,
     );
     expect(fixed.map((body) => body.id)).toEqual(['sun', 'venus', 'uranus', 'pluto']);
 
@@ -157,11 +161,11 @@ describe('nodeDirection', () => {
 
 describe('primeMeridianAngle', () => {
   it('is W0 at J2000', () => {
-    expect(primeMeridianAngle(J2000_JD, earth)).toBeCloseTo(earth.primeMeridianDeg, 12);
+    expect(primeMeridianAngle(J2000_JD, earth)).toBeCloseTo(earth.rotation!.primeMeridianDeg, 12);
   });
 
   it('advances 360 degrees in one sidereal day for Earth', () => {
-    const period = 360 / earth.rotationRateDegPerDay;
+    const period = 360 / earth.rotation!.rotationRateDegPerDay;
     const turn =
       primeMeridianAngle(J2000_JD + period, earth) - primeMeridianAngle(J2000_JD, earth);
 
@@ -210,14 +214,14 @@ describe('bodyOrientation', () => {
     // textureAlignment.test.ts both notice.
     const jd = J2000_JD + 1234.5;
     const pluto = getBody('pluto');
-    const zero = new THREE.Vector3(-1, 0, 0).applyQuaternion(bodyOrientation(jd, pluto, pluto.textures.illustrative.longitudeOriginDeg));
+    const zero = new THREE.Vector3(-1, 0, 0).applyQuaternion(bodyOrientation(jd, pluto, pluto.textures!.illustrative.longitudeOriginDeg));
 
     expect(angleBetween(zero, primeMeridianDirection(jd, pluto))).toBeLessThan(1e-5);
   });
 
   it('is a pure rotation: no scaling, no reflection', () => {
     for (const body of CATALOG) {
-      const quaternion = bodyOrientation(J2000_JD + 4000, body, body.textures.illustrative.longitudeOriginDeg);
+      const quaternion = bodyOrientation(J2000_JD + 4000, body, body.textures!.illustrative.longitudeOriginDeg);
       const basis = new THREE.Matrix4().makeRotationFromQuaternion(quaternion);
 
       expect(quaternion.length()).toBeCloseTo(1, 12);
@@ -294,14 +298,19 @@ describe('directionToGeographic', () => {
     const second = directionToGeographic(fixed, J2000_JD + 0.01, earth).longitudeDeg;
     const delta = ((second - first + 540) % 360) - 180;
 
-    expect(delta).toBeCloseTo(-earth.rotationRateDegPerDay * 0.01, 6);
+    expect(delta).toBeCloseTo(-earth.rotation!.rotationRateDegPerDay * 0.01, 6);
   });
 });
 
 describe('the catalog agrees with itself', () => {
   it('derives the same rotation period from W as from the fact sheets', () => {
     for (const body of CATALOG) {
-      const fromRate = Math.abs(360 / body.rotationRateDegPerDay) * 24;
+      // Neptune is drawn in a different rotation system from the one its fact sheet
+      // quotes, deliberately, and has its own test below.
+      if (body.id === 'neptune') {
+        continue;
+      }
+      const fromRate = Math.abs(360 / body.rotation!.rotationRateDegPerDay) * 24;
       const fromSheet = Math.abs(body.rotationPeriodHours);
 
       // The two sources are independent, so they agree to their own precision
@@ -310,10 +319,25 @@ describe('the catalog agrees with itself', () => {
     }
   });
 
+  it('lets Neptune turn at one rate and report another, because it has two', () => {
+    // System III, the magnetic field, is the 16.11 hours everybody quotes and what the
+    // interface shows. System II, the optically observed clouds, is what the *map* has
+    // to turn at, because the map is of clouds. The IAU publishes both and Horizons
+    // cartographs Neptune -- alone among the giants -- in the second.
+    const neptune = CATALOG.find((body) => body.id === 'neptune')!;
+    const fromRate = (360 / neptune.rotation!.rotationRateDegPerDay) * 24;
+
+    expect(neptune.rotationPeriodHours).toBeCloseTo(16.11, 2);
+    expect(fromRate).toBeCloseTo(15.9663, 3);
+    // Not a rounding disagreement: they are nine minutes apart, which is a quarter of
+    // the planet every seventy-five days.
+    expect((neptune.rotationPeriodHours - fromRate) * 60).toBeGreaterThan(8);
+  });
+
   it('keeps Venus and Uranus retrograde in both conventions', () => {
-    expect(venus.rotationRateDegPerDay).toBeLessThan(0);
+    expect(venus.rotation!.rotationRateDegPerDay).toBeLessThan(0);
     expect(venus.rotationPeriodHours).toBeLessThan(0);
-    expect(uranus.rotationRateDegPerDay).toBeLessThan(0);
+    expect(uranus.rotation!.rotationRateDegPerDay).toBeLessThan(0);
     expect(uranus.rotationPeriodHours).toBeLessThan(0);
   });
 
@@ -324,18 +348,18 @@ describe('the catalog agrees with itself', () => {
     // describe the same rotation. Pinned here so nobody "fixes" it.
     const pluto = getBody('pluto');
 
-    expect(pluto.rotationRateDegPerDay).toBeGreaterThan(0);
+    expect(pluto.rotation!.rotationRateDegPerDay).toBeGreaterThan(0);
     expect(pluto.rotationPeriodHours).toBeLessThan(0);
-    expect(pluto.axialTiltDeg).toBeGreaterThan(90);
+    expect(pluto.axialTiltDeg!).toBeGreaterThan(90);
   });
 
   it('gives every body a pole on the celestial sphere', () => {
     for (const body of CATALOG) {
-      expect(body.poleRaDeg).toBeGreaterThanOrEqual(0);
-      expect(body.poleRaDeg).toBeLessThan(360);
-      expect(Math.abs(body.poleDecDeg)).toBeLessThanOrEqual(90);
-      expect(body.primeMeridianDeg).toBeGreaterThanOrEqual(0);
-      expect(body.primeMeridianDeg).toBeLessThan(360);
+      expect(body.rotation!.poleRaDeg).toBeGreaterThanOrEqual(0);
+      expect(body.rotation!.poleRaDeg).toBeLessThan(360);
+      expect(Math.abs(body.rotation!.poleDecDeg)).toBeLessThanOrEqual(90);
+      expect(body.rotation!.primeMeridianDeg).toBeGreaterThanOrEqual(0);
+      expect(body.rotation!.primeMeridianDeg).toBeLessThan(360);
     }
   });
 });

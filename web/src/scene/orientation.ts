@@ -1,4 +1,4 @@
-import type { BodyDefinition } from '@sss/tools/types';
+import type { BodyDefinition, RotationalElements } from '@sss/tools/types';
 import * as THREE from 'three';
 
 import { J2000_JD } from '../core/time.ts';
@@ -42,6 +42,21 @@ const DEG = Math.PI / 180;
 /** Days in a Julian century, the unit the IAU periodic terms are expressed in. */
 const DAYS_PER_CENTURY = 36525;
 
+/**
+ * A body's rotational elements, or a loud failure for one that has none.
+ *
+ * Throws rather than inventing an axis. The moons carry no rotation yet, and every
+ * caller that can meet one checks `body.rotation` first; reaching here without one is a
+ * bug in the caller, and a quietly made-up pole is exactly the error this module was
+ * written to remove.
+ */
+function rotationOf(body: BodyDefinition): RotationalElements {
+  if (body.rotation === null) {
+    throw new Error(`${body.id} has no rotational elements.`);
+  }
+  return body.rotation;
+}
+
 /** The IAU elements of a body at one instant, periodic term included. */
 export interface IauElements {
   /** Pole right ascension, ICRF equatorial, degrees. */
@@ -66,26 +81,35 @@ export interface IauElements {
  *
  * With both in place every body's sub-solar latitude matches JPL's to under 0.03
  * degrees across 2026.
+ *
+ * The moons need the rest of the model: every periodic term, and for Phobos the
+ * quadratic in W. It is the form NAIF's PCK evaluates, term for term.
  */
 export function iauElementsAt(jdTdb: number, body: BodyDefinition): IauElements {
+  const rotation = rotationOf(body);
   const days = jdTdb - J2000_JD;
-  const w = body.primeMeridianDeg + body.rotationRateDegPerDay * days;
+  let wDeg =
+    rotation.primeMeridianDeg +
+    rotation.rotationRateDegPerDay * days +
+    rotation.primeMeridianAccelDegPerDay2 * days * days;
 
   const centuries = days / DAYS_PER_CENTURY;
-  const raDeg = body.poleRaDeg + body.poleRaRateDegPerCentury * centuries;
-  const decDeg = body.poleDecDeg + body.poleDecRateDegPerCentury * centuries;
+  let raDeg = rotation.poleRaDeg + rotation.poleRaRateDegPerCentury * centuries;
+  let decDeg = rotation.poleDecDeg + rotation.poleDecRateDegPerCentury * centuries;
 
-  const nutation = body.poleNutation;
-  if (nutation === null) {
-    return { raDeg, decDeg, wDeg: w };
+  for (const term of rotation.periodicTerms) {
+    const n =
+      (term.angleDeg +
+        term.rateDegPerCentury * centuries +
+        term.accelDegPerCentury2 * centuries * centuries) *
+      DEG;
+    const sin = Math.sin(n);
+    raDeg += term.raSinCoeffDeg * sin;
+    decDeg += term.decCosCoeffDeg * Math.cos(n);
+    wDeg += term.wSinCoeffDeg * sin;
   }
 
-  const n = (nutation.angleDeg + nutation.rateDegPerCentury * centuries) * DEG;
-  return {
-    raDeg: raDeg + nutation.raSinCoeffDeg * Math.sin(n),
-    decDeg: decDeg + nutation.decCosCoeffDeg * Math.cos(n),
-    wDeg: w + nutation.wSinCoeffDeg * Math.sin(n),
-  };
+  return { raDeg, decDeg, wDeg };
 }
 
 /**
@@ -285,7 +309,7 @@ export function directionToGeographic(
  */
 export function rotationalPole(jdTdb: number, body: BodyDefinition): Vec3 {
   const pole = poleDirection(jdTdb, body);
-  return body.rotationRateDegPerDay >= 0 ? pole : vec3(-pole.x, -pole.y, -pole.z);
+  return rotationOf(body).rotationRateDegPerDay >= 0 ? pole : vec3(-pole.x, -pole.y, -pole.z);
 }
 
 /**

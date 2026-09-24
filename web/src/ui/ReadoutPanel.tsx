@@ -17,6 +17,13 @@ export interface ReadoutPanelProps {
   readonly jd: number;
   readonly distanceMode: DistanceMode;
   readonly onDistanceMode: (mode: DistanceMode) => void;
+  /**
+   * Body kinds currently switched on in the layers panel.
+   *
+   * A kind that is off is off everywhere. Listing a body here that is not on screen
+   * makes the panel a different answer to "what is in this scene" from the scene itself.
+   */
+  readonly visibleKinds: ReadonlySet<string>;
   readonly tick: number;
 }
 
@@ -25,6 +32,7 @@ export function ReadoutPanel({
   jd,
   distanceMode,
   onDistanceMode,
+  visibleKinds,
   tick,
 }: ReadoutPanelProps) {
   const focus = useViewStore((state) => state.focus);
@@ -74,42 +82,45 @@ export function ReadoutPanel({
           </tr>
         </thead>
         <tbody>
-          {store.bodies.map((body) => {
-            const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);
-            const speed = store.speedRelativeTo(body.id, 'sun', jd);
-            const lightTime = store.lightTimeSeconds(body.id, 'sun', jd, distanceMode);
-            const fromFocus = store.distanceBetween(body.id, focus, jd, distanceMode);
+          {store.bodies
+            .filter((body) => visibleKinds.has(body.kind))
+            .map((body) => {
+              const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);
+              const speed = store.speedRelativeTo(body.id, 'sun', jd);
+              const lightTime = store.lightTimeSeconds(body.id, 'sun', jd, distanceMode);
+              const fromFocus = store.distanceBetween(body.id, focus, jd, distanceMode);
 
-            return (
-              <tr
-                key={body.id}
-                onClick={() => setFocus(body.id)}
-                style={{
-                  borderTop: '1px solid #1c1c1c',
-                  textAlign: 'right',
-                  cursor: 'pointer',
-                  background: body.id === focus ? '#12161a' : 'transparent',
-                }}
-              >
-                <td style={{ textAlign: 'left', padding: '0.25rem 0.5rem 0.25rem 0' }}>
-                  <span style={{ color: body.color, marginRight: '0.4rem' }}>&#9679;</span>
-                  {body.name}
-                </td>
-                <td style={{ padding: '0.25rem 0.5rem', color: '#c8c8c8' }}>
-                  {fromSun === null ? '--' : (fromSun / AU_KM).toFixed(3)}
-                </td>
-                <td style={{ padding: '0.25rem 0.5rem', color: '#c8c8c8' }}>
-                  {speed === null ? '--' : `${speed.toFixed(2)} km/s`}
-                </td>
-                <td style={{ padding: '0.25rem 0.5rem', color: '#8a8a8a' }}>
-                  {lightTime === null || body.id === 'sun' ? '--' : formatLightTime(lightTime)}
-                </td>
-                <td style={{ padding: '0.25rem 0 0.25rem 0.5rem', color: '#8a8a8a' }}>
-                  {fromFocus === null ? '--' : `${(fromFocus / AU_KM).toFixed(3)} AU`}
-                </td>
-              </tr>
-            );
-          })}
+              return (
+                <tr
+                  key={body.id}
+                  className="ui-press"
+                  onClick={() => setFocus(body.id)}
+                  style={{
+                    borderTop: '1px solid #1c1c1c',
+                    textAlign: 'right',
+                    cursor: 'pointer',
+                    background: body.id === focus ? '#12161a' : 'transparent',
+                  }}
+                >
+                  <td style={{ textAlign: 'left', padding: '0.25rem 0.5rem 0.25rem 0' }}>
+                    <span style={{ color: body.color, marginRight: '0.4rem' }}>&#9679;</span>
+                    {body.name}
+                  </td>
+                  <td style={{ padding: '0.25rem 0.5rem', color: '#c8c8c8' }}>
+                    {fromSun === null ? '--' : (fromSun / AU_KM).toFixed(3)}
+                  </td>
+                  <td style={{ padding: '0.25rem 0.5rem', color: '#c8c8c8' }}>
+                    {speed === null ? '--' : `${speed.toFixed(2)} km/s`}
+                  </td>
+                  <td style={{ padding: '0.25rem 0.5rem', color: '#8a8a8a' }}>
+                    {lightTime === null || body.id === 'sun' ? '--' : formatLightTime(lightTime)}
+                  </td>
+                  <td style={{ padding: '0.25rem 0 0.25rem 0.5rem', color: '#8a8a8a' }}>
+                    {fromFocus === null ? '--' : `${(fromFocus / AU_KM).toFixed(3)} AU`}
+                  </td>
+                </tr>
+              );
+            })}
         </tbody>
       </table>
 
