@@ -1,4 +1,4 @@
-import type { BodyDefinition, BodyId } from '@sss/tools/types';
+import type { BodyId } from '@sss/tools/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DistanceMode } from './core/ephemerisStore.ts';
@@ -6,6 +6,7 @@ import { useSimulation } from './core/useSimulation.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
+import { BodyPicker } from './ui/BodyPicker.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
@@ -97,14 +98,6 @@ export function App() {
   );
   const uiVisible = layers.userInterface;
 
-  // The system the picker's second row lists: the focused planet's, or the planet a
-  // focused moon belongs to.
-  const focusBody = store.body(focus);
-  const system = focusBody.parent ?? focusBody.id;
-  const systemMoons = visibleKinds.has('moon')
-    ? store.bodies.filter((body) => body.parent === system)
-    : [];
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <SolarSystemCanvas
@@ -160,62 +153,13 @@ export function App() {
 
       {uiVisible && (
         <>
-          {/* Top-left: breadcrumb and body picker. */}
-          <div style={{ position: 'absolute', top: '1rem', left: '1.25rem' }}>
-            <div
-              style={{
-                letterSpacing: '0.22em',
-                fontSize: '0.78rem',
-                color: '#c8c8c8',
-                textTransform: 'uppercase',
-              }}
-            >
-              Solar System <span style={{ color: '#4a4a4a' }}>&rsaquo;</span>{' '}
-              <span style={{ color: '#fff' }}>{store.body(focus).name}</span>
-            </div>
-            <div
-              style={{
-                marginTop: '0.6rem',
-                display: 'flex',
-                gap: '0.3rem',
-                flexWrap: 'wrap',
-                maxWidth: '28rem',
-              }}
-            >
-              {store.bodies
-                .filter((body) => body.parent === null && visibleKinds.has(body.kind))
-                .map((body) => (
-                  <BodyButton
-                    key={body.id}
-                    body={body}
-                    active={body.id === focus || body.id === system}
-                    onClick={() => setFocus(body.id)}
-                  />
-                ))}
-            </div>
-            {/* The moons of whichever system is in focus. Twenty-one of them in the row
-                above would bury the planets; here they are the ones you are near. */}
-            {systemMoons.length > 0 && (
-              <div
-                style={{
-                  marginTop: '0.3rem',
-                  display: 'flex',
-                  gap: '0.3rem',
-                  flexWrap: 'wrap',
-                  maxWidth: '28rem',
-                }}
-              >
-                {systemMoons.map((body) => (
-                  <BodyButton
-                    key={body.id}
-                    body={body}
-                    active={body.id === focus}
-                    onClick={() => setFocus(body.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Top-left: where you are, and the list of everywhere else. */}
+          <BodyPicker
+            store={store}
+            focus={focus}
+            onFocus={setFocus}
+            visibleKinds={visibleKinds}
+          />
 
           {/* Bottom-left: time. */}
           <div style={{ position: 'absolute', bottom: '1.25rem', left: '1.25rem' }}>
@@ -275,38 +219,6 @@ export function App() {
         </button>
       )}
     </div>
-  );
-}
-
-function BodyButton({
-  body,
-  active,
-  onClick,
-}: {
-  body: BodyDefinition;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: active ? '#1e2a24' : 'rgba(0,0,0,0.4)',
-        border: `1px solid ${active ? '#3ddc84' : '#2a2a2a'}`,
-        color: active ? '#3ddc84' : '#8a8a8a',
-        padding: '0.24rem 0.55rem',
-        fontSize: '0.68rem',
-        letterSpacing: '0.06em',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        borderRadius: '0.2rem',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span style={{ color: body.color, marginRight: '0.35rem' }}>&#9679;</span>
-      {body.name}
-    </button>
   );
 }
 

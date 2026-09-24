@@ -182,7 +182,7 @@ describe('hiding a kind', () => {
     // The check that survives a new panel: anything that walks `store.bodies` to put
     // something on screen has to filter, or it becomes a different answer to "what is in
     // this scene" from the scene itself.
-    for (const file of ['../App.tsx', 'ReadoutPanel.tsx', '../scene/LabelProjector.tsx']) {
+    for (const file of ['../App.tsx', 'BodyPicker.tsx', 'ReadoutPanel.tsx', '../scene/LabelProjector.tsx']) {
       const source = await read(file);
       if (source.includes('store.bodies')) {
         expect(source, file).toContain('visibleKinds');

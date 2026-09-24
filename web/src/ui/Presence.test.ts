@@ -25,10 +25,18 @@ describe('panel animations', () => {
   it('keep a closing panel mounted exactly as long as it animates', () => {
     expect(durationOf('panel-exit')).toBe(PANEL_EXIT_MS);
     expect(durationOf('overlay-exit')).toBe(PANEL_EXIT_MS);
+    expect(durationOf('dropdown-exit')).toBe(PANEL_EXIT_MS);
   });
 
   it('stay small: under a fifth of a second either way', () => {
-    for (const name of ['panel-enter', 'panel-exit', 'overlay-enter', 'overlay-exit']) {
+    for (const name of [
+      'panel-enter',
+      'panel-exit',
+      'overlay-enter',
+      'overlay-exit',
+      'dropdown-enter',
+      'dropdown-exit',
+    ]) {
       expect(durationOf(name), name).toBeLessThanOrEqual(200);
     }
   });
@@ -44,8 +52,8 @@ describe('panel animations', () => {
     // Reduced motion means no movement; a fade in place is still allowed, and still says
     // that something opened or closed.
     const block = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
-    expect(block).toMatch(/\.panel-enter\s*\{\s*animation-name:\s*overlay-in/);
-    expect(block).toMatch(/\.panel-exit\s*\{\s*animation-name:\s*overlay-out/);
+    expect(block).toMatch(/\.panel-enter,\s*\.dropdown-enter\s*\{\s*animation-name:\s*overlay-in/);
+    expect(block).toMatch(/\.panel-exit,\s*\.dropdown-exit\s*\{\s*animation-name:\s*overlay-out/);
     expect(block).not.toMatch(/animation-duration/);
     // And the fades it swaps in move nothing.
     expect(/@keyframes overlay-in\s*\{[^@]*\}/.exec(css)?.[0]).not.toMatch(/transform/);
