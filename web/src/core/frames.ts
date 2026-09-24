@@ -5,13 +5,13 @@ import { addStates, subtractStates, ZERO_STATE, type StateVector } from './vec3.
 /**
  * The reference-frame tree.
  *
- * Every body's ephemeris is stored relative to its parent. In v1 all ten bodies hang
- * off the Solar System barycenter, so the tree is one level deep and this module
- * looks like overkill. It is not: the moment a moon arrives with `parent: 'jupiter'`
- * and vectors requested at CENTER='500@599', its position in the root frame is its
- * own vector plus Jupiter's, and that sum has to happen in double precision before
- * anything reaches the GPU. Building the walk now is what keeps phases A through C
- * from becoming a renderer rewrite.
+ * Every body's ephemeris is stored relative to its parent. In v1 all ten bodies hung
+ * off the Solar System barycenter, so the tree was one level deep and this module
+ * looked like overkill. It was not: Io arrives with `parent: 'jupiter'` and vectors
+ * requested at CENTER='500@599', so its position in the root frame is its own vector
+ * plus Jupiter's, and that sum has to happen in double precision before anything
+ * reaches the GPU. The moons landed without a line of this file changing, which is
+ * what it was built for.
  *
  * Root frame is the Solar System barycenter, and `parent: null` means "measured
  * against the root".

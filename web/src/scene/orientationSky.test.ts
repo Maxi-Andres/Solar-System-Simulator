@@ -198,7 +198,9 @@ describeWithData('axial tilt, from two independent sources', () => {
     const jd = dateToTdb(new Date('2026-01-01T00:00:00Z'));
 
     for (const body of loaded.bodies) {
-      if (body.id === 'sun') {
+      // The moons carry no pole yet, and their tilt is to their planet's orbit plane,
+      // not the Sun's; both arrive with their maps.
+      if (body.id === 'sun' || body.rotation === null) {
         continue;
       }
       const heliocentric = loaded.stateRelativeTo(body.id, 'sun', jd);
@@ -213,7 +215,7 @@ describeWithData('axial tilt, from two independent sources', () => {
 
       // A third of a degree covers the fact sheets' own rounding and the difference
       // between an instantaneous orbit normal and a mean one.
-      expect(Math.abs(measured - body.axialTiltDeg), body.id).toBeLessThan(0.35);
+      expect(Math.abs(measured - body.axialTiltDeg!), body.id).toBeLessThan(0.35);
     }
   });
 
@@ -234,10 +236,10 @@ describeWithData('axial tilt, from two independent sources', () => {
     const loaded = store!;
     const jd = dateToTdb(new Date('2026-01-01T00:00:00Z'));
 
-    for (const body of loaded.bodies) {
+    for (const body of loaded.bodies.filter((candidate) => candidate.rotation !== null)) {
       const alignment = dot(poleDirection(jd, body), rotationalPole(jd, body));
 
-      expect(alignment, body.id).toBeCloseTo(body.rotationRateDegPerDay < 0 ? -1 : 1, 9);
+      expect(alignment, body.id).toBeCloseTo(body.rotation!.rotationRateDegPerDay < 0 ? -1 : 1, 9);
     }
   });
 });
@@ -367,7 +369,10 @@ describeWithData('the sub-solar longitude, against JPL Horizons', () => {
     // needs System II. The error is 4.83 degrees a day, so over the four sample dates
     // it is anywhere at all: the average miss was 90 degrees.
     const neptune = store!.body('neptune');
-    const wrong = { ...neptune, primeMeridianDeg: 253.18, rotationRateDegPerDay: 536.3128492 };
+    const wrong = {
+      ...neptune,
+      rotation: { ...neptune.rotation!, primeMeridianDeg: 253.18, rotationRateDegPerDay: 536.3128492 },
+    };
 
     const seen = dateToTdb(new Date('2026-06-29T00:00:00Z'));
     let emitted = seen;

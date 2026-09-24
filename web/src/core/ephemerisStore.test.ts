@@ -49,7 +49,8 @@ describeWithData('EphemerisStore against the generated data', () => {
   const midWindow = (s.manifest.window.startJd + s.manifest.window.stopJd) / 2;
 
   it('loads the full catalog and manifest', () => {
-    expect(s.bodies).toHaveLength(10);
+    // The Sun, eight planets, Pluto, and twenty-one moons.
+    expect(s.bodies).toHaveLength(31);
     expect(s.manifest.bodies).toContain('earth');
     expect(s.manifest.frame.center).toBe('500@0');
     expect(s.generatedAt.getTime()).toBeLessThanOrEqual(Date.now());
@@ -178,11 +179,12 @@ describeWithData('EphemerisStore against the generated data', () => {
     expect(r).toBeLessThan(elements.apoapsisKm * 1.001);
   });
 
-  it('answers for right now, which is the whole point of LIVE mode', () => {
+  it('answers for right now, which is the whole point of LIVE mode', async () => {
     const now = dateToTdb(new Date());
+    await s.whenLoadedAt(now);
     const states = s.allStatesInRoot(now);
 
-    expect(states.size).toBe(10);
+    expect(states.size).toBe(s.bodies.length);
     for (const [, state] of states) {
       expect(state.approximate).toBe(false);
     }
@@ -192,10 +194,18 @@ describeWithData('EphemerisStore against the generated data', () => {
     expect(
       () =>
         new EphemerisStore({
-          manifest: { ...s.manifest, bodies: [...s.manifest.bodies, 'nibiru'] },
+          manifest: {
+            ...s.manifest,
+            bodies: [...s.manifest.bodies, 'nibiru'],
+            tables: {
+              ...s.manifest.tables,
+              nibiru: { startJd: 0, stopJd: 1, chunks: null },
+            },
+          },
           bodies: s.bodies,
           vectors: new Map(),
           elements: new Map(),
+          loadChunk: null,
         }),
     ).toThrow(/no vector table/);
   });

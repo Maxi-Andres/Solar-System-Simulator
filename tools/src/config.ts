@@ -23,15 +23,41 @@ export const OUT_UNITS = 'KM-S';
 export const WINDOW_YEARS_BACK = 10;
 export const WINDOW_YEARS_FORWARD = 10;
 
-/** Rounding applied before serializing, to keep the JSON small. */
+/**
+ * The window for the fast moons, the ones whose catalog entry says `short`.
+ *
+ * One year each way, by decision. The fast moons need sub-day spacing -- Phobos a
+ * sample every fifteen minutes -- and that makes their data a matter of budget:
+ *
+ *   window       samples     JSON      requests to Horizons per run
+ *   +-1 year     ~200,000    ~17 MB    ~140
+ *   +-5 years  ~1,000,000    ~85 MB    ~700
+ *   20 years   ~2,000,000   ~170 MB  ~1,400
+ *
+ * The visitor never pays for any of it, because the tables ship in chunks fetched
+ * one instant at a time; what the window costs is the deploy's time and JPL's
+ * patience, and the weekly cron re-centres it. Outside it a moon falls back to
+ * Keplerian propagation from its elements and is marked approximate, exactly like a
+ * planet outside the twenty years.
+ */
+export const SHORT_WINDOW_YEARS_BACK = 1;
+export const SHORT_WINDOW_YEARS_FORWARD = 1;
+
+/**
+ * Rounding applied before serializing, to keep the JSON small.
+ *
+ * Time carries eight decimals rather than six. At six a sample's instant could be
+ * 43 ms off, which Mercury -- at 47 km/s -- turns into 2 km, and Phobos, moving 2.1 km/s
+ * against Mars, into 90 m: most of its whole interpolation budget. Horizons prints nine.
+ */
 export const POSITION_DECIMALS = 3; // km, i.e. 1 mm
 export const VELOCITY_DECIMALS = 9; // km/s, i.e. 1 nm/s
-export const TIME_DECIMALS = 6; // days, i.e. ~0.09 s
+export const TIME_DECIMALS = 8; // days, i.e. ~1 ms
 
 /**
  * Politeness settings. JPL publishes no hard rate limit but asks for reasonable
- * use; 10 bodies times 2 calls is only 20 requests per run, so a small concurrency
- * cap plus retries is plenty.
+ * use. The planets are about 30 requests per run; the moons add about 140, almost all
+ * of them Phobos and the inner Saturnians. Two at a time keeps that polite.
  */
 export const MAX_CONCURRENT_REQUESTS = 2;
 

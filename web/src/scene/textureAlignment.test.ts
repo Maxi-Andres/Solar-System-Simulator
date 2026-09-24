@@ -199,7 +199,7 @@ const SET_IDS = TEXTURE_SETS.map((set) => set.id);
  */
 describe.each(SET_IDS)('Earth is drawn the way the map is drawn (%s)', (setId) => {
   const earth = getBody('earth');
-  const variant = earth.textures[setId as TextureSetId];
+  const variant = earth.textures![setId as TextureSetId];
 
   it.each(EARTH)('finds $name where it belongs ($describe)', async (landmark) => {
     const pixel = await texelAt(earth, landmark, variant);
@@ -245,7 +245,7 @@ const spot = (name: string, latitudeDeg: number, longitudeDeg: number): Landmark
 });
 
 describe.each(SET_IDS)('the other mapped bodies (%s)', (setId) => {
-  const variantOf = (id: string) => getBody(id).textures[setId as TextureSetId];
+  const variantOf = (id: string) => getBody(id).textures![setId as TextureSetId];
 
   it('puts Syrtis Major dark and Hellas bright on Mars', async () => {
     // Two different publishers between the sets -- Solar System Scope and NASA 3D
@@ -284,7 +284,9 @@ describe.each(SET_IDS)('the other mapped bodies (%s)', (setId) => {
 
 describe('the catalog says where every image starts', () => {
   const variants = CATALOG.flatMap((body) =>
-    SET_IDS.map((setId) => ({ id: body.id, setId, ...body.textures[setId as TextureSetId] })),
+    body.textures === null
+      ? []
+      : SET_IDS.map((setId) => ({ id: body.id, setId, ...body.textures![setId as TextureSetId] })),
   );
 
   it('gives every map in every set a longitude origin on the circle', () => {
@@ -318,7 +320,9 @@ describe('the catalog says where every image starts', () => {
     // Three of ten. Pinned because the UI states the count, and a silently growing or
     // shrinking set would make that text a lie.
     const differing = CATALOG.filter(
-      (body) => body.textures.illustrative.file !== body.textures.photometric.file,
+      (body) =>
+        body.textures !== null &&
+        body.textures.illustrative.file !== body.textures.photometric.file,
     ).map((body) => body.id);
 
     expect(differing).toEqual(['earth', 'mars', 'neptune']);

@@ -1,5 +1,5 @@
-import type { BodyId } from '@sss/tools/types';
-import { useMemo, useRef, useState } from 'react';
+import type { BodyDefinition, BodyId } from '@sss/tools/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DistanceMode } from './core/ephemerisStore.ts';
 import { useSimulation } from './core/useSimulation.ts';
@@ -56,6 +56,18 @@ export function App() {
     return kinds;
   }, [layers]);
 
+  // Switching a layer off while standing on one of its bodies would leave the camera
+  // orbiting something that is no longer drawn. Step back to what it orbits.
+  useEffect(() => {
+    if (store === null) {
+      return;
+    }
+    const body = store.body(focus);
+    if (!visibleKinds.has(body.kind) && body.parent !== null) {
+      setFocus(body.parent);
+    }
+  }, [store, focus, visibleKinds, setFocus]);
+
   if (error !== null) {
     return (
       <Centered>
@@ -76,8 +88,21 @@ export function App() {
   }
 
   const jd = clock.tdbJulianDay;
-  const exact = store.isExactAt(jd);
+  // Exact for what is on screen. The moons' window is two years and the planets'
+  // twenty, so the answer depends on whether the moons are shown at all.
+  const exact = store.isExactAt(
+    jd,
+    store.bodies.filter((body) => visibleKinds.has(body.kind)).map((body) => body.id),
+  );
   const uiVisible = layers.userInterface;
+
+  // The system the picker's second row lists: the focused planet's, or the planet a
+  // focused moon belongs to.
+  const focusBody = store.body(focus);
+  const system = focusBody.parent ?? focusBody.id;
+  const systemMoons = visibleKinds.has('moon')
+    ? store.bodies.filter((body) => body.parent === system)
+    : [];
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -157,30 +182,38 @@ export function App() {
               }}
             >
               {store.bodies
-                .filter((body) => visibleKinds.has(body.kind))
+                .filter((body) => body.parent === null && visibleKinds.has(body.kind))
                 .map((body) => (
-                  <button
+                  <BodyButton
                     key={body.id}
-                    type="button"
+                    body={body}
+                    active={body.id === focus || body.id === system}
                     onClick={() => setFocus(body.id)}
-                    style={{
-                      background: body.id === focus ? '#1e2a24' : 'rgba(0,0,0,0.4)',
-                      border: `1px solid ${body.id === focus ? '#3ddc84' : '#2a2a2a'}`,
-                      color: body.id === focus ? '#3ddc84' : '#8a8a8a',
-                      padding: '0.24rem 0.55rem',
-                      fontSize: '0.68rem',
-                      letterSpacing: '0.06em',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      borderRadius: '0.2rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span style={{ color: body.color, marginRight: '0.35rem' }}>&#9679;</span>
-                    {body.name}
-                  </button>
+                  />
                 ))}
             </div>
+            {/* The moons of whichever system is in focus. Twenty-one of them in the row
+                above would bury the planets; here they are the ones you are near. */}
+            {systemMoons.length > 0 && (
+              <div
+                style={{
+                  marginTop: '0.3rem',
+                  display: 'flex',
+                  gap: '0.3rem',
+                  flexWrap: 'wrap',
+                  maxWidth: '28rem',
+                }}
+              >
+                {systemMoons.map((body) => (
+                  <BodyButton
+                    key={body.id}
+                    body={body}
+                    active={body.id === focus}
+                    onClick={() => setFocus(body.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Bottom-left: time. */}
@@ -234,6 +267,38 @@ export function App() {
         </button>
       )}
     </div>
+  );
+}
+
+function BodyButton({
+  body,
+  active,
+  onClick,
+}: {
+  body: BodyDefinition;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: active ? '#1e2a24' : 'rgba(0,0,0,0.4)',
+        border: `1px solid ${active ? '#3ddc84' : '#2a2a2a'}`,
+        color: active ? '#3ddc84' : '#8a8a8a',
+        padding: '0.24rem 0.55rem',
+        fontSize: '0.68rem',
+        letterSpacing: '0.06em',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        borderRadius: '0.2rem',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ color: body.color, marginRight: '0.35rem' }}>&#9679;</span>
+      {body.name}
+    </button>
   );
 }
 

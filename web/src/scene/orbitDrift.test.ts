@@ -127,20 +127,26 @@ function distanceToPolyline(points: Float64Array, target: readonly number[]): nu
   return nearest;
 }
 
-/** How far the body sits from the orbit drawn for that same instant, in body radii. */
+/**
+ * How far the body sits from the orbit drawn for that same instant, in body radii.
+ *
+ * Around whatever it orbits, exactly as SolarSystem.tsx draws it: the Sun for a planet,
+ * the planet alone for a moon.
+ */
 function driftInRadii(s: EphemerisStore, id: string, jd: number): number | null {
   const body = s.body(id);
-  const state = s.stateRelativeTo(id, 'sun', jd);
+  const parent = s.body(body.parent ?? 'sun');
+  const state = s.stateRelativeTo(id, parent.id, jd);
   if (state === null) {
     return null;
   }
 
   const elements = stateToOsculatingElements(
     state,
-    s.body('sun').gmKm3S2 + body.gmKm3S2,
+    parent.gmBodyOnlyKm3S2 + body.gmKm3S2,
     jd,
     id,
-    '500@10',
+    `500@${parent.horizonsId}`,
   );
   if (elements === null) {
     return null;
@@ -161,8 +167,27 @@ describeWithData('orbit drawn from the live state', () => {
   const s = store!;
   const { startJd, stopJd } = s.manifest.window;
 
+  it('keeps every moon on its own orbit across its own window', async () => {
+    // A moon's orbit is drawn around its planet, from the moon's planet-relative state
+    // and the planet's own mass. Sampled at uneven fractions so the instants fall
+    // between samples and inside chunks rather than on their seams.
+    for (const body of s.bodies.filter((candidate) => candidate.parent !== null)) {
+      const span = s.coverage(body.id)!;
+      for (const fraction of [0.001, 0.137, 0.5, 0.731, 0.999]) {
+        const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
+        await s.whenLoadedAt(jd, [body.id]);
+        const drift = driftInRadii(s, body.id, jd);
+
+        expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
+        expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
+      }
+    }
+  });
+
   it('keeps every planet on its own orbit across the whole 20-year window', () => {
-    for (const body of s.bodies.filter((candidate) => candidate.drawOrbit)) {
+    for (const body of s.bodies.filter(
+      (candidate) => candidate.drawOrbit && candidate.parent === null,
+    )) {
       // Ten instants spread over the full window, including both edges.
       for (let i = 0; i <= 10; i += 1) {
         const jd = startJd + ((stopJd - startJd) * i) / 10;
@@ -331,11 +356,14 @@ describeWithData('stateToOsculatingElements', () => {
  */
 describeWithData('reported orbit defects', () => {
   const s = store!;
+  // The advertised window is the full-window bodies' promise. The fast moons make a
+  // narrower one of their own, checked separately.
+  const fullWindow = s.manifest.bodies.filter((id) => s.body(id).vectorWindow === 'full');
 
   it('covers the advertised window for every body, including the giants', () => {
     // The end-of-data jump: with a 32-day step and no slack, Jupiter through Neptune
     // stopped eight days before the window the manifest claimed.
-    for (const id of s.manifest.bodies) {
+    for (const id of fullWindow) {
       const exact = s.stateInRoot(id, s.manifest.window.stopJd);
 
       expect(exact).not.toBeNull();
@@ -347,7 +375,7 @@ describeWithData('reported orbit defects', () => {
     const { startJd, stopJd } = s.manifest.window;
 
     for (const jd of [startJd, startJd + 0.5, stopJd - 0.5, stopJd]) {
-      for (const id of s.manifest.bodies) {
+      for (const id of fullWindow) {
         const state = s.stateInRoot(id, jd);
         expect(state).not.toBeNull();
         expect(state!.approximate).toBe(false);

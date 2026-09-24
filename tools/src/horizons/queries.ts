@@ -20,10 +20,59 @@ export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 86_400_000);
 }
 
-/** Formats a Date as the YYYY-MM-DD string Horizons expects for START/STOP_TIME. */
+/** Minutes in a day: the unit sub-day steps are counted in. */
+export const MINUTES_PER_DAY = 1440;
+const MS_PER_MINUTE = 60_000;
+
+/** Adds whole minutes to a date, exactly: no fraction of a day is ever formed. */
+export function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * MS_PER_MINUTE);
+}
+
+/**
+ * Formats a Date as the 'YYYY-MM-DD HH:MM' string Horizons takes for START/STOP_TIME.
+ *
+ * To the minute, not the day. The planets never noticed the difference, because every
+ * one of their chunk boundaries falls on a midnight; the moons' do not. Phobos splits
+ * into pieces fifteen and a half days long, and cutting those to the date made each
+ * piece start hours before the previous one ended.
+ *
+ * Throws on a date that is not a whole minute, rather than silently moving it onto a
+ * different sampling grid.
+ */
 export function toHorizonsDate(date: Date): string {
-  const isoDate = date.toISOString().slice(0, 10);
-  return isoDate;
+  if (date.getTime() % MS_PER_MINUTE !== 0) {
+    throw new Error(`${date.toISOString()} is not on a whole minute.`);
+  }
+  const iso = date.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
+/**
+ * A body's sample spacing in whole minutes.
+ *
+ * Throws unless it is one. Horizons takes a step as an integer and a unit, and a step
+ * that is not a whole number of minutes cannot be written down without rounding it
+ * onto a different grid from the one the chunks were planned on.
+ */
+export function stepMinutes(stepDays: number): number {
+  const minutes = stepDays * MINUTES_PER_DAY;
+  const whole = Math.round(minutes);
+  if (whole < 1 || Math.abs(minutes - whole) > 1e-6) {
+    throw new Error(`A step of ${stepDays} days is not a whole number of minutes.`);
+  }
+  return whole;
+}
+
+/**
+ * The STEP_SIZE parameter for a body.
+ *
+ * Whole days are written in days, exactly as they always were, so the planets' queries
+ * are unchanged; anything finer is written in minutes -- '15m' for Phobos.
+ */
+export function stepSize(stepDays: number): string {
+  const minutes = stepMinutes(stepDays);
+  return minutes % MINUTES_PER_DAY === 0 ? `${minutes / MINUTES_PER_DAY}d` : `${minutes}m`;
 }
 
 /**
@@ -58,7 +107,7 @@ export function vectorQuery(
     STOP_TIME: toHorizonsDate(stop),
     // Per body: see the measurements in catalog.ts for why one step cannot serve
     // both Mercury and Neptune.
-    STEP_SIZE: `${body.stepDays}d`,
+    STEP_SIZE: stepSize(body.stepDays),
     // Table type 2 is position + velocity; without labels the rows are plain CSV.
     VEC_TABLE: '2',
     VEC_LABELS: 'NO',

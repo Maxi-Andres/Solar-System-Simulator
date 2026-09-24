@@ -55,10 +55,13 @@ describeWithData('rebaseFrame', () => {
     }
   });
 
-  it('includes every body and reports real distances', () => {
+  it('includes every body and reports real distances', async () => {
+    // The moons' chunks are fetched on demand; until they are here a moon is absent
+    // rather than wrong.
+    await s.whenLoadedAt(jd);
     const snapshot = rebaseFrame(s, 'earth', jd);
 
-    expect(snapshot.bodies.size).toBe(10);
+    expect(snapshot.bodies.size).toBe(s.bodies.length);
     // The Sun from Earth is about 1 AU, whichever way you look at it.
     expect(snapshot.bodies.get('sun')!.distanceKm / AU_KM).toBeCloseTo(1, 1);
   });
@@ -139,7 +142,7 @@ describeWithData('what the scene will actually show', () => {
     const snapshot = rebaseFrame(s, 'sun', jd);
 
     for (const body of s.bodies) {
-      if (body.id === 'sun') continue;
+      if (body.id === 'sun' || body.parent !== null) continue;
       const rebased = snapshot.bodies.get(body.id)!;
       const distance = Math.max(rebased.distanceKm, cameraDistanceKm);
       const px = angularRadiusPixels(body.radiusEquatorialKm, distance, HEIGHT_PX, FOV);
@@ -200,8 +203,11 @@ describeWithData('what the scene will actually show', () => {
       FOV,
     );
 
+    // Planets only. The Moon is the one body that genuinely can outgrow the Sun from
+    // here -- 29.3 to 34.1 arcminutes against the Sun's 31.5 to 32.5 -- which is the
+    // whole reason there are total eclipses as well as annular ones.
     for (const body of s.bodies) {
-      if (body.id === 'sun' || body.id === 'earth') continue;
+      if (body.id === 'sun' || body.id === 'earth' || body.parent !== null) continue;
       const rebased = snapshot.bodies.get(body.id)!;
       const px = angularRadiusPixels(body.radiusEquatorialKm, rebased.distanceKm, HEIGHT_PX, FOV);
 

@@ -18,6 +18,9 @@ import {
   MESH_FADE_START_PX,
   meshOpacity,
   pixelsToWorldSize,
+  SATELLITE_HIDDEN_PX,
+  SATELLITE_SHOWN_PX,
+  satelliteOpacity,
   toSceneUnits,
   unitsToKm,
 } from './scale.ts';
@@ -398,5 +401,38 @@ describe('focusOrbitOpacity', () => {
         focusOrbitOpacity(angularRadiusPixels(1, 16, height, FOV_DEG), height),
       ).toBeCloseTo(focusOrbitOpacity(angularRadiusPixels(1, 16, 1080, FOV_DEG), 1080), 6);
     }
+  });
+});
+
+describe('satelliteOpacity', () => {
+  const AU = 149_597_870.7;
+  const orbitPx = (orbitKm: number, fromKm: number): number =>
+    angularRadiusPixels(orbitKm, fromKm, 1080, FOV_DEG);
+
+  it('fades a moon in between its two thresholds, and nowhere else', () => {
+    expect(satelliteOpacity(SATELLITE_HIDDEN_PX)).toBe(0);
+    expect(satelliteOpacity(SATELLITE_HIDDEN_PX - 1)).toBe(0);
+    expect(satelliteOpacity(SATELLITE_SHOWN_PX)).toBe(1);
+    expect(satelliteOpacity(SATELLITE_SHOWN_PX * 10)).toBe(1);
+    expect(satelliteOpacity((SATELLITE_HIDDEN_PX + SATELLITE_SHOWN_PX) / 2)).toBeCloseTo(0.5, 9);
+  });
+
+  it('keeps the Galileans off Jupiter in a view of the whole planetary system', () => {
+    // Callisto, the widest, from 4.2 AU -- about where Earth sees Jupiter from.
+    expect(satelliteOpacity(orbitPx(1_882_700, 4.2 * AU))).toBe(0);
+    // And the Moon, from the far side of the Sun.
+    expect(satelliteOpacity(orbitPx(384_400, 2 * AU))).toBe(0);
+  });
+
+  it('opens the system up well before the planet itself stops being a dot', () => {
+    // Io's orbit is fully shown from 0.2 AU, where Jupiter is still a sub-pixel point.
+    expect(satelliteOpacity(orbitPx(421_800, 0.2 * AU))).toBe(1);
+    expect(angularRadiusPixels(71_492, 0.2 * AU, 1080, FOV_DEG)).toBeLessThan(6);
+  });
+
+  it('shows every moon when its own planet is in focus at the framing distance', () => {
+    // CameraRig settles at eight radii. Phobos, closest to its planet of any moon here
+    // at 2.8 Mars radii, is the hardest case.
+    expect(satelliteOpacity(orbitPx(9_376, 8 * 3_396.19))).toBe(1);
   });
 });

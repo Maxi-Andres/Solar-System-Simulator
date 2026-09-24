@@ -248,3 +248,28 @@ export function focusOrbitOpacity(pixelRadius: number, viewportHeightPx: number)
   }
   return ramp(pixelRadius / (viewportHeightPx / 2), FOCUS_ORBIT_FULL, FOCUS_ORBIT_GONE);
 }
+
+/**
+ * When a moon is worth showing at all: by how big its orbit looks, not where it is.
+ *
+ * From anywhere but close by, a planet's moons sit on top of it. The Galileans seen from
+ * the Sun's default framing are within six pixels of Jupiter, and drawing their markers
+ * there buries the one marker that says "Jupiter" under four more. So a moon, its label
+ * and its orbit line fade in together as the camera gets close enough for the system
+ * to open up -- which is what NASA Eyes does.
+ *
+ * The measure is the orbit's apparent radius -- the semi-major axis, seen from where the
+ * camera is -- rather than the moon's current distance from the planet on screen. That
+ * one reads the same number whether the moon is at elongation or crossing the planet's
+ * face, so Io does not vanish every time it transits Jupiter.
+ *
+ * Gone at twelve pixels, the marker's own diameter plus a pixel: below that, even at its
+ * furthest a moon's marker overlaps its planet's. Full at twice that.
+ */
+export const SATELLITE_HIDDEN_PX = 12;
+export const SATELLITE_SHOWN_PX = 24;
+
+/** How visible a moon and its orbit should be, 1 to 0, from its orbit's radius in pixels. */
+export function satelliteOpacity(orbitRadiusPx: number): number {
+  return ramp(orbitRadiusPx, SATELLITE_SHOWN_PX, SATELLITE_HIDDEN_PX);
+}

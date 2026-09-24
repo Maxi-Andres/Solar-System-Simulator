@@ -21,27 +21,42 @@ import {
   OUTPUT_DIR,
   REF_PLANE,
   REF_SYSTEM,
+  SHORT_WINDOW_YEARS_BACK,
+  SHORT_WINDOW_YEARS_FORWARD,
   WINDOW_YEARS_BACK,
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
 import { fetchVectors } from './horizons/fetchVectors.ts';
 import { parseElements } from './horizons/parseElements.ts';
-import { elementsQuery, fromJulianDay } from './horizons/queries.ts';
+import { elementsQuery, fromJulianDay, stepSize } from './horizons/queries.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
 import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
-import type { BodyDefinition, Manifest, OsculatingElements, VectorTable } from './types.ts';
+import type {
+  BodyDefinition,
+  BodyId,
+  ChunkInfo,
+  Manifest,
+  OsculatingElements,
+  TableInfo,
+  VectorTable,
+  VectorWindow,
+} from './types.ts';
 import {
   prepareOutputDir,
   writeCatalog,
   writeElements,
   writeManifest,
   writeStars,
+  writeVectorChunk,
   writeVectors,
 } from './writeOutput.ts';
 
 interface BodyResult {
+  readonly body: BodyDefinition;
   readonly vectors: VectorTable;
+  /** The pieces the table was fetched in; a short-window body ships as these. */
+  readonly parts: readonly VectorTable[];
   readonly elements: OsculatingElements | null;
   readonly sourceVersion: string;
 }
@@ -87,12 +102,19 @@ function todayUtcMidnight(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-async function fetchBody(
-  body: BodyDefinition,
-  start: Date,
-  stop: Date,
-  epoch: Date,
-): Promise<BodyResult> {
+/** The span a body's vectors are requested over, from its catalog window. */
+function windowFor(window: VectorWindow, epoch: Date): { start: Date; stop: Date } {
+  return window === 'full'
+    ? { start: addYears(epoch, -WINDOW_YEARS_BACK), stop: addYears(epoch, WINDOW_YEARS_FORWARD) }
+    : {
+        start: addYears(epoch, -SHORT_WINDOW_YEARS_BACK),
+        stop: addYears(epoch, SHORT_WINDOW_YEARS_FORWARD),
+      };
+}
+
+async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
+  const { start, stop } = windowFor(body.vectorWindow, epoch);
+
   // Both calls for one body run together; the concurrency cap above limits how many
   // bodies are in flight, so JPL sees a handful of requests at a time.
   const [vectors, elementsResponse] = await Promise.all([
@@ -106,28 +128,46 @@ async function fetchBody(
     elementsResponse === null ? null : parseElements(elementsResponse.result, body);
 
   console.log(
-    `[fetch-data] ${body.name.padEnd(8)} ${String(vectors.table.count).padStart(5)} samples ` +
-      `at ${body.stepDays}d` +
-      (vectors.chunks > 1 ? ` (${vectors.chunks} requests)` : ''),
+    `[fetch-data] ${body.name.padEnd(9)} ${String(vectors.table.count).padStart(6)} samples ` +
+      `at ${stepSize(body.stepDays)}` +
+      (vectors.chunks > 1 ? ` (${vectors.chunks} requests)` : '') +
+      (body.vectorWindow === 'short' ? ', short window' : ''),
   );
 
-  return { vectors: vectors.table, elements, sourceVersion: vectors.sourceVersion };
+  return {
+    body,
+    vectors: vectors.table,
+    parts: vectors.parts,
+    elements,
+    sourceVersion: vectors.sourceVersion,
+  };
+}
+
+/** First and last instant of a table, or a loud failure if it has none. */
+function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
+  const startJd = table.t[0];
+  const stopJd = table.t.at(-1);
+  if (startJd === undefined || stopJd === undefined) {
+    throw new Error(`${table.id} produced an empty vector table.`);
+  }
+  return { startJd, stopJd };
 }
 
 async function main(): Promise<void> {
   const epoch = todayUtcMidnight();
-  const start = addYears(epoch, -WINDOW_YEARS_BACK);
-  const stop = addYears(epoch, WINDOW_YEARS_FORWARD);
+  const full = windowFor('full', epoch);
+  const short = windowFor('short', epoch);
 
-  console.log(`[fetch-data] Window ${start.toISOString()} .. ${stop.toISOString()}`);
+  console.log(`[fetch-data] Window ${full.start.toISOString()} .. ${full.stop.toISOString()}`);
+  console.log(
+    `[fetch-data] Short window ${short.start.toISOString()} .. ${short.stop.toISOString()}`,
+  );
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
   // Two independent services, so they run together. The sky is two requests against
   // VizieR and comes back long before Horizons has finished with the planets.
   const [results, hipparcosRows, tycho2Rows] = await Promise.all([
-    mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) =>
-      fetchBody(body, start, stop, epoch),
-    ),
+    mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) => fetchBody(body, epoch)),
     fetchHipparcos(),
     fetchTycho2(),
   ]);
@@ -155,8 +195,26 @@ async function main(): Promise<void> {
   // cannot leave a half-populated data directory that looks publishable.
   await prepareOutputDir();
 
+  const tables: Record<BodyId, TableInfo> = {};
   for (const result of results) {
-    await writeVectors(result.vectors);
+    if (result.body.vectorWindow === 'full') {
+      await writeVectors(result.vectors);
+      tables[result.body.id] = { ...spanOf(result.vectors), chunks: null };
+    } else {
+      // Shipped as the pieces it was fetched in. Each is about 1500 samples -- Phobos
+      // is 47 of them -- and the app fetches only the one covering the instant it is
+      // drawing.
+      const chunks: ChunkInfo[] = [];
+      for (const [index, part] of result.parts.entries()) {
+        chunks.push(await writeVectorChunk(part, index));
+      }
+      const first = chunks[0];
+      const last = chunks.at(-1);
+      if (first === undefined || last === undefined) {
+        throw new Error(`${result.body.id} produced no chunks.`);
+      }
+      tables[result.body.id] = { startJd: first.startJd, stopJd: last.stopJd, chunks };
+    }
     if (result.elements !== null) {
       await writeElements(result.elements);
     }
@@ -165,20 +223,17 @@ async function main(): Promise<void> {
   await writeCatalog(CATALOG);
   await writeStars(stars);
 
-  // The window every body can answer for: the intersection of all the tables, not
-  // the range we asked for. Publishing the request instead would claim coverage the
-  // widest-stepped bodies do not have, and the app would fall back to propagation
-  // without flagging it.
+  // The window every full-window body can answer for: the intersection of their
+  // tables, not the range we asked for. Publishing the request instead would claim
+  // coverage the widest-stepped bodies do not have, and the app would fall back to
+  // propagation without flagging it. The short-window moons are left out, or this
+  // would shrink to their two years; their own spans are in `tables`.
   let startJd = -Infinity;
   let stopJd = Infinity;
-  for (const result of results) {
-    const first = result.vectors.t[0];
-    const last = result.vectors.t.at(-1);
-    if (first === undefined || last === undefined) {
-      throw new Error(`${result.vectors.id} produced an empty vector table.`);
-    }
-    startJd = Math.max(startJd, first);
-    stopJd = Math.min(stopJd, last);
+  for (const result of results.filter((candidate) => candidate.body.vectorWindow === 'full')) {
+    const span = spanOf(result.vectors);
+    startJd = Math.max(startJd, span.startJd);
+    stopJd = Math.min(stopJd, span.stopJd);
   }
   if (!Number.isFinite(startJd) || !Number.isFinite(stopJd) || stopJd <= startJd) {
     throw new Error('The bodies do not share a usable time window.');
@@ -204,12 +259,15 @@ async function main(): Promise<void> {
       stopUtc: fromJulianDay(stopJd).toISOString(),
     },
     bodies: CATALOG.map((body) => body.id),
+    tables,
   };
 
   await writeManifest(manifest);
 
+  const samples = results.reduce((total, result) => total + result.vectors.count, 0);
   console.log(
-    `[fetch-data] Wrote ${results.length} bodies and ${stars.count} stars to ${OUTPUT_DIR}`,
+    `[fetch-data] Wrote ${results.length} bodies (${samples} samples) and ` +
+      `${stars.count} stars to ${OUTPUT_DIR}`,
   );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');

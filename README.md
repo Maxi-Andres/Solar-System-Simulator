@@ -120,15 +120,18 @@ time, never from a visitor's browser.
 
 ## Generated data
 
-`pnpm fetch:data` writes about 2.9 MB of JSON, covering 20 years — ten back and ten
-forward from the day it runs — plus the sky:
+`pnpm fetch:data` writes about 20 MB of JSON: 20 years of the planets and the Moon —
+ten back and ten forward from the day it runs — two years of the other twenty moons,
+and the sky. Only about 3 MB of it is loaded up front; the moons arrive in pieces as
+they are needed.
 
 ```
 web/public/data/
-├─ manifest.json          # generation time, frame, covered window, body list
+├─ manifest.json          # generation time, frame, window, and each body's coverage
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
 ├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
+├─ vectors/<id>/<n>.json  # the same, for a fast moon, split into ~1500-sample chunks
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -153,6 +156,12 @@ produces numbers that look fine and are not:
   the dominating mass at its focus. Requesting barycentric elements puts Mercury's
   semi-major axis 2% off and its period 3% off; against the Sun's center the same
   request lands within 0.01%.
+- **A moon's vectors and elements are both taken against its planet's body center**
+  (`CENTER='500@599'` for Io). That makes each table exactly the parent-relative state
+  the frame tree adds to the planet's, and puts the planet at the focus of the ellipse.
+  The orbit is drawn with the planet's *own* mass, not the system value DE440 gives the
+  giants: for Io the difference is 2.1 × 10⁻⁴, which would bend the drawn ellipse about
+  175 km off Io's path.
 
 Positions come from vectors, so they are exact DE441 values regardless. The elements
 only shape the drawn orbit line and the out-of-window fallback.
@@ -171,10 +180,26 @@ spacing that still lands well inside its own radius:
 | Pluto | 2 days | 0.07 — limited by Charon, not by its orbit |
 | Venus, Earth | 4 days | < 0.01 |
 | Sun, Mars | 8 days | < 0.01 |
-| Jupiter, Saturn, Uranus, Neptune | 64 days | 0.02 |
+| Jupiter, Saturn, Uranus, Neptune | 32 days | 0.01 — see below |
+| The Moon | 1 day | 0.0024 |
+| The other twenty moons | 15 minutes (Phobos) to 1.5 days (Iapetus) | < 0.01 each |
 
-That is why a 20-year window costs less than the 6-year one that used a flat one-day
-step: 16,900 samples against 21,900.
+That is why a 20-year window of the planets costs less than the 6-year one that used a
+flat one-day step: 16,900 samples against 21,900.
+
+The moons turn that around. About 24 samples an orbit keeps nearly every one of them
+inside a hundredth of its radius, and their orbits are short: a year of all twenty is
+99,700 samples, six times the whole planetary set, a third of it Phobos. So the fast
+moons take a narrower window — a year either side of the build — and ship in chunks,
+and a visitor fetches one chunk per moon, only once that moon's system has opened up on
+screen. The full measurement, moon by moon, is in `tools/src/catalog.ts`.
+
+One thing the moons exposed about the planets: **Jupiter's own table is 0.013 of its
+radius out at worst**, 956 km across 2026 at six-hour spacing, slightly more than the
+table above says. The Galileans swing Jupiter's centre about the system's barycentre by
+around 200 km every few days, and one sample a month cannot follow that — the same
+effect that limits Pluto, smaller. It moves the whole Jovian system together, so Io
+against Jupiter is still exact.
 
 ### Freshness
 
@@ -184,7 +209,9 @@ either side. The weekly CI run re-centres that window on the present; it does no
 correct drift.
 
 Outside the downloaded window the app falls back to Keplerian propagation and says
-**APPROXIMATE** while it does.
+**APPROXIMATE** while it does. For the fast moons that window is two years, so warping
+further than a year from the build makes them approximate while the planets are still
+exact; the indicator only counts the bodies that are switched on.
 
 Two caveats worth knowing:
 
@@ -243,9 +270,15 @@ Full per-file sources, licences and longitude conventions in
 
 ## Page weight
 
-About **1.42 MB gzipped** on first load: 296 KB of application, 647 KB of
-ephemerides and 472 KB of sky. GitHub Pages serves both compressed, so the 1.5 MB of JSON on disk is
-not what crosses the wire.
+About **1.72 MB gzipped** on first load: 296 KB of application, 938 KB of
+ephemerides and 484 KB of sky. GitHub Pages serves both compressed, so the 2.2 MB of
+JSON on disk is not what crosses the wire. The Moon is 244 KB of that, shipped with the
+planets because at one sample a day its twenty years are cheap.
+
+The other twenty moons are **not** part of it. Their tables are split into chunks of
+about 1500 samples — 51 KB each, compressed — and a chunk is fetched only once its moon's
+system has opened up on screen: from the default view of the Sun, not one. Approaching
+Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
@@ -254,15 +287,16 @@ and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
 
 | Connection | First load |
 |---|---|
-| Fibre / good wifi (50 Mbps) | 0.23 s |
-| Typical broadband (20 Mbps) | 0.6 s |
-| 4G mobile (10 Mbps) | 1.1 s |
-| 3G mobile (1.6 Mbps) | 7.1 s |
+| Fibre / good wifi (50 Mbps) | 0.28 s |
+| Typical broadband (20 Mbps) | 0.7 s |
+| 4G mobile (10 Mbps) | 1.4 s |
+| 3G mobile (1.6 Mbps) | 8.6 s |
 
 Everything is cached after the first visit, so this is a first-load cost only. The
-app does wait for all ten bodies before rendering, since a partially-populated Solar
-System would be worse than a moment of "LOADING EPHEMERIDES". If the catalog grows
-past a few dozen bodies that should become progressive loading.
+app waits for the planets and the Moon before rendering, since a partially-populated
+Solar System would be worse than a moment of "LOADING EPHEMERIDES". The other moons
+load progressively: one whose chunk has not arrived is simply absent for a frame or
+two, never drawn somewhere approximate and then moved.
 
 ## Data sources
 
@@ -281,6 +315,8 @@ past a few dozen bodies that should become progressive loading.
   lights and atmosphere, and a real star catalogue. A photographic Milky Way panorama
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
+  The twenty-one major moons are in, with real positions and orbits; their rotation,
+  shapes and surface maps are next, then planet-centred views, then spacecraft.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
@@ -291,6 +327,15 @@ past a few dozen bodies that should become progressive loading.
 ## Known approximations
 
 Stated plainly, since the point of the project is that everything else is not:
+
+- **The moons are spheres at their mean radius, in flat colour, turned no particular
+  way.** Their positions and orbits are JPL's; their bodies are placeholders, stated as
+  such. Most are triaxial — Mimas is 208 × 197 × 191 km, its long axis locked toward
+  Saturn — and drawing the shape honestly needs to know which way each one faces. So
+  their rotation, shapes and maps arrive together, checked against JPL the way the
+  planets' were.
+- **The fast moons are exact for two years, not twenty.** A year either side of the
+  build, by budget: see *Sample spacing*.
 
 - **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
   Which stars are there is a measurement: 46,071 real stars at their own positions,

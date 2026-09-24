@@ -28,9 +28,11 @@ const TEXTURE_DIR = join(import.meta.dirname, '../../public/textures');
 const files = (await readdir(TEXTURE_DIR)).filter((name) => !name.endsWith('.md'));
 const credits = await readFile(join(TEXTURE_DIR, 'CREDITS.md'), 'utf8');
 
-/** Every (body, set) pair, flattened, since both sets ship. */
+/** Every (body, set) pair, flattened, since both sets ship. Moons have no maps yet. */
 const variants = CATALOG.flatMap((body) =>
-  TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures[set.id] })),
+  body.textures === null
+    ? []
+    : TEXTURE_SETS.map((set) => ({ id: body.id, set: set.id, ...body.textures![set.id] })),
 );
 
 /**

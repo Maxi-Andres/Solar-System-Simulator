@@ -72,6 +72,34 @@ describe('planChunks', () => {
       expect(samples).toBeLessThanOrEqual(100);
     }
   });
+
+  it("keeps Phobos's fifteen-minute grid across two years of seams", () => {
+    // 0.0104166... days: the step that broke day arithmetic. Every boundary must be a
+    // whole number of steps from the start, to the millisecond, and a whole minute --
+    // which is what the request format can express.
+    const start = new Date('2025-09-24T00:00:00Z');
+    const stop = new Date('2027-09-24T00:15:00Z');
+    const chunks = planChunks(start, stop, 15 / 1440);
+
+    expect(chunks.length).toBe(47);
+    for (const chunk of chunks) {
+      const offsetMs = chunk.start.getTime() - start.getTime();
+      expect(offsetMs % (15 * 60_000)).toBe(0);
+      expect(chunk.stop.getTime() % 60_000).toBe(0);
+      expect((chunk.stop.getTime() - chunk.start.getTime()) / (15 * 60_000) + 1).toBeLessThanOrEqual(
+        1500,
+      );
+    }
+    for (let i = 1; i < chunks.length; i += 1) {
+      expect(chunks[i]!.start.getTime()).toBe(chunks[i - 1]!.stop.getTime());
+    }
+    expect(chunks.at(-1)!.stop.getTime()).toBe(stop.getTime());
+  });
+
+  it('refuses a step that is not a whole number of minutes', () => {
+    // A seventh of a day is 205.71 minutes.
+    expect(() => planChunks(START, STOP, 1 / 7)).toThrow(/whole number of minutes/);
+  });
 });
 
 /** Builds a table of `count` samples starting at `t0`, one day apart. */
