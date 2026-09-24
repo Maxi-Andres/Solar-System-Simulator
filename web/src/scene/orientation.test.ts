@@ -301,6 +301,11 @@ describe('directionToGeographic', () => {
 describe('the catalog agrees with itself', () => {
   it('derives the same rotation period from W as from the fact sheets', () => {
     for (const body of CATALOG) {
+      // Neptune is drawn in a different rotation system from the one its fact sheet
+      // quotes, deliberately, and has its own test below.
+      if (body.id === 'neptune') {
+        continue;
+      }
       const fromRate = Math.abs(360 / body.rotationRateDegPerDay) * 24;
       const fromSheet = Math.abs(body.rotationPeriodHours);
 
@@ -308,6 +313,21 @@ describe('the catalog agrees with itself', () => {
       // rather than exactly: Mercury is the worst at 0.007%.
       expect(Math.abs(fromRate - fromSheet) / fromSheet).toBeLessThan(0.0005);
     }
+  });
+
+  it('lets Neptune turn at one rate and report another, because it has two', () => {
+    // System III, the magnetic field, is the 16.11 hours everybody quotes and what the
+    // interface shows. System II, the optically observed clouds, is what the *map* has
+    // to turn at, because the map is of clouds. The IAU publishes both and Horizons
+    // cartographs Neptune -- alone among the giants -- in the second.
+    const neptune = CATALOG.find((body) => body.id === 'neptune')!;
+    const fromRate = (360 / neptune.rotationRateDegPerDay) * 24;
+
+    expect(neptune.rotationPeriodHours).toBeCloseTo(16.11, 2);
+    expect(fromRate).toBeCloseTo(15.9663, 3);
+    // Not a rounding disagreement: they are nine minutes apart, which is a quarter of
+    // the planet every seventy-five days.
+    expect((neptune.rotationPeriodHours - fromRate) * 60).toBeGreaterThan(8);
   });
 
   it('keeps Venus and Uranus retrograde in both conventions', () => {

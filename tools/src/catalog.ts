@@ -456,14 +456,36 @@ export const CATALOG: readonly BodyDefinition[] = [
     radiusEquatorialKm: 24764,
     radiusPolarKm: 24341,
     gmKm3S2: 6836527.10058,
+    // 16.11 hours is System III, the magnetic field, and it is what a person means by
+    // "how long is a day on Neptune" -- so it is what the interface shows. The map turns
+    // at the System II rate above instead, because the map is of clouds. The two are a
+    // fact about Neptune rather than a disagreement in the catalog; see the note on
+    // `primeMeridianDeg`.
     rotationPeriodHours: 16.11,
     axialTiltDeg: 28.32,
     poleRaDeg: 299.36,
     poleDecDeg: 43.46,
     poleRaRateDegPerCentury: 0,
     poleDecRateDegPerCentury: 0,
-    primeMeridianDeg: 253.18,
-    rotationRateDegPerDay: 536.3128492,
+    // **Neptune has two rotations, and the map turns with the wrong one if you take
+    // the obvious set.** The IAU publishes System III for it -- the 16.11 hour rotation
+    // of the magnetic field, which is the interior -- and that is what the fact sheets
+    // quote and what this catalog carried at first: W = 253.18 + 536.3128492 d.
+    //
+    // But a surface map of Neptune is a map of *clouds*, and clouds do not turn with the
+    // magnetic field. For cartography the IAU 2015 report gives **System II**, the
+    // rotation of optically observed features: W = 249.978 + 541.1397757 d. Horizons
+    // says so in the header of every Neptune ephemeris it prints, and it is the only
+    // body of the four giants where the two differ -- Jupiter, Saturn and Uranus are all
+    // cartographed in System III.
+    //
+    // The cost of the wrong one is not subtle: 4.83 deg/day, a full turn every 75 days,
+    // which put the Great Dark Spot a quarter of the planet away from where NASA draws
+    // it. Measured against Horizons across the whole ephemeris window with the light
+    // time taken out, these values land within 0.011 deg and the old ones were 90 deg
+    // out on average. See `orientationSky.test.ts`.
+    primeMeridianDeg: 249.978,
+    rotationRateDegPerDay: 541.1397757,
     // The only body here whose periodic term is large enough to see. Leaving it out
     // puts the sub-solar latitude 0.278 deg from JPL's; including it lands within
     // 0.004 deg. Measured against Horizons across 2026, not assumed.

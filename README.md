@@ -31,9 +31,24 @@ Everything else is measured:
 - **Rotation** at each body's real sidereal rate, retrograde for Venus, Uranus and
   Pluto.
 - **Axis direction and prime meridian** from the IAU rotational elements, so every body
-  is turned the way it is actually turned. Verified against JPL's own sub-solar point for
-  all nine planets across 2026: the worst disagreement is **0.0026°**, nine arcseconds.
-  Earth's noon falls on Greenwich.
+  is turned the way it is actually turned — and so that the face you are looking at is the
+  face that is really there. Verified against JPL's own sub-solar point for all nine
+  planets across 2026, in **both** coordinates: latitude to **0.0026°**, nine arcseconds,
+  and longitude to **0.02°**. Earth's noon falls on Greenwich.
+
+  Checking the longitude needs two things the latitude never did. **Light time**, because
+  Horizons reports where the Sun stood when the light we see left the body — Neptune is
+  four light hours away and turns 90° in that time. And **the sign convention**, which the
+  IAU measures opposite to the rotation, so it runs west-positive on a prograde body and
+  east-positive on Venus, Uranus and Pluto.
+
+  **Neptune is drawn in a different rotation system from the one its fact sheet quotes,
+  and that is not a slip.** The IAU publishes System III for it, the 16.11-hour rotation
+  of the magnetic field — the interior. But a surface map of Neptune is a map of *clouds*,
+  and for cartography the IAU gives System II, `W = 249.978 + 541.1397757 d`. It is the
+  only one of the four giants where the two differ, and taking the obvious set costs
+  **4.83° a day**: a full turn every 75 days, which is enough to put the Great Dark Spot
+  a quarter of the planet from where it belongs.
 - **Saturn's rings** at real radii in its real equatorial plane, reusing the same IAU
   pole the sphere is oriented by — so they open and close over its 29.5-year orbit, as
   they do, with Saturn's own oblate shadow falling across them.

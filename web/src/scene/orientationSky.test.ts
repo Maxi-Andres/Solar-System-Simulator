@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   loadEphemerisStore,
+  SPEED_OF_LIGHT_KM_S,
   type EphemerisStore,
   type Fetcher,
 } from '../core/ephemerisStore.ts';
@@ -264,5 +265,140 @@ describeWithData('the axis stays put while the body orbits', () => {
       expect(ours[i]!).toBeGreaterThan(ours[i - 1]!);
       expect(latitudes[i]!).toBeGreaterThan(latitudes[i - 1]!);
     }
+  });
+});
+
+/**
+ * Sub-solar **longitudes** from JPL Horizons, in each body's own published convention.
+ *
+ * **This is the test that was missing, and it cost a planet.** Latitude is set by the
+ * pole alone, so for years every body's pole was pinned to a hundredth of a degree while
+ * the prime meridian -- which decides *which face you are looking at* -- was checked
+ * only on Earth. Neptune was drawn in the wrong rotation system for its map the whole
+ * time: 4.83 degrees a day, a full turn every seventy-five days, which put the Great
+ * Dark Spot a quarter of the planet from where NASA draws it. Nothing failed, because
+ * nothing asked.
+ *
+ * Two things have to be right for this to work at all, and both are the point:
+ *
+ * **Light time.** Horizons reports the *apparent* sub-solar point -- where the Sun stood
+ * at the instant the light we see left the body. Neptune is four light hours away and
+ * turns 90 degrees in that time, so comparing instantaneous geometry against it is off
+ * by a quarter turn before anything else is wrong. Latitude never noticed: the pole
+ * barely moves in four hours.
+ *
+ * **The sign convention, which is not free.** The IAU measures longitude *opposite* to
+ * the body's rotation, so it runs west-positive on a prograde rotator and east-positive
+ * on a retrograde one -- Venus, Uranus and Pluto. That is not hardcoded per body here:
+ * it is taken from the sign of each body's own rotation period, which makes it a check
+ * rather than a lookup. Get a rotation direction wrong and the longitude comes out
+ * mirrored, and the four dates cannot all agree by accident.
+ */
+const HORIZONS_SUB_SOLAR_LONGITUDE: Record<string, readonly number[]> = {
+  mercury: [1.261493, 165.884248, 261.785885, 5.600387],
+  venus: [142.972425, 328.272028, 154.410366, 338.795625],
+  mars: [344.955191, 117.648887, 252.445507, 34.373047],
+  jupiter: [213.648877, 236.260845, 260.187145, 287.433307],
+  saturn: [278.444452, 324.640187, 14.205423, 64.15319],
+  uranus: [52.498762, 240.880317, 71.780433, 264.908405],
+  neptune: [175.372687, 243.782894, 314.543074, 25.134105],
+  pluto: [158.894395, 16.307468, 233.743018, 91.454861],
+};
+
+/** The dates those were sampled at, sixty days apart through 2026. */
+const LONGITUDE_DATES = ['2026-03-01', '2026-04-30', '2026-06-29', '2026-08-28'];
+
+describeWithData('the sub-solar longitude, against JPL Horizons', () => {
+  /** Where the Sun stood when the light we are looking at left the body. */
+  function apparentSubSolarLongitude(bodyId: string, date: Date): number {
+    const loaded = store!;
+    const seen = dateToTdb(date);
+
+    let emitted = seen;
+    for (let pass = 0; pass < 3; pass += 1) {
+      const fromEarth = loaded.stateRelativeTo(bodyId, 'earth', emitted);
+      if (fromEarth === null) {
+        throw new Error(`No state for ${bodyId}`);
+      }
+      const distanceKm = Math.hypot(
+        fromEarth.position.x,
+        fromEarth.position.y,
+        fromEarth.position.z,
+      );
+      emitted = seen - distanceKm / SPEED_OF_LIGHT_KM_S / 86_400;
+    }
+
+    const toSun = loaded.stateRelativeTo('sun', bodyId, emitted);
+    if (toSun === null) {
+      throw new Error(`No state for ${bodyId}`);
+    }
+    const east =
+      ((directionToGeographic(toSun.position, emitted, loaded.body(bodyId)).longitudeDeg %
+        360) +
+        360) %
+      360;
+
+    // Measured opposite the rotation, which is the IAU's rule and not a per-body fact.
+    //
+    // Taken from the *period* rather than the rate, and Pluto is why. Its W increases
+    // with time -- the rate is positive -- because the IAU redefined its pole in 2009
+    // and W is measured about that pole. It still turns backwards, which is what the
+    // negative period says, and it is the turning that sets the convention. The catalog
+    // already flags that the two are different statements; this is what they are for.
+    return loaded.body(bodyId).rotationPeriodHours > 0 ? (360 - east) % 360 : east;
+  }
+
+  function separationDeg(a: number, b: number): number {
+    const raw = (((a - b) % 360) + 360) % 360;
+    return Math.abs(raw > 180 ? raw - 360 : raw);
+  }
+
+  it('puts every planet on the same face as JPL, to a fiftieth of a degree', () => {
+    for (const [id, expected] of Object.entries(HORIZONS_SUB_SOLAR_LONGITUDE)) {
+      LONGITUDE_DATES.forEach((date, index) => {
+        const ours = apparentSubSolarLongitude(id, new Date(`${date}T00:00:00Z`));
+        expect(separationDeg(ours, expected[index]!), `${id} ${date}`).toBeLessThan(0.02);
+      });
+    }
+  });
+
+  it('would have caught Neptune, which is the whole reason it exists', () => {
+    // Drawn in System III -- the magnetic field, 16.11 hours -- where its map of clouds
+    // needs System II. The error is 4.83 degrees a day, so over the four sample dates
+    // it is anywhere at all: the average miss was 90 degrees.
+    const neptune = store!.body('neptune');
+    const wrong = { ...neptune, primeMeridianDeg: 253.18, rotationRateDegPerDay: 536.3128492 };
+
+    const seen = dateToTdb(new Date('2026-06-29T00:00:00Z'));
+    let emitted = seen;
+    for (let pass = 0; pass < 3; pass += 1) {
+      const fromEarth = store!.stateRelativeTo('neptune', 'earth', emitted)!;
+      emitted =
+        seen -
+        Math.hypot(fromEarth.position.x, fromEarth.position.y, fromEarth.position.z) /
+          SPEED_OF_LIGHT_KM_S /
+          86_400;
+    }
+    const toSun = store!.stateRelativeTo('sun', 'neptune', emitted)!;
+    const east =
+      ((directionToGeographic(toSun.position, emitted, wrong).longitudeDeg % 360) + 360) % 360;
+    const west = (360 - east) % 360;
+
+    expect(separationDeg(west, HORIZONS_SUB_SOLAR_LONGITUDE['neptune']![2]!)).toBeGreaterThan(20);
+  });
+
+  it('needs the light time taken out, which latitude never did', () => {
+    // Neptune is four light hours away and turns 90 degrees in four hours. Comparing
+    // the instantaneous geometry against Horizons' apparent value is off by a quarter
+    // turn before anything else is even considered.
+    const seen = dateToTdb(new Date('2026-06-29T00:00:00Z'));
+    const toSun = store!.stateRelativeTo('sun', 'neptune', seen)!;
+    const east =
+      ((directionToGeographic(toSun.position, seen, store!.body('neptune')).longitudeDeg % 360) +
+        360) %
+      360;
+    const west = (360 - east) % 360;
+
+    expect(separationDeg(west, HORIZONS_SUB_SOLAR_LONGITUDE['neptune']![2]!)).toBeGreaterThan(60);
   });
 });
