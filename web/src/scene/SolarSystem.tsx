@@ -40,6 +40,17 @@ import {
   type RingShadowUniforms,
 } from './ringShadow.ts';
 import { LIGHTING } from './shading.ts';
+import {
+  glareLevel,
+  glareRadiusDeg,
+  glareWorldRadius,
+  SOLAR_GLARE_FRAGMENT_SHADER,
+  SOLAR_GLARE_VERTEX_SHADER,
+  sunAngularRadiusDeg,
+  SUN_COLOR_INDEX,
+  SUN_OVEREXPOSURE,
+} from './solarGlare.ts';
+import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
@@ -169,6 +180,14 @@ interface BodyHandles {
   readonly ringShadow: RingShadowUniforms | null;
   /** Night lights, clouds and oceans. Non-null for exactly one body. */
   readonly earth: EarthHandles | null;
+  /**
+   * The veil of scattered light around the Sun. Non-null for exactly one body.
+   *
+   * A billboard rather than anything attached to the sphere, because glare is not a
+   * property of the Sun at all -- it is what the Sun does inside the eye looking at it.
+   * See `solarGlare.ts`.
+   */
+  readonly glare: THREE.Mesh | null;
 }
 
 export function SolarSystem({
@@ -199,13 +218,17 @@ export function SolarSystem({
       const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
       const geometry = new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
-      // The Sun emits rather than receives, so it gets an unlit material. Earth gets
-      // the physical one, for one reason: `ior`, which only exists there, and which is
-      // what stops its oceans reflecting twice as much light as water does. Everything
-      // else is a rough diffuse surface with no specular worth paying for.
+      // The Sun emits rather than receives, so it gets an unlit material -- and one
+      // driven far past full scale, because a light source is not a lit surface. See
+      // SUN_OVEREXPOSURE. Earth gets the physical material, for one reason: `ior`, which
+      // only exists there, and which is what stops its oceans reflecting twice as much
+      // light as water does. Everything else is a rough diffuse surface with no specular
+      // worth paying for.
       const material =
         definition.kind === 'star'
-          ? new THREE.MeshBasicMaterial({ color: definition.color })
+          ? new THREE.MeshBasicMaterial({
+              color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
+            })
           : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
                 color: definition.color,
@@ -378,6 +401,39 @@ export function SolarSystem({
         orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
       }
 
+      let glare: THREE.Mesh | null = null;
+      if (definition.kind === 'star') {
+        // The Sun's own colour, from its colour index through the same Planck and CIE
+        // path the stars use: scattered sunlight is still sunlight.
+        const [red, green, blue] = starColor(SUN_COLOR_INDEX);
+        glare = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.ShaderMaterial({
+            uniforms: {
+              uLevel: { value: 0 },
+              uTanRadius: { value: 1 },
+              uSunRadiusDeg: { value: 0.27 },
+              uColor: { value: new THREE.Color(red, green, blue) },
+            },
+            vertexShader: SOLAR_GLARE_VERTEX_SHADER,
+            fragmentShader: SOLAR_GLARE_FRAGMENT_SHADER,
+            // Light adds. Depth is read, so a planet crossing in front of the Sun hides
+            // the halo behind it, and never written, because a veil has no surface.
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            // The exposure is already chosen and stated, as it is for the stars.
+            toneMapped: false,
+          }),
+        );
+        // Over the photosphere, under the markers.
+        glare.renderOrder = 5;
+        // The quad is scaled to an angle, which at Neptune's distance is a very large
+        // number of scene units; leave culling to the sphere it sits on.
+        glare.frustumCulled = false;
+        group.add(glare);
+      }
+
       return {
         definition,
         group,
@@ -387,6 +443,7 @@ export function SolarSystem({
         ring,
         ringShadow,
         earth,
+        glare,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
@@ -492,6 +549,31 @@ export function SolarSystem({
         // Constant on-screen size, whatever the distance.
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         handle.marker.scale.setScalar(worldSize);
+      }
+
+      if (handle.glare !== null) {
+        // Everything the veil does follows from one distance: how bright it is, how far
+        // it reaches, and where the disc masks it. See solarGlare.ts.
+        const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm);
+        handle.glare.visible = radiusDeg > 0;
+        if (handle.glare.visible) {
+          const uniforms = (handle.glare.material as THREE.ShaderMaterial).uniforms;
+          uniforms.uLevel!.value = glareLevel(
+            handle.definition.radiusEquatorialKm,
+            distanceKm,
+          );
+          // The tangent, not the angle: a fragment's angle is the arctangent of its
+          // offset over the distance, and close to the Sun the difference is 40%.
+          uniforms.uTanRadius!.value = Math.tan((radiusDeg * Math.PI) / 180);
+          uniforms.uSunRadiusDeg!.value = sunAngularRadiusDeg(
+            handle.definition.radiusEquatorialKm,
+            distanceKm,
+          );
+          handle.glare.scale.setScalar(2 * glareWorldRadius(distanceUnits, radiusDeg));
+          // A billboard: the group carries position only, so the camera's own rotation
+          // is the one that turns the quad to face it.
+          handle.glare.quaternion.copy(camera.quaternion);
+        }
       }
 
       handle.mesh.visible = sphereOpacity > 0.005;
@@ -692,8 +774,17 @@ export function SolarSystem({
             }
             meshMaterial.map = texture;
             // The catalog colour was standing in for the surface; left in place it
-            // would now tint it.
-            meshMaterial.color.set('#ffffff');
+            // would now tint it. **Except on the Sun**, where the colour is not a
+            // stand-in at all: it is the exposure. Resetting it here is what silently
+            // undid the overexposure the first time -- the disc went back to unity the
+            // moment its map arrived, which is exactly when anybody would be looking.
+            if (handle.definition.kind === 'star') {
+              meshMaterial.color
+                .set(handle.definition.color)
+                .multiplyScalar(SUN_OVEREXPOSURE);
+            } else {
+              meshMaterial.color.set('#ffffff');
+            }
             meshMaterial.needsUpdate = true;
             handle.shownFile = wanted.file;
             handle.shownOriginDeg = wanted.longitudeOriginDeg;

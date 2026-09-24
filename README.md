@@ -324,6 +324,48 @@ Stated plainly, since the point of the project is that everything else is not:
   Stars sit on a sphere rather than at their real distances, so there is no parallax.
   The nearest star here would move 0.742 arcseconds across Earth's orbit, which is under
   a hundredth of a pixel. Real distances are phase D.
+- **The Sun's glare is real in shape and calibrated in brightness.** Most of what you
+  see around the Sun is its light scattered sideways inside whatever is looking at it,
+  and that scatter is measured: the CIE disability-glare equation (CIE 135/1-1999, from
+  Vos and van den Berg) gives the veil as `10/θ³ + 5/θ²` with θ in degrees. That is the
+  profile used here, and it follows the inverse square law on its own — the halo is 3.9°
+  wide from Mercury's orbit, 1.8° from Earth's, 0.34° from Saturn's, with nothing
+  animating it. Its colour is the Sun's own, from the same Planck-and-CIE path the stars
+  use.
+
+  **There is no free constant in it.** The veil's brightness is the illuminance the disc
+  delivers — `E = L·π·sin²θ_R`, the inverse square law written without assuming the source
+  is a point — so it is tied to whatever exposure the disc is drawn at and cannot drift
+  away from it. An earlier version anchored the veil independently and then the disc was
+  overexposed by 45; the glare did not follow, and the halo went from plausible to
+  invisible beside its own source.
+
+  What does not match the reference is the far profile — theirs falls as θ^-3.5 where the
+  eye's equation is between θ^-3 and θ^-2, so at Earth's distance their glow ends at 1.72°
+  and this one reaches 3.6°. Theirs is tighter because an optical instrument is tighter
+  than an eye: most of the eye's veil is scattered inside the eye itself, and a lens has no
+  retina. Matching it would mean replacing a published measurement with a fitted exponent.
+
+  The veil is drawn outside the photosphere only, because the disc is already clipped.
+
+- **The Sun's disc is overexposed, and that is the physical answer rather than a stylistic
+  one.** Its photosphere radiates `σT⁴/π`, which at 5,772 K is 2.0×10⁷ W/m²/sr against the
+  130 that sunlit Earth returns — so the Sun is **154,000× brighter than the brightest
+  thing this exposure can hold**, and a correct render of it is a flat white circle with
+  nothing in it at all.
+
+  It is drawn at **45× full scale**, which is still three and a half thousand times *under*
+  the true value. The factor was chosen so red clips across the whole map, leaving what
+  survives of the granulation in the blue channel — the only one with headroom left. The
+  disc then averages **255, 249, 60** on screen. Reading NASA's own render of the Sun pixel
+  by pixel gives **255, 249, 59**: one code value per channel, from a number that was not
+  fitted to it.
+
+  The overexposure is also what flattens the map. Across NASA's disc the green channel runs
+  244 to 253 — a spread of 9 out of 255. Drawn at unity ours ran 52 to 205, a spread of
+  153; at 45 it is about 21. That flatness is not a filter applied to the texture, it is
+  what happens to any texture pushed against the ceiling.
+
 - **Flood** and **Shadow** lighting are legibility aids; only **Natural** is physical.
 - **Saturn's ring radii are fitted, not quoted.** The ring map is a radial strip and its
   publisher does not say which radii its edges are, so they were measured from the
