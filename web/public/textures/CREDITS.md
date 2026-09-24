@@ -67,6 +67,26 @@ to prove the check still has teeth.
 | `earth-night.jpg` | Earth, city lights | [NASA Earth Observatory, Earth at Night 2012 (VIIRS DNB)](https://visibleearth.nasa.gov/images/79765/night-lights-2012-flat-map) | Public domain |
 | `earth-clouds.jpg` | Earth, cloud deck | [NASA Visible Earth, Blue Marble clouds (MODIS)](https://visibleearth.nasa.gov/images/57747/blue-marble-clouds) | Public domain |
 | `earth-water.png` | Earth, land/water mask | [NASA Visible Earth, Blue Marble land surface, shallow water and shaded topography](https://visibleearth.nasa.gov/images/57752/blue-marble-land-surface-shallow-water-and-shaded-topography) | Public domain |
+| `moon.jpg` | Moon | [NASA SVS CGI Moon Kit (LRO LROC WAC), 4720](https://svs.gsfc.nasa.gov/4720) | Public domain |
+| `phobos.jpg` | Phobos | [USGS Astrogeology, Mars Express SRC + Viking global mosaic](https://planetarymaps.usgs.gov/mosaic/Phobos_ME_SRC_Mosaic_Global_16ppd.tif) | Public domain |
+| `io.jpg` | Io | [USGS Astrogeology, Galileo SSI colour merged onto the Voyager–Galileo global mosaic, 1 km](https://planetarymaps.usgs.gov/mosaic/Io_GalileoSSI-Voyager_Global_Mosaic_ClrMerge_1km.tif) | Public domain |
+| `europa.jpg` | Europa | [USGS Astrogeology, Voyager–Galileo SSI global mosaic 500 m](https://planetarymaps.usgs.gov/mosaic/Europa_Voyager_GalileoSSI_global_mosaic_500m.tif) | Public domain |
+| `ganymede.jpg` | Ganymede | [USGS Astrogeology, Voyager–Galileo SSI global mosaic 1 km](https://planetarymaps.usgs.gov/mosaic/Ganymede_Voyager_GalileoSSI_global_mosaic_1km.tif) | Public domain |
+| `callisto.jpg` | Callisto | [USGS Astrogeology, Voyager–Galileo SSI global mosaic 1 km](https://planetarymaps.usgs.gov/mosaic/Callisto_Voyager_GalileoSSI_global_mosaic_1km.tif) | Public domain |
+| `mimas.jpg` | Mimas | [NASA/JPL-Caltech/Space Science Institute, Cassini ISS, PIA17214](https://photojournal.jpl.nasa.gov/catalog/PIA17214) | Public domain |
+| `enceladus.jpg` | Enceladus | [USGS Astrogeology, Cassini ISS global mosaic 100 m, high-pass filtered](https://planetarymaps.usgs.gov/mosaic/Enceladus_Cassini_ISS_Global_Mosaic_100m_HPF.tif) | Public domain |
+| `tethys.jpg` | Tethys | [USGS Astrogeology, Cassini ISS global mosaic 293 m](https://planetarymaps.usgs.gov/mosaic/Tethys_Cassini_mosaic_global_293m.tif) | Public domain |
+| `dione.jpg` | Dione | [USGS Astrogeology, Cassini–Voyager global mosaic 154 m](https://planetarymaps.usgs.gov/mosaic/Dione_Cassini_Voyager_mosaic_global_154m.tif) | Public domain |
+| `rhea.jpg` | Rhea | [USGS Astrogeology, Cassini–Voyager global mosaic 417 m](https://planetarymaps.usgs.gov/mosaic/Rhea_Cassini_Voyager_mosaic_global_417m.tif) | Public domain |
+| `titan.jpg` | Titan | [USGS Astrogeology, Cassini ISS 938 nm global mosaic (PIA19658)](https://planetarymaps.usgs.gov/mosaic/Titan_ISS_P19658_Mosaic_Global_4km.tif) | Public domain |
+| `iapetus.jpg` | Iapetus | [USGS Astrogeology, Cassini–Voyager global mosaic 783 m](https://planetarymaps.usgs.gov/mosaic/Iapetus_Cassini_Voyager_mosaic_global_783m.tif) | Public domain |
+| `miranda.jpg` | Miranda | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `ariel.jpg` | Ariel | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `umbriel.jpg` | Umbriel | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `titania.jpg` | Titania | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `oberon.jpg` | Oberon | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `triton.jpg` | Triton | [USGS Astrogeology, Voyager 2 colour global mosaic with fill, 600 m](https://planetarymaps.usgs.gov/mosaic/Triton_Voyager2_ClrMosaic_GlobalFill_600m.tif) | Public domain |
+| `charon.jpg` | Charon | [USGS Astrogeology, New Horizons LORRI/MVIC global mosaic 300 m](https://planetarymaps.usgs.gov/mosaic/Charon_NewHorizons_Global_Mosaic_300m_Jul2017_8bit.tif) | Public domain |
 
 ## Attribution
 
@@ -92,6 +112,59 @@ boundary relaxed over a few dozen pixels so there is no seam. Reproduce it by ma
 every pixel below luminance 12, setting it to the mean of the rest, and running 40
 iterations of a 3x3 average over the masked pixels only, wrapping in longitude and
 clamping at the poles. Nothing south of about 40 S on Pluto is observation.
+
+## The moons
+
+Mission mosaics, nearly all of them from **USGS Astrogeology**, whose products are in
+the U.S. public domain; they ask that the authors be cited, and several were assembled by
+DLR (Roatsch et al.) and by the LPI (Schenk). NASA imagery -- the Moon, Mimas, the
+Uranian set -- is not subject to copyright; credit NASA, and for the Moon NASA's
+Scientific Visualization Studio.
+
+**Most are greyscale, and that is the measurement, not a shortcut.** Galileo, Cassini
+and Voyager mapped these bodies through a clear or green filter; there is no global
+true-colour map of any of them. The colour products that exist -- the Cassini sets
+PIA18434-18439, USGS's Ganymede -- are enhanced into the ultraviolet and infrared, and
+are what a camera would not see. The Moon is the one natural-colour map here, from LRO's
+wide-angle camera. Titan's is at 938 nm, the near-infrared window through its haze: the
+only way anyone has seen its surface. Two more carry colour, and neither is calibrated:
+Io's is Galileo colour laid over a monochrome base, and Triton's is Voyager's orange,
+violet and ultraviolet filters combined -- in NASA's words, a close approximation to
+what an eye would see.
+
+**How each was made.** Downloaded once from the link in the table, downscaled to 2048 x
+1024 with Lanczos resampling and saved as JPEG at quality 85, single-channel where the
+source is. Sources smaller than that -- the five Uranian moons, 1440 x 720 -- keep their
+own size, because upscaling would invent detail. Nothing else is altered, except below.
+
+**Where each file starts in longitude was measured, twice.** Once from the product's own
+ISIS label -- `UpperLeftCornerX` of minus pi R puts the left edge 180 degrees from
+`CenterLongitude` -- and once by eye against named features from the USGS Gazetteer of
+Planetary Nomenclature: Mare Crisium and Tycho on the Moon, Stickney on Phobos, Pele and
+Loki Patera on Io, Tuonela Planitia on Triton, Pwyll on
+Europa, Galileo Regio and Tros on Ganymede, Valhalla on Callisto, Herschel on Mimas,
+Odysseus on Tethys, Inktomi on Rhea, Xanadu and Belet on Titan, Cassini Regio on
+Iapetus, Arden and Inverness Coronae on Miranda, Laica on Ariel, Wunda on Umbriel,
+Gertrude on Titania, Hamlet on Oberon and Argo Chasma on Charon. The two agreed for every
+map. `textureAlignment.test.ts` holds the ones with enough contrast to read from the
+pixels.
+
+**Half of several moons was never photographed, and is filled -- the Pluto recipe.**
+Voyager 2 passed Uranus in 1986 near southern solstice, so its moons' northern
+hemispheres were in the dark: 57 to 62% of each Uranian map. New Horizons saw Charon's
+south in polar night (35%), and Galileo left gaps near Callisto's, Ganymede's and
+Europa's poles (4 to 5%); Voyager 2 saw Triton's northern 39% in the same darkness it
+saw Uranus's moons. Each is filled as Pluto is -- every pixel below luminance 12 set to
+the mean of the rest, then 40 relaxation passes of a 3 x 3 average over the filled
+pixels only -- with one addition: the mask is grown by three pixels first, because the
+edge of an imaged region is anti-aliased into the black and otherwise survives as a dark
+outline. It reads as missing data rather than as a black cap. Nothing in those regions is
+an observation.
+
+**Deimos has no map**, by decision. The one global map, Stooke's from Viking, cannot be
+placed: its USGS world file and its author's guide disagree about where longitude 0 is,
+and Deimos's two named craters are too small to settle it from the pixels. It stays in
+flat colour until a map can be registered.
 
 ## Two things worth knowing about how these are drawn
 

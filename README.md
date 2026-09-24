@@ -283,7 +283,9 @@ Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
 and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
-(Mercury). The unused true-colour files are never requested at all.
+(Mercury). The unused true-colour files are never requested at all. The moons' maps work
+the same way: 38 KB (Umbriel) to 731 KB (Dione), each fetched only when that moon is on
+screen. They bring the committed texture set to 12.4 MB.
 
 | Connection | First load |
 |---|---|
@@ -328,11 +330,20 @@ two, never drawn somewhere approximate and then moved.
 
 Stated plainly, since the point of the project is that everything else is not:
 
-- **The moons are drawn in flat colour.** Their surface maps come next. Everything else
-  about them is measured: their shapes are the IAU's triaxial radii, and their rotation
-  is the IAU model with every periodic term, read by script out of NAIF's `pck00011.tpc`
-  rather than typed. Against JPL, all twenty-one poles land within 0.002° and the face
-  each moon turns to its planet within 0.007°.
+- **The moons are mostly greyscale**, because that is what exists: Galileo, Cassini and
+  Voyager mapped them through clear filters, and the colour products are enhanced into
+  the ultraviolet and infrared. The Moon is natural colour; Titan is 938 nm, its surface
+  through the haze; Io and Triton carry uncalibrated mission colour. Maps are USGS,
+  NASA SVS and NASA 3D Resources, each placed in longitude from its ISIS label and
+  checked against Gazetteer features (`web/public/textures/CREDITS.md`).
+- **Half of several moons was never photographed**, and is filled as Pluto's south is —
+  Uranus's five and Triton in the north, Charon in the south. Not observation.
+- **Deimos has no map.** Its one global map cannot be placed in longitude, so it stays
+  flat rather than possibly half a turn out.
+- The moons' shapes and rotation *are* measured: the IAU's triaxial radii, and the IAU
+  model with every periodic term, read by script out of NAIF's `pck00011.tpc` rather
+  than typed. Against JPL, all twenty-one poles land within 0.002° and the face each moon
+  turns to its planet within 0.007°.
 - **The fast moons are exact for two years, not twenty.** A year either side of the
   build, by budget: see *Sample spacing*.
 

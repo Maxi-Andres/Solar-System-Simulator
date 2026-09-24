@@ -228,10 +228,18 @@ describe('the moons', () => {
     }
   });
 
-  it('all carry their IAU rotation, and none a surface map yet', () => {
+  it('all carry their IAU rotation, and every one a map but Deimos', () => {
     for (const body of moons) {
       expect(body.rotation, body.id).not.toBeNull();
-      expect(body.textures, body.id).toBeNull();
+    }
+    // Deimos's only map cannot be registered; see its entry. Everything else has one,
+    // and the same file in both sets, since no moon has two products to choose between.
+    expect(moons.filter((body) => body.textures === null).map((body) => body.id)).toEqual([
+      'deimos',
+    ]);
+    for (const body of moons.filter((candidate) => candidate.textures !== null)) {
+      expect(body.textures!.illustrative, body.id).toEqual(body.textures!.photometric);
+      expect(body.textures!.illustrative.file, body.id).toBe(`${body.id}.jpg`);
     }
   });
 });

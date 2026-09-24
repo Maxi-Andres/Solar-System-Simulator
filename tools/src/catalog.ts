@@ -187,6 +187,16 @@ interface MoonSpec {
   readonly rotationPeriodHours: number;
   readonly axialTiltDeg: number | null;
   readonly color: string;
+  /**
+   * The surface map, or null for a moon drawn in flat colour.
+   *
+   * One map serves both sets: for no moon is there a calibrated product *and* an
+   * illustrative one to choose between, so the choice would be a pretence. Most are
+   * greyscale -- clear-filter mission mosaics -- because that is what exists. The origin
+   * is measured from the pixels against a named feature, per moon, in
+   * textureAlignment.test.ts.
+   */
+  readonly map: { readonly file: string; readonly longitudeOriginDeg: number } | null;
 }
 
 /**
@@ -235,7 +245,7 @@ function moon(spec: MoonSpec): BodyDefinition {
     rotation: orientation.rotation,
     color: spec.color,
     drawOrbit: true,
-    textures: null,
+    textures: spec.map === null ? null : { illustrative: spec.map, photometric: spec.map },
     rings: null,
   };
 }
@@ -311,6 +321,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 655.7199,
     axialTiltDeg: 6.67,
     color: '#b8b8b8',
+    map: { file: 'moon.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'phobos',
@@ -324,6 +335,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 7.6538,
     axialTiltDeg: null,
     color: '#a08a78',
+    map: { file: 'phobos.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'deimos',
@@ -337,6 +349,12 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 30.2986,
     axialTiltDeg: null,
     color: '#b8a48c',
+    // Left in flat colour on purpose. The one global map (Stooke, from Viking) cannot
+    // be placed: its USGS world file puts longitude 0 at the left edge, the author's
+    // own guide puts it in the middle, and Deimos's only named craters -- Voltaire and
+    // Swift, 1 to 2 km across -- cannot be picked out of it to settle which. Half a turn
+    // wrong would look exactly as plausible as right.
+    map: null,
   }),
   moon({
     id: 'io',
@@ -350,6 +368,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 42.4593,
     axialTiltDeg: null,
     color: '#e6d45c',
+    map: { file: 'io.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'europa',
@@ -363,6 +382,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 85.2283,
     axialTiltDeg: null,
     color: '#d2c2a0',
+    map: { file: 'europa.jpg', longitudeOriginDeg: 0 },
   }),
   moon({
     id: 'ganymede',
@@ -376,6 +396,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 171.7093,
     axialTiltDeg: null,
     color: '#aca296',
+    map: { file: 'ganymede.jpg', longitudeOriginDeg: 0 },
   }),
   moon({
     id: 'callisto',
@@ -389,6 +410,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 400.5364,
     axialTiltDeg: null,
     color: '#8a7e70',
+    map: { file: 'callisto.jpg', longitudeOriginDeg: 0 },
   }),
   moon({
     id: 'mimas',
@@ -402,6 +424,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 22.6181,
     axialTiltDeg: null,
     color: '#c4c4c4',
+    map: { file: 'mimas.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'enceladus',
@@ -415,6 +438,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 32.8852,
     axialTiltDeg: null,
     color: '#eef2f6',
+    map: { file: 'enceladus.jpg', longitudeOriginDeg: 0 },
   }),
   moon({
     id: 'tethys',
@@ -428,6 +452,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 45.3072,
     axialTiltDeg: null,
     color: '#dcdcd4',
+    map: { file: 'tethys.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'dione',
@@ -441,6 +466,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 65.686,
     axialTiltDeg: null,
     color: '#c8c8c0',
+    map: { file: 'dione.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'rhea',
@@ -454,6 +480,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 108.42,
     axialTiltDeg: null,
     color: '#bcb8b0',
+    map: { file: 'rhea.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'titan',
@@ -467,6 +494,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 382.6908,
     axialTiltDeg: null,
     color: '#dca84e',
+    map: { file: 'titan.jpg', longitudeOriginDeg: 0 },
   }),
   moon({
     id: 'iapetus',
@@ -480,6 +508,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: 1903.944,
     axialTiltDeg: null,
     color: '#a8987f',
+    map: { file: 'iapetus.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'miranda',
@@ -493,6 +522,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -33.9235,
     axialTiltDeg: null,
     color: '#b4b4b4',
+    map: { file: 'miranda.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'ariel',
@@ -506,6 +536,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -60.4891,
     axialTiltDeg: null,
     color: '#ccc8c2',
+    map: { file: 'ariel.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'umbriel',
@@ -519,6 +550,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -99.4602,
     axialTiltDeg: null,
     color: '#8e8a86',
+    map: { file: 'umbriel.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'titania',
@@ -532,6 +564,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -208.9409,
     axialTiltDeg: null,
     color: '#b6aea6',
+    map: { file: 'titania.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'oberon',
@@ -545,6 +578,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -323.1177,
     axialTiltDeg: null,
     color: '#a69e96',
+    map: { file: 'oberon.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'triton',
@@ -563,6 +597,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -141.0445,
     axialTiltDeg: null,
     color: '#d6cac2',
+    map: { file: 'triton.jpg', longitudeOriginDeg: 180 },
   }),
   moon({
     id: 'charon',
@@ -577,6 +612,7 @@ const MOONS: readonly BodyDefinition[] = [
     rotationPeriodHours: -153.2935,
     axialTiltDeg: null,
     color: '#aca49a',
+    map: { file: 'charon.jpg', longitudeOriginDeg: 180 },
   }),
 ];
 
