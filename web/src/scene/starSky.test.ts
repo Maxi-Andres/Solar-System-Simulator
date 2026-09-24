@@ -231,11 +231,12 @@ describeWithData('how it will look', () => {
   it('leaves the sky between the stars black, which is what went wrong last time', () => {
     // The photographic panorama lit 31.8% of the sky. Measured off the reference frame
     // itself, 0.405% of its pixels clear the display floor and 99.39% are exactly
-    // black. This comes to 0.451% before the sampling correction, so better than
-    // 99.5% of the sky is still black -- the property that killed the panorama and the
-    // one worth protecting as the catalogue gets deeper.
+    // black. This comes to 0.570% before the sampling correction -- it rose from 0.451%
+    // when the point spread gained its wings, which is the cost of bright stars having
+    // haloes. Still better than 99.4% black, which is the property that killed the
+    // panorama and the one worth protecting as the model gets richer.
     const lit = skyCoverageFraction(sky.mag, coefficients, DISPLAY_FLOOR, pixelsPerDegree);
-    expect(lit).toBeLessThan(0.006);
+    expect(lit).toBeLessThan(0.0075);
   });
 
   it('paints about the bright fraction the reference paints', () => {

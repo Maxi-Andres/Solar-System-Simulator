@@ -311,15 +311,18 @@ Stated plainly, since the point of the project is that everything else is not:
   magnitude system was built from. So Sirius outshines a magnitude 8 star by nearly six
   thousand to one in the sky and by fifty to one on screen.
 
-  A star's size is not a separate setting: each is a Gaussian 0.54 pixels wide, and how
-  big it looks is where that falls below the darkest step the display can show. That
-  width is measured the same way: the reference draws stars with a median equivalent
-  diameter of 2.26 px and a 90th percentile of 2.99, and this reproduces both.
+  A star's size is not a separate setting: it is where its point spread falls below the
+  darkest step the display can show. That spread is a **Gaussian core 0.54 pixels wide
+  plus a power-law tail**, `1/(1 + (r/σ)²)`, carrying a tenth of the star's light — the
+  same shape as the Sun's glare, and for the same reason: every real optical system
+  scatters a few percent of a source into a halo, and a Gaussian alone cannot.
 
-  The one thing still visibly different is the bright end. The reference's brightest
-  star saturates and spreads over 13.5 px; here it reaches 0.71 and 4.4. A single
-  Gaussian cannot do a wide halo and a two-pixel median at once — that needs a core plus
-  power-law wings, which is what a real optical system has.
+  Both numbers are measured off the reference. The core reproduces its median equivalent
+  diameter of 2.26 px and its 90th percentile of 2.99; the tail's share was solved from
+  its brightest blob, 13.5 px across, which a Gaussian at this σ could not exceed 4.2 for
+  however bright the star. Here the same star draws 13.2. The cost is a slightly less
+  black sky — 0.57% of pixels above the floor against 0.45% without the tail, and the
+  reference's own 0.41%.
 
   Stars sit on a sphere rather than at their real distances, so there is no parallax.
   The nearest star here would move 0.742 arcseconds across Earth's orbit, which is under

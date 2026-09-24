@@ -111,6 +111,46 @@ export const FAINTEST_PEAK = 0.02;
 export const PSF_SIGMA_PX = 0.54;
 
 /**
+ * Share of a star's light that goes into the wings of the point spread rather than the
+ * core.
+ *
+ * **A Gaussian has no wings, and that was the last thing on the sky that was visibly
+ * wrong.** Held against the reference, their brightest star spreads over **13.5 pixels**
+ * and saturates; a Gaussian at this sigma tops out at 4.2 however bright the star is,
+ * because exp(-r^2) falls off faster than any amount of flux can push out. It is the same
+ * finding the Sun's glare closed -- see `solarGlare.ts` -- and the same physics: every
+ * real optical system, and the eye itself, scatters a few percent of a source's light
+ * into a power-law halo.
+ *
+ * The profile here is a core plus a Lorentzian tail, `1 / (1 + (r/sigma)^2)`, whose wings
+ * fall as `r^-2` -- the far-field term of the CIE disability-glare equation the Sun uses.
+ * Since it is a fixed *share* of each star's light, it scales with the star and needs no
+ * per-star setting: what changes is how far out it stays above the display floor, and
+ * that goes as the square root of brightness instead of its logarithm.
+ *
+ * **0.1 is solved from the reference, not chosen.** At that share the brightest star in
+ * the catalogue draws **13.2 pixels** across against their measured 13.5, while the
+ * median star stays at 2.46 and the 90th percentile at 3.17 -- both untouched, because a
+ * faint star's wings never clear the floor at all. One constant, one measurement, and the
+ * rest of the sky exactly as it was.
+ */
+export const STAR_WING_FRACTION = 0.1;
+
+/**
+ * The point spread, normalised so its centre is exactly 1.
+ *
+ * Normalised rather than left at `1 + STAR_WING_FRACTION`, so adding the wings does not
+ * quietly brighten every star in the sky by ten percent and undo the response calibrated
+ * against the reference's own peak distribution.
+ */
+export function starProfile(radiusPx: number, sigmaPx = PSF_SIGMA_PX): number {
+  const x = radiusPx / sigmaPx;
+  return (
+    (Math.exp(-0.5 * x * x) + STAR_WING_FRACTION / (1 + x * x)) / (1 + STAR_WING_FRACTION)
+  );
+}
+
+/**
  * Distance to the star sphere, in scene units (1e9 units = 1e12 km).
  *
  * Parked far enough that no body can be beyond it, and translated with the camera each
@@ -158,10 +198,12 @@ export function srgbToLinear(value: number): number {
 }
 
 /**
- * Radius, in CSS pixels, at which a star's Gaussian falls to a given display value.
+ * Radius, in CSS pixels, at which a star's profile falls to a given display value.
  *
- * The Gaussian is in **linear light**, because a point spread function spreads energy,
- * not code values. Returns 0 when the star never reaches that level at all.
+ * Evaluated in **linear light**, because a point spread function spreads energy, not code
+ * values. Solved rather than inverted: the core and the wings cross over somewhere in the
+ * middle for a bright star, and neither closed form is right on both sides of that.
+ * Returns 0 when the star never reaches the level at all.
  */
 export function profileRadiusPx(
   peakDisplay: number,
@@ -170,10 +212,21 @@ export function profileRadiusPx(
 ): number {
   const peakLinear = srgbToLinear(peakDisplay);
   const levelLinear = srgbToLinear(displayLevel);
-  if (peakLinear <= levelLinear) {
+  if (peakLinear * starProfile(0, sigmaPx) <= levelLinear) {
     return 0;
   }
-  return sigmaPx * Math.sqrt(2 * Math.log(peakLinear / levelLinear));
+
+  let inside = 0;
+  let outside = sigmaPx * 400;
+  for (let step = 0; step < 60; step += 1) {
+    const middle = (inside + outside) / 2;
+    if (peakLinear * starProfile(middle, sigmaPx) > levelLinear) {
+      inside = middle;
+    } else {
+      outside = middle;
+    }
+  }
+  return inside;
 }
 
 /**
@@ -188,14 +241,13 @@ export function spriteDiameterPx(peakDisplay: number, sigmaPx = PSF_SIGMA_PX): n
   return Math.max(1, 2 * profileRadiusPx(peakDisplay, DISPLAY_FLOOR, sigmaPx));
 }
 
-/** Display value at a distance from a star's centre, following the same Gaussian. */
+/** Display value at a distance from a star's centre, following the same profile. */
 export function profileDisplayValue(
   radiusPx: number,
   peakDisplay: number,
   sigmaPx = PSF_SIGMA_PX,
 ): number {
-  const peakLinear = srgbToLinear(peakDisplay);
-  return linearToSrgb(peakLinear * Math.exp((-0.5 * radiusPx * radiusPx) / (sigmaPx * sigmaPx)));
+  return linearToSrgb(srgbToLinear(peakDisplay) * starProfile(radiusPx, sigmaPx));
 }
 
 /**
@@ -307,12 +359,21 @@ void main() {
   float peak = clamp(uMagnitudeToPeak.x + uMagnitudeToPeak.y * magnitude, uDisplayFloor, 1.0);
   vPeakLinear = srgbToLinear(peak);
 
-  // max() before the square root: the clamp above guarantees the ratio is at least
-  // one in exact arithmetic, and float rounding is enough to make it 0.9999, whose
-  // logarithm is negative and whose square root is NaN -- one star at a time.
-  float aboveFloor = max(0.0, log(vPeakLinear / srgbToLinear(uDisplayFloor)));
-  float radiusPx = uSigmaPx * sqrt(2.0 * aboveFloor);
-  vSizePx = max(2.0 * radiusPx, 1.0);
+  // How far the profile reaches, in units of the peak over the display floor. The two
+  // terms are solved separately and the larger wins: for a faint star the core is the
+  // whole of it, and for a bright one the wings are.
+  //
+  // max() before each square root: the clamp above guarantees these are non-negative in
+  // exact arithmetic, and float rounding is enough to make one of them -1e-8, whose
+  // square root is NaN -- one star at a time.
+  float peakOverFloor =
+    vPeakLinear / (${(1 + STAR_WING_FRACTION).toFixed(3)} * srgbToLinear(uDisplayFloor));
+  float coreRadius = uSigmaPx * sqrt(2.0 * max(0.0, log(max(1.0, peakOverFloor))));
+  // The wing term at half the floor rather than at it, so the sprite is a shade wider
+  // than the visible halo and the two terms summing cannot leave a square edge on it.
+  float wingRadius =
+    uSigmaPx * sqrt(max(0.0, 2.0 * peakOverFloor * ${STAR_WING_FRACTION.toFixed(3)} - 1.0));
+  vSizePx = max(2.0 * max(coreRadius, wingRadius), 1.0);
   gl_PointSize = vSizePx * uPixelRatio;
 
   vColor = starColor;
@@ -322,7 +383,7 @@ void main() {
 /**
  * The fragment shader.
  *
- * The Gaussian is evaluated in linear light and the colour multiplies it there, because
+ * The profile is evaluated in linear light and the colour multiplies it there, because
  * `starColor` arrives at unit luminance: a red star and a blue star of the same
  * magnitude come out equally bright, which is what a magnitude means.
  *
@@ -346,7 +407,13 @@ float linearToSrgb(float value) {
 
 void main() {
   float radiusPx = distance(gl_PointCoord, vec2(0.5)) * vSizePx;
-  float luminance = vPeakLinear * exp(-0.5 * radiusPx * radiusPx / (uSigmaPx * uSigmaPx));
+  float x = radiusPx / uSigmaPx;
+  // Core plus a Lorentzian tail, normalised so the centre is exactly 1. The tail is what
+  // a Gaussian cannot do: it falls as r^-2, so a bright star keeps a halo where an
+  // exponential has already reached zero. See STAR_WING_FRACTION.
+  float profile =
+    (exp(-0.5 * x * x) + ${STAR_WING_FRACTION.toFixed(3)} / (1.0 + x * x)) / ${(1 + STAR_WING_FRACTION).toFixed(3)};
+  float luminance = vPeakLinear * profile;
   vec3 linear = vColor * luminance;
   gl_FragColor = vec4(
     linearToSrgb(linear.r),

@@ -11,6 +11,8 @@ import {
   PSF_SIGMA_PX,
   spriteDiameterPx,
   srgbToLinear,
+  STAR_WING_FRACTION,
+  starProfile,
   STAR_FRAGMENT_SHADER,
   STAR_VERTEX_SHADER,
 } from './starRendering.ts';
@@ -72,12 +74,33 @@ describe('the point spread function', () => {
     }
   });
 
-  it('falls off as a Gaussian in linear light, not in code values', () => {
-    // A point spread spreads energy. At one sigma the linear value is down by
-    // exp(-1/2), and that is what has to hold -- not the display value.
+  it('is a Gaussian core plus a power-law tail, evaluated in linear light', () => {
+    // A point spread spreads energy, so the profile is linear-light and normalised to
+    // exactly 1 at the centre -- adding wings must not brighten every star by ten
+    // percent and undo the response calibrated against the reference.
+    expect(starProfile(0)).toBeCloseTo(1, 12);
+
+    // At one sigma the core is down by exp(-1/2) and the tail is at half its strength.
+    const expected =
+      (Math.exp(-0.5) + STAR_WING_FRACTION / 2) / (1 + STAR_WING_FRACTION);
+    expect(starProfile(PSF_SIGMA_PX)).toBeCloseTo(expected, 12);
+
     const peak = 1;
     const atSigma = profileDisplayValue(PSF_SIGMA_PX, peak);
-    expect(srgbToLinear(atSigma) / srgbToLinear(peak)).toBeCloseTo(Math.exp(-0.5), 6);
+    expect(srgbToLinear(atSigma) / srgbToLinear(peak)).toBeCloseTo(expected, 6);
+  });
+
+  it('keeps a tail exactly where a Gaussian has none', () => {
+    // Ten sigma out: exp(-50) is 2e-22 and the sky would be empty. The tail is at
+    // 1/101 of its own strength, which is nine parts in ten thousand of the peak --
+    // small, and the entire reason a bright star can have a halo at all.
+    const gaussian = Math.exp(-0.5 * 100);
+    expect(gaussian).toBeLessThan(1e-20);
+    expect(starProfile(10 * PSF_SIGMA_PX)).toBeGreaterThan(8e-4);
+    // And it falls as r^-2 out there, not faster.
+    const ratio = starProfile(10 * PSF_SIGMA_PX) / starProfile(20 * PSF_SIGMA_PX);
+    expect(ratio).toBeGreaterThan(3.8);
+    expect(ratio).toBeLessThan(4.2);
   });
 
   it('gives a brighter star a bigger disc, without a size setting anywhere', () => {
@@ -87,23 +110,24 @@ describe('the point spread function', () => {
     for (let index = 1; index < sizes.length; index += 1) {
       expect(sizes[index]!).toBeGreaterThan(sizes[index - 1]!);
     }
-    // And the range is narrow, because it is a tail crossing a threshold rather than a
-    // glow being drawn: four orders of magnitude in flux is under three in radius. The
-    // brightness does the work; the size only follows it.
-    expect(sizes.at(-1)! / sizes[0]!).toBeLessThan(3);
+    // And the range is wide now, which is the point of the tail. A Gaussian gave a
+    // factor of 2.8 between the faintest star and the brightest however much flux was
+    // poured in, because exp(-r^2) outruns any amount of it. The tail gives nine.
+    expect(sizes.at(-1)! / sizes[0]!).toBeGreaterThan(7);
+    expect(sizes.at(-1)! / sizes[0]!).toBeLessThan(11);
   });
 
   it('draws points, at the sizes measured off the reference', () => {
-    // Both frames were read pixel by pixel at the same view. NASA Eyes draws stars
-    // with a median equivalent diameter of 2.26 px and a 90th percentile of 2.99.
-    // These are the analytic sizes behind that, which run about 10% above what the
-    // render then measures -- a sprite is sampled at pixel centres, not at its own.
+    // Both frames were read pixel by pixel at the same view. NASA Eyes draws stars with
+    // a median equivalent diameter of 2.26 px, a 90th percentile of 2.99, and a
+    // brightest blob of **13.5**. The faint end is the Gaussian core and the bright end
+    // is the tail; `STAR_WING_FRACTION` was solved from that 13.5 and nothing else.
     const faintest = spriteDiameterPx(peakDisplayValue(LIMIT, COEFFICIENTS));
     const brightest = spriteDiameterPx(peakDisplayValue(BRIGHTEST, COEFFICIENTS));
     expect(faintest).toBeGreaterThan(1.3);
     expect(faintest).toBeLessThan(1.7);
-    expect(brightest).toBeGreaterThan(3.8);
-    expect(brightest).toBeLessThan(4.6);
+    expect(brightest).toBeGreaterThan(12);
+    expect(brightest).toBeLessThan(15);
   });
 
   it('sizes the sprite to hold everything above the floor and nothing more', () => {
@@ -138,9 +162,20 @@ describe('the shaders say the same thing as the module', () => {
     expect(STAR_FRAGMENT_SHADER).toContain('1.055');
   });
 
-  it('evaluates the Gaussian in linear light, like profileDisplayValue', () => {
-    expect(STAR_FRAGMENT_SHADER).toContain('vPeakLinear * exp(');
-    expect(STAR_FRAGMENT_SHADER).toContain('uSigmaPx * uSigmaPx');
+  it('evaluates the same core and tail as starProfile, in linear light', () => {
+    expect(STAR_FRAGMENT_SHADER).toContain('exp(-0.5 * x * x)');
+    expect(STAR_FRAGMENT_SHADER).toContain(
+      `${STAR_WING_FRACTION.toFixed(3)} / (1.0 + x * x)`,
+    );
+    // Normalised by the same denominator, or every star gains ten percent.
+    expect(STAR_FRAGMENT_SHADER).toContain(`/ ${(1 + STAR_WING_FRACTION).toFixed(3)}`);
+    expect(STAR_FRAGMENT_SHADER).toContain('vPeakLinear * profile');
+  });
+
+  it('sizes the sprite from whichever of the two terms reaches further', () => {
+    expect(STAR_VERTEX_SHADER).toContain('coreRadius');
+    expect(STAR_VERTEX_SHADER).toContain('wingRadius');
+    expect(STAR_VERTEX_SHADER).toContain('max(coreRadius, wingRadius)');
   });
 
   it('applies the response as one multiply-add, from the coefficients', () => {
