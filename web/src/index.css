@@ -105,6 +105,95 @@ body {
   cursor: default;
 }
 
+/* The slide-over panels ease in from the toolbar side and back out again.
+
+   Small on purpose: ten pixels and under a fifth of a second, so it reads as the panel
+   arriving rather than as something to wait for. Out is quicker than in, because a
+   closing panel is something the person has already finished with.
+
+   The vertical centring lives in the keyframes, not only in the inline style, because an
+   animation overrides an inline `transform` for as long as it runs -- leave it out and
+   the panel would drop by half its own height while it slid. The duration of
+   `panel-out` must match PANEL_EXIT_MS in Presence.tsx, which keeps the panel mounted
+   exactly that long. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translate(10px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(10px, -50%);
+  }
+}
+
+/* The About screen covers everything, so it only fades: sliding a whole page reads as
+   the page moving, not as it opening. */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.panel-enter {
+  animation: panel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.panel-exit {
+  animation: panel-out 160ms ease both;
+  pointer-events: none;
+}
+
+.overlay-enter {
+  animation: overlay-in 180ms ease-out both;
+}
+
+.overlay-exit {
+  animation: overlay-out 160ms ease both;
+  pointer-events: none;
+}
+
+/* Someone who has asked for less motion gets the panels without the travel: the same
+   fade, in place. Reduced motion means no movement, not no change -- and the first
+   version, which cut both animations to a millisecond, made closing a panel look exactly
+   like the panel vanishing, on the one machine this was tried on, whose Windows had
+   animation effects switched off. */
+@media (prefers-reduced-motion: reduce) {
+  .panel-enter {
+    animation-name: overlay-in;
+  }
+
+  .panel-exit {
+    animation-name: overlay-out;
+  }
+
+  /* overlay-in and overlay-out only touch opacity, so the panel's own inline transform
+     keeps it centred. */
+}
+
 /* The WebGL canvas must never start a text selection while dragging. */
 canvas {
   display: block;

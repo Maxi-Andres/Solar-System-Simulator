@@ -1,4 +1,11 @@
-/** Shared chrome for the slide-over panels the toolbar opens. */
+import { useClosing } from './Presence.tsx';
+
+/**
+ * Shared chrome for the slide-over panels the toolbar opens.
+ *
+ * Animates in and out on its own: every panel gets it by being a Panel, and the one
+ * wrapped in `Presence` in App.tsx gets the closing half too. See index.css.
+ */
 export function Panel({
   title,
   onClose,
@@ -10,8 +17,10 @@ export function Panel({
   children: React.ReactNode;
   width?: string;
 }) {
+  const closing = useClosing();
   return (
     <div
+      className={closing ? 'panel-exit' : 'panel-enter'}
       style={{
         position: 'absolute',
         top: '50%',

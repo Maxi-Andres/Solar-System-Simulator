@@ -9,6 +9,7 @@ import { AboutPanel } from './ui/AboutPanel.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
+import { Presence } from './ui/Presence.tsx';
 import { ReadoutPanel } from './ui/ReadoutPanel.tsx';
 import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
@@ -223,12 +224,17 @@ export function App() {
 
           <Toolbar />
 
-          {openPanel === 'body' && (
+          {/* Each panel stays mounted for its closing animation; see Presence.tsx. */}
+          <Presence show={openPanel === 'body'}>
             <InfoPanel store={store} jd={jd} distanceMode={distanceMode} tick={frame} />
-          )}
-          {openPanel === 'layers' && <LayersPanel />}
-          {openPanel === 'lighting' && <LightingPanel />}
-          {openPanel === 'readout' && (
+          </Presence>
+          <Presence show={openPanel === 'layers'}>
+            <LayersPanel />
+          </Presence>
+          <Presence show={openPanel === 'lighting'}>
+            <LightingPanel />
+          </Presence>
+          <Presence show={openPanel === 'readout'}>
             <ReadoutPanel
               store={store}
               jd={jd}
@@ -237,11 +243,13 @@ export function App() {
               visibleKinds={visibleKinds}
               tick={frame}
             />
-          )}
+          </Presence>
         </>
       )}
 
-      {openPanel === 'about' && <AboutPanel store={store} stars={stars} />}
+      <Presence show={openPanel === 'about'}>
+        <AboutPanel store={store} stars={stars} />
+      </Presence>
 
       {/* The only way back once the interface is switched off. */}
       {!uiVisible && (

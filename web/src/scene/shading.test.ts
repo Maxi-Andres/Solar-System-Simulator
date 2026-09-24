@@ -72,11 +72,24 @@ describe('the legibility modes are honest about what they cost', () => {
   it('measures how much of the night side each mode lifts', () => {
     const night = (mode: LightingMode) => renderedBrightness(180, MAP_ALBEDO.venus!, mode);
 
-    // 13 of 255 on Venus in Shadow: dim, but never black.
-    expect(night('shadow') * 255).toBeGreaterThan(10);
-    expect(night('shadow') * 255).toBeLessThan(20);
+    // 64 of 255 on Venus in Shadow: twenty points of the display above the 13 it used
+    // to be, which was too close to Natural's black to tell the modes apart.
+    expect(night('shadow') * 255).toBeGreaterThan(60);
+    expect(night('shadow') * 255).toBeLessThan(68);
     expect(night('flood')).toBeGreaterThan(night('shadow'));
     expect(night('natural')).toBe(0);
+  });
+
+  it("lifts even Earth's night side off black, which it once did not", () => {
+    // At the old 0.08 Earth's night side was 1 of 255 -- indistinguishable from Natural.
+    const earthNight = renderedBrightness(180, MAP_ALBEDO.earth!, 'shadow') * 255;
+    expect(earthNight).toBeGreaterThan(12);
+    // And the lit side is still Natural's to within a few code values.
+    const noonGap =
+      (renderedBrightness(0, MAP_ALBEDO.earth!, 'shadow') -
+        renderedBrightness(0, MAP_ALBEDO.earth!, 'natural')) *
+      255;
+    expect(noonGap).toBeLessThan(8);
   });
 
   it('flattens the terminator almost entirely in Flood', () => {

@@ -4,6 +4,7 @@ import type { StarCatalog } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { useViewStore } from '../state/store.ts';
+import { useClosing } from './Presence.tsx';
 
 /**
  * The welcome / about screen.
@@ -30,6 +31,7 @@ import { useViewStore } from '../state/store.ts';
  */
 export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: StarCatalog }) {
   const closePanel = useViewStore((state) => state.closePanel);
+  const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState<ScrollState>({ progress: 0, scrollable: false });
@@ -68,6 +70,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
 
   return (
     <div
+      className={closing ? 'overlay-exit' : 'overlay-enter'}
       style={{
         position: 'absolute',
         inset: 0,
