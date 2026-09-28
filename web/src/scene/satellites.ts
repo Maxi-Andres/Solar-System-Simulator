@@ -80,7 +80,10 @@ export function rebaseVisibleFrame(
   const satellites: BodyDefinition[] = [];
   for (const id of wanted) {
     const body = store.body(id);
-    if (body.parent === null || always.has(id)) {
+    // A satellite with no elements -- JWST, which hangs off Earth -- has no orbit size to
+    // judge by until it has a position, so it is resolved up front like a planet. Its
+    // current distance from its parent then stands in for the orbit.
+    if (body.parent === null || always.has(id) || store.elementsFor(id) === null) {
       primaries.add(id);
     } else {
       satellites.push(body);

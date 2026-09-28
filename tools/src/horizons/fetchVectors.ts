@@ -2,7 +2,8 @@ import { MAX_SAMPLES_PER_REQUEST } from '../config.ts';
 import type { BodyDefinition, VectorTable } from '../types.ts';
 import { callHorizons } from './client.ts';
 import { parseVectors } from './parseVectors.ts';
-import { addMinutes, stepMinutes, vectorQuery } from './queries.ts';
+import { addMinutes, MINUTES_PER_DAY, stepMinutes, toJulianDay, vectorQuery } from './queries.ts';
+import { alignStop, refineSamples, type RefineOptions, type RefineResult, type Sampler } from './refine.ts';
 
 /**
  * Fetches a body's state vectors, splitting the window when it would be too large.
@@ -159,4 +160,104 @@ export async function fetchVectors(
   }
 
   return { table: concatTables(parts), parts, sourceVersion, chunks: chunks.length };
+}
+
+/**
+ * Splits a table into pieces of at most `maxSamples`, neighbours sharing their boundary
+ * sample -- the layout a chunked table ships in, where any instant inside a piece must
+ * be answerable from that piece alone.
+ *
+ * A moon's chunks are simply the requests it was fetched in. A spacecraft's cannot be:
+ * its requests are one coarse sweep and dozens of short refinements, so they are cut
+ * afresh from the finished table.
+ */
+export function splitTable(table: VectorTable, maxSamples: number): VectorTable[] {
+  if (maxSamples < 2) {
+    throw new Error('A chunk needs at least two samples to interpolate between.');
+  }
+  if (table.count <= maxSamples) {
+    return [table];
+  }
+  const pieces: VectorTable[] = [];
+  for (let from = 0; from < table.count - 1; from += maxSamples - 1) {
+    const to = Math.min(from + maxSamples - 1, table.count - 1);
+    pieces.push({
+      ...table,
+      count: to - from + 1,
+      t: table.t.slice(from, to + 1),
+      x: table.x.slice(from, to + 1),
+      y: table.y.slice(from, to + 1),
+      z: table.z.slice(from, to + 1),
+      vx: table.vx.slice(from, to + 1),
+      vy: table.vy.slice(from, to + 1),
+      vz: table.vz.slice(from, to + 1),
+    });
+  }
+  return pieces;
+}
+
+/** Rounds a date up, or down, onto a whole minute. */
+function toMinute(date: Date, direction: 'up' | 'down'): Date {
+  const minutes = date.getTime() / 60_000;
+  return new Date((direction === 'up' ? Math.ceil(minutes) : Math.floor(minutes)) * 60_000);
+}
+
+/**
+ * Fetches a spacecraft's vectors: the window cut to JPL's coverage, sampled adaptively.
+ *
+ * The span is the requested window where JPL covers all of it, and JPL's edge where it
+ * does not -- rounded inwards to the minute, so the first and last requests are never
+ * refused. The end is then pulled back onto the coarse grid, which can drop up to one
+ * coarse step at the end of coverage: a day, for a craft whose trajectory stops inside
+ * the window, and it is where its prediction ends anyway.
+ */
+export async function fetchMissionVectors(
+  body: BodyDefinition,
+  windowStart: Date,
+  windowStop: Date,
+  coverage: { readonly start: Date; readonly stop: Date },
+  options: RefineOptions,
+): Promise<{ table: VectorTable; sourceVersion: string; result: RefineResult }> {
+  const start = toMinute(new Date(Math.max(windowStart.getTime(), coverage.start.getTime())), 'up');
+  const end = toMinute(new Date(Math.min(windowStop.getTime(), coverage.stop.getTime())), 'down');
+  const base = stepMinutes(body.stepDays);
+  const stop = alignStop(start, end, base);
+  if (stop.getTime() <= start.getTime()) {
+    throw new Error(`${body.name} has no coverage inside the window.`);
+  }
+
+  let sourceVersion = 'unknown';
+  let calls = 0;
+  const sampler: Sampler = async (from, to, step) => {
+    const parts: VectorTable[] = [];
+    for (const chunk of planChunks(from, to, step / MINUTES_PER_DAY)) {
+      calls += 1;
+      const response = await callHorizons(
+        vectorQuery({ ...body, stepDays: step / MINUTES_PER_DAY }, chunk.start, chunk.stop),
+        `${body.name} vectors ${calls} (${step} min)`,
+      );
+      parts.push(parseVectors(response.result, body));
+      sourceVersion = response.signature.version;
+    }
+    const table = concatTables(parts);
+    // The refinement splices by index, so a request that came back off its grid -- a
+    // sample missing at either end -- would splice the wrong samples together.
+    const first = table.t[0];
+    const last = table.t.at(-1);
+    if (
+      first === undefined ||
+      last === undefined ||
+      Math.abs(first - toJulianDay(from)) > 1e-6 ||
+      Math.abs(last - toJulianDay(to)) > 1e-6
+    ) {
+      throw new Error(
+        `${body.name}: asked for ${from.toISOString()} .. ${to.toISOString()} and got ` +
+          `JD ${String(first)} .. ${String(last)}.`,
+      );
+    }
+    return table;
+  };
+
+  const result = await refineSamples(sampler, start, stop, base, options);
+  return { table: result.table, sourceVersion, result };
 }

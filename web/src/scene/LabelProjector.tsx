@@ -47,8 +47,19 @@ interface Projected {
   readonly y: number;
   readonly depth: number;
   readonly offset: number;
-  /** True for a body with a parent, which yields a contested spot to one without. */
-  readonly satellite: boolean;
+  /** Who yields a contested spot: a lower rank keeps it. See `labelRank`. */
+  readonly rank: number;
+}
+
+/**
+ * Label precedence: the Sun, planets and dwarf planets first, then moons, then
+ * spacecraft. Depth only decides between bodies of the same rank.
+ */
+export function labelRank(kind: string, parent: BodyId | null): number {
+  if (kind === 'spacecraft') {
+    return 2;
+  }
+  return parent === null ? 0 : 1;
 }
 
 export function LabelProjector({
@@ -143,7 +154,7 @@ export function LabelProjector({
         y: (-scratch.y * 0.5 + 0.5) * size.height,
         depth: distanceUnits,
         offset: Math.min(pixelRadius, size.height * 0.4) + LABEL_GAP_PX,
-        satellite: body.parent !== null,
+        rank: labelRank(body.kind, body.parent),
       });
     }
 
@@ -152,10 +163,9 @@ export function LabelProjector({
     //
     // Except that a moon never takes a spot from a planet. A moon on the near side of
     // Jupiter is closer to the camera than Jupiter is, and by depth alone it would
-    // take the name of the planet it is there to be seen around.
-    projected.sort((a, b) =>
-      a.satellite === b.satellite ? a.depth - b.depth : a.satellite ? 1 : -1,
-    );
+    // take the name of the planet it is there to be seen around. And a spacecraft never
+    // takes one from either: Juice passing Earth is there to be seen passing Earth.
+    projected.sort((a, b) => (a.rank === b.rank ? a.depth - b.depth : a.rank - b.rank));
 
     const placed: Projected[] = [];
     const shown = new Set<BodyId>();

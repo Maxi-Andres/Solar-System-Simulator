@@ -56,7 +56,6 @@ describe('layer catalog', () => {
       'asteroids',
       'comets',
       'constellations',
-      'spacecraft',
       'trails',
     ]);
     for (const layer of LAYERS) {
@@ -85,6 +84,11 @@ describe('layer catalog', () => {
   it('shows the moons from the start, now that they are real', () => {
     expect(isLayerAvailable('moons')).toBe(true);
     expect(INITIAL.layers.moons).toBe(true);
+  });
+
+  it('shows the spacecraft from the start too', () => {
+    expect(isLayerAvailable('spacecraft')).toBe(true);
+    expect(INITIAL.layers.spacecraft).toBe(true);
   });
 });
 

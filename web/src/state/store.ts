@@ -89,7 +89,7 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'comets', label: 'Comets', pending: 'Phase B' },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
-  { id: 'spacecraft', label: 'Spacecraft', pending: 'Phase A', startsGroup: true },
+  { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
 
   { id: 'trails', label: 'Trails', pending: 'Phase A', startsGroup: true },
   { id: 'orbits', label: 'Orbits', pending: null },
@@ -106,7 +106,7 @@ const DEFAULT_LAYERS: LayerState = {
   moons: true,
   asteroids: false,
   comets: false,
-  spacecraft: false,
+  spacecraft: true,
   constellations: false,
   trails: false,
   orbits: true,

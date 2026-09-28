@@ -45,7 +45,7 @@ export interface FrameSnapshot {
 /**
  * Computes one frame's worth of rebased positions.
  *
- * Allocates a Map per frame, which at thirty-one bodies is not worth optimising away;
+ * Allocates a Map per frame, which at forty-two bodies is not worth optimising away;
  * when phase C brings tens of thousands of satellites, that path will want typed arrays
  * and a worker instead. Keeping this a plain function makes that swap local.
  *

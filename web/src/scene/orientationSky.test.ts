@@ -199,8 +199,8 @@ describeWithData('axial tilt, from two independent sources', () => {
 
     for (const body of loaded.bodies) {
       // A moon's tilt is to its orbit about its planet, not the Sun's; the Moon's is
-      // checked that way in moonRotation.test.ts.
-      if (body.id === 'sun' || body.parent !== null) {
+      // checked that way in moonRotation.test.ts. A spacecraft has no pole at all.
+      if (body.id === 'sun' || body.parent !== null || body.kind === 'spacecraft') {
         continue;
       }
       const heliocentric = loaded.stateRelativeTo(body.id, 'sun', jd);
@@ -347,7 +347,7 @@ describeWithData('the sub-solar longitude, against JPL Horizons', () => {
     // and W is measured about that pole. It still turns backwards, which is what the
     // negative period says, and it is the turning that sets the convention. The catalog
     // already flags that the two are different statements; this is what they are for.
-    return loaded.body(bodyId).rotationPeriodHours > 0 ? (360 - east) % 360 : east;
+    return loaded.body(bodyId).rotationPeriodHours! > 0 ? (360 - east) % 360 : east;
   }
 
   function separationDeg(a: number, b: number): number {

@@ -49,8 +49,8 @@ describeWithData('EphemerisStore against the generated data', () => {
   const midWindow = (s.manifest.window.startJd + s.manifest.window.stopJd) / 2;
 
   it('loads the full catalog and manifest', () => {
-    // The Sun, eight planets, Pluto, and twenty-one moons.
-    expect(s.bodies).toHaveLength(31);
+    // The Sun, eight planets, Pluto, twenty-one moons and eleven spacecraft.
+    expect(s.bodies).toHaveLength(42);
     expect(s.manifest.bodies).toContain('earth');
     expect(s.manifest.frame.center).toBe('500@0');
     expect(s.generatedAt.getTime()).toBeLessThanOrEqual(Date.now());

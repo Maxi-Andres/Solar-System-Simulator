@@ -44,6 +44,30 @@ export const SHORT_WINDOW_YEARS_BACK = 1;
 export const SHORT_WINDOW_YEARS_FORWARD = 1;
 
 /**
+ * How far a spacecraft's interpolated path may stray from JPL's, km.
+ *
+ * A spacecraft has no radius to measure against, which is what the planets' and moons'
+ * rule -- a hundredth of the body -- is written in. So the rule is absolute, and set by
+ * the closest thing anything here is ever seen next to: Europa Clipper will pass 25 km
+ * above Europa, and Juice passes 8,640 km above Earth on 2026-09-28. A kilometre is 4%
+ * of the first and a fraction of a pixel at every distance the second is framed from.
+ *
+ * Cheap, because it is only paid where it is needed. Cruise at one sample a day is
+ * already well inside it; the refinement goes finer only inside encounters,
+ * perihelia and burns. See refine.ts.
+ */
+export const SPACECRAFT_TOLERANCE_KM = 1;
+
+/** The finest step the spacecraft refinement may reach, minutes: Horizons' own unit. */
+export const SPACECRAFT_MIN_STEP_MINUTES = 1;
+
+/**
+ * Largest spacecraft table shipped as one file, in samples. Anything longer is split
+ * into chunks of about this size and fetched as the clock reaches them, like a moon's.
+ */
+export const SPACECRAFT_CHUNK_SAMPLES = 1500;
+
+/**
  * Rounding applied before serializing, to keep the JSON small.
  *
  * Time carries eight decimals rather than six. At six a sample's instant could be

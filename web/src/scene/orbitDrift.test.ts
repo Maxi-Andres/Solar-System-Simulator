@@ -171,7 +171,7 @@ describeWithData('orbit drawn from the live state', () => {
     // A moon's orbit is drawn around its planet, from the moon's planet-relative state
     // and the planet's own mass. Sampled at uneven fractions so the instants fall
     // between samples and inside chunks rather than on their seams.
-    for (const body of s.bodies.filter((candidate) => candidate.parent !== null)) {
+    for (const body of s.bodies.filter((candidate) => candidate.kind === 'moon')) {
       const span = s.coverage(body.id)!;
       for (const fraction of [0.001, 0.137, 0.5, 0.731, 0.999]) {
         const jd = span.startJd + (span.stopJd - span.startJd) * fraction;

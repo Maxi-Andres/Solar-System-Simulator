@@ -60,15 +60,24 @@ export function App() {
 
   // Switching a layer off while standing on one of its bodies would leave the camera
   // orbiting something that is no longer drawn. Step back to what it orbits.
+  //
+  // A spacecraft can also stop existing under the camera: run the clock back past its
+  // launch, or forward past the end of its trajectory, and it has no position at all --
+  // and neither, measured from it, does anything else. So it steps back too, to what it
+  // flies with.
+  const jdNow = clock.tdbJulianDay;
   useEffect(() => {
     if (store === null) {
       return;
     }
     const body = store.body(focus);
-    if (!visibleKinds.has(body.kind) && body.parent !== null) {
-      setFocus(body.parent);
+    const craft = body.kind === 'spacecraft';
+    if (!visibleKinds.has(body.kind) && (body.parent !== null || craft)) {
+      setFocus(body.parent ?? 'sun');
+    } else if (craft && !store.isCoveredAt(focus, jdNow)) {
+      setFocus(body.parent ?? 'sun');
     }
-  }, [store, focus, visibleKinds, setFocus]);
+  }, [store, focus, visibleKinds, setFocus, jdNow]);
 
   if (error !== null) {
     return (
@@ -159,6 +168,7 @@ export function App() {
             focus={focus}
             onFocus={setFocus}
             visibleKinds={visibleKinds}
+            jd={jd}
           />
 
           {/* Bottom-left: time. */}

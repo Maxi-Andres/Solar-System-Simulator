@@ -131,7 +131,7 @@ web/public/data/
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
 ├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
-├─ vectors/<id>/<n>.json  # the same, for a fast moon, split into ~1500-sample chunks
+├─ vectors/<id>/<n>.json  # the same, split into ~1500-sample chunks (fast moons, long spacecraft paths)
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -200,6 +200,32 @@ table above says. The Galileans swing Jupiter's centre about the system's baryce
 around 200 km every few days, and one sample a month cannot follow that — the same
 effect that limits Pluto, smaller. It moves the whole Jovian system together, so Io
 against Jupiter is still exact.
+
+### Spacecraft sampling
+
+A spacecraft is the case no single step can serve. Juice cruises for months on a curve
+one sample a day follows well inside a kilometre, then passes 8,640 km above Earth at 13 km/s,
+where the same step misses it by 41,783 km. Parker Solar Probe spends most of each
+88-day orbit far out and a few days of it at up to 190 km/s.
+
+So spacecraft are **sampled adaptively** (`tools/src/horizons/refine.ts`). Fetch at a
+coarse step; drop every other sample and interpolate it back from its neighbours — Hermite
+error goes as the fourth power of the spacing, so that miss over 16 is the error of the
+table as stored; re-fetch only the intervals over the tolerance, at the step the
+fourth-power law says they need; repeat, down to a minute. The tolerance is **1 km**,
+with a safety factor of 4 on the estimate because at flybys it was measured running up to
+2.1× low against one-minute truth. Every refined step divides the one it refines, so the
+grids nest and splice without seams of our own.
+
+What JPL covers is asked on every run, from Horizons' own refusal to answer outside it,
+because it moves: an active mission gets a new predicted trajectory every few weeks. A
+craft is absent outside that span, never propagated — there is no conic to propagate.
+
+The refinement also finds **seams in JPL's data**: places where Horizons hands over from
+one trajectory file to the next and the two disagree. They are logged, not smoothed —
+Europa Clipper jumps about 950 km on 2026-12-12 where its navigation prediction gives
+way to the pre-launch reference trajectory, and Psyche's by 239,500 km in one minute on
+2026-12-01.
 
 ### Freshness
 
@@ -280,6 +306,12 @@ about 1500 samples — 51 KB each, compressed — and a chunk is fetched only on
 system has opened up on screen: from the default view of the Sun, not one. Approaching
 Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB.
 
+The spacecraft add about **58 KB** to it: the Voyagers, the Pioneers and New Horizons
+ship whole, because coasting out of the Solar System they need a sample a month. The
+other six ship in ~1500-sample chunks of about 60 KB each, and since a craft is drawn
+from anywhere, one chunk of each — about 350 KB — arrives in the first moments rather
+than before the first frame. Parker is 63 chunks, one per few weeks of its orbits.
+
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
 and approaching one planet costs one image — between 76 KB (Uranus) and 852 KB
@@ -304,7 +336,7 @@ two, never drawn somewhere approximate and then moved.
 
 | Source | Used for |
 |---|---|
-| [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft |
+| [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft, and what span each spacecraft's path covers |
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
@@ -317,8 +349,9 @@ two, never drawn somewhere approximate and then moved.
   lights and atmosphere, and a real star catalogue. A photographic Milky Way panorama
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
-  The twenty-one major moons are in, with real positions and orbits; their rotation,
-  shapes and surface maps are next, then planet-centred views, then spacecraft.
+  The twenty-one major moons are in, with positions, orbits, rotation, shapes and
+  surface maps. Eleven interplanetary spacecraft are in as markers at their real
+  positions; their trajectories are next, then planet-centred views.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a

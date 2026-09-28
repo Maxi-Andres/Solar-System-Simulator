@@ -23,11 +23,16 @@ import {
   REF_SYSTEM,
   SHORT_WINDOW_YEARS_BACK,
   SHORT_WINDOW_YEARS_FORWARD,
+  SPACECRAFT_CHUNK_SAMPLES,
+  SPACECRAFT_MIN_STEP_MINUTES,
+  SPACECRAFT_TOLERANCE_KM,
   WINDOW_YEARS_BACK,
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
-import { fetchVectors } from './horizons/fetchVectors.ts';
+import { fetchCoverage } from './horizons/coverage.ts';
+import { fetchMissionVectors, fetchVectors, splitTable } from './horizons/fetchVectors.ts';
+import { ESTIMATE_MARGIN } from './horizons/refine.ts';
 import { parseElements } from './horizons/parseElements.ts';
 import { elementsQuery, fromJulianDay, stepSize } from './horizons/queries.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
@@ -102,9 +107,13 @@ function todayUtcMidnight(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-/** The span a body's vectors are requested over, from its catalog window. */
+/**
+ * The span a body's vectors are requested over, from its catalog window.
+ *
+ * A spacecraft asks for the full window and is then cut to what JPL covers.
+ */
 function windowFor(window: VectorWindow, epoch: Date): { start: Date; stop: Date } {
-  return window === 'full'
+  return window !== 'short'
     ? { start: addYears(epoch, -WINDOW_YEARS_BACK), stop: addYears(epoch, WINDOW_YEARS_FORWARD) }
     : {
         start: addYears(epoch, -SHORT_WINDOW_YEARS_BACK),
@@ -112,7 +121,42 @@ function windowFor(window: VectorWindow, epoch: Date): { start: Date; stop: Date
       };
 }
 
+/** Formats a TDB Julian day as a calendar instant for the log. */
+function logDate(jd: number): string {
+  return `${fromJulianDay(jd).toISOString().slice(0, 16).replace('T', ' ')} TDB`;
+}
+
+async function fetchSpacecraft(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
+  const { start, stop } = windowFor(body.vectorWindow, epoch);
+  const coverage = await fetchCoverage(body);
+  const { table, sourceVersion, result } = await fetchMissionVectors(body, start, stop, coverage, {
+    toleranceKm: SPACECRAFT_TOLERANCE_KM,
+    minStepMinutes: SPACECRAFT_MIN_STEP_MINUTES,
+    margin: ESTIMATE_MARGIN,
+  });
+  const parts = splitTable(table, SPACECRAFT_CHUNK_SAMPLES);
+
+  console.log(
+    `[fetch-data] ${body.name.padEnd(9)} ${String(table.count).padStart(6)} samples, ` +
+      `adaptive ${stepSize(body.stepDays)} .. ${result.finestStepMinutes}m ` +
+      `(${result.requests} requests, ${parts.length} chunk${parts.length === 1 ? '' : 's'}), ` +
+      `${logDate(table.t[0]!)} .. ${logDate(table.t.at(-1)!)}`,
+  );
+  // Not ours to fix and not to be hidden: the path JPL publishes jumps here.
+  for (const seam of result.discontinuities) {
+    console.log(
+      `[fetch-data]   ${body.name}: JPL's path jumps ~${Math.round(seam.jumpKm).toLocaleString('en-US')} km ` +
+        `near ${logDate(seam.jd)}`,
+    );
+  }
+
+  return { body, vectors: table, parts, elements: null, sourceVersion };
+}
+
 async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
+  if (body.vectorWindow === 'mission') {
+    return fetchSpacecraft(body, epoch);
+  }
   const { start, stop } = windowFor(body.vectorWindow, epoch);
 
   // Both calls for one body run together; the concurrency cap above limits how many
@@ -197,13 +241,16 @@ async function main(): Promise<void> {
 
   const tables: Record<BodyId, TableInfo> = {};
   for (const result of results) {
-    if (result.body.vectorWindow === 'full') {
+    if (
+      result.body.vectorWindow === 'full' ||
+      (result.body.vectorWindow === 'mission' && result.parts.length === 1)
+    ) {
       await writeVectors(result.vectors);
       tables[result.body.id] = { ...spanOf(result.vectors), chunks: null };
     } else {
       // Shipped as the pieces it was fetched in. Each is about 1500 samples -- Phobos
       // is 47 of them -- and the app fetches only the one covering the instant it is
-      // drawing.
+      // drawing. A spacecraft's were cut from its finished table the same size.
       const chunks: ChunkInfo[] = [];
       for (const [index, part] of result.parts.entries()) {
         chunks.push(await writeVectorChunk(part, index));

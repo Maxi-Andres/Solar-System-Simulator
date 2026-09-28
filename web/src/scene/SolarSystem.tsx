@@ -222,8 +222,6 @@ export function SolarSystem({
    * makes Saturn and Jupiter visibly flattened, as they are.
    */
   const handles = useMemo<BodyHandles[]>(() => {
-    const texture = markerTexture();
-
     return store.bodies.map((definition) => {
       const group = new THREE.Group();
       group.name = definition.id;
@@ -275,7 +273,7 @@ export function SolarSystem({
 
       const marker = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: texture,
+          map: markerTexture(definition.kind === 'spacecraft' ? 'diamond' : 'circle'),
           color: definition.color,
           transparent: true,
           depthTest: false,
@@ -608,8 +606,13 @@ export function SolarSystem({
 
       // Ring and sphere are independent: they overlap rather than swapping, so
       // nothing pops at any distance. See scale.ts.
-      const ringOpacity = markerOpacity(pixelRadius) * satellite;
-      const sphereOpacity = meshOpacity(pixelRadius);
+      //
+      // A spacecraft has no sphere to hand over to. Its radius is its span, there only
+      // so the camera can frame it, and a ball that size would be a shape it does not
+      // have -- so its marker stays at any range, and nothing replaces it.
+      const shaped = handle.definition.kind !== 'spacecraft';
+      const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
+      const sphereOpacity = shaped ? meshOpacity(pixelRadius) : 0;
 
       handle.marker.visible = showIcons && ringOpacity > 0.005;
       if (handle.marker.visible) {

@@ -39,6 +39,7 @@ function body(id: string, parent: string | null): BodyDefinition {
       photometric: { file: 'test.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   };
 }
 

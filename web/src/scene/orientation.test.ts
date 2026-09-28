@@ -17,8 +17,10 @@ import {
 } from './orientation.ts';
 
 // The Sun, the planets and Pluto. The moons are checked in moonRotation.test.ts, against
-// the planet they face rather than the Sun.
-const CATALOG = FULL_CATALOG.filter((body) => body.parent === null);
+// the planet they face rather than the Sun; the spacecraft have no rotation to check.
+const CATALOG = FULL_CATALOG.filter(
+  (body) => body.parent === null && body.kind !== 'spacecraft',
+);
 
 const earth = getBody('earth');
 const venus = getBody('venus');
@@ -175,7 +177,7 @@ describe('primeMeridianAngle', () => {
     // fact sheets publish, which is two independent sources agreeing, not a bug.
     const hours = period * 24;
     expect(hours).toBeCloseTo(23.9345, 4);
-    expect(Math.abs(hours - earth.rotationPeriodHours) * 3600).toBeLessThan(0.01);
+    expect(Math.abs(hours - earth.rotationPeriodHours!) * 3600).toBeLessThan(0.01);
   });
 
   it('runs backwards for Venus', () => {
@@ -311,7 +313,7 @@ describe('the catalog agrees with itself', () => {
         continue;
       }
       const fromRate = Math.abs(360 / body.rotation!.rotationRateDegPerDay) * 24;
-      const fromSheet = Math.abs(body.rotationPeriodHours);
+      const fromSheet = Math.abs(body.rotationPeriodHours!);
 
       // The two sources are independent, so they agree to their own precision
       // rather than exactly: Mercury is the worst at 0.007%.
@@ -331,7 +333,7 @@ describe('the catalog agrees with itself', () => {
     expect(fromRate).toBeCloseTo(15.9663, 3);
     // Not a rounding disagreement: they are nine minutes apart, which is a quarter of
     // the planet every seventy-five days.
-    expect((neptune.rotationPeriodHours - fromRate) * 60).toBeGreaterThan(8);
+    expect((neptune.rotationPeriodHours! - fromRate) * 60).toBeGreaterThan(8);
   });
 
   it('keeps Venus and Uranus retrograde in both conventions', () => {

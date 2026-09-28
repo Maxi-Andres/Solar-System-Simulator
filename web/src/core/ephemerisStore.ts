@@ -173,10 +173,23 @@ export class EphemerisStore {
    * decides whether the interface says APPROXIMATE.
    */
   isExactAt(jd: number, ids: readonly BodyId[] = this.#data.manifest.bodies): boolean {
-    return ids.every((id) => {
-      const span = this.coverage(id);
-      return span !== null && jd >= span.startJd && jd <= span.stopJd;
-    });
+    // A body with nothing to propagate -- a spacecraft -- is never approximate. Outside
+    // its table it is simply not there: before launch, or past the end of its
+    // trajectory, there is nowhere honest to put it.
+    return ids.every(
+      (id) => this.isCoveredAt(id, jd) || !this.#data.elements.has(id),
+    );
+  }
+
+  /**
+   * True when `jd` is inside a body's table, whether or not its chunk has arrived.
+   *
+   * For a spacecraft this is the same as "exists at this instant": before its launch
+   * and after its trajectory ends it has no state at all.
+   */
+  isCoveredAt(id: BodyId, jd: number): boolean {
+    const span = this.coverage(id);
+    return span !== null && jd >= span.startJd && jd <= span.stopJd;
   }
 
   /**

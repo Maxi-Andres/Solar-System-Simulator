@@ -149,8 +149,13 @@ export interface RotationalElements {
  * startup. A `short` one is split into chunks the app fetches only for the instant
  * it is showing, because a year of every fast moon is ten times the whole planetary
  * set.
+ *
+ * `mission` is a spacecraft's: the full window cut down to what JPL actually has for
+ * the craft, which starts at launch and, for a mission still flying, ends wherever its
+ * latest predicted trajectory does. It is sampled adaptively rather than at one step
+ * -- see refine.ts -- and shipped whole or chunked by its size.
  */
-export type VectorWindow = 'full' | 'short';
+export type VectorWindow = 'full' | 'short' | 'mission';
 
 /**
  * A body in the catalog.
@@ -217,8 +222,11 @@ export interface BodyDefinition {
    *
    * For a moon it equals the orbital period, because every moon in the catalog is
    * locked to its planet. The IAU rates below say the same thing independently.
+   *
+   * Null for a spacecraft. It is pointed, not spun, and a number here would be
+   * invented.
    */
-  readonly rotationPeriodHours: number;
+  readonly rotationPeriodHours: number | null;
   /**
    * Axial tilt in degrees, relative to the body's orbital plane.
    *
@@ -261,6 +269,22 @@ export interface BodyDefinition {
   readonly textures: Readonly<Record<TextureSetId, TextureVariant>> | null;
   /** Ring system, or null for the bodies here that have none worth drawing. */
   readonly rings: RingSystem | null;
+  /** Who flies it and when it left, for a spacecraft; null for a natural body. */
+  readonly mission: Mission | null;
+}
+
+/**
+ * The facts about a spacecraft that are not in its state vectors.
+ *
+ * Its size is not here: it is `radiusEquatorialKm`, taken for a spacecraft as half its
+ * largest deployed dimension, so everything that frames a body by its radius frames a
+ * craft by its span. There is no model to draw yet, and no sphere is drawn in its place.
+ */
+export interface Mission {
+  /** Launch instant, ISO 8601 UTC, as the operator published it. */
+  readonly launchUtc: string;
+  /** The agency responsible for it. */
+  readonly operator: string;
 }
 
 

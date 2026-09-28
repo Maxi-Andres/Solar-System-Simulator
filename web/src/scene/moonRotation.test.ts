@@ -180,7 +180,7 @@ async function subPlanetPoint(id: string, date: string): Promise<[number, number
   // Opposite the rotation, taken from the sign of the body's own period -- which is
   // exactly what caught the retrograde moons being entered as prograde. The Moon is
   // east-positive by tradition, as Earth is.
-  const convention = body.rotationPeriodHours > 0 && id !== 'moon' ? (360 - east) % 360 : east;
+  const convention = body.rotationPeriodHours! > 0 && id !== 'moon' ? (360 - east) % 360 : east;
   return [convention, planetographicLatitude(latitudeDeg, body)];
 }
 

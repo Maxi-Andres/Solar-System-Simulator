@@ -2,7 +2,8 @@ import { MOON_ORIENTATION } from './moonRotation.ts';
 import type { BodyDefinition, TextureSetId } from './types.ts';
 
 /**
- * Body catalog: the Sun, the eight planets, Pluto, and their major moons.
+ * Body catalog: the Sun, the eight planets, Pluto, their major moons, and the
+ * interplanetary spacecraft.
  *
  * Physical constants are hard-coded rather than scraped from Horizons' OBJ_DATA
  * block, which is free-form prose and differs per body. These values do not change,
@@ -247,6 +248,7 @@ function moon(spec: MoonSpec): BodyDefinition {
     drawOrbit: true,
     textures: spec.map === null ? null : { illustrative: spec.map, photometric: spec.map },
     rings: null,
+    mission: null,
   };
 }
 
@@ -616,6 +618,247 @@ const MOONS: readonly BodyDefinition[] = [
   }),
 ];
 
+/** What differs from one spacecraft to the next. */
+interface SpacecraftSpec {
+  readonly id: string;
+  readonly name: string;
+  readonly horizonsId: string;
+  /** Null for a craft in orbit about the Sun; the body id for one tied to a planet. */
+  readonly parent: string | null;
+  readonly parentHorizonsId: string | null;
+  /** The coarse step refinement starts from, days. See `SPACECRAFT` below. */
+  readonly stepDays: number;
+  /** Largest deployed dimension, metres. */
+  readonly spanM: number;
+  readonly launchUtc: string;
+  readonly operator: string;
+  readonly color: string;
+}
+
+/**
+ * A spacecraft: its path from JPL, and nothing drawn that is not known.
+ *
+ * No orbit line, because a spacecraft does not fly a conic -- its path is gravity
+ * assists, burns and hand-overs between trajectory files, and an osculating ellipse
+ * through it would be a shape it never follows. No sphere either: the radius stands for
+ * the craft's size so the camera can frame it, and there is no model yet to put there.
+ */
+function spacecraft(spec: SpacecraftSpec): BodyDefinition {
+  const center = spec.parentHorizonsId === null ? SSB_CENTER : `500@${spec.parentHorizonsId}`;
+  const radiusKm = spec.spanM / 2 / 1000;
+  return {
+    id: spec.id,
+    name: spec.name,
+    horizonsId: spec.horizonsId,
+    stepDays: spec.stepDays,
+    vectorWindow: 'mission',
+    center,
+    elementsCenter: center,
+    parent: spec.parent,
+    kind: 'spacecraft',
+    radiusEquatorialKm: radiusKm,
+    radiusPolarKm: radiusKm,
+    triaxialRadiiKm: null,
+    // A few thousand kilograms is a GM of 1e-16 km^3/s^2: nothing orbits it, and it
+    // bends nothing it passes.
+    gmKm3S2: 0,
+    gmBodyOnlyKm3S2: 0,
+    rotationPeriodHours: null,
+    axialTiltDeg: null,
+    rotation: null,
+    color: spec.color,
+    drawOrbit: false,
+    textures: null,
+    rings: null,
+    mission: { launchUtc: spec.launchUtc, operator: spec.operator },
+  };
+}
+
+/**
+ * The interplanetary spacecraft.
+ *
+ * Sources:
+ *   - Paths: JPL Horizons, each craft's own reconstructed and predicted trajectory.
+ *     What Horizons covers is asked each run rather than written here, because it moves:
+ *     a mission still flying gets a new predicted trajectory every few weeks.
+ *   - Launch instants: the Horizons object summary for each craft, except Voyager 1,
+ *     whose summary lists the date of the 6th in its timeline; the launch was
+ *     1977-09-05 12:56 UTC, which is also where its trajectory begins.
+ *   - Spans: Horizons' summary where it gives one (New Horizons 2.5 m, JWST's
+ *     21.197 m sunshield, Europa Clipper 30.5 m, Lucy 14.25 m, Psyche 24.76 m);
+ *     otherwise NASA's mission pages (Voyager's 13 m magnetometer boom, Pioneer's
+ *     6.6 m one, Parker's 3 m height) and ESA's Juice specifications (27.1 m across
+ *     the solar arrays).
+ *
+ * **Sampling.** Not one step per craft, which is what the planets and moons get: no
+ * single step can follow Juice through a year of cruise and through its Earth flyby
+ * both. `stepDays` is where the adaptive refinement starts, and it refines down to a
+ * minute wherever the interpolation would miss by more than SPACECRAFT_TOLERANCE_KM.
+ * The step is only a starting guess, so a wrong one costs requests rather than
+ * accuracy. The five coasting out of the Solar System start at 32 days, and there the
+ * Voyagers and Pioneers need no refinement at all -- worst estimate 2 m -- so each is
+ * one request and 229 samples for twenty years. That matters more than for the others,
+ * because a table this small ships whole and is waited for at startup: at eight days
+ * the five cost 190 KB compressed, at 32 they cost 58. New Horizons refines only at
+ * its trajectory seams. The rest start at one day.
+ *
+ * Measured over the twenty-year window, 2026-09-25:
+ *
+ *   craft               samples   refinements   chunks
+ *   Voyager 1, 2, Pioneer 10, 11   229 each     0      1
+ *   New Horizons             465        53       1
+ *   Parker Solar Probe    92,947       120      63
+ *   JWST                   3,789        22       3
+ *   Juice                  4,545        48       4
+ *   Europa Clipper        32,317       285      22
+ *   Lucy                   5,035        61       4
+ *   Psyche                 3,019       252       3
+ *
+ * Parker is most of it, and for the reason it exists: twenty-odd perihelia at up to
+ * 190 km/s, each needing minutes. Psyche's many short refinements are most likely its
+ * electric thrusters switching on and off, each one a kink in the path -- not verified.
+ * Against JPL at off-grid instants inside the hardest stretches -- two Earth flybys, a
+ * Mars flyby, a perihelion -- the worst miss is 110 m; see spacecraftJpl.test.ts.
+ *
+ * JWST hangs off Earth rather than the Sun, because that is what it moves with: it
+ * circles the Sun-Earth L2 point 1.5 million km beyond Earth, and against Earth its
+ * six-month halo orbit is what the samples have to follow.
+ */
+const SPACECRAFT: readonly BodyDefinition[] = [
+  spacecraft({
+    id: 'voyager-1',
+    name: 'Voyager 1',
+    horizonsId: '-31',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 32,
+    spanM: 13,
+    launchUtc: '1977-09-05T12:56:00Z',
+    operator: 'NASA',
+    color: '#c9b37a',
+  }),
+  spacecraft({
+    id: 'voyager-2',
+    name: 'Voyager 2',
+    horizonsId: '-32',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 32,
+    spanM: 13,
+    launchUtc: '1977-08-20T14:29:00Z',
+    operator: 'NASA',
+    color: '#b8a36c',
+  }),
+  spacecraft({
+    id: 'pioneer-10',
+    name: 'Pioneer 10',
+    horizonsId: '-23',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 32,
+    spanM: 6.6,
+    launchUtc: '1972-03-03T01:49:00Z',
+    operator: 'NASA',
+    color: '#a8a8b8',
+  }),
+  spacecraft({
+    id: 'pioneer-11',
+    name: 'Pioneer 11',
+    horizonsId: '-24',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 32,
+    spanM: 6.6,
+    launchUtc: '1973-04-06T02:11:00Z',
+    operator: 'NASA',
+    color: '#9898a8',
+  }),
+  spacecraft({
+    id: 'new-horizons',
+    name: 'New Horizons',
+    horizonsId: '-98',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 32,
+    spanM: 2.5,
+    launchUtc: '2006-01-19T19:00:00Z',
+    operator: 'NASA',
+    color: '#d8c8a0',
+  }),
+  spacecraft({
+    id: 'parker-solar-probe',
+    name: 'Parker Solar Probe',
+    horizonsId: '-96',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 3,
+    launchUtc: '2018-08-12T07:31:00Z',
+    operator: 'NASA',
+    color: '#e0a060',
+  }),
+  spacecraft({
+    id: 'jwst',
+    name: 'James Webb Space Telescope',
+    horizonsId: '-170',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 21.197,
+    launchUtc: '2021-12-25T12:20:00Z',
+    operator: 'NASA / ESA / CSA',
+    color: '#e8c860',
+  }),
+  spacecraft({
+    id: 'juice',
+    name: 'Juice',
+    horizonsId: '-28',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 27.1,
+    launchUtc: '2023-04-14T12:14:36Z',
+    operator: 'ESA',
+    color: '#7fb0e0',
+  }),
+  spacecraft({
+    id: 'europa-clipper',
+    name: 'Europa Clipper',
+    horizonsId: '-159',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 30.5,
+    launchUtc: '2024-10-14T16:06:00Z',
+    operator: 'NASA',
+    color: '#80c8c0',
+  }),
+  spacecraft({
+    id: 'lucy',
+    name: 'Lucy',
+    horizonsId: '-49',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 14.25,
+    launchUtc: '2021-10-16T09:34:00Z',
+    operator: 'NASA',
+    color: '#c0a0d8',
+  }),
+  spacecraft({
+    id: 'psyche',
+    name: 'Psyche',
+    horizonsId: '-255',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 24.76,
+    launchUtc: '2023-10-13T14:19:43Z',
+    operator: 'NASA',
+    color: '#a0c890',
+  }),
+];
+
 export const CATALOG: readonly BodyDefinition[] = [
   {
     id: 'sun',
@@ -658,6 +901,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'sun.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'mercury',
@@ -696,6 +940,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'mercury.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'venus',
@@ -734,6 +979,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'venus.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'earth',
@@ -772,6 +1018,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'earth-photometric.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'mars',
@@ -810,6 +1057,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'mars-photometric.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'jupiter',
@@ -849,6 +1097,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'jupiter.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'saturn',
@@ -912,6 +1161,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       innerRadiusKm: 69942,
       outerRadiusKm: 141880,
     },
+    mission: null,
   },
   {
     id: 'uranus',
@@ -950,6 +1200,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'uranus.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'neptune',
@@ -1022,6 +1273,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'neptune-photometric.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
+    mission: null,
   },
   {
     id: 'pluto',
@@ -1078,8 +1330,10 @@ export const CATALOG: readonly BodyDefinition[] = [
       photometric: { file: 'pluto.jpg', longitudeOriginDeg: 0 },
     },
     rings: null,
+    mission: null,
   },
   ...MOONS,
+  ...SPACECRAFT,
 ];
 
 /** Look up a body by id. Throws rather than returning undefined: ids are ours. */

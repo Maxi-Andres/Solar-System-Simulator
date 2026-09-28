@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG, getBody, SSB_CENTER, SUN_CENTER } from './catalog.ts';
 import { stepMinutes } from './horizons/queries.ts';
 
-const primaries = CATALOG.filter((body) => body.kind !== 'moon');
+const primaries = CATALOG.filter((body) => body.kind !== 'moon' && body.kind !== 'spacecraft');
 const moons = CATALOG.filter((body) => body.kind === 'moon');
+const craft = CATALOG.filter((body) => body.kind === 'spacecraft');
 
 describe('CATALOG', () => {
   it('covers the Sun, the eight planets and Pluto', () => {
@@ -106,7 +107,7 @@ describe('CATALOG', () => {
   });
 
   it('marks Venus, Uranus and Pluto as retrograde rotators, and the moons that turn with them', () => {
-    const retrograde = CATALOG.filter((body) => body.rotationPeriodHours < 0).map(
+    const retrograde = CATALOG.filter((body) => (body.rotationPeriodHours ?? 0) < 0).map(
       (body) => body.id,
     );
 
@@ -222,7 +223,7 @@ describe('the moons', () => {
     // is the IAU's W, read out of the PCK by script. Locked means they agree.
     for (const body of moons) {
       const fromRate = Math.abs(360 / body.rotation!.rotationRateDegPerDay) * 24;
-      expect(Math.abs(fromRate / Math.abs(body.rotationPeriodHours) - 1), body.id).toBeLessThan(
+      expect(Math.abs(fromRate / Math.abs(body.rotationPeriodHours!) - 1), body.id).toBeLessThan(
         5e-4,
       );
     }
@@ -240,6 +241,69 @@ describe('the moons', () => {
     for (const body of moons.filter((candidate) => candidate.textures !== null)) {
       expect(body.textures!.illustrative, body.id).toEqual(body.textures!.photometric);
       expect(body.textures!.illustrative.file, body.id).toBe(`${body.id}.jpg`);
+    }
+  });
+});
+
+describe('the spacecraft', () => {
+  it('are the interplanetary eleven, each by its Horizons id', () => {
+    expect(craft.map((body) => [body.id, body.horizonsId])).toEqual([
+      ['voyager-1', '-31'],
+      ['voyager-2', '-32'],
+      ['pioneer-10', '-23'],
+      ['pioneer-11', '-24'],
+      ['new-horizons', '-98'],
+      ['parker-solar-probe', '-96'],
+      ['jwst', '-170'],
+      ['juice', '-28'],
+      ['europa-clipper', '-159'],
+      ['lucy', '-49'],
+      ['psyche', '-255'],
+    ]);
+  });
+
+  it('take the mission window, and nothing that belongs to a natural body', () => {
+    for (const body of craft) {
+      expect(body.vectorWindow, body.id).toBe('mission');
+      // Not conics, so no ellipse; no shape, so no sphere's worth of rotation or maps.
+      expect(body.drawOrbit, body.id).toBe(false);
+      expect(body.rotation, body.id).toBeNull();
+      expect(body.rotationPeriodHours, body.id).toBeNull();
+      expect(body.textures, body.id).toBeNull();
+      expect(body.rings, body.id).toBeNull();
+      expect(body.gmKm3S2, body.id).toBe(0);
+      expect(body.mission, body.id).not.toBeNull();
+      expect(Number.isNaN(Date.parse(body.mission!.launchUtc)), body.id).toBe(false);
+    }
+    // And no natural body claims a mission.
+    for (const body of CATALOG.filter((candidate) => candidate.kind !== 'spacecraft')) {
+      expect(body.mission, body.id).toBeNull();
+    }
+  });
+
+  it('are sized by their span, metres rather than kilometres', () => {
+    for (const body of craft) {
+      // Parker is 3 m tall; Europa Clipper spans 30.5 m.
+      expect(body.radiusEquatorialKm, body.id).toBeGreaterThanOrEqual(0.001);
+      expect(body.radiusEquatorialKm, body.id).toBeLessThan(0.016);
+    }
+  });
+
+  it('orbit the Sun from the barycenter, except JWST, which moves with Earth', () => {
+    for (const body of craft) {
+      if (body.id === 'jwst') {
+        expect(body.parent).toBe('earth');
+        expect(body.center).toBe('500@399');
+      } else {
+        expect(body.parent, body.id).toBeNull();
+        expect(body.center, body.id).toBe(SSB_CENTER);
+      }
+    }
+  });
+
+  it('start refinement from a whole number of minutes', () => {
+    for (const body of craft) {
+      expect(() => stepMinutes(body.stepDays), body.id).not.toThrow();
     }
   });
 });

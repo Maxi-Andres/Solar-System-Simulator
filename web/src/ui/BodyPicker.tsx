@@ -16,6 +16,11 @@ import { Presence, useClosing } from './Presence.tsx';
  *
  * Every tier of the breadcrumb is itself a way up: from Io, "Jupiter" goes to Jupiter,
  * "Solar System" to the Sun.
+ *
+ * The spacecraft come last, in a section of their own rather than folded under the
+ * bodies they happen to be near. One that does not exist at the clock's instant -- not
+ * launched yet, or past the end of its trajectory -- is listed but cannot be chosen,
+ * and says which: there is nowhere to put the camera.
  */
 
 const ACCENT = '#3ddc84';
@@ -26,9 +31,11 @@ export interface BodyPickerProps {
   readonly onFocus: (id: BodyId) => void;
   /** Body kinds switched on in the layers panel; the list shows only those. */
   readonly visibleKinds: ReadonlySet<string>;
+  /** The clock's instant, TDB: a spacecraft can only be chosen while it exists. */
+  readonly jd: number;
 }
 
-export function BodyPicker({ store, focus, onFocus, visibleKinds }: BodyPickerProps) {
+export function BodyPicker({ store, focus, onFocus, visibleKinds, jd }: BodyPickerProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -107,6 +114,7 @@ export function BodyPicker({ store, focus, onFocus, visibleKinds }: BodyPickerPr
           store={store}
           focus={focus}
           visibleKinds={visibleKinds}
+          jd={jd}
           onChoose={choose}
         />
       </Presence>
@@ -161,15 +169,37 @@ function Caret({ open }: { open: boolean }) {
   );
 }
 
+/** Why a spacecraft cannot be chosen right now, or null when it can. */
+export function craftUnavailability(store: EphemerisStore, id: BodyId, jd: number): string | null {
+  const span = store.coverage(id);
+  if (span === null) {
+    return 'no data';
+  }
+  if (jd < span.startJd) {
+    return `from ${calendarYear(span.startJd)}`;
+  }
+  if (jd > span.stopJd) {
+    return `until ${calendarYear(span.stopJd)}`;
+  }
+  return null;
+}
+
+/** The calendar year a Julian day falls in, near enough for a label. */
+function calendarYear(jd: number): number {
+  return new Date((jd - 2440587.5) * 86_400_000).getUTCFullYear();
+}
+
 function BodyList({
   store,
   focus,
   visibleKinds,
+  jd,
   onChoose,
 }: {
   store: EphemerisStore;
   focus: BodyId;
   visibleKinds: ReadonlySet<string>;
+  jd: number;
   onChoose: (id: BodyId) => void;
 }) {
   const closing = useClosing();
@@ -180,10 +210,16 @@ function BodyList({
   const [expanded, setExpanded] = useState<ReadonlySet<BodyId>>(() => new Set([system]));
 
   const primaries = store.bodies.filter(
-    (body) => body.parent === null && visibleKinds.has(body.kind),
+    (body) => body.parent === null && body.kind !== 'spacecraft' && visibleKinds.has(body.kind),
   );
+  // Moons only: JWST hangs off Earth in the frame tree, and is listed with the craft.
   const moonsOf = (id: BodyId): BodyDefinition[] =>
-    visibleKinds.has('moon') ? store.bodies.filter((body) => body.parent === id) : [];
+    visibleKinds.has('moon')
+      ? store.bodies.filter((body) => body.parent === id && body.kind === 'moon')
+      : [];
+  const craft = visibleKinds.has('spacecraft')
+    ? store.bodies.filter((body) => body.kind === 'spacecraft')
+    : [];
 
   const toggle = (id: BodyId): void => {
     setExpanded((current) => {
@@ -277,6 +313,34 @@ function BodyList({
           </div>
         );
       })}
+      {craft.length > 0 && (
+        <>
+          <div
+            style={{
+              margin: '0.45rem 0.45rem 0.2rem',
+              paddingTop: '0.45rem',
+              borderTop: '1px solid #242424',
+              color: '#5a5a5a',
+              fontSize: '0.6rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Spacecraft
+          </div>
+          {craft.map((body) => (
+            <Row
+              key={body.id}
+              body={body}
+              active={body.id === focus}
+              inSystem={false}
+              onChoose={onChoose}
+              unavailable={craftUnavailability(store, body.id, jd)}
+              trailing={null}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -286,6 +350,7 @@ function Row({
   active,
   inSystem,
   indent = false,
+  unavailable = null,
   onChoose,
   trailing,
 }: {
@@ -294,15 +359,20 @@ function Row({
   /** The planet whose moon is in focus: marked, more quietly than the focus itself. */
   inSystem: boolean;
   indent?: boolean;
+  /** Why this row cannot be chosen at the clock's instant, or null when it can. */
+  unavailable?: string | null;
   onChoose: (id: BodyId) => void;
   trailing: React.ReactNode;
 }) {
+  const craft = body.kind === 'spacecraft';
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <button
         type="button"
         role="option"
         aria-selected={active}
+        aria-disabled={unavailable !== null}
+        disabled={unavailable !== null}
         onClick={() => onChoose(body.id)}
         style={{
           flex: 1,
@@ -314,27 +384,41 @@ function Row({
           border: 'none',
           borderRadius: '0.25rem',
           padding: `0.3rem 0.45rem 0.3rem ${indent ? '1.55rem' : '0.45rem'}`,
-          color: active ? ACCENT : inSystem ? '#e8e8e8' : '#a8a8a8',
+          color: active
+            ? ACCENT
+            : unavailable !== null
+              ? '#4e4e4e'
+              : inSystem
+                ? '#e8e8e8'
+                : '#a8a8a8',
           fontFamily: 'inherit',
-          fontSize: indent ? '0.72rem' : '0.78rem',
+          fontSize: indent || craft ? '0.72rem' : '0.78rem',
           letterSpacing: '0.03em',
-          cursor: 'pointer',
+          cursor: unavailable === null ? 'pointer' : 'default',
         }}
       >
         <span
           aria-hidden="true"
           style={{
-            width: indent ? '0.4rem' : '0.5rem',
-            height: indent ? '0.4rem' : '0.5rem',
-            borderRadius: '50%',
+            width: indent || craft ? '0.4rem' : '0.5rem',
+            height: indent || craft ? '0.4rem' : '0.5rem',
             // Planets filled, moons as rings, so a moon reads as belonging to the row
-            // above it even before the indent does.
-            background: indent ? 'transparent' : body.color,
-            border: indent ? `1px solid ${body.color}` : 'none',
+            // above it even before the indent does. A spacecraft is a diamond, as its
+            // marker is in the scene.
+            borderRadius: craft ? 0 : '50%',
+            transform: craft ? 'rotate(45deg)' : 'none',
+            background: indent || craft ? 'transparent' : body.color,
+            border: indent || craft ? `1px solid ${body.color}` : 'none',
+            opacity: unavailable === null ? 1 : 0.4,
             flex: 'none',
           }}
         />
-        {body.name}
+        <span style={{ flex: 1 }}>{body.name}</span>
+        {unavailable !== null && (
+          <span style={{ fontSize: '0.6rem', color: '#4e4e4e', letterSpacing: '0.04em' }}>
+            {unavailable}
+          </span>
+        )}
       </button>
       {trailing}
     </div>
