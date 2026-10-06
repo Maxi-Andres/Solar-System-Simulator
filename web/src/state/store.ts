@@ -91,7 +91,9 @@ export const LAYERS: readonly LayerDefinition[] = [
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
 
-  { id: 'trails', label: 'Trails', pending: 'Phase A', startsGroup: true },
+  // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
+  // be its orbit drawn twice, so the layer is the craft's alone.
+  { id: 'trails', label: 'Trails', pending: null, startsGroup: true },
   { id: 'orbits', label: 'Orbits', pending: null },
   { id: 'labels', label: 'Labels', pending: null },
   { id: 'icons', label: 'Icons', pending: null },
@@ -108,7 +110,7 @@ const DEFAULT_LAYERS: LayerState = {
   comets: false,
   spacecraft: true,
   constellations: false,
-  trails: false,
+  trails: true,
   orbits: true,
   labels: true,
   icons: true,

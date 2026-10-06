@@ -19,6 +19,7 @@ import {
   MAX_CONCURRENT_REQUESTS,
   OUT_UNITS,
   OUTPUT_DIR,
+  PATH_ANGULAR_TOLERANCE,
   REF_PLANE,
   REF_SYSTEM,
   SHORT_WINDOW_YEARS_BACK,
@@ -32,9 +33,16 @@ import {
 import { callHorizons } from './horizons/client.ts';
 import { fetchCoverage } from './horizons/coverage.ts';
 import { fetchMissionVectors, fetchVectors, splitTable } from './horizons/fetchVectors.ts';
-import { ESTIMATE_MARGIN } from './horizons/refine.ts';
+import { type Discontinuity, ESTIMATE_MARGIN } from './horizons/refine.ts';
 import { parseElements } from './horizons/parseElements.ts';
 import { elementsQuery, fromJulianDay, stepSize } from './horizons/queries.ts';
+import {
+  locateSeams,
+  nearestBodyTolerance,
+  type PositionAt,
+  positionAt,
+  simplifyPath,
+} from './paths.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
 import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
 import type {
@@ -43,6 +51,7 @@ import type {
   ChunkInfo,
   Manifest,
   OsculatingElements,
+  PathInfo,
   TableInfo,
   VectorTable,
   VectorWindow,
@@ -52,6 +61,8 @@ import {
   writeCatalog,
   writeElements,
   writeManifest,
+  serializeSeam,
+  writePath,
   writeStars,
   writeVectorChunk,
   writeVectors,
@@ -64,6 +75,8 @@ interface BodyResult {
   readonly parts: readonly VectorTable[];
   readonly elements: OsculatingElements | null;
   readonly sourceVersion: string;
+  /** Where a spacecraft's refinement hit its floor with the tolerance still missed. */
+  readonly discontinuities: readonly Discontinuity[];
 }
 
 /** Runs `task` over `items` with at most `limit` in flight at once. */
@@ -150,7 +163,14 @@ async function fetchSpacecraft(body: BodyDefinition, epoch: Date): Promise<BodyR
     );
   }
 
-  return { body, vectors: table, parts, elements: null, sourceVersion };
+  return {
+    body,
+    vectors: table,
+    parts,
+    elements: null,
+    sourceVersion,
+    discontinuities: result.discontinuities,
+  };
 }
 
 async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
@@ -184,6 +204,7 @@ async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult>
     parts: vectors.parts,
     elements,
     sourceVersion: vectors.sourceVersion,
+    discontinuities: [],
   };
 }
 
@@ -195,6 +216,69 @@ function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
     throw new Error(`${table.id} produced an empty vector table.`);
   }
   return { startJd, stopJd };
+}
+
+/**
+ * Every spacecraft's drawable trajectory, written to paths/ -- see paths.ts.
+ *
+ * The tolerance is measured from the bodies whose tables span the whole window: the
+ * Sun, the planets, Pluto and the Moon. The other moons cover two years, so a craft
+ * passing one outside them -- Europa Clipper at Europa from 2031 -- is held to Jupiter's
+ * distance instead. The moons themselves are propagated there anyway.
+ */
+async function writePaths(results: readonly BodyResult[]): Promise<Record<BodyId, PathInfo>> {
+  const full = new Map(
+    results
+      .filter((result) => result.body.vectorWindow === 'full')
+      .map((result) => [result.body.id, result] as const),
+  );
+
+  // Barycentric, by walking the parents: the Moon's table is relative to Earth.
+  const barycentric = (id: BodyId): PositionAt => {
+    const result = full.get(id);
+    if (result === undefined) {
+      throw new Error(`${id} has no full-window table to measure a path against.`);
+    }
+    const parent = result.body.parent === null ? null : barycentric(result.body.parent);
+    return (jd) => {
+      const local = positionAt(result.vectors, jd);
+      if (local === null || parent === null) {
+        return local;
+      }
+      const origin = parent(jd);
+      return origin === null
+        ? null
+        : [local[0] + origin[0], local[1] + origin[1], local[2] + origin[2]];
+    };
+  };
+  const references = [...full.keys()].map(barycentric);
+  const atBarycentre: PositionAt = () => [0, 0, 0];
+
+  const paths: Record<BodyId, PathInfo> = {};
+  for (const result of results.filter((candidate) => candidate.body.vectorWindow === 'mission')) {
+    const { body, vectors } = result;
+    const seams = locateSeams(vectors, result.discontinuities);
+    const origin = body.parent === null ? atBarycentre : barycentric(body.parent);
+    const path = simplifyPath(
+      vectors,
+      seams,
+      nearestBodyTolerance(references, origin, PATH_ANGULAR_TOLERANCE, SPACECRAFT_TOLERANCE_KM),
+    );
+    await writePath(path);
+    paths[body.id] = {
+      count: path.count,
+      angularTolerance: PATH_ANGULAR_TOLERANCE,
+      floorKm: SPACECRAFT_TOLERANCE_KM,
+      seams: seams.map(serializeSeam),
+    };
+
+    console.log(
+      `[fetch-data] ${body.name.padEnd(9)} path ${String(path.count).padStart(5)} of ` +
+        `${vectors.count} samples` +
+        (seams.length > 0 ? `, ${seams.length} seam${seams.length === 1 ? '' : 's'}` : ''),
+    );
+  }
+  return paths;
 }
 
 async function main(): Promise<void> {
@@ -267,6 +351,8 @@ async function main(): Promise<void> {
     }
   }
 
+  const paths = await writePaths(results);
+
   await writeCatalog(CATALOG);
   await writeStars(stars);
 
@@ -307,6 +393,7 @@ async function main(): Promise<void> {
     },
     bodies: CATALOG.map((body) => body.id),
     tables,
+    paths,
   };
 
   await writeManifest(manifest);

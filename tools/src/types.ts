@@ -382,6 +382,68 @@ export interface Manifest {
   readonly bodies: readonly BodyId[];
   /** What each body's vectors actually cover, and how they are split. */
   readonly tables: Readonly<Record<BodyId, TableInfo>>;
+  /**
+   * The drawable trajectory of every spacecraft, keyed by body; nothing else has one.
+   * Each entry's samples are in `paths/<id>.json`. See PathTable.
+   */
+  readonly paths: Readonly<Record<BodyId, PathInfo>>;
+}
+
+/**
+ * Where a spacecraft's path, as JPL publishes it, jumps rather than bends.
+ *
+ * Horizons stitches a craft's trajectory from a sequence of files, and where one hands
+ * over to the next the two need not agree. The step is JPL's, not an interpolation
+ * error, and it is kept: the samples on both sides are real. The trajectory line breaks
+ * across it rather than drawing a straight stroke the craft never flew.
+ */
+export interface Seam {
+  /** The sample just before the jump, Julian day TDB. */
+  readonly startJd: number;
+  /** The sample just after it, Julian day TDB: one step-floor later. */
+  readonly stopJd: number;
+  /**
+   * Size of the jump, km: how far the second sample sits from where the first one,
+   * moving at the two samples' mean velocity, would have arrived.
+   */
+  readonly jumpKm: number;
+}
+
+/** A spacecraft's drawable trajectory: what is in its path file, and how it was cut. */
+export interface PathInfo {
+  /** Samples in `paths/<id>.json`. */
+  readonly count: number;
+  /**
+   * The tolerance the path was simplified to, as an angle: radians, seen from the
+   * nearest of the Sun, the planets, Pluto and the Moon. See paths.ts.
+   */
+  readonly angularTolerance: number;
+  /** Tolerance never asked for below this, km: the full table's own accuracy. */
+  readonly floorKm: number;
+  /** Every jump in the craft's path, in time order. */
+  readonly seams: readonly Seam[];
+}
+
+/**
+ * A spacecraft's whole trajectory, light enough to load at once.
+ *
+ * A subset of the craft's own samples, unchanged -- every one is a JPL state vector --
+ * chosen so that Hermite interpolation through the subset stays within a tolerance of
+ * the full table everywhere. The full table is what the craft is drawn at; this is only
+ * what its line is drawn along, and it is a few kilobytes where the full table of
+ * Parker Solar Probe is four megabytes.
+ */
+export interface PathTable extends VectorTable {
+  /**
+   * How far the curve through each interval may stray from the full table, km: one
+   * entry per interval, `count - 1` of them. Also what the app tessellates it to.
+   */
+  readonly toleranceKm: readonly number[];
+  /**
+   * Intervals that span a seam, by index: their two ends are on either side of a jump,
+   * and nothing is drawn or interpolated between them.
+   */
+  readonly gaps: readonly number[];
 }
 
 /**

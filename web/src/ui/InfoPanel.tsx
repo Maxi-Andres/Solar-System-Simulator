@@ -1,3 +1,5 @@
+import type { Seam } from '@sss/tools/types';
+
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
 import { useViewStore } from '../state/store.ts';
@@ -123,6 +125,11 @@ function CraftFacts({
   // them is invisible at this precision.
   const launchJd = mission === null ? null : Date.parse(mission.launchUtc) / 86_400_000 + 2440587.5;
   const elapsedDays = launchJd === null ? null : jd - launchJd;
+  // The largest place JPL's path jumps, so a craft seen teleporting has a reason on screen.
+  const largestSeam = (store.pathInfo(focus)?.seams ?? []).reduce<Seam | null>(
+    (largest, seam) => (largest === null || seam.jumpKm > largest.jumpKm ? seam : largest),
+    null,
+  );
 
   return (
     <>
@@ -144,6 +151,11 @@ function CraftFacts({
       )}
       {coverage !== null && (
         <Row label="JPL path until">{formatTdbDate(coverage.stopJd)}</Row>
+      )}
+      {largestSeam !== null && (
+        <Row label="Largest path jump">
+          {`${Math.round(largestSeam.jumpKm).toLocaleString('en-US')} km, ${formatTdbDate(largestSeam.startJd)}`}
+        </Row>
       )}
     </>
   );

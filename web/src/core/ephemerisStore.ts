@@ -3,10 +3,12 @@ import type {
   BodyId,
   Manifest,
   OsculatingElements,
+  PathInfo,
+  PathTable,
   VectorTable,
 } from '@sss/tools/types';
 
-import { ChunkedTable, type ChunkLoader } from './chunkedTable.ts';
+import { ChunkedTable, type ChunkLoader, RETRY_AFTER_MS } from './chunkedTable.ts';
 import { FrameTree } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
@@ -59,7 +61,12 @@ export interface EphemerisData {
   readonly elements: ReadonlyMap<BodyId, OsculatingElements>;
   /** Fetches one chunk of a chunked table, or null where nothing may be fetched. */
   readonly loadChunk: ChunkLoader | null;
+  /** Fetches a spacecraft's trajectory, or null where nothing may be fetched. */
+  readonly loadPath: PathLoader | null;
 }
+
+/** Fetches the drawable trajectory of a spacecraft. */
+export type PathLoader = (id: BodyId) => Promise<PathTable>;
 
 /** Fetch-like function, injected so the store is testable without a browser. */
 export type Fetcher = (path: string) => Promise<unknown>;
@@ -74,7 +81,15 @@ export async function loadEphemerisData(
   fetcher: Fetcher,
   basePath = '/',
 ): Promise<EphemerisData> {
-  const manifest = (await fetcher(`${basePath}data/manifest.json`)) as Manifest;
+  const published = (await fetcher(`${basePath}data/manifest.json`)) as Manifest;
+  // Data generated before the trajectories has no paths. Everything else in it is still
+  // good, so it is used, and the craft are drawn without their lines until it is
+  // regenerated -- said once rather than failed on.
+  const hasPaths = typeof published.paths === 'object' && published.paths !== null;
+  if (!hasPaths) {
+    console.warn('The published data predates spacecraft trajectories. Regenerate it to draw them.');
+  }
+  const manifest: Manifest = hasPaths ? published : { ...published, paths: {} };
   const bodies = (await fetcher(`${basePath}data/bodies.json`)) as BodyDefinition[];
 
   // Data generated before the moons has no table index. Say so plainly, rather than
@@ -110,6 +125,7 @@ export async function loadEphemerisData(
     elements: new Map(elementList),
     loadChunk: async (id, index) =>
       (await fetcher(`${basePath}data/vectors/${id}/${index}.json`)) as VectorTable,
+    loadPath: async (id) => (await fetcher(`${basePath}data/paths/${id}.json`)) as PathTable,
   };
 }
 
@@ -117,6 +133,9 @@ export class EphemerisStore {
   readonly #data: EphemerisData;
   readonly #tree: FrameTree;
   readonly #chunked = new Map<BodyId, ChunkedTable>();
+  readonly #paths = new Map<BodyId, PathTable>();
+  readonly #pathsPending = new Map<BodyId, Promise<void>>();
+  readonly #pathsFailedAt = new Map<BodyId, number>();
 
   constructor(data: EphemerisData) {
     this.#data = data;
@@ -200,6 +219,71 @@ export class EphemerisStore {
    */
   async whenLoadedAt(jd: number, ids: readonly BodyId[] = this.#data.manifest.bodies): Promise<void> {
     await Promise.all(ids.map((id) => this.#chunked.get(id)?.whenLoadedAt(jd)));
+  }
+
+  /** How a spacecraft's trajectory was cut, and where it jumps; null for anything else. */
+  pathInfo(id: BodyId): PathInfo | null {
+    return this.#data.manifest.paths[id] ?? null;
+  }
+
+  /**
+   * A spacecraft's drawable trajectory, or null until it has arrived.
+   *
+   * Asked for on the first call and never waited on, like a moon's chunk: a craft's line
+   * appears when its file does. A few kilobytes each, and nothing is fetched for a craft
+   * whose line is never shown.
+   */
+  path(id: BodyId): PathTable | null {
+    const path = this.#paths.get(id);
+    if (path !== undefined) {
+      return path;
+    }
+    void this.requestPath(id);
+    return null;
+  }
+
+  /** Asks for a trajectory, once; resolves when it has arrived or has failed. */
+  requestPath(id: BodyId): Promise<void> {
+    const load = this.#data.loadPath;
+    if (this.#paths.has(id) || this.pathInfo(id) === null || load === null) {
+      return Promise.resolve();
+    }
+    const pending = this.#pathsPending.get(id);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const failedAt = this.#pathsFailedAt.get(id);
+    if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) {
+      return Promise.resolve();
+    }
+    const promise = load(id)
+      .then((path) => {
+        this.#paths.set(id, path);
+        this.#pathsFailedAt.delete(id);
+      })
+      .catch((error: unknown) => {
+        this.#pathsFailedAt.set(id, Date.now());
+        console.error(`Could not load the trajectory of ${id}`, error);
+      })
+      .finally(() => {
+        this.#pathsPending.delete(id);
+      });
+    this.#pathsPending.set(id, promise);
+    return promise;
+  }
+
+  /**
+   * A body's exact state relative to its parent, from data already here; null otherwise.
+   *
+   * Never fetches and never propagates. It is what a trajectory line samples its craft
+   * with: exactly the curve the craft itself is drawn on, wherever that curve is loaded.
+   */
+  loadedLocalState(id: BodyId, jd: number): StateVector | null {
+    const table = this.#data.vectors.get(id);
+    if (table !== undefined) {
+      return interpolateState(table, jd);
+    }
+    return this.#chunked.get(id)?.stateIfLoaded(jd) ?? null;
   }
 
   /**

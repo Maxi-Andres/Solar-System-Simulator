@@ -54,10 +54,12 @@ import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
+import { orbitalPeriodDays, TrajectoryLine } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
   focusOrbitOpacity,
+  KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
   meshOpacity,
@@ -121,6 +123,8 @@ export interface SolarSystemProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
+  /** Spacecraft trajectories: the Trails layer. */
+  readonly showTrails: boolean;
   readonly showIcons: boolean;
   readonly lighting: LightingMode;
   /** Body kinds currently switched on in the layers panel. */
@@ -172,6 +176,12 @@ interface BodyHandles {
   readonly orbitMu: number;
   /** Horizons center code of the parent, carried on the derived elements. */
   readonly orbitCenter: string;
+  /**
+   * Where a spacecraft's trajectory goes once its path has arrived; null for a natural
+   * body. The group is in the scene from the start so the line can be added to it late.
+   */
+  readonly trajectoryGroup: THREE.Group | null;
+  trajectory: TrajectoryLine | null;
   /** Ring system mesh, for the one body here that has one. */
   readonly ring: THREE.Mesh | null;
   /**
@@ -208,6 +218,7 @@ export function SolarSystem({
   clock,
   focus,
   showOrbits,
+  showTrails,
   showIcons,
   lighting,
   visibleKinds,
@@ -472,6 +483,8 @@ export function SolarSystem({
         orbitParent,
         orbitMu,
         orbitCenter,
+        trajectoryGroup: definition.kind === 'spacecraft' ? new THREE.Group() : null,
+        trajectory: null,
         ring,
         ringShadow,
         earth,
@@ -514,6 +527,9 @@ export function SolarSystem({
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
     const sun = snapshot.bodies.get('sun');
+    // Spacecraft paths live in the barycentric frame, whose origin is wherever the focus
+    // is not: minus the focus's own barycentric position.
+    const focusInRoot = store.stateInRoot(focus, jd);
 
     for (const handle of handles) {
       const rebased = snapshot.bodies.get(handle.definition.id);
@@ -521,6 +537,10 @@ export function SolarSystem({
         handle.group.visible = false;
         if (handle.orbit !== null) {
           handle.orbit.line.visible = false;
+        }
+        // A craft outside its coverage is not there, and neither is its line.
+        if (handle.trajectoryGroup !== null) {
+          handle.trajectoryGroup.visible = false;
         }
         continue;
       }
@@ -531,6 +551,9 @@ export function SolarSystem({
       if (!kindVisible) {
         if (handle.orbit !== null) {
           handle.orbit.line.visible = false;
+        }
+        if (handle.trajectoryGroup !== null) {
+          handle.trajectoryGroup.visible = false;
         }
         continue;
       }
@@ -919,6 +942,59 @@ export function SolarSystem({
           handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25);
         }
       }
+
+      if (handle.trajectoryGroup !== null) {
+        const id = handle.definition.id;
+        const parentId = handle.definition.parent;
+        // The path's frame, relative to the focus: the barycentre, or the planet a craft
+        // like JWST is hung from.
+        const origin =
+          parentId === null
+            ? focusInRoot === null
+              ? undefined
+              : {
+                  x: -focusInRoot.position.x,
+                  y: -focusInRoot.position.y,
+                  z: -focusInRoot.position.z,
+                }
+            : snapshot.bodies.get(parentId)?.positionKm;
+
+        // Asked for only once the line is wanted: a layer that is off costs nothing.
+        const wantedLine = showTrails && satellite > 0.005 && origin !== undefined;
+        if (wantedLine && handle.trajectory === null) {
+          const path = store.path(id);
+          if (path !== null) {
+            handle.trajectory = new TrajectoryLine(path, handle.definition.color);
+            handle.trajectoryGroup.add(handle.trajectory.object);
+          }
+        }
+
+        handle.trajectoryGroup.visible = wantedLine && handle.trajectory !== null;
+        if (handle.trajectoryGroup.visible && handle.trajectory !== null && origin !== undefined) {
+          // A JWST line waits for Earth's system to open up, like a moon's orbit.
+          handle.trajectory.setFade(satellite);
+          // A float32 vertex at d km carries an error near d * 6e-8, and the chords
+          // nearest the camera sit about the camera's own distance from the focus. Let
+          // the anchor drift a hundred times that and the error is still a hundredth of a
+          // pixel; tighter would rebuild every chord every frame while following a craft.
+          const anchorToleranceKm = 100 * cameraDistanceUnits * KM_PER_UNIT;
+          // One turn of the orbit it is on now, about what it orbits: the Sun, or Earth
+          // for JWST. Recomputed every frame, so after a flyby the trail is the new orbit's.
+          const center = parentId ?? 'sun';
+          const relative = store.stateRelativeTo(id, center, jd);
+          const spanDays =
+            relative === null
+              ? null
+              : orbitalPeriodDays(relative, store.body(center).gmBodyOnlyKm3S2);
+          handle.trajectory.update(
+            jd,
+            origin,
+            anchorToleranceKm,
+            (time) => store.loadedLocalState(id, time)?.position ?? null,
+            spanDays,
+          );
+        }
+      }
     }
 
     // The Sun is the only light source, which is what puts a real terminator on
@@ -931,7 +1007,6 @@ export function SolarSystem({
       );
     }
 
-    void cameraDistanceUnits;
   });
 
   return (
@@ -958,6 +1033,14 @@ export function SolarSystem({
         .filter((handle) => handle.orbit !== null)
         .map((handle) => (
           <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!.line} />
+        ))}
+      {handles
+        .filter((handle) => handle.trajectoryGroup !== null)
+        .map((handle) => (
+          <primitive
+            key={`${handle.definition.id}-trajectory`}
+            object={handle.trajectoryGroup!}
+          />
         ))}
     </group>
   );

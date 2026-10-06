@@ -132,6 +132,7 @@ web/public/data/
 ├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
 ├─ vectors/<id>/<n>.json  # the same, split into ~1500-sample chunks (fast moons, long spacecraft paths)
+├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -222,10 +223,28 @@ because it moves: an active mission gets a new predicted trajectory every few we
 craft is absent outside that span, never propagated — there is no conic to propagate.
 
 The refinement also finds **seams in JPL's data**: places where Horizons hands over from
-one trajectory file to the next and the two disagree. They are logged, not smoothed —
-Europa Clipper jumps about 950 km on 2026-12-12 where its navigation prediction gives
-way to the pre-launch reference trajectory, and Psyche's by 239,500 km in one minute on
-2026-12-01.
+one trajectory file to the next and the two disagree. They are kept, not smoothed, and
+published in the manifest with their measured size. They move as JPL revises its
+predictions: on the run of 2026-09-24 Psyche's largest was 239,513 km on 2026-12-01, and
+on 2026-10-06 it was 1,622,330 km on 2027-02-01. The About panel reads them from the
+data for that reason.
+
+### Spacecraft trajectories
+
+The full table is far more than a line needs — Parker's is 93,000 samples in 63 files —
+so each craft also gets a **path** (`tools/src/paths.ts`): a subset of its own samples,
+unchanged, chosen greedily so that Hermite through them stays within tolerance of the
+full table at every dropped sample and every midpoint. The tolerance is an **angle**,
+10⁻⁴ rad seen from the nearest of the Sun, the planets, Pluto and the Moon: a camera
+here always stands at a body, so a flyby keeps its kilometres while a cruise through
+empty space costs a few points. Voyager 1's twenty years are 2 samples, Parker's eleven
+are 1,302 (59 KB compressed). Seams are gaps in the path, never interpolated across.
+
+The app cuts each interval into chords until their sag is inside its tolerance, and
+redraws the interval the craft is in every frame from the craft's own data, closing in on
+it geometrically, so the line meets the marker at any zoom. It shows one period of the
+orbit the craft is on now, behind and ahead — none for a craft on a hyperbola, which gets
+its whole path.
 
 ### Freshness
 
@@ -311,6 +330,8 @@ ship whole, because coasting out of the Solar System they need a sample a month.
 other six ship in ~1500-sample chunks of about 60 KB each, and since a craft is drawn
 from anywhere, one chunk of each — about 350 KB — arrives in the first moments rather
 than before the first frame. Parker is 63 chunks, one per few weeks of its orbits.
+Their trails come the same way, after the first frame: about 200 KB for all eleven
+paths, 89 KB of it Europa Clipper's.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
@@ -350,8 +371,8 @@ two, never drawn somewhere approximate and then moved.
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
   The twenty-one major moons are in, with positions, orbits, rotation, shapes and
-  surface maps. Eleven interplanetary spacecraft are in as markers at their real
-  positions; their trajectories are next, then planet-centred views.
+  surface maps. Eleven interplanetary spacecraft are in at their real positions, with
+  their trajectories drawn from JPL's samples; planet-centred views are next.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a

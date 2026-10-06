@@ -36,6 +36,7 @@ export interface SolarSystemCanvasProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
+  readonly showTrails: boolean;
   readonly showIcons: boolean;
   readonly showLabels: boolean;
   readonly lighting: LightingMode;
@@ -49,6 +50,7 @@ export function SolarSystemCanvas({
   clock,
   focus,
   showOrbits,
+  showTrails,
   showIcons,
   showLabels,
   lighting,
@@ -76,6 +78,7 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         showOrbits={showOrbits}
+        showTrails={showTrails}
         showIcons={showIcons}
         lighting={lighting}
         visibleKinds={visibleKinds}

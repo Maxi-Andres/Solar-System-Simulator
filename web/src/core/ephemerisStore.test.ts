@@ -206,6 +206,7 @@ describeWithData('EphemerisStore against the generated data', () => {
           vectors: new Map(),
           elements: new Map(),
           loadChunk: null,
+          loadPath: null,
         }),
     ).toThrow(/no vector table/);
   });

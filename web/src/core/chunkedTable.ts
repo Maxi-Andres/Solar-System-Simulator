@@ -132,6 +132,20 @@ export class ChunkedTable {
   }
 
   /**
+   * The interpolated state at `jd` if its chunk is already here, and nothing asked for
+   * if it is not.
+   *
+   * For drawing a stretch of path rather than a point: a trajectory line samples its
+   * craft at many instants, and fetching every chunk one of them landed in would pull
+   * most of a mission's data for a line that has its own table to fall back on.
+   */
+  stateIfLoaded(jd: number): StateVector | null {
+    const index = this.indexAt(jd);
+    const table = index < 0 ? undefined : this.#tables[index];
+    return table === undefined ? null : interpolateState(table, jd);
+  }
+
+  /**
    * Asks for chunk `index`, once. Resolves when it has arrived or has failed.
    *
    * A failure is logged and the chunk is left alone for a while rather than asked for

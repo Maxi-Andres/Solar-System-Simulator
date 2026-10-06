@@ -12,6 +12,8 @@ import type {
   ChunkInfo,
   Manifest,
   OsculatingElements,
+  PathTable,
+  Seam,
   StarCatalog,
   VectorTable,
 } from './types.ts';
@@ -52,6 +54,7 @@ export async function prepareOutputDir(): Promise<void> {
   await rm(OUTPUT_DIR, { recursive: true, force: true });
   await mkdir(join(OUTPUT_DIR, 'vectors'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'elements'), { recursive: true });
+  await mkdir(join(OUTPUT_DIR, 'paths'), { recursive: true });
 }
 
 function serializeTable(table: VectorTable): VectorTable {
@@ -98,6 +101,33 @@ export async function writeVectorChunk(table: VectorTable, index: number): Promi
     throw new Error(`${table.id} chunk ${index} is empty.`);
   }
   return { startJd, stopJd, count: serialized.count };
+}
+
+/**
+ * A spacecraft's trajectory, as paths/<id>.json.
+ *
+ * Rounded exactly as the full table is, so every sample in it is, to the last digit, the
+ * sample of the same instant in the craft's vector files.
+ */
+export async function writePath(path: PathTable): Promise<void> {
+  await writeCompactJson(join(OUTPUT_DIR, 'paths', `${path.id}.json`), {
+    ...serializeTable(path),
+    // A metre is far inside every tolerance here; the floor alone is a kilometre.
+    toleranceKm: roundAll(path.toleranceKm, 3),
+    gaps: path.gaps,
+  });
+}
+
+/**
+ * A seam as the manifest carries it: its instants rounded as the tables' are, so that
+ * they match the samples on either side of it to the last digit.
+ */
+export function serializeSeam(seam: Seam): Seam {
+  return {
+    startJd: round(seam.startJd, TIME_DECIMALS),
+    stopJd: round(seam.stopJd, TIME_DECIMALS),
+    jumpKm: round(seam.jumpKm, POSITION_DECIMALS),
+  };
 }
 
 export async function writeElements(elements: OsculatingElements): Promise<void> {

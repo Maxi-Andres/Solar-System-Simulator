@@ -115,6 +115,7 @@ export function App() {
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
+        showTrails={layers.trails}
         showIcons={layers.icons}
         showLabels={layers.labels && uiVisible}
         lighting={lighting}

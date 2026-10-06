@@ -68,6 +68,26 @@ export const SPACECRAFT_MIN_STEP_MINUTES = 1;
 export const SPACECRAFT_CHUNK_SAMPLES = 1500;
 
 /**
+ * How far a spacecraft's drawn line may stray from its path, as an angle seen from the
+ * nearest body, radians. See paths.ts for why it is an angle.
+ *
+ * A tenth of a milliradian is about a quarter of a pixel at the 27-degree field of view
+ * on a 1080-line screen, and the line's total error is at most twice it -- the path's
+ * own miss plus the chord the app draws it with. Measured on the run of 2026-10-06:
+ *
+ *   craft              full table    path   path, gz
+ *   Parker               92,979     1,302     59 KB
+ *   Europa Clipper       32,409     2,028     89 KB
+ *   JWST                  3,796       488     20 KB
+ *   Juice                 4,545       255     12 KB
+ *   Voyager 1               229         2    < 1 KB
+ *
+ * A flat 100 km would have been larger -- 2,883 samples for Parker, on the earlier run --
+ * and looser where it matters: at Earth during Juice's flyby this asks for 1.5 km.
+ */
+export const PATH_ANGULAR_TOLERANCE = 1e-4;
+
+/**
  * Rounding applied before serializing, to keep the JSON small.
  *
  * Time carries eight decimals rather than six. At six a sample's instant could be

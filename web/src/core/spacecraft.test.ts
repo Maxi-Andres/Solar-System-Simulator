@@ -113,6 +113,7 @@ function makeStore(): EphemerisStore {
         { startJd: entry.t[0]!, stopJd: entry.t.at(-1)!, chunks: null },
       ]),
     ),
+    paths: {},
   };
   return new EphemerisStore({
     manifest,
@@ -120,6 +121,7 @@ function makeStore(): EphemerisStore {
     vectors,
     elements: new Map([['planet', PLANET_ELEMENTS]]),
     loadChunk: null,
+    loadPath: null,
   });
 }
 

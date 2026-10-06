@@ -56,7 +56,6 @@ describe('layer catalog', () => {
       'asteroids',
       'comets',
       'constellations',
-      'trails',
     ]);
     for (const layer of LAYERS) {
       if (layer.pending !== null) {

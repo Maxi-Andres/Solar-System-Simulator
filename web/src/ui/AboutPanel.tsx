@@ -154,6 +154,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
               'Sunsets, from the same physics rather than from a colour ramp. The sunlight reaching the ground and the clouds is attenuated by the air it came down through, so it loses a fifth of its blue at noon and almost all of it near the terminator: the light there is rgb(255, 106, 3) at a quarter of its strength. That is what turns the clouds amber on the daylit side of the line.',
               'Earth’s oceans are as rough as Cox and Munk measured the sea to be from its sun glitter, and reflect at water’s refractive index rather than the generic one every renderer assumes. That is what puts a real glint on the water and none on the land.',
               'Orbits drawn as osculating ellipses around whatever each body orbits — the Sun for a planet, the planet alone for a moon — re-derived from the body’s own state as it moves, so the line always passes through it.',
+              'Spacecraft trails drawn from JPL’s samples themselves, never from an ellipse: a craft changes orbit at every flyby and an ellipse would be wrong on both sides of one. The line is held to a fixed angle — a tenth of a milliradian, a quarter of a pixel — as seen from the nearest planet, so a flyby keeps every kilometre of its detail while a cruise through empty space costs a handful of points; and around the craft itself it is redrawn every frame from the same data the craft is placed with, so it runs into the marker at any zoom. It covers one period of the orbit the craft is on now, behind it and ahead, so Parker Solar Probe shows the loop it is flying rather than all of them.',
               `The sky is ESA’s Hipparcos and Tycho-2 catalogues together: every one of the ${stars.count.toLocaleString('en-US')} stars down to magnitude ${stars.magnitudeLimit} is a real star, at its own right ascension and declination, moving at its own proper motion, and coloured from its own measured B−V through Planck’s law and the CIE observer — so Betelgeuse is orange because it is 3,600 K. The check is Orion’s belt: nobody arranged those three stars, and if the epoch shift and the rotation into the ecliptic are right they land in a row on their own. They do, with Alnilam 0.09° off the line across a 2.74° span, which is the sky’s own figure.`,
               'The Sun has glare, and its shape is a measurement of the eye rather than a bloom filter. Most of what you see around the Sun is not coming from the Sun’s direction at all — it is its light scattered sideways inside whatever is looking. That scatter has been measured for a century, and the CIE disability-glare equation describes it: the veil falls as 10/θ³ + 5/θ², with θ in degrees. It follows the inverse square law on its own, so the halo is 3.9° wide from Mercury’s orbit, 1.8° from Earth’s and 0.34° from Saturn’s with nothing animating it, and it takes the Sun’s own colour because scattered sunlight is still sunlight.',
               'The Sun’s disc is overexposed, and that is the physical answer rather than a stylistic one. Its photosphere radiates σT⁴/π, which at 5,772 K is 154,000 times the radiance of the sunlit Earth this scene’s exposure is set for — so a correct render of the Sun is a flat white circle with nothing in it. It is drawn at 45 times full scale, which is still three and a half thousand times *under* the true value, chosen so red clips across the whole map and what survives of the granulation is in the blue channel. The disc then averages 255, 249, 60 on screen; reading NASA’s own render of the Sun pixel by pixel gives 255, 249, 59.',
@@ -169,7 +170,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
               'A photographic Milky Way panorama was tried behind the stars and taken out again. It was correctly placed — on the galactic frame, checked against Sagittarius A*, Andromeda and both Magellanic Clouds — and still wrong: a photograph’s stars arrive already blurred by an atmosphere and a lens, so no resolution turns them back into points. It lit 31.8% of the sky where the reference lights 0.9%.',
               'The Sun’s glare has no brightness setting at all: the veil is the illuminance the disc delivers, E = L·π·sin²θ, so it is tied to whatever exposure the disc is drawn at and cannot drift from it. What still differs from NASA’s render is how fast it falls — theirs goes as θ⁻³·⁵ where the eye’s equation is between θ⁻³ and θ⁻², so their glow ends at 1.72° from Earth’s distance and this one reaches 3.6°. An optical instrument is tighter than an eye: most of the eye’s veil is scattered inside the eye itself, and a lens has no retina.',
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
-              'A spacecraft exists only where JPL has its path: from launch, and until its trajectory ends — for a mission still flying, until its latest prediction does. Outside that it is not drawn and cannot be chosen, because there is nothing honest to propagate it with. Where JPL’s path is stitched from two trajectory files that disagree, it jumps: Europa Clipper by about 950 km on 12 December 2026, where its navigation prediction hands over to the pre-launch reference trajectory, and Psyche by 240,000 km in a single minute on 1 December 2026. The jumps are JPL’s and they are kept.',
+              `A spacecraft exists only where JPL has its path: from launch, and until its trajectory ends — for a mission still flying, until its latest prediction does. Outside that it is not drawn and cannot be chosen, because there is nothing honest to propagate it with. Where JPL’s path is stitched from two trajectory files that disagree, it jumps in a single minute. ${seamSentence(store)} The jumps are JPL’s and they are kept: the craft moves across them, and its trail breaks there rather than drawing a stroke nothing flew along.`,
               'Spacecraft are drawn as markers, never as a shape: there is no model yet, and a sphere their size would be a shape they do not have. Their size is their span — 30.5 m for Europa Clipper — and it is only used to frame them.',
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does. The moons have a narrower window than the planets — a year either side of the build, against ten — because Phobos alone needs 35,000 samples a year. Their data arrives in pieces as the clock reaches it, so a moon can be missing for a moment, never misplaced.',
               'The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager photographed them through clear filters, and the colour versions that exist are enhanced into the ultraviolet and infrared. The Moon is in natural colour, Titan is its surface at 938 nm seen through the haze, and Io and Triton carry uncalibrated mission colour.',
@@ -265,6 +266,41 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
 }
 
 /** Radius of the progress ring, in the SVG's own units. */
+/** A jump this size or larger is named in the About text; smaller ones are counted. */
+export const NOTABLE_JUMP_KM = 1000;
+
+/**
+ * The jumps in this data's spacecraft paths, as a sentence.
+ *
+ * Read from the manifest rather than written down, because JPL revises its trajectories
+ * and the jumps move with them: between two runs a week apart Psyche's went from 239,513
+ * km on 1 December 2026 to 1,622,330 km on 1 February 2027, and Europa Clipper's 954 km
+ * handover was replaced by three others. A sentence typed into the source would have
+ * been wrong by the next deploy.
+ */
+export function seamSentence(store: EphemerisStore): string {
+  const notable = Object.entries(store.manifest.paths)
+    .flatMap(([id, info]) =>
+      info.seams.map((seam) => ({ name: store.body(id).name, ...seam })),
+    )
+    .filter((seam) => seam.jumpKm >= NOTABLE_JUMP_KM)
+    .sort((a, b) => b.jumpKm - a.jumpKm);
+  const largest = notable[0];
+  if (largest === undefined) {
+    return `In this data none jumps by ${NOTABLE_JUMP_KM.toLocaleString('en-US')} km or more.`;
+  }
+  const date = new Date((largest.startJd - 2440587.5) * 86_400_000).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const size = `${Math.round(largest.jumpKm).toLocaleString('en-US')} km`;
+  return notable.length === 1
+    ? `In this data one jump is over ${NOTABLE_JUMP_KM.toLocaleString('en-US')} km: ${largest.name}’s, ${size} on ${date}.`
+    : `In this data ${notable.length} are over ${NOTABLE_JUMP_KM.toLocaleString('en-US')} km, the largest ${largest.name}’s: ${size} on ${date}.`;
+}
+
 const RING_RADIUS = 13;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
