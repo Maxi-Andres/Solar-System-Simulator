@@ -8,6 +8,8 @@ import { useMemo, type RefObject } from 'react';
 
 import { CameraRig } from './CameraRig.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
+// Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
+import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
@@ -20,7 +22,9 @@ import { Starfield } from './Starfield.tsx';
  *  - `logarithmicDepthBuffer`. A conventional depth buffer distributes precision by
  *    1/z, so a near plane small enough to stand on Earth's surface would leave
  *    nothing for Neptune. The logarithmic buffer spreads precision evenly in orders
- *    of magnitude, which is exactly the shape of this scene.
+ *    of magnitude, which is exactly the shape of this scene -- once it counts from
+ *    the near plane rather than from one scene unit, which three's own does not; see
+ *    logDepth.ts for the 1.5 m it was costing everything within 1000 km.
  *  - A near plane of 1e-6 units (one metre) and a far plane past the star sphere.
  *    That is a range of 1e17, which only the log buffer makes survivable.
  *
@@ -72,7 +76,7 @@ export function SolarSystemCanvas({
         // filmic curve keeps it from blowing out everything around it.
         toneMapping: 3, // THREE.ACESFilmicToneMapping
       }}
-      camera={{ fov: FOV_DEG, near: 1e-6, far: 1e11 }}
+      camera={{ fov: FOV_DEG, near: CAMERA_NEAR_UNITS, far: CAMERA_FAR_UNITS }}
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
       <Starfield catalog={stars} clock={clock} />

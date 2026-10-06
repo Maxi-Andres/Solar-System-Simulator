@@ -43,7 +43,20 @@ function body(id: string, kind: BodyDefinition['kind'], parent: string | null): 
     drawOrbit: !craft && id !== 'sun',
     textures: null,
     rings: null,
-    mission: craft ? { launchUtc: '2025-01-01T00:00:00Z', operator: 'Test' } : null,
+    mission: craft
+      ? {
+          launchUtc: '2025-01-01T00:00:00Z',
+          operator: 'Test',
+          shape: {
+            model: null,
+            boxM: [10, 5, 2],
+            pointsAt: 'sun',
+            pointingPart: 'solar-arrays',
+            pointingAxis: [0, 0, 1],
+            rollAxis: [0, 1, 0],
+          },
+        }
+      : null,
   };
 }
 

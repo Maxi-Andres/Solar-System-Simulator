@@ -1,5 +1,5 @@
 import { MOON_ORIENTATION } from './moonRotation.ts';
-import type { BodyDefinition, TextureSetId } from './types.ts';
+import type { BodyDefinition, CraftShape, TextureSetId } from './types.ts';
 
 /**
  * Body catalog: the Sun, the eight planets, Pluto, their major moons, and the
@@ -633,6 +633,8 @@ interface SpacecraftSpec {
   readonly launchUtc: string;
   readonly operator: string;
   readonly color: string;
+  /** See CraftShape, and SHAPES below for where each one comes from. */
+  readonly shape: CraftShape;
 }
 
 /**
@@ -670,9 +672,113 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
     drawOrbit: false,
     textures: null,
     rings: null,
-    mission: { launchUtc: spec.launchUtc, operator: spec.operator },
+    mission: { launchUtc: spec.launchUtc, operator: spec.operator, shape: spec.shape },
   };
 }
+
+/**
+ * What each craft looks like up close, and which way it faces. See CraftShape.
+ *
+ * **Models.** NASA's own, from NASA 3D Resources (science.nasa.gov/3d-resources and the
+ * nasa/NASA-3D-Resources mirror), compressed for the web -- see web/public/models/
+ * CREDITS.md for each file's source and how it was processed. NASA's 3D content is
+ * "generally not subject to copyright in the United States" and may be used for
+ * "computer graphical simulations and Internet Web pages", with NASA acknowledged as
+ * the source. None states its units; every one measures in metres against a published
+ * dimension, within 10%:
+ *
+ *   model            measured                      published
+ *   Voyager          dish 3.82 m                   3.7 m high-gain antenna
+ *   Pioneer 10       dish 2.88 m                   2.74 m
+ *   New Horizons     dish 1.94 m                   2.1 m
+ *   Parker           shield mount 2.18 m           2.3 m heat shield
+ *   JWST             sunshield 21.0 x 12.9 m       21.2 x 14.2 m
+ *   Europa Clipper   span 30.50 m                  30.5 m
+ *
+ * One model serves both Voyagers, and Pioneer 10's serves Pioneer 11: the pairs were
+ * built alike, and no model of the second of either was published.
+ *
+ * **Axes** were read off the geometry, since no model documents them: each dish's
+ * opening side by where its feed sits, Parker's shield by its mounting at -Z, JWST's
+ * sunshield by the telescope standing on its +Y side, Clipper's cells by their normals
+ * (+Z, all 3,200 of them).
+ *
+ * **Boxes**, for the three with no model that may be used: Juice's is ESA's, with no
+ * licence stated, and Lucy's and Psyche's exist only inside NASA Eyes, with no terms
+ * published. Each box is as long as the craft's solar-array span, as wide as one array,
+ * and as deep as its body, every figure published:
+ *
+ *   Lucy     15.82 x 7.28 x 2.00 m   NASA: width, height deployed, depth
+ *   Psyche   24.76 x 7.34 x 2.4 m    JPL: flight system long x wide; bus deep
+ *   Juice    27.1 x 3.5 x 2.86 m     ESA: across the arrays; one panel's long side
+ *                                    (ten 2.5 x 3.5 m panels, five a wing); the
+ *                                    smallest side of the stowed craft
+ *
+ * Juice's full deployed envelope is 16.8 x 27.1 x 13.7 m, but most of that is the
+ * 16 m radar antenna and the 10.6 m magnetometer boom; a solid box that size would
+ * be a brick with nothing of the craft in it.
+ *
+ * The boxes face the Sun with their broad side, as the arrays they stand for do.
+ */
+const SUN_FACING_BOX = {
+  pointsAt: 'sun',
+  pointingPart: 'solar-arrays',
+  pointingAxis: [0, 0, 1],
+  rollAxis: [0, 1, 0],
+} as const;
+const SHAPES = {
+  voyager: {
+    model: 'voyager.glb',
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  pioneer: {
+    model: 'pioneer.glb',
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 0, -1],
+    rollAxis: [0, -1, 0],
+  },
+  newHorizons: {
+    model: 'new-horizons.glb',
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  parker: {
+    model: 'parker-solar-probe.glb',
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'heat-shield',
+    pointingAxis: [0, 0, -1],
+    rollAxis: [0, 1, 0],
+  },
+  jwst: {
+    model: 'jwst.glb',
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'sunshield',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  europaClipper: {
+    model: 'europa-clipper.glb',
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
+  },
+  juice: { model: null, boxM: [27.1, 3.5, 2.86], ...SUN_FACING_BOX },
+  lucy: { model: null, boxM: [15.82, 7.28, 2.0], ...SUN_FACING_BOX },
+  psyche: { model: null, boxM: [24.76, 7.34, 2.4], ...SUN_FACING_BOX },
+} as const satisfies Record<string, CraftShape>;
 
 /**
  * The interplanetary spacecraft.
@@ -727,6 +833,7 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
 const SPACECRAFT: readonly BodyDefinition[] = [
   spacecraft({
     id: 'voyager-1',
+    shape: SHAPES.voyager,
     name: 'Voyager 1',
     horizonsId: '-31',
     parent: null,
@@ -739,6 +846,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'voyager-2',
+    shape: SHAPES.voyager,
     name: 'Voyager 2',
     horizonsId: '-32',
     parent: null,
@@ -751,6 +859,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'pioneer-10',
+    shape: SHAPES.pioneer,
     name: 'Pioneer 10',
     horizonsId: '-23',
     parent: null,
@@ -763,6 +872,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'pioneer-11',
+    shape: SHAPES.pioneer,
     name: 'Pioneer 11',
     horizonsId: '-24',
     parent: null,
@@ -775,6 +885,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'new-horizons',
+    shape: SHAPES.newHorizons,
     name: 'New Horizons',
     horizonsId: '-98',
     parent: null,
@@ -787,6 +898,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'parker-solar-probe',
+    shape: SHAPES.parker,
     name: 'Parker Solar Probe',
     horizonsId: '-96',
     parent: null,
@@ -799,6 +911,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'jwst',
+    shape: SHAPES.jwst,
     name: 'James Webb Space Telescope',
     horizonsId: '-170',
     parent: 'earth',
@@ -811,6 +924,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'juice',
+    shape: SHAPES.juice,
     name: 'Juice',
     horizonsId: '-28',
     parent: null,
@@ -823,6 +937,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'europa-clipper',
+    shape: SHAPES.europaClipper,
     name: 'Europa Clipper',
     horizonsId: '-159',
     parent: null,
@@ -835,6 +950,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'lucy',
+    shape: SHAPES.lucy,
     name: 'Lucy',
     horizonsId: '-49',
     parent: null,
@@ -847,6 +963,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'psyche',
+    shape: SHAPES.psyche,
     name: 'Psyche',
     horizonsId: '-255',
     parent: null,

@@ -285,6 +285,44 @@ export interface Mission {
   readonly launchUtc: string;
   /** The agency responsible for it. */
   readonly operator: string;
+  /** What is drawn in its place when it is close enough to have a size. */
+  readonly shape: CraftShape;
+}
+
+/** An axis in a craft's own frame: a unit vector along one of its model axes. */
+export type CraftAxis = readonly [number, number, number];
+
+/**
+ * How a spacecraft is drawn up close, and which way it faces.
+ *
+ * Either the agency's own 3D model, in metres, or -- where no model may be used -- a
+ * plain box of the craft's published dimensions, which says how big it is and claims
+ * nothing about its shape.
+ *
+ * **Attitude is modelled, not measured.** Where each craft actually points is in JPL's
+ * attitude kernels for some of them, as gigabytes of binary, and is published for none
+ * of Pioneer, Parker or JWST. What is drawn instead is the rule each one flies by:
+ * Voyager, Pioneer and New Horizons keep their dish on Earth; Parker keeps its heat
+ * shield on the Sun, JWST its sunshield, and the solar-powered craft their arrays. That
+ * fixes one axis. The roll about it is not published for any of them and is set by
+ * convention -- `rollAxis` held as near ecliptic north as the pointing allows.
+ */
+export interface CraftShape {
+  /** File under web/public/models/, or null to draw the box instead. */
+  readonly model: string | null;
+  /**
+   * The box: its size along the craft's own x, y and z, metres. Null with a model,
+   * which carries its own size.
+   */
+  readonly boxM: readonly [number, number, number] | null;
+  /** The body the craft keeps `pointingAxis` on. */
+  readonly pointsAt: 'earth' | 'sun';
+  /** What it keeps there, for saying so on screen. */
+  readonly pointingPart: 'dish' | 'heat-shield' | 'sunshield' | 'solar-arrays';
+  /** In the craft's own frame: the dish's boresight, the shield's or the arrays' normal. */
+  readonly pointingAxis: CraftAxis;
+  /** In the craft's own frame, perpendicular to `pointingAxis`: held toward ecliptic north. */
+  readonly rollAxis: CraftAxis;
 }
 
 

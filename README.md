@@ -115,6 +115,7 @@ pnpm preview         # serve the build to verify it before publishing
 | `web/` | Frontend: Vite + React + Three.js. Reads the JSON from its own origin. |
 | `web/public/data/` | **Generated, not versioned.** Recreate with `pnpm fetch:data`. |
 | `web/public/textures/` | Surface maps, **committed**. Static third-party assets that never change, so the build does not depend on a third-party host being up. Credited in `CREDITS.md`, which a test enforces. |
+| `web/public/models/` | NASA's spacecraft models, compressed, **committed** for the same reason. Credited in `CREDITS.md`, which a test enforces. |
 
 The site is fully static — there is no backend. JPL Horizons is queried only at build
 time, never from a visitor's browser.
@@ -247,6 +248,22 @@ it geometrically, so the line meets the marker at any zoom. It is a **trail**, a
 Eyes draws one: only where the craft has been, one period of its current orbit back,
 fading linearly with age. A craft on a hyperbola has no period, and its trail reaches back
 to the start of its path.
+
+### Spacecraft up close
+
+Six craft are drawn with **NASA's own 3D models** (NASA 3D Resources; Voyager's serves
+both Voyagers, Pioneer 10's both Pioneers), compressed with meshopt and WebP from 50 MB
+to 5.8 MB and fetched only once a craft is six pixels across. None documents its units;
+each measures in metres against a published dimension, within 10%, and a test checks
+the compressed files still measure what NASA's did. Juice, Lucy and Psyche have no model
+that may be used, so each is a **white box of its published size** — array span by array
+width by body depth.
+
+Which way a craft faces is **modelled**: dish to Earth for Voyager, Pioneer and New
+Horizons, heat shield or sunshield to the Sun for Parker and JWST, arrays to the Sun for
+the rest. The roll about that axis is a convention. JPL's attitude kernels would be the
+measured answer for some of them; they are gigabytes of binary and do not exist for
+Pioneer, Parker or JWST.
 
 ### Freshness
 

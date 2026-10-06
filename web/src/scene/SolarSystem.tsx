@@ -1,4 +1,4 @@
-import type { BodyDefinition, BodyId, TextureSetId } from '@sss/tools/types';
+import type { BodyDefinition, BodyId, CraftShape, TextureSetId } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -56,6 +56,13 @@ import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { labelRank } from './LabelProjector.tsx';
+import {
+  craftBox,
+  craftOrientation,
+  loadCraftModel,
+  MODEL_REQUEST_PX,
+  SHAPE_SHOWN_PX,
+} from './craftModels.ts';
 import { orbitalPeriodDays, TRAIL_COLOR, TrajectoryLine } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
@@ -219,6 +226,44 @@ interface BodyHandles {
    * See `solarGlare.ts`.
    */
   readonly glare: THREE.Mesh | null;
+  /**
+   * A spacecraft's model or box, once it has been asked for; null for a natural body
+   * and for a craft still too small to be worth fetching one. See craftModels.ts.
+   */
+  craftShape: THREE.Object3D | null;
+  craftShapeRequested: boolean;
+}
+
+/**
+ * Asks for a craft's model, or builds its box, once it is big enough to be worth it.
+ *
+ * A box is built on the spot. A model is fetched, and the marker carries on alone until
+ * it arrives; a failed fetch is logged and may be asked for again.
+ */
+function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: number): void {
+  if (handle.craftShapeRequested || pixelRadius < MODEL_REQUEST_PX) {
+    return;
+  }
+  handle.craftShapeRequested = true;
+
+  const attach = (object: THREE.Object3D): void => {
+    object.visible = false;
+    handle.group.add(object);
+    handle.craftShape = object;
+  };
+
+  if (shape.model === null) {
+    if (shape.boxM !== null) {
+      attach(craftBox(shape.boxM));
+    }
+    return;
+  }
+  loadCraftModel(shape.model)
+    .then(attach)
+    .catch((error: unknown) => {
+      handle.craftShapeRequested = false;
+      console.error(`Could not load the model of ${handle.definition.id}`, error);
+    });
 }
 
 export function SolarSystem({
@@ -502,6 +547,8 @@ export function SolarSystem({
         shownFile: null,
         shownOriginDeg: 0,
         ringRequested: false,
+        craftShape: null,
+        craftShapeRequested: false,
       };
     });
   }, [store]);
@@ -647,12 +694,29 @@ export function SolarSystem({
       // Ring and sphere are independent: they overlap rather than swapping, so
       // nothing pops at any distance. See scale.ts.
       //
-      // A spacecraft has no sphere to hand over to. Its radius is its span, there only
-      // so the camera can frame it, and a ball that size would be a shape it does not
-      // have -- so its marker stays at any range, and nothing replaces it.
-      const shaped = handle.definition.kind !== 'spacecraft';
+      // A spacecraft has no sphere to hand over to: its radius is its span, there so the
+      // camera can frame it, and a ball that size would be a shape it does not have. It
+      // hands over to its model or box instead, once that is here -- until then the
+      // marker stays at any range.
+      const craft = handle.definition.mission;
+      // Data generated before the models has no shape; such a craft keeps its marker.
+      const craftShape = (craft?.shape as CraftShape | undefined) ?? null;
+      if (craftShape !== null) {
+        requestCraftShape(handle, craftShape, pixelRadius);
+      }
+      const shaped = craft === null || handle.craftShape !== null;
       const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
-      const sphereOpacity = shaped ? meshOpacity(pixelRadius) : 0;
+      const sphereOpacity = craft === null ? meshOpacity(pixelRadius) : 0;
+      if (handle.craftShape !== null && craftShape !== null) {
+        handle.craftShape.visible = pixelRadius > SHAPE_SHOWN_PX;
+        if (handle.craftShape.visible) {
+          // Its pointing rule, toward the Earth or the Sun as seen from the craft.
+          const target = store.stateRelativeTo(craftShape.pointsAt, handle.definition.id, jd);
+          if (target !== null) {
+            craftOrientation(craftShape, target.position, handle.craftShape.quaternion);
+          }
+        }
+      }
 
       handle.marker.visible = showIcons && ringOpacity > 0.005;
       if (handle.marker.visible) {

@@ -1,4 +1,4 @@
-import type { Seam } from '@sss/tools/types';
+import type { CraftShape, Seam } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
@@ -140,6 +140,16 @@ function CraftFacts({
         <>
           <Row label="Operator">{mission.operator}</Row>
           <Row label="Launched">{mission.launchUtc.slice(0, 10)}</Row>
+          {mission.shape !== undefined && (
+            <>
+              {/* What is on screen up close, and which way it faces: said, because
+                  the facing is a rule and not a measurement. */}
+              <Row label="Drawn as">
+                {mission.shape.model === null ? 'Box, published size' : 'NASA 3D model'}
+              </Row>
+              <Row label="Facing (modelled)">{facingRule(mission.shape)}</Row>
+            </>
+          )}
         </>
       )}
       {elapsedDays !== null && elapsedDays >= 0 && (
@@ -264,6 +274,17 @@ function Divider() {
       style={{ gridColumn: '1 / -1', height: 1, background: '#202020', margin: '0.4rem 0' }}
     />
   );
+}
+
+/** A craft's pointing rule, in words. See CraftShape. */
+function facingRule(shape: CraftShape): string {
+  const part = {
+    dish: 'Dish',
+    'heat-shield': 'Heat shield',
+    sunshield: 'Sunshield',
+    'solar-arrays': 'Solar arrays',
+  }[shape.pointingPart];
+  return `${part} to ${shape.pointsAt === 'earth' ? 'Earth' : 'Sun'}`;
 }
 
 /** A TDB Julian day as a calendar date, which is all a coverage edge needs. */
