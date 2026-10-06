@@ -54,7 +54,7 @@ import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
-import { orbitalPeriodDays, TrajectoryLine } from './trajectoryLine.ts';
+import { orbitalPeriodDays, TRAIL_COLOR, TrajectoryLine } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
@@ -964,7 +964,7 @@ export function SolarSystem({
         if (wantedLine && handle.trajectory === null) {
           const path = store.path(id);
           if (path !== null) {
-            handle.trajectory = new TrajectoryLine(path, handle.definition.color);
+            handle.trajectory = new TrajectoryLine(path, TRAIL_COLOR);
             handle.trajectoryGroup.add(handle.trajectory.object);
           }
         }
@@ -978,8 +978,9 @@ export function SolarSystem({
           // the anchor drift a hundred times that and the error is still a hundredth of a
           // pixel; tighter would rebuild every chord every frame while following a craft.
           const anchorToleranceKm = 100 * cameraDistanceUnits * KM_PER_UNIT;
-          // One turn of the orbit it is on now, about what it orbits: the Sun, or Earth
-          // for JWST. Recomputed every frame, so after a flyby the trail is the new orbit's.
+          // The trail reaches one turn of the orbit it is on now back, about what it
+          // orbits: the Sun, or Earth for JWST. Recomputed every frame, so after a flyby
+          // it is the new orbit's turn.
           const center = parentId ?? 'sun';
           const relative = store.stateRelativeTo(id, center, jd);
           const spanDays =

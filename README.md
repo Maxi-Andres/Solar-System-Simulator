@@ -242,9 +242,10 @@ are 1,302 (59 KB compressed). Seams are gaps in the path, never interpolated acr
 
 The app cuts each interval into chords until their sag is inside its tolerance, and
 redraws the interval the craft is in every frame from the craft's own data, closing in on
-it geometrically, so the line meets the marker at any zoom. It shows one period of the
-orbit the craft is on now, behind and ahead — none for a craft on a hyperbola, which gets
-its whole path.
+it geometrically, so the line meets the marker at any zoom. It is a **trail**, as NASA
+Eyes draws one: only where the craft has been, one period of its current orbit back,
+fading linearly with age. A craft on a hyperbola has no period, and its trail reaches back
+to the start of its path.
 
 ### Freshness
 

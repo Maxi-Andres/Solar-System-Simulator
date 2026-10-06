@@ -12,6 +12,8 @@ import {
   closeInTimes,
   orbitalPeriodDays,
   tessellatePath,
+  TRAIL_OPACITY,
+  trailFade,
   TrajectoryLine,
 } from './trajectoryLine.ts';
 
@@ -160,114 +162,113 @@ describe('TrajectoryLine', () => {
   /** The best data the craft is drawn from: here the path itself, exactly. */
   const sampler = (path: PathTable) => (jd: number) => interpolateState(path, jd)?.position ?? null;
 
-  type Lines = [THREE.LineSegments, THREE.LineSegments, THREE.Line, THREE.Line];
+  type Lines = [THREE.LineSegments, THREE.Line];
   const parts = (line: TrajectoryLine) => line.object.children as unknown as Lines;
 
-  it('splits the line at the craft: behind, the interval it is in, and ahead', () => {
+  it('draws only where the craft has been, and runs into it', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
     const { firstChord } = tessellatePath(path);
     const jd = START + 123.4; // inside interval 12
 
-    line.update(jd, ORIGIN, 1, sampler(path));
-    const [past, future, nearBehind, nearAhead] = parts(line);
-    expect(past.geometry.drawRange).toMatchObject({ start: 0, count: firstChord[12]! * 2 });
-    expect(future.geometry.drawRange.start).toBe(firstChord[13]! * 2);
-    expect(future.geometry.drawRange.start + future.geometry.drawRange.count).toBe(
-      line.chordCount * 2,
-    );
+    line.update(jd, ORIGIN, 1, sampler(path), null);
+    const [trail, near] = parts(line);
+    // The chords stop at the interval the craft is in; nothing after it is drawn.
+    expect(trail.geometry.drawRange).toMatchObject({ start: 0, count: firstChord[12]! * 2 });
 
-    // The two near pieces meet exactly at the craft -- to float32, which at 1 AU from the
-    // origin is about ten kilometres; near the focus it is millimetres.
+    // That interval is drawn from its first sample up to the craft -- to float32, which at
+    // 1 AU from the origin is about ten kilometres; near the focus it is millimetres.
     const craft = interpolateState(path, jd)!.position;
-    const behind = nearBehind.geometry.getAttribute('position');
-    const ahead = nearAhead.geometry.getAttribute('position');
-    const lastBehind = nearBehind.geometry.drawRange.count - 1;
-    for (const [attribute, index] of [
-      [behind, lastBehind],
-      [ahead, 0],
-    ] as const) {
-      expect(attribute.getX(index)).toBe(Math.fround(craft.x / KM_PER_UNIT));
-      expect(attribute.getY(index)).toBe(Math.fround(craft.y / KM_PER_UNIT));
-    }
-    // And their outer ends are the interval's own samples, where the static line resumes.
-    expect(behind.getX(0)).toBe(Math.fround(path.x[12]! / KM_PER_UNIT));
-    expect(ahead.getX(nearAhead.geometry.drawRange.count - 1)).toBe(
-      Math.fround(path.x[13]! / KM_PER_UNIT),
-    );
+    const positions = near.geometry.getAttribute('position');
+    const last = near.geometry.drawRange.count - 1;
+    expect(positions.getX(0)).toBe(Math.fround(path.x[12]! / KM_PER_UNIT));
+    expect(positions.getX(last)).toBe(Math.fround(craft.x / KM_PER_UNIT));
+    expect(positions.getY(last)).toBe(Math.fround(craft.y / KM_PER_UNIT));
+    // And its newest vertex is now: full strength at the craft.
+    const days = near.geometry.getAttribute('aDays');
+    expect(days.getX(last)).toBe(Math.fround(jd - START));
+  });
+
+  it('reaches back one period, fading to nothing at its end', () => {
+    const path = circlePath(10, 100);
+    const line = new TrajectoryLine(path, '#ffffff');
+    const [trail] = parts(line);
+    const { chordStopJd } = tessellatePath(path);
+    const jd = START + 180;
+
+    line.update(jd, ORIGIN, 1, sampler(path), 50);
+    const oldest = trail.geometry.drawRange.start / 2;
+    // The oldest chord drawn reaches past jd - 50 days and the one before it does not.
+    expect(chordStopJd[oldest]).toBeGreaterThan(jd - 50);
+    expect(chordStopJd[oldest - 1]).toBeLessThanOrEqual(jd - 50);
+
+    expect(line.material.uniforms.uNowDays!.value).toBe(180);
+    expect(line.material.uniforms.uSpanDays!.value).toBe(50);
+    expect(trailFade(0, 50)).toBe(1);
+    expect(trailFade(25, 50)).toBe(0.5);
+    expect(trailFade(50, 50)).toBe(0);
+    expect(trailFade(80, 50)).toBe(0);
+  });
+
+  it('reaches back to the start of the path for a craft on no orbit', () => {
+    const path = circlePath(10, 100);
+    const line = new TrajectoryLine(path, '#ffffff');
+    const [trail] = parts(line);
+    line.update(START + 180, ORIGIN, 1, sampler(path), null);
+    expect(trail.geometry.drawRange.start).toBe(0);
+    expect(line.material.uniforms.uSpanDays!.value).toBe(180);
   });
 
   it('falls back to the path where the finer data is not loaded', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
     line.update(START + 50.5, ORIGIN, 1, () => null);
-    const [, , nearBehind] = parts(line);
-    expect(nearBehind.geometry.drawRange.count).toBeGreaterThan(CLOSE_IN_STEPS);
+    const [, near] = parts(line);
+    expect(near.geometry.drawRange.count).toBeGreaterThan(CLOSE_IN_STEPS);
   });
 
-  it('draws nothing near the craft while it is crossing a seam', () => {
+  it('draws nothing at the craft while it is crossing a seam', () => {
     const path = circlePath(10, 100, [7]);
     const line = new TrajectoryLine(path, '#ffffff');
     line.update(START + 75, ORIGIN, 1, sampler(path));
-    const [, , nearBehind, nearAhead] = parts(line);
-    expect(nearBehind.geometry.drawRange.count).toBe(0);
-    expect(nearAhead.geometry.drawRange.count).toBe(0);
+    const [, near] = parts(line);
+    expect(near.geometry.drawRange.count).toBe(0);
   });
 
-  it('is all ahead before the path starts and all behind after it ends', () => {
+  it('is nothing before the path starts and all of it after it ends', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
-    const [past, future] = parts(line);
+    const [trail] = parts(line);
 
     line.update(START - 5, ORIGIN, 1, sampler(path));
-    expect(past.geometry.drawRange.count).toBe(0);
-    expect(future.geometry.drawRange).toMatchObject({ start: 0, count: line.chordCount * 2 });
+    expect(trail.geometry.drawRange.count).toBe(0);
 
     line.update(START + 400, ORIGIN, 1, sampler(path));
-    expect(past.geometry.drawRange.count).toBe(line.chordCount * 2);
-    expect(future.geometry.drawRange.count).toBe(0);
+    expect(trail.geometry.drawRange).toMatchObject({ start: 0, count: line.chordCount * 2 });
   });
 
-  it('draws one period either side of the craft, not the whole path', () => {
-    const path = circlePath(10, 100);
-    const line = new TrajectoryLine(path, '#ffffff');
-    const [past, future] = parts(line);
-    const { chordStartJd, chordStopJd } = tessellatePath(path);
-    const jd = START + 180;
-
-    line.update(jd, ORIGIN, 1, sampler(path), 50);
-    const oldest = past.geometry.drawRange.start / 2;
-    const newest = (future.geometry.drawRange.start + future.geometry.drawRange.count) / 2 - 1;
-    // The oldest chord drawn reaches past jd - 50 days and the one before it does not.
-    expect(chordStopJd[oldest]).toBeGreaterThan(jd - 50);
-    expect(chordStopJd[oldest - 1]).toBeLessThanOrEqual(jd - 50);
-    expect(chordStartJd[newest]).toBeLessThan(jd + 50);
-    expect(chordStartJd[newest + 1]).toBeGreaterThanOrEqual(jd + 50);
-
-    // No period: the whole of it.
-    line.update(jd, ORIGIN, 1, sampler(path), null);
-    expect(past.geometry.drawRange.start).toBe(0);
-    expect(future.geometry.drawRange.start + future.geometry.drawRange.count).toBe(
-      line.chordCount * 2,
-    );
+  it('scales its strength for a line fading in with its planet', () => {
+    const line = new TrajectoryLine(circlePath(10, 100), '#ffffff');
+    line.setFade(0.5);
+    expect(line.material.uniforms.uOpacity!.value).toBeCloseTo(TRAIL_OPACITY / 2, 12);
   });
 
   it('carries a small drift on the transform and rebuilds past the tolerance', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
-    const [past] = parts(line);
-    const positions = past.geometry.getAttribute('position');
+    const [trail] = parts(line);
+    const positions = trail.geometry.getAttribute('position');
 
     line.update(START + 100, ORIGIN, 1000, sampler(path));
     const before = positions.getX(0);
 
     line.update(START + 100, { x: 500, y: 0, z: 0 }, 1000, sampler(path));
     expect(positions.getX(0)).toBe(before);
-    expect(past.position.x).toBeCloseTo(500 / KM_PER_UNIT, 9);
+    expect(trail.position.x).toBeCloseTo(500 / KM_PER_UNIT, 9);
 
     line.update(START + 100, { x: 5000, y: 0, z: 0 }, 1000, sampler(path));
     expect(positions.getX(0)).toBeCloseTo((path.x[0]! + 5000) / KM_PER_UNIT, 1);
-    expect(past.position.x).toBe(0);
+    expect(trail.position.x).toBe(0);
   });
 });
 
