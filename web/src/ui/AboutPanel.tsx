@@ -196,7 +196,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
           <List
             items={[
               'Drag to rotate. There is no pole to get stuck at — in space there is no up, so the view tumbles freely in any direction.',
-              'Scroll to zoom. Each notch changes distance by a fixed ratio, so a few thousand km and tens of AU are equally easy to navigate.',
+              'Scroll to zoom. Each notch changes distance by a fixed ratio, so a few thousand km and hundreds of AU are equally easy to navigate. It pulls back to 2,000 AU — far enough to see the Voyagers and the Pioneers with the planets a dot between them.',
               'Click any body, label or table row to focus it. The camera reframes relative to that body’s own radius.',
               'Use the time controls to run fast, run backwards, or jump back to LIVE.',
             ]}

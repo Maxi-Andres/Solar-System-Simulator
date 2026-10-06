@@ -187,7 +187,12 @@ export function CameraRig({
     camera.position.copy(offset.current);
     camera.up.copy(up.current);
     camera.lookAt(0, 0, 0);
-  });
+    // Before everything else in the frame. The sky follows the camera and the labels are
+    // projected through it; run after them, and both used last frame's camera. Near a
+    // planet that was invisible, but zooming out at hundreds of AU the camera moves tens
+    // of millions of km a frame, and the star sphere -- centred where the camera had
+    // been -- slid across the screen. Negative: runs first without taking over rendering.
+  }, -1);
 
   return null;
 }

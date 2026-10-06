@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { SPHERE_RADIUS } from './starRendering.ts';
+
 import {
   angularRadiusPixels,
   FOCUS_ORBIT_FULL,
@@ -12,6 +14,7 @@ import {
   KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
+  MAX_VIEW_DISTANCE_KM,
   MARKER_FADE_OUT_PX,
   MARKER_FULL_PX,
   MESH_FADE_END_PX,
@@ -434,5 +437,19 @@ describe('satelliteOpacity', () => {
     // CameraRig settles at eight radii. Phobos, closest to its planet of any moon here
     // at 2.8 Mars radii, is the hardest case.
     expect(satelliteOpacity(orbitPx(9_376, 8 * 3_396.19))).toBe(1);
+  });
+});
+
+describe('how far the camera may pull back', () => {
+  it('fits the farthest spacecraft in the picture, with room to spare', () => {
+    // Voyager 1 at the end of the data window, measured from the run of 2026-10-06.
+    const voyagerKm = 207.4 * AU_KM;
+    const halfField = Math.tan(((FOV_DEG / 2) * Math.PI) / 180);
+    const reachKm = MAX_VIEW_DISTANCE_KM * halfField;
+    expect(voyagerKm / reachKm).toBeLessThan(0.5);
+  });
+
+  it('stays inside the star sphere, so the Sun is never drawn behind the sky', () => {
+    expect(kmToUnits(MAX_VIEW_DISTANCE_KM)).toBeLessThan(SPHERE_RADIUS / 2);
   });
 });

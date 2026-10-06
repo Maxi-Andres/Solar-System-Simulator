@@ -54,6 +54,8 @@ import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture } from './textureCache.ts';
+import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
+import { labelRank } from './LabelProjector.tsx';
 import { orbitalPeriodDays, TRAIL_COLOR, TrajectoryLine } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
@@ -80,6 +82,7 @@ const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
 /** The rotation axis in a body's own frame: SphereGeometry puts its poles on +/-y. */
 const BODY_LOCAL_POLE = new THREE.Vector3(0, 1, 0);
 const scratchPole = new THREE.Vector3();
+const scratchScreen = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchBody = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
@@ -129,6 +132,11 @@ export interface SolarSystemProps {
   readonly lighting: LightingMode;
   /** Body kinds currently switched on in the layers panel. */
   readonly visibleKinds: ReadonlySet<string>;
+  /**
+   * Written every frame: the bodies whose marker lost its spot to another's. The labels
+   * read it, so a name goes with its marker. See markerDeclutter.ts.
+   */
+  readonly hiddenMarkers: Set<BodyId>;
 }
 
 /**
@@ -222,6 +230,7 @@ export function SolarSystem({
   showIcons,
   lighting,
   visibleKinds,
+  hiddenMarkers,
 }: SolarSystemProps) {
   const rootRef = useRef<THREE.Group>(null);
   const sunLightRef = useRef<THREE.PointLight>(null);
@@ -504,6 +513,8 @@ export function SolarSystem({
     () => bodiesToResolve(store, visibleKinds, focus),
     [store, visibleKinds, focus],
   );
+  // The markers shown last frame, which keep their places. See markerDeclutter.ts.
+  const heldMarkers = useMemo(() => new Set<BodyId>(), []);
 
   useFrame(() => {
     const root = rootRef.current;
@@ -530,6 +541,12 @@ export function SolarSystem({
     // Spacecraft paths live in the barycentric frame, whose origin is wherever the focus
     // is not: minus the focus's own barycentric position.
     const focusInRoot = store.stateInRoot(focus, jd);
+
+    // Every marker's place on screen, to find the ones on top of each other. Through this
+    // frame's camera: CameraRig has moved it, and the render has not yet caught up.
+    camera.updateMatrixWorld();
+    const markerCandidates: MarkerCandidate[] = [];
+    const markers = new Map<BodyId, THREE.Sprite>();
 
     for (const handle of handles) {
       const rebased = snapshot.bodies.get(handle.definition.id);
@@ -643,6 +660,18 @@ export function SolarSystem({
         // Constant on-screen size, whatever the distance.
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         handle.marker.scale.setScalar(worldSize);
+
+        scratchScreen.copy(handle.group.position).project(camera);
+        if (scratchScreen.z >= -1 && scratchScreen.z <= 1) {
+          markerCandidates.push({
+            id: handle.definition.id,
+            x: (scratchScreen.x * 0.5 + 0.5) * size.width,
+            y: (-scratchScreen.y * 0.5 + 0.5) * size.height,
+            depth: distanceUnits,
+            rank: labelRank(handle.definition.kind, handle.definition.parent),
+          });
+          markers.set(handle.definition.id, handle.marker);
+        }
       }
 
       if (handle.glare !== null) {
@@ -995,6 +1024,19 @@ export function SolarSystem({
             spanDays,
           );
         }
+      }
+    }
+
+    // Markers on top of each other: the one behind goes, and its label with it.
+    const hidden = declutterMarkers(markerCandidates, focus, MARKER_PIXELS, heldMarkers);
+    hiddenMarkers.clear();
+    heldMarkers.clear();
+    for (const [id, marker] of markers) {
+      if (hidden.has(id)) {
+        marker.visible = false;
+        hiddenMarkers.add(id);
+      } else {
+        heldMarkers.add(id);
       }
     }
 

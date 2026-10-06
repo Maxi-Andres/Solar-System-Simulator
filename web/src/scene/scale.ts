@@ -64,6 +64,23 @@ export const KM_PER_UNIT = 1000;
  */
 export const FOV_DEG = 27;
 
+/** One astronomical unit, km. Exact by IAU 2012 resolution B2. */
+export const AU_KM = 149_597_870.7;
+
+/**
+ * The farthest the camera may pull back from its focus, km: 2,000 AU.
+ *
+ * Set by the farthest thing in the catalog. Voyager 1 is 207 AU from the Sun at the end
+ * of the data window, and fitting it inside half the vertical field takes 207 AU /
+ * tan(13.5 degrees) = 862 AU; 2,000 puts every craft in the inner half of the picture
+ * with the planets a dot in the middle, which is the view NASA Eyes zooms out to.
+ *
+ * Bounded the other way by the star sphere (`SPHERE_RADIUS`, 6,685 AU): the sky follows
+ * the camera at that radius, and the Sun must stay in front of it. Phase D, out to the
+ * nearest stars, is what moves both.
+ */
+export const MAX_VIEW_DISTANCE_KM = 2000 * AU_KM;
+
 export function kmToUnits(km: number): number {
   return km / KM_PER_UNIT;
 }

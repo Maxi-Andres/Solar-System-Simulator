@@ -4,11 +4,11 @@ import { Canvas } from '@react-three/fiber';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
-import type { RefObject } from 'react';
+import { useMemo, type RefObject } from 'react';
 
 import { CameraRig } from './CameraRig.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
-import { FOV_DEG, kmToUnits } from './scale.ts';
+import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
 
@@ -59,6 +59,9 @@ export function SolarSystemCanvas({
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
+  // The scene writes it, the labels read it: which markers lost their spot this frame.
+  // SolarSystem's frame runs before LabelProjector's, being declared first.
+  const hiddenMarkers = useMemo(() => new Set<BodyId>(), []);
 
   return (
     <Canvas
@@ -82,6 +85,7 @@ export function SolarSystemCanvas({
         showIcons={showIcons}
         lighting={lighting}
         visibleKinds={visibleKinds}
+        hiddenMarkers={hiddenMarkers}
       />
       <LabelProjector
         store={store}
@@ -89,6 +93,7 @@ export function SolarSystemCanvas({
         focus={focus}
         visible={showLabels}
         visibleKinds={visibleKinds}
+        hiddenMarkers={hiddenMarkers}
         elements={labelElements}
       />
       <CameraRig
@@ -101,7 +106,7 @@ export function SolarSystemCanvas({
         // size instead of burying the camera or losing the body entirely.
         framingDistance={radiusUnits * 8}
         minDistance={radiusUnits * 1.05}
-        maxDistance={kmToUnits(2e10)}
+        maxDistance={kmToUnits(MAX_VIEW_DISTANCE_KM)}
       />
     </Canvas>
   );

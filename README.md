@@ -99,7 +99,8 @@ pnpm preview         # serve the build to verify it before publishing
 - **Drag** to rotate. There is no pole to get stuck at — in space there is no up, so
   the view tumbles freely in any direction.
 - **Scroll** to zoom. Each notch changes distance by a fixed ratio, so a few thousand
-  km and tens of AU are equally easy to navigate.
+  km and hundreds of AU are equally easy to navigate. It pulls back to 2,000 AU, far
+  enough to see Voyager 1 with the whole planetary system as a dot beside it.
 - **Click** any body, label or table row to focus it.
 - **Play** always runs forward at real time from wherever you are; **rewind** is the
   only control that ever runs time backwards.
