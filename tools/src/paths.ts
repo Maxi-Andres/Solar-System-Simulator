@@ -313,3 +313,26 @@ export function simplifyPath(
     gaps,
   };
 }
+
+/**
+ * A full table with the samples it does not need removed: the same greedy pass as a
+ * path, at one fixed tolerance everywhere.
+ *
+ * What it is for is the refinement's surplus. A flagged run is fetched at a minute
+ * straight away when it fits in one request (see refine.ts), which is cheap in requests
+ * and generous in samples -- a day of cruise at a minute where an hour would do. This
+ * takes them back out, checking every sample it drops, and every midpoint, against
+ * JPL's own minute-by-minute states.
+ */
+export function thinTable(
+  table: VectorTable,
+  seams: readonly Seam[],
+  tolerance: number | ToleranceAt,
+): VectorTable {
+  const { toleranceKm: _tolerances, gaps: _gaps, ...thinned } = simplifyPath(
+    table,
+    seams,
+    typeof tolerance === 'number' ? () => tolerance : tolerance,
+  );
+  return thinned;
+}

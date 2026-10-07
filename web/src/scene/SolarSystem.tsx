@@ -90,6 +90,9 @@ const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
 const BODY_LOCAL_POLE = new THREE.Vector3(0, 1, 0);
 const scratchPole = new THREE.Vector3();
 const scratchScreen = new THREE.Vector3();
+
+/** The south ecliptic pole, as a direction in the scene's frame. */
+const ECLIPTIC_SOUTH = { x: 0, y: 0, z: -1 } as const;
 const scratchSun = new THREE.Vector3();
 const scratchBody = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
@@ -258,7 +261,7 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
     }
     return;
   }
-  loadCraftModel(shape.model)
+  loadCraftModel(shape.model, shape.metresPerUnit)
     .then(attach)
     .catch((error: unknown) => {
       handle.craftShapeRequested = false;
@@ -710,10 +713,14 @@ export function SolarSystem({
       if (handle.craftShape !== null && craftShape !== null) {
         handle.craftShape.visible = pixelRadius > SHAPE_SHOWN_PX;
         if (handle.craftShape.visible) {
-          // Its pointing rule, toward the Earth or the Sun as seen from the craft.
-          const target = store.stateRelativeTo(craftShape.pointsAt, handle.definition.id, jd);
-          if (target !== null) {
-            craftOrientation(craftShape, target.position, handle.craftShape.quaternion);
+          // Its pointing rule, toward the Earth or the Sun as seen from the craft -- or,
+          // for Wind, the south ecliptic pole, a direction rather than a body.
+          const toTarget =
+            craftShape.pointsAt === 'ecliptic-south'
+              ? ECLIPTIC_SOUTH
+              : store.stateRelativeTo(craftShape.pointsAt, handle.definition.id, jd)?.position;
+          if (toTarget !== undefined) {
+            craftOrientation(craftShape, toTarget, handle.craftShape.quaternion);
           }
         }
       }

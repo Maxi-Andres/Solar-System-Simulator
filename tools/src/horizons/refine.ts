@@ -33,8 +33,16 @@ import { addMinutes } from './queries.ts';
 export type Sampler = (start: Date, stop: Date, stepMinutes: number) => Promise<VectorTable>;
 
 export interface RefineOptions {
-  /** Largest interpolation error allowed anywhere, km. */
+  /**
+   * Largest interpolation error allowed, km: everywhere, or -- with `toleranceAt` --
+   * wherever that asks for less.
+   */
   readonly toleranceKm: number;
+  /**
+   * The tolerance at a point of the path, km, when it varies along it; the point is in
+   * the path's own frame. Never taken below `toleranceKm`. See SPACECRAFT_ANGULAR_TOLERANCE.
+   */
+  readonly toleranceAt?: (jd: number, position: readonly [number, number, number]) => number;
   /**
    * How much larger the true error may be than the estimate, as a factor the estimate
    * is multiplied by before it is compared with the tolerance. See ESTIMATE_MARGIN.
@@ -42,6 +50,12 @@ export interface RefineOptions {
   readonly margin: number;
   /** Finest step the refinement may reach, minutes. */
   readonly minStepMinutes: number;
+  /**
+   * Samples one request can return. A flagged run that fits in one request at the
+   * floor step is fetched at the floor straight away. Optional: without it the
+   * refinement descends one fourth-power step at a time, as it first did.
+   */
+  readonly samplesPerRequest?: number;
 }
 
 /**
@@ -257,7 +271,8 @@ export async function refineSamples(
 
   const refine = async (segment: Segment): Promise<VectorTable> => {
     const errors = estimateIntervalErrors(segment.table).map((error) => error * options.margin);
-    const flagged = errors.map((error) => error > options.toleranceKm);
+    const tolerances = intervalTolerances(segment.table, options);
+    const flagged = errors.map((error, k) => error > tolerances[k]!);
     const canRefine = segment.stepMinutes > options.minStepMinutes;
 
     const parts: VectorTable[] = [];
@@ -283,18 +298,30 @@ export async function refineSamples(
         continue;
       }
       // One run of consecutive flagged intervals, re-fetched as a single request.
+      // The worst run member as a multiple of its own tolerance, which is what the
+      // fourth-power law is asked to bring down to one.
       let j = i;
       let runWorst = 0;
       while (j < flagged.length && flagged[j]) {
-        runWorst = Math.max(runWorst, errors[j]!);
+        runWorst = Math.max(runWorst, errors[j]! / tolerances[j]!);
         j += 1;
       }
-      const step = refinedStep(
-        segment.stepMinutes,
-        runWorst,
-        options.toleranceKm,
-        options.minStepMinutes,
+      // Straight to the floor when the whole run fits in one request there. The
+      // fourth-power law picks a step that should suffice, and for a smooth bend it
+      // does; for a seam or a burn it never does, and the descent from a day to a
+      // minute cost a request per level -- eleven for each of ACE's dozens of seams,
+      // four hundred requests before it was stopped. One request at the floor costs no
+      // more than one at any coarser step, and the surplus samples it brings are
+      // thinned away afterwards (see `thinTable`).
+      const runMinutes = Math.round(
+        (segment.table.t[j]! - segment.table.t[i]!) * 1440,
       );
+      const fitsAtFloor =
+        options.samplesPerRequest !== undefined &&
+        runMinutes / options.minStepMinutes + 1 <= options.samplesPerRequest;
+      const step = fitsAtFloor
+        ? options.minStepMinutes
+        : refinedStep(segment.stepMinutes, runWorst, 1, options.minStepMinutes);
       if (cursor < i) {
         parts.push(slice(segment.table, cursor, i));
       }
@@ -324,6 +351,31 @@ export async function refineSamples(
     worstEstimatedErrorKm: worst,
     discontinuities,
   };
+}
+
+/**
+ * Each interval's tolerance, km: the fixed one, or the varying one taken at the
+ * interval's middle, never below the fixed one.
+ */
+function intervalTolerances(table: VectorTable, options: RefineOptions): number[] {
+  const intervals = Math.max(0, table.count - 1);
+  const toleranceAt = options.toleranceAt;
+  if (toleranceAt === undefined) {
+    return new Array<number>(intervals).fill(options.toleranceKm);
+  }
+  const tolerances = new Array<number>(intervals);
+  for (let k = 0; k < intervals; k += 1) {
+    const middle: [number, number, number] = [
+      (table.x[k]! + table.x[k + 1]!) / 2,
+      (table.y[k]! + table.y[k + 1]!) / 2,
+      (table.z[k]! + table.z[k + 1]!) / 2,
+    ];
+    tolerances[k] = Math.max(
+      options.toleranceKm,
+      toleranceAt((table.t[k]! + table.t[k + 1]!) / 2, middle),
+    );
+  }
+  return tolerances;
 }
 
 /** Where the refinement's own samples must land for `stop - start` to be whole steps. */

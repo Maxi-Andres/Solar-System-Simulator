@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { SPACECRAFT_ANGULAR_TOLERANCE, SPACECRAFT_TOLERANCE_KM } from '@sss/tools/config';
+
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 
 /**
@@ -93,7 +95,7 @@ describeWithData('spacecraft positions against JPL', () => {
   const s = store!;
 
   for (const capture of CAPTURES) {
-    it(`puts ${capture.id} within the 1 km tolerance at ${capture.note}`, async () => {
+    it(`puts ${capture.id} within its tolerance at ${capture.note}`, async () => {
       if (!s.isCoveredAt(capture.id, capture.jd)) {
         // The window moves with every build; an instant it has left says nothing.
         console.warn(`[spacecraftJpl.test] ${capture.id} capture is outside the data; skipped.`);
@@ -108,7 +110,16 @@ describeWithData('spacecraft positions against JPL', () => {
 
       const [x, y, z] = capture.position;
       const miss = Math.hypot(state!.position.x - x, state!.position.y - y, state!.position.z - z);
-      expect(miss, capture.id).toBeLessThan(1);
+      // The generator's own rule: a kilometre, or ten microradians seen from the nearest
+      // full-window body, whichever is larger (SPACECRAFT_ANGULAR_TOLERANCE in tools).
+      const craft = s.stateInRoot(capture.id, capture.jd)!.position;
+      let nearest = Infinity;
+      for (const body of s.bodies.filter((candidate) => candidate.vectorWindow === 'full')) {
+        const at = s.stateInRoot(body.id, capture.jd)!.position;
+        nearest = Math.min(nearest, Math.hypot(craft.x - at.x, craft.y - at.y, craft.z - at.z));
+      }
+      const toleranceKm = Math.max(SPACECRAFT_TOLERANCE_KM, SPACECRAFT_ANGULAR_TOLERANCE * nearest);
+      expect(miss, capture.id).toBeLessThan(toleranceKm);
     });
   }
 

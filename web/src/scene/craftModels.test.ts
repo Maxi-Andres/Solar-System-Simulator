@@ -11,7 +11,9 @@ import { craftOrientation } from './craftModels.ts';
 const MODELS = join(import.meta.dirname, '../../public/models');
 
 const shapes = CATALOG.flatMap((body) =>
-  body.mission === null ? [] : [{ id: body.id, shape: body.mission.shape }],
+  body.mission === null || body.mission.shape === null
+    ? []
+    : [{ id: body.id, shape: body.mission.shape }],
 );
 
 /**
@@ -27,6 +29,38 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'parker-solar-probe.glb': [5.75, 5.26, 6.61],
   'jwst.glb': [12.87, 11.26, 21.0],
   'europa-clipper.glb': [30.5, 11.25, 18.0],
+  'ace.glb': [921.52, 277.99, 1345.3],
+  'dscovr.glb': [266.37, 96.4, 102.54],
+  'soho.glb': [43.27, 14.43, 17.34],
+  'roman.glb': [411.92, 131.23, 364.08],
+  'tess.glb': [37.1, 18.27, 15.97],
+  'stereo.glb': [3142.19, 2425.18, 2434.48],
+  'osiris-rex.glb': [13.72, 12.01, 34.65],
+  'cassini.glb': [17.98, 11.66, 13.11],
+  'dawn.glb': [19.7, 2.2, 2.22],
+  'kepler.glb': [2.65, 5.01, 2.66],
+  'spitzer.glb': [1.62, 4.49, 2.11],
+};
+
+/**
+ * One published dimension per model, and the axis of the file it is measured along:
+ * the model's extent there, times its catalog factor, must come out at it. For the
+ * metre-scale models this is the check that they are in metres; for the others it is
+ * the factor itself. Sources are in SHAPES and MORE_SHAPES.
+ */
+const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: number; readonly within: number }> = {
+  'europa-clipper.glb': { axis: 0, metres: 30.5, within: 0.01 },
+  'jwst.glb': { axis: 2, metres: 21.197, within: 0.02 },
+  'dawn.glb': { axis: 0, metres: 20, within: 0.02 },
+  'kepler.glb': { axis: 1, metres: 4.7, within: 0.07 },
+  'spitzer.glb': { axis: 1, metres: 4.5, within: 0.01 },
+  'ace.glb': { axis: 2, metres: 8.3, within: 0.01 },
+  'dscovr.glb': { axis: 0, metres: 6.1, within: 0.01 },
+  'soho.glb': { axis: 0, metres: 9.5, within: 0.01 },
+  'roman.glb': { axis: 0, metres: 12.8, within: 0.01 },
+  'tess.glb': { axis: 0, metres: 3.9, within: 0.01 },
+  'stereo.glb': { axis: 0, metres: 6.47, within: 0.01 },
+  'osiris-rex.glb': { axis: 2, metres: 6.2, within: 0.01 },
 };
 
 interface Gltf {
@@ -118,8 +152,9 @@ async function extentOf(file: string): Promise<[number, number, number]> {
 }
 
 describe('the spacecraft models', () => {
-  it('gives every craft a shape: a model, or a box of positive size', () => {
-    expect(shapes).toHaveLength(11);
+  it('gives every craft but two a shape: a model, or a box of positive size', () => {
+    // Gaia and Aditya-L1 have no three published dimensions, and keep their markers.
+    expect(shapes).toHaveLength(37);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();
@@ -161,15 +196,18 @@ describe('the spacecraft models', () => {
     }
   });
 
-  it('is Europa Clipper at its published 30.5 m span', async () => {
-    const [span] = await extentOf('europa-clipper.glb');
-    expect(span).toBeCloseTo(30.5, 1);
+  it.each(Object.keys(PUBLISHED))('%s comes out at its published size', async (file) => {
+    const { axis, metres, within } = PUBLISHED[file]!;
+    const shape = shapes.find(({ shape }) => shape.model === file)!.shape;
+    const extent = (await extentOf(file))[axis]! * shape.metresPerUnit;
+    expect(Math.abs(extent - metres) / metres).toBeLessThan(within);
   });
 });
 
 describe('craftOrientation', () => {
   const shape: CraftShape = {
     model: null,
+    metresPerUnit: 1,
     boxM: [1, 1, 1],
     pointsAt: 'earth',
     pointingPart: 'dish',

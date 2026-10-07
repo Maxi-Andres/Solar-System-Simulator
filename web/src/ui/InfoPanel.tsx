@@ -140,10 +140,18 @@ function CraftFacts({
         <>
           <Row label="Operator">{mission.operator}</Row>
           <Row label="Launched">{mission.launchUtc.slice(0, 10)}</Row>
-          {mission.shape !== undefined && (
+          {/* Only for a craft that was destroyed; data from before the field has none. */}
+          {typeof mission.endUtc === 'string' && (
+            <Row label="Ended">{mission.endUtc.slice(0, 10)}</Row>
+          )}
+          {/* What is on screen up close, and which way it faces: said, because the
+              facing is a rule and not a measurement. Data from before the shapes has
+              none at all, and says nothing. */}
+          {mission.shape === null && (
+            <Row label="Drawn as">Marker: no published dimensions</Row>
+          )}
+          {mission.shape !== null && mission.shape !== undefined && (
             <>
-              {/* What is on screen up close, and which way it faces: said, because
-                  the facing is a rule and not a measurement. */}
               <Row label="Drawn as">
                 {mission.shape.model === null ? 'Box, published size' : 'NASA 3D model'}
               </Row>
@@ -283,8 +291,10 @@ function facingRule(shape: CraftShape): string {
     'heat-shield': 'Heat shield',
     sunshield: 'Sunshield',
     'solar-arrays': 'Solar arrays',
+    'spin-axis': 'Spin axis',
   }[shape.pointingPart];
-  return `${part} to ${shape.pointsAt === 'earth' ? 'Earth' : 'Sun'}`;
+  const target = { earth: 'Earth', sun: 'Sun', 'ecliptic-south': 'ecliptic south' }[shape.pointsAt];
+  return `${part} to ${target}`;
 }
 
 /** A TDB Julian day as a calendar date, which is all a coverage edge needs. */

@@ -17,9 +17,11 @@ import { CATALOG, SSB_CENTER } from './catalog.ts';
 import {
   HORIZONS_API_URL,
   MAX_CONCURRENT_REQUESTS,
+  MAX_SAMPLES_PER_REQUEST,
   OUT_UNITS,
   OUTPUT_DIR,
   PATH_ANGULAR_TOLERANCE,
+  SPACECRAFT_ANGULAR_TOLERANCE,
   REF_PLANE,
   REF_SYSTEM,
   SHORT_WINDOW_YEARS_BACK,
@@ -31,7 +33,7 @@ import {
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
-import { fetchCoverage } from './horizons/coverage.ts';
+import { fetchCoverage, horizonsProbe, lastWithData } from './horizons/coverage.ts';
 import { fetchMissionVectors, fetchVectors, splitTable } from './horizons/fetchVectors.ts';
 import { type Discontinuity, ESTIMATE_MARGIN } from './horizons/refine.ts';
 import { parseElements } from './horizons/parseElements.ts';
@@ -139,13 +141,49 @@ function logDate(jd: number): string {
   return `${fromJulianDay(jd).toISOString().slice(0, 16).replace('T', ' ')} TDB`;
 }
 
-async function fetchSpacecraft(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
+async function fetchSpacecraft(
+  body: BodyDefinition,
+  epoch: Date,
+  frames: ReferenceFrames,
+): Promise<BodyResult> {
   const { start, stop } = windowFor(body.vectorWindow, epoch);
-  const coverage = await fetchCoverage(body);
+  const stated = await fetchCoverage(body);
+  // Where the stated span outruns the data -- DART's runs years past its impact -- the
+  // end is pulled back to the last day that has any. See `lastWithData`.
+  // And never past the instant the craft stopped existing.
+  const destroyed = body.mission?.endUtc ?? null;
+  const statedEnd = new Date(
+    Math.min(
+      stop.getTime(),
+      stated.stop.getTime(),
+      destroyed === null ? Infinity : Math.floor(Date.parse(destroyed) / 60_000) * 60_000,
+    ),
+  );
+  const dataEnd = await lastWithData(
+    new Date(Math.max(start.getTime(), stated.start.getTime()) + 120_000),
+    statedEnd,
+    horizonsProbe(body),
+  );
+  if (dataEnd.getTime() < statedEnd.getTime()) {
+    console.log(
+      `[fetch-data]   ${body.name}: Horizons has no data after ` +
+        `${dataEnd.toISOString().slice(0, 10)} inside its stated coverage; cut there`,
+    );
+  }
+  const coverage = { start: stated.start, stop: dataEnd };
+  const origin: PositionAt =
+    body.parent === null ? () => [0, 0, 0] : frames.barycentric(body.parent);
   const { table, sourceVersion, result } = await fetchMissionVectors(body, start, stop, coverage, {
     toleranceKm: SPACECRAFT_TOLERANCE_KM,
+    toleranceAt: nearestBodyTolerance(
+      frames.references,
+      origin,
+      SPACECRAFT_ANGULAR_TOLERANCE,
+      SPACECRAFT_TOLERANCE_KM,
+    ),
     minStepMinutes: SPACECRAFT_MIN_STEP_MINUTES,
     margin: ESTIMATE_MARGIN,
+    samplesPerRequest: MAX_SAMPLES_PER_REQUEST,
   });
   const parts = splitTable(table, SPACECRAFT_CHUNK_SAMPLES);
 
@@ -174,9 +212,6 @@ async function fetchSpacecraft(body: BodyDefinition, epoch: Date): Promise<BodyR
 }
 
 async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
-  if (body.vectorWindow === 'mission') {
-    return fetchSpacecraft(body, epoch);
-  }
   const { start, stop } = windowFor(body.vectorWindow, epoch);
 
   // Both calls for one body run together; the concurrency cap above limits how many
@@ -218,26 +253,32 @@ function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
   return { startJd, stopJd };
 }
 
+/** Where the reference bodies are, for measuring a spacecraft's tolerances against. */
+interface ReferenceFrames {
+  /** A full-window body's barycentric position, walking its parents. */
+  readonly barycentric: (id: BodyId) => PositionAt;
+  /** Every full-window body's: the Sun, the planets, Pluto and the Moon. */
+  readonly references: readonly PositionAt[];
+}
+
 /**
- * Every spacecraft's drawable trajectory, written to paths/ -- see paths.ts.
+ * The reference bodies, from the tables fetched for them.
  *
- * The tolerance is measured from the bodies whose tables span the whole window: the
- * Sun, the planets, Pluto and the Moon. The other moons cover two years, so a craft
- * passing one outside them -- Europa Clipper at Europa from 2031 -- is held to Jupiter's
- * distance instead. The moons themselves are propagated there anyway.
+ * Only those whose tables span the whole window. The other moons cover two years, so a
+ * craft passing one outside them -- Europa Clipper at Europa from 2031 -- is held to
+ * Jupiter's distance instead. The moons themselves are propagated there anyway.
  */
-async function writePaths(results: readonly BodyResult[]): Promise<Record<BodyId, PathInfo>> {
+function referenceFrames(results: readonly BodyResult[]): ReferenceFrames {
   const full = new Map(
     results
       .filter((result) => result.body.vectorWindow === 'full')
       .map((result) => [result.body.id, result] as const),
   );
-
   // Barycentric, by walking the parents: the Moon's table is relative to Earth.
   const barycentric = (id: BodyId): PositionAt => {
     const result = full.get(id);
     if (result === undefined) {
-      throw new Error(`${id} has no full-window table to measure a path against.`);
+      throw new Error(`${id} has no full-window table to measure against.`);
     }
     const parent = result.body.parent === null ? null : barycentric(result.body.parent);
     return (jd) => {
@@ -251,7 +292,22 @@ async function writePaths(results: readonly BodyResult[]): Promise<Record<BodyId
         : [local[0] + origin[0], local[1] + origin[1], local[2] + origin[2]];
     };
   };
-  const references = [...full.keys()].map(barycentric);
+  return { barycentric, references: [...full.keys()].map(barycentric) };
+}
+
+/**
+ * Every spacecraft's drawable trajectory, written to paths/ -- see paths.ts.
+ *
+ * The tolerance is measured from the bodies whose tables span the whole window: the
+ * Sun, the planets, Pluto and the Moon. The other moons cover two years, so a craft
+ * passing one outside them -- Europa Clipper at Europa from 2031 -- is held to Jupiter's
+ * distance instead. The moons themselves are propagated there anyway.
+ */
+async function writePaths(
+  results: readonly BodyResult[],
+  frames: ReferenceFrames,
+): Promise<Record<BodyId, PathInfo>> {
+  const { barycentric, references } = frames;
   const atBarycentre: PositionAt = () => [0, 0, 0];
 
   const paths: Record<BodyId, PathInfo> = {};
@@ -294,11 +350,25 @@ async function main(): Promise<void> {
 
   // Two independent services, so they run together. The sky is two requests against
   // VizieR and comes back long before Horizons has finished with the planets.
-  const [results, hipparcosRows, tycho2Rows] = await Promise.all([
-    mapWithConcurrency(CATALOG, MAX_CONCURRENT_REQUESTS, (body) => fetchBody(body, epoch)),
+  const [natural, hipparcosRows, tycho2Rows] = await Promise.all([
+    mapWithConcurrency(
+      CATALOG.filter((body) => body.vectorWindow !== 'mission'),
+      MAX_CONCURRENT_REQUESTS,
+      (body) => fetchBody(body, epoch),
+    ),
     fetchHipparcos(),
     fetchTycho2(),
   ]);
+
+  // The spacecraft after the natural bodies, because their sampling is measured against
+  // them: how fine a craft must be followed depends on how far it is from the nearest.
+  const frames = referenceFrames(natural);
+  const craft = await mapWithConcurrency(
+    CATALOG.filter((body) => body.vectorWindow === 'mission'),
+    MAX_CONCURRENT_REQUESTS,
+    (body) => fetchSpacecraft(body, epoch, frames),
+  );
+  const results = [...natural, ...craft];
 
   const stars = buildStarCatalog({
     hipparcos: hipparcosRows,
@@ -325,10 +395,11 @@ async function main(): Promise<void> {
 
   const tables: Record<BodyId, TableInfo> = {};
   for (const result of results) {
-    if (
-      result.body.vectorWindow === 'full' ||
-      (result.body.vectorWindow === 'mission' && result.parts.length === 1)
-    ) {
+    // A spacecraft is always chunked, even when one chunk holds all of it: a whole table
+    // is loaded before the first frame, and with forty craft that would be forty files
+    // the visitor waits for to see the Sun. A chunk arrives a frame or two after the
+    // craft is first wanted, which is all the delay there is.
+    if (result.body.vectorWindow === 'full') {
       await writeVectors(result.vectors);
       tables[result.body.id] = { ...spanOf(result.vectors), chunks: null };
     } else {
@@ -351,7 +422,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const paths = await writePaths(results);
+  const paths = await writePaths(results, frames);
 
   await writeCatalog(CATALOG);
   await writeStars(stars);

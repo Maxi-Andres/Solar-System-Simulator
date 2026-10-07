@@ -63,7 +63,7 @@ const cache = new Map<string, Promise<THREE.Object3D>>();
  *
  * Scaled from metres to scene units; its own frame is the catalog's, untouched.
  */
-export async function loadCraftModel(file: string): Promise<THREE.Object3D> {
+export async function loadCraftModel(file: string, metresPerUnit = 1): Promise<THREE.Object3D> {
   let pending = cache.get(file);
   if (pending === undefined) {
     pending = gltfLoader()
@@ -76,7 +76,8 @@ export async function loadCraftModel(file: string): Promise<THREE.Object3D> {
   const scene = await pending;
   const copy = scene.clone(true);
   const holder = new THREE.Group();
-  holder.scale.setScalar(UNITS_PER_METRE);
+  // A model authored in arbitrary units carries its own factor to metres; see SHAPES.
+  holder.scale.setScalar(UNITS_PER_METRE * metresPerUnit);
   holder.add(copy);
   return holder;
 }

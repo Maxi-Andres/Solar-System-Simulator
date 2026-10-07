@@ -246,8 +246,8 @@ describe('the moons', () => {
 });
 
 describe('the spacecraft', () => {
-  it('are the interplanetary eleven, each by its Horizons id', () => {
-    expect(craft.map((body) => [body.id, body.horizonsId])).toEqual([
+  it('are the interplanetary eleven first, each by its Horizons id', () => {
+    expect(craft.slice(0, 11).map((body) => [body.id, body.horizonsId])).toEqual([
       ['voyager-1', '-31'],
       ['voyager-2', '-32'],
       ['pioneer-10', '-23'],
@@ -260,6 +260,12 @@ describe('the spacecraft', () => {
       ['lucy', '-49'],
       ['psyche', '-255'],
     ]);
+  });
+
+  it('never list one craft twice, by name or by Horizons id', () => {
+    expect(new Set(craft.map((body) => body.id)).size).toBe(craft.length);
+    expect(new Set(craft.map((body) => body.horizonsId)).size).toBe(craft.length);
+    expect(craft.length).toBe(39);
   });
 
   it('take the mission window, and nothing that belongs to a natural body', () => {
@@ -283,22 +289,25 @@ describe('the spacecraft', () => {
 
   it('are sized by their span, metres rather than kilometres', () => {
     for (const body of craft) {
-      // Parker is 3 m tall; Europa Clipper spans 30.5 m.
-      expect(body.radiusEquatorialKm, body.id).toBeGreaterThanOrEqual(0.001);
+      // LICIACube is a 30 cm CubeSat; Europa Clipper spans 30.5 m.
+      expect(body.radiusEquatorialKm, body.id).toBeGreaterThanOrEqual(0.0001);
       expect(body.radiusEquatorialKm, body.id).toBeLessThan(0.016);
     }
   });
 
-  it('orbit the Sun from the barycenter, except JWST, which moves with Earth', () => {
+  it('are measured from what they move with: the barycentre, or the body they hang off', () => {
     for (const body of craft) {
-      if (body.id === 'jwst') {
-        expect(body.parent).toBe('earth');
-        expect(body.center).toBe('500@399');
-      } else {
-        expect(body.parent, body.id).toBeNull();
+      if (body.parent === null) {
         expect(body.center, body.id).toBe(SSB_CENTER);
+      } else {
+        const parent = CATALOG.find((candidate) => candidate.id === body.parent)!;
+        expect(body.center, body.id).toBe(`500@${parent.horizonsId}`);
+        // Only bodies with full-window tables, so the frame is there whenever the craft is.
+        expect(parent.vectorWindow, body.id).toBe('full');
       }
     }
+    expect(craft.find((body) => body.id === 'jwst')!.parent).toBe('earth');
+    expect(craft.find((body) => body.id === 'cassini')!.parent).toBe('saturn');
   });
 
   it('start refinement from a whole number of minutes', () => {

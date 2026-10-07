@@ -50,7 +50,9 @@ describeWithData('EphemerisStore against the generated data', () => {
 
   it('loads the full catalog and manifest', () => {
     // The Sun, eight planets, Pluto, twenty-one moons and eleven spacecraft.
-    expect(s.bodies).toHaveLength(42);
+    // Every body the manifest lists, and the natural ones all there: 31 of them.
+    expect(s.bodies).toHaveLength(s.manifest.bodies.length);
+    expect(s.bodies.filter((body) => body.kind !== 'spacecraft')).toHaveLength(31);
     expect(s.manifest.bodies).toContain('earth');
     expect(s.manifest.frame.center).toBe('500@0');
     expect(s.generatedAt.getTime()).toBeLessThanOrEqual(Date.now());
@@ -184,7 +186,12 @@ describeWithData('EphemerisStore against the generated data', () => {
     await s.whenLoadedAt(now);
     const states = s.allStatesInRoot(now);
 
-    expect(states.size).toBe(s.bodies.length);
+    // Every body that exists right now: a spacecraft that has ended -- DART, Cassini --
+    // or not yet launched has no state, which is not the same as a missing one.
+    const present = s.bodies.filter(
+      (body) => body.kind !== 'spacecraft' || s.isCoveredAt(body.id, now),
+    );
+    expect(states.size).toBe(present.length);
     for (const [, state] of states) {
       expect(state.approximate).toBe(false);
     }

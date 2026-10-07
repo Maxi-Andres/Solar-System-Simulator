@@ -285,8 +285,17 @@ export interface Mission {
   readonly launchUtc: string;
   /** The agency responsible for it. */
   readonly operator: string;
-  /** What is drawn in its place when it is close enough to have a size. */
-  readonly shape: CraftShape;
+  /**
+   * The instant the craft stopped existing, ISO 8601 UTC, or null for one that still
+   * does -- flying or adrift. Its path is cut there whatever JPL's files hold: DART's
+   * run on for years past its impact into Dimorphos.
+   */
+  readonly endUtc: string | null;
+  /**
+   * What is drawn in its place when it is close enough to have a size; null for a craft
+   * whose dimensions have not been published, which keeps its marker at any range.
+   */
+  readonly shape: CraftShape | null;
 }
 
 /** An axis in a craft's own frame: a unit vector along one of its model axes. */
@@ -311,14 +320,22 @@ export interface CraftShape {
   /** File under web/public/models/, or null to draw the box instead. */
   readonly model: string | null;
   /**
+   * Metres per model unit. One for a model authored in metres; otherwise the published
+   * dimension over the same extent measured in the file -- see SHAPES in the catalog.
+   */
+  readonly metresPerUnit: number;
+  /**
    * The box: its size along the craft's own x, y and z, metres. Null with a model,
    * which carries its own size.
    */
   readonly boxM: readonly [number, number, number] | null;
-  /** The body the craft keeps `pointingAxis` on. */
-  readonly pointsAt: 'earth' | 'sun';
+  /**
+   * What the craft keeps `pointingAxis` on: the Earth, the Sun, or -- for Wind, whose
+   * spin axis is held within a degree of it -- the south ecliptic pole.
+   */
+  readonly pointsAt: 'earth' | 'sun' | 'ecliptic-south';
   /** What it keeps there, for saying so on screen. */
-  readonly pointingPart: 'dish' | 'heat-shield' | 'sunshield' | 'solar-arrays';
+  readonly pointingPart: 'dish' | 'heat-shield' | 'sunshield' | 'solar-arrays' | 'spin-axis';
   /** In the craft's own frame: the dish's boresight, the shield's or the arrays' normal. */
   readonly pointingAxis: CraftAxis;
   /** In the craft's own frame, perpendicular to `pointingAxis`: held toward ecliptic north. */

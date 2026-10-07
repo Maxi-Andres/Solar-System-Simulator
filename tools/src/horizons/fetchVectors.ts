@@ -1,9 +1,23 @@
 import { MAX_SAMPLES_PER_REQUEST } from '../config.ts';
+import { locateSeams, thinTable } from '../paths.ts';
 import type { BodyDefinition, VectorTable } from '../types.ts';
 import { callHorizons } from './client.ts';
 import { parseVectors } from './parseVectors.ts';
-import { addMinutes, MINUTES_PER_DAY, stepMinutes, toJulianDay, vectorQuery } from './queries.ts';
+import {
+  addMinutes,
+  fromJulianDay,
+  MINUTES_PER_DAY,
+  stepMinutes,
+  toJulianDay,
+  vectorQuery,
+} from './queries.ts';
 import { alignStop, refineSamples, type RefineOptions, type RefineResult, type Sampler } from './refine.ts';
+
+/**
+ * The tolerance thinning is held to, as a fraction of the refinement's: see
+ * fetchMissionVectors.
+ */
+export const THINNING_FRACTION = 0.5;
 
 /**
  * Fetches a body's state vectors, splitting the window when it would be too large.
@@ -196,6 +210,48 @@ export function splitTable(table: VectorTable, maxSamples: number): VectorTable[
   return pieces;
 }
 
+/**
+ * The contiguous run of real samples in a table, as indices; null when there is none.
+ *
+ * A real state is never exactly zero in all six components -- that would be a craft at
+ * rest at the centre of what it is measured from -- so a sample that is, is Horizons
+ * filling a hole. Holes at either end are trimmed by the caller. One in the middle is
+ * not something to trim around silently, and fails loudly instead.
+ */
+export function validRun(table: VectorTable): { first: number; last: number } | null {
+  const zero = (i: number): boolean =>
+    table.x[i] === 0 &&
+    table.y[i] === 0 &&
+    table.z[i] === 0 &&
+    table.vx[i] === 0 &&
+    table.vy[i] === 0 &&
+    table.vz[i] === 0;
+  let first = 0;
+  while (first < table.count && zero(first)) {
+    first += 1;
+  }
+  if (first === table.count) {
+    return null;
+  }
+  let last = table.count - 1;
+  while (zero(last)) {
+    last -= 1;
+  }
+  for (let i = first; i <= last; i += 1) {
+    if (zero(i)) {
+      throw new Error(
+        `${table.id}: Horizons returned zero vectors at JD ${table.t[i]}, between real ones.`,
+      );
+    }
+  }
+  return { first, last };
+}
+
+/** Rounds a date to the nearest whole minute. */
+function nearestMinute(date: Date): Date {
+  return new Date(Math.round(date.getTime() / 60_000) * 60_000);
+}
+
 /** Rounds a date up, or down, onto a whole minute. */
 function toMinute(date: Date, direction: 'up' | 'down'): Date {
   const minutes = date.getTime() / 60_000;
@@ -258,6 +314,45 @@ export async function fetchMissionVectors(
     return table;
   };
 
-  const result = await refineSamples(sampler, start, stop, base, options);
-  return { table: result.table, sourceVersion, result };
+  // Where Horizons' trajectory files have a hole, it does not refuse the request as it
+  // does outside coverage: it answers with zero vectors. Wind's ends in one -- from
+  // 2026-12-12 to the coverage edge it reports, four days later, every state is
+  // exactly zero, which would put the craft at Earth's centre. So the span is cut to
+  // the samples that are real, from the coarse pass, before anything is refined.
+  const coarse = await sampler(start, stop, base);
+  const run = validRun(coarse);
+  if (run === null) {
+    throw new Error(`${body.name}: Horizons returned only zero vectors inside its coverage.`);
+  }
+  // To the nearest minute: these are samples on the grid already, and a Julian day read
+  // back to a date can land a hair either side of its minute -- rounding down turned
+  // Parker's 08:17 into 08:16 and broke the grid.
+  const validStart = nearestMinute(fromJulianDay(coarse.t[run.first]!));
+  const validStop = nearestMinute(fromJulianDay(coarse.t[run.last]!));
+  if (run.first > 0 || run.last < coarse.count - 1) {
+    console.log(
+      `[fetch-data]   ${body.name}: Horizons returns zero vectors outside ` +
+        `${validStart.toISOString().slice(0, 10)} .. ${validStop.toISOString().slice(0, 10)} ` +
+        `inside its stated coverage; cut to the real samples`,
+    );
+  }
+
+  const result = await refineSamples(sampler, validStart, validStop, base, options);
+  // Thinned to half the tolerance, so a sample dropped here and the estimate the
+  // refinement stopped at cannot add up to more than one and a half times it.
+  const seams = locateSeams(result.table, result.discontinuities);
+  const table = thinTable(result.table, seams, (jd, position) =>
+    THINNING_FRACTION *
+    Math.max(options.toleranceKm, options.toleranceAt?.(jd, position) ?? options.toleranceKm),
+  );
+  return {
+    table,
+    sourceVersion,
+    result: {
+      ...result,
+      table,
+      // Rewritten to the seams' own first samples, which thinning always keeps.
+      discontinuities: seams.map((seam) => ({ jd: seam.startJd, jumpKm: seam.jumpKm })),
+    },
+  };
 }

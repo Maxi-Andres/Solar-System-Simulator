@@ -632,9 +632,11 @@ interface SpacecraftSpec {
   readonly spanM: number;
   readonly launchUtc: string;
   readonly operator: string;
+  /** See Mission.endUtc: only for a craft that was destroyed. */
+  readonly endUtc?: string;
   readonly color: string;
   /** See CraftShape, and SHAPES below for where each one comes from. */
-  readonly shape: CraftShape;
+  readonly shape: CraftShape | null;
 }
 
 /**
@@ -672,7 +674,12 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
     drawOrbit: false,
     textures: null,
     rings: null,
-    mission: { launchUtc: spec.launchUtc, operator: spec.operator, shape: spec.shape },
+    mission: {
+      launchUtc: spec.launchUtc,
+      operator: spec.operator,
+      endUtc: spec.endUtc ?? null,
+      shape: spec.shape,
+    },
   };
 }
 
@@ -729,6 +736,7 @@ const SUN_FACING_BOX = {
 const SHAPES = {
   voyager: {
     model: 'voyager.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
     pointingPart: 'dish',
@@ -737,6 +745,7 @@ const SHAPES = {
   },
   pioneer: {
     model: 'pioneer.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
     pointingPart: 'dish',
@@ -745,6 +754,7 @@ const SHAPES = {
   },
   newHorizons: {
     model: 'new-horizons.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
     pointingPart: 'dish',
@@ -753,6 +763,7 @@ const SHAPES = {
   },
   parker: {
     model: 'parker-solar-probe.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
     pointingPart: 'heat-shield',
@@ -761,6 +772,7 @@ const SHAPES = {
   },
   jwst: {
     model: 'jwst.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
     pointingPart: 'sunshield',
@@ -769,15 +781,16 @@ const SHAPES = {
   },
   europaClipper: {
     model: 'europa-clipper.glb',
+    metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
     pointingPart: 'solar-arrays',
     pointingAxis: [0, 0, 1],
     rollAxis: [0, 1, 0],
   },
-  juice: { model: null, boxM: [27.1, 3.5, 2.86], ...SUN_FACING_BOX },
-  lucy: { model: null, boxM: [15.82, 7.28, 2.0], ...SUN_FACING_BOX },
-  psyche: { model: null, boxM: [24.76, 7.34, 2.4], ...SUN_FACING_BOX },
+  juice: { model: null, metresPerUnit: 1, boxM: [27.1, 3.5, 2.86], ...SUN_FACING_BOX },
+  lucy: { model: null, metresPerUnit: 1, boxM: [15.82, 7.28, 2.0], ...SUN_FACING_BOX },
+  psyche: { model: null, metresPerUnit: 1, boxM: [24.76, 7.34, 2.4], ...SUN_FACING_BOX },
 } as const satisfies Record<string, CraftShape>;
 
 /**
@@ -973,6 +986,587 @@ const SPACECRAFT: readonly BodyDefinition[] = [
     launchUtc: '2023-10-13T14:19:43Z',
     operator: 'NASA',
     color: '#a0c890',
+  }),
+];
+
+/**
+ * The shapes of the second batch, step A5. Same rules as SHAPES; see web/public/models/
+ * CREDITS.md for the files.
+ *
+ * **Scale.** Four NASA models are in metres (Cassini, Dawn, Kepler, Spitzer, each within
+ * 7% of a published dimension). Seven are in arbitrary units and are scaled by one
+ * published dimension against the same extent measured in the file:
+ *
+ *   model        extent in the file        published                       metres/unit
+ *   OSIRIS-REx   34.65 along z (arrays)    6.2 m with arrays deployed      0.17893
+ *   STEREO       3142.19 along x (arrays)  6.47 m deployed (Horizons)      0.0020591
+ *   ACE          1345.30 along z           8.3 m wingspan (Caltech ASC)    0.0061697
+ *   DSCOVR       79.7 across the bus (x)   72 in (NOAA: "54 by 72 inches") 0.02296
+ *   SOHO         43.27 along x (arrays)    9.5 m span (SOHO fact sheet)    0.21955
+ *   Roman        411.92 along x (tube)     12.8 m tall, cover open (SVS)   0.031074
+ *   TESS         37.10 along x (arrays)    3.9 m deployed                  0.10512
+ *
+ * TESS's 3.9 m is the manufacturer's figure as carried by spaceflight101 -- no NASA page
+ * states it -- and SOHO's model is longer for its height than the craft is, so it is
+ * scaled by its span, the dimension that frames it.
+ *
+ * **Axes**, read off each model's geometry: Cassini's dish opens to +y; Dawn's and
+ * Kepler's cells by their normals, z and x, the sign Dawn's by its dish on +z and
+ * Kepler's -- not determinable from geometry alone -- by its cells' majority facing +x;
+ * Spitzer's flat solar panel and shield on -z; OSIRIS-REx's dish and arrays face -y;
+ * STEREO's arrays face +y, its radio antennas trailing on -y; ACE spins about y (which
+ * end faces the Sun is not determinable from the model, and does not show on a spinning
+ * craft); DSCOVR's dish and EPIC look along +z, toward Earth; SOHO's arrays lie in xz
+ * with the payload rising on +y; Roman's solar-array sunshield is on +y; TESS's
+ * cameras look along +y, away from the Sun.
+ *
+ * **Boxes**, every figure published (L x W x D, metres; the broad face to the Sun):
+ *
+ *   Wind           2.4 x 2.4 x 1.8   bus, 2.4 m across, 1.8 m high (Wind CMAD). Its
+ *                                    100 m wire antennas are not drawn, and NASA's model
+ *                                    draws them a few metres long, so it is not used.
+ *   IMAP           2.4 x 2.4 x 0.9   deck (NASA IMAP blog, 2025-09-24)
+ *   Euclid         4.7 x 3.7 x 3.7   4.7 m tall, 3.7 m across (ESA overview)
+ *   Artemis I, II  18.9 x 7.9 x 5.0  arrays 18.9 m wide; crew and service modules
+ *                                    7.9 m tall, 5 m across (Orion by the numbers)
+ *   CAPSTONE       0.61 x 0.34 x 0.34  a 12U CubeSat (NSSDC); its arrays' span is
+ *                                    not published, so only the body is drawn
+ *   Solar Orbiter  18 x 3.1 x 2.5    18 m across (Mueller et al. 2020, ESA);
+ *                                    body 2.5 x 3.1 x 2.7 (ESA factsheet)
+ *   BepiColombo    30 x 6.3 x 3.9    ~30 m across the transfer module's wings;
+ *                                    the stack 3.9 x 3.6 x 6.3 (ESA factsheet)
+ *   Hayabusa2      6 x 4.23 x 1.25   paddles deployed (JAXA)
+ *   Hera           11.5 x 2.2 x 1.8  11.5 m across; body 2.2 x 2 x 1.8 (ESA)
+ *   DART           18.3 x 1.3 x 1.2  two 8.5 m arrays (APL) across a 1.3 m bus: the
+ *                                    18.3 is their sum
+ *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
+ *   ESCAPADE       4.88 x 1.65 x 1.09  deployed (Horizons; NASA SVS spec sheet)
+ *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
+ *                                    (JAXA ISAS)
+ *
+ * **No shape** for Gaia and Aditya-L1: ESA publishes only Gaia's 10 m across, ISRO only
+ * Aditya-L1's 6 m magnetometer boom, and a box needs three dimensions. Their markers
+ * stay at any range. ESA's own models of Euclid, Gaia, Solar Orbiter, BepiColombo and
+ * Hera exist, with terms that do not say they may be used on a public site.
+ */
+const BOX = { model: null, metresPerUnit: 1, ...SUN_FACING_BOX } as const;
+const MORE_SHAPES = {
+  wind: {
+    model: null,
+    metresPerUnit: 1,
+    boxM: [2.4, 2.4, 1.8],
+    pointsAt: 'ecliptic-south',
+    pointingPart: 'spin-axis',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
+  },
+  ace: {
+    model: 'ace.glb',
+    metresPerUnit: 0.0061697,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'spin-axis',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  dscovr: {
+    model: 'dscovr.glb',
+    metresPerUnit: 0.02296,
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
+  },
+  soho: {
+    model: 'soho.glb',
+    metresPerUnit: 0.21955,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  imap: { ...BOX, boxM: [2.4, 2.4, 0.9], pointingPart: 'spin-axis' },
+  euclid: { ...BOX, boxM: [4.7, 3.7, 3.7], pointingPart: 'sunshield' },
+  roman: {
+    model: 'roman.glb',
+    metresPerUnit: 0.031074,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'sunshield',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  tess: {
+    model: 'tess.glb',
+    metresPerUnit: 0.10512,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  orion: { ...BOX, boxM: [18.9, 7.9, 5.0] },
+  capstone: { ...BOX, boxM: [0.61, 0.34, 0.34] },
+  solarOrbiter: { ...BOX, boxM: [18, 3.1, 2.5], pointingPart: 'heat-shield' },
+  stereo: {
+    model: 'stereo.glb',
+    metresPerUnit: 0.0020591,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  bepicolombo: { ...BOX, boxM: [30, 6.3, 3.9] },
+  osirisApex: {
+    model: 'osiris-rex.glb',
+    metresPerUnit: 0.17893,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  hayabusa2: { ...BOX, boxM: [6, 4.23, 1.25] },
+  hera: { ...BOX, boxM: [11.5, 2.2, 1.8] },
+  dart: { ...BOX, boxM: [18.3, 1.3, 1.2] },
+  liciacube: { ...BOX, boxM: [0.3, 0.2, 0.1] },
+  escapade: { ...BOX, boxM: [4.88, 1.65, 1.09] },
+  cassini: {
+    model: 'cassini.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, -1],
+  },
+  dawn: {
+    model: 'dawn.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
+  },
+  kepler: {
+    model: 'kepler.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [1, 0, 0],
+    rollAxis: [0, 1, 0],
+  },
+  spitzer: {
+    model: 'spitzer.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, -1],
+    rollAxis: [0, 1, 0],
+  },
+  akatsuki: { ...BOX, boxM: [5.1, 1.4, 1.0] },
+} as const satisfies Record<string, CraftShape>;
+
+/**
+ * The second batch of spacecraft, step A5: the missions at the Lagrange points, in deep
+ * space and around the Moon, and five that ended inside the window.
+ *
+ * Sources, for each launch instant, operator and span: the mission's own NASA, ESA,
+ * JAXA, ISRO or APL page, its press kit or fact sheet, or its Horizons object summary.
+ * The research is recorded in the plan, step A5, with every URL.
+ *
+ * **Frames.** What a craft moves with is what it hangs off, as JWST does from Earth:
+ * the L1 and L2 observatories, TESS and the Artemis flights from Earth; CAPSTONE, in its
+ * orbit about the Moon, from the Moon; Cassini from Saturn and Akatsuki from Venus. The
+ * rest orbit the Sun.
+ *
+ * **Sampling** follows SPACECRAFT_ANGULAR_TOLERANCE: a kilometre near a body, an angle
+ * away from one. Without that the L1 group alone cost thousands of requests a run,
+ * chasing the few-kilometre seams JPL's trajectory files leave about weekly.
+ *
+ * Left out for now: SWFO-L1 and the Carruthers Geocorona Observatory, both launched with
+ * IMAP in 2025, whose dimensions have not been published; and the Tesla Roadster, whose
+ * Horizons object is the Falcon upper stage with the car on it, whose size is not
+ * published either.
+ */
+const MORE_SPACECRAFT: readonly BodyDefinition[] = [
+  // Near Earth: the Sun-Earth L1 point.
+  spacecraft({
+    id: 'wind',
+    shape: MORE_SHAPES.wind,
+    name: 'Wind',
+    horizonsId: '-8',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 2.4,
+    launchUtc: '1994-11-01T09:31:00Z',
+    operator: 'NASA',
+    color: '#b8c4d0',
+  }),
+  spacecraft({
+    id: 'ace',
+    shape: MORE_SHAPES.ace,
+    name: 'ACE',
+    horizonsId: '-92',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 8.3,
+    launchUtc: '1997-08-25T14:39:00Z',
+    operator: 'NASA',
+    color: '#c8b890',
+  }),
+  spacecraft({
+    id: 'dscovr',
+    shape: MORE_SHAPES.dscovr,
+    name: 'DSCOVR',
+    horizonsId: '-78',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    // Across the arrays, from the model at its published bus width.
+    spanM: 6.1,
+    launchUtc: '2015-02-11T23:03:02Z',
+    operator: 'NOAA / NASA',
+    color: '#90b8d8',
+  }),
+  spacecraft({
+    id: 'soho',
+    shape: MORE_SHAPES.soho,
+    name: 'SOHO',
+    horizonsId: '-21',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 9.5,
+    launchUtc: '1995-12-02T08:08:01Z',
+    operator: 'ESA / NASA',
+    color: '#e0c070',
+  }),
+  spacecraft({
+    id: 'imap',
+    shape: MORE_SHAPES.imap,
+    name: 'IMAP',
+    horizonsId: '-43',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 2.4,
+    launchUtc: '2025-09-24T11:30:00Z',
+    operator: 'NASA',
+    color: '#a8d0b0',
+  }),
+  spacecraft({
+    id: 'aditya-l1',
+    shape: null,
+    name: 'Aditya-L1',
+    horizonsId: '-156',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 6,
+    launchUtc: '2023-09-02T06:20:00Z',
+    operator: 'ISRO',
+    color: '#e8a878',
+  }),
+  // Near Earth: the Sun-Earth L2 point, and beyond.
+  spacecraft({
+    id: 'euclid',
+    shape: MORE_SHAPES.euclid,
+    name: 'Euclid',
+    horizonsId: '-680',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 4.7,
+    launchUtc: '2023-07-01T15:12:00Z',
+    operator: 'ESA',
+    color: '#9ab0e8',
+  }),
+  spacecraft({
+    id: 'gaia',
+    shape: null,
+    name: 'Gaia',
+    horizonsId: '-139479',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 10,
+    launchUtc: '2013-12-19T09:12:00Z',
+    operator: 'ESA',
+    color: '#c0a8e0',
+  }),
+  spacecraft({
+    id: 'roman',
+    shape: MORE_SHAPES.roman,
+    name: 'Roman Space Telescope',
+    horizonsId: '-211',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 12.8,
+    launchUtc: '2026-08-30T11:26:00Z',
+    operator: 'NASA',
+    color: '#d8d0a0',
+  }),
+  spacecraft({
+    id: 'tess',
+    shape: MORE_SHAPES.tess,
+    name: 'TESS',
+    horizonsId: '-95',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 3.9,
+    launchUtc: '2018-04-18T22:51:00Z',
+    operator: 'NASA',
+    color: '#88c8c8',
+  }),
+  // Near Earth: the Moon.
+  spacecraft({
+    id: 'artemis-1',
+    shape: MORE_SHAPES.orion,
+    name: 'Artemis I',
+    horizonsId: '-1023',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 18.9,
+    launchUtc: '2022-11-16T06:47:44Z',
+    operator: 'NASA',
+    color: '#d0d0d0',
+  }),
+  spacecraft({
+    id: 'artemis-2',
+    shape: MORE_SHAPES.orion,
+    name: 'Artemis II',
+    horizonsId: '-1024',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 18.9,
+    launchUtc: '2026-04-01T22:35:00Z',
+    operator: 'NASA',
+    color: '#e8e8e8',
+  }),
+  spacecraft({
+    id: 'capstone',
+    shape: MORE_SHAPES.capstone,
+    name: 'CAPSTONE',
+    horizonsId: '-1176',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    spanM: 0.61,
+    launchUtc: '2022-06-28T09:55:00Z',
+    operator: 'NASA / Advanced Space',
+    color: '#b0b8a0',
+  }),
+  // Interplanetary.
+  spacecraft({
+    id: 'solar-orbiter',
+    shape: MORE_SHAPES.solarOrbiter,
+    name: 'Solar Orbiter',
+    horizonsId: '-144',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 18,
+    launchUtc: '2020-02-10T04:03:00Z',
+    operator: 'ESA / NASA',
+    color: '#f0b080',
+  }),
+  spacecraft({
+    id: 'stereo-a',
+    shape: MORE_SHAPES.stereo,
+    name: 'STEREO-A',
+    horizonsId: '-234',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 6.47,
+    launchUtc: '2006-10-26T00:52:00Z',
+    operator: 'NASA',
+    color: '#c8a0a0',
+  }),
+  spacecraft({
+    id: 'bepicolombo',
+    shape: MORE_SHAPES.bepicolombo,
+    name: 'BepiColombo',
+    horizonsId: '-121',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 30,
+    launchUtc: '2018-10-20T01:45:28Z',
+    operator: 'ESA / JAXA',
+    color: '#a0b8c8',
+  }),
+  spacecraft({
+    id: 'osiris-apex',
+    shape: MORE_SHAPES.osirisApex,
+    name: 'OSIRIS-APEX',
+    horizonsId: '-64',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 6.2,
+    launchUtc: '2016-09-08T23:05:00Z',
+    operator: 'NASA',
+    color: '#d0b890',
+  }),
+  spacecraft({
+    id: 'hayabusa2',
+    shape: MORE_SHAPES.hayabusa2,
+    name: 'Hayabusa2',
+    horizonsId: '-37',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 6,
+    launchUtc: '2014-12-03T04:22:04Z',
+    operator: 'JAXA',
+    color: '#b8a8c8',
+  }),
+  spacecraft({
+    id: 'hera',
+    shape: MORE_SHAPES.hera,
+    name: 'Hera',
+    horizonsId: '-91',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 11.5,
+    launchUtc: '2024-10-07T14:52:00Z',
+    operator: 'ESA',
+    color: '#a8c8e0',
+  }),
+  spacecraft({
+    id: 'dart',
+    shape: MORE_SHAPES.dart,
+    name: 'DART',
+    horizonsId: '-135',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 18.3,
+    launchUtc: '2021-11-24T06:21:02Z',
+    // Impact into Dimorphos, from its Horizons summary.
+    endUtc: '2022-09-26T23:14:24.183Z',
+    operator: 'NASA',
+    color: '#c0c0b0',
+  }),
+  spacecraft({
+    id: 'liciacube',
+    shape: MORE_SHAPES.liciacube,
+    name: 'LICIACube',
+    horizonsId: '-210',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 0.3,
+    launchUtc: '2021-11-24T06:21:02Z',
+    operator: 'ASI',
+    color: '#a8b8a8',
+  }),
+  spacecraft({
+    id: 'escapade-blue',
+    shape: MORE_SHAPES.escapade,
+    name: 'ESCAPADE Blue',
+    horizonsId: '-9',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 4.88,
+    launchUtc: '2025-11-13T20:55:01Z',
+    operator: 'NASA',
+    color: '#80a8e0',
+  }),
+  spacecraft({
+    id: 'escapade-gold',
+    shape: MORE_SHAPES.escapade,
+    name: 'ESCAPADE Gold',
+    horizonsId: '-10',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 4.88,
+    launchUtc: '2025-11-13T20:55:01Z',
+    operator: 'NASA',
+    color: '#e0c060',
+  }),
+  spacecraft({
+    id: 'dawn',
+    shape: MORE_SHAPES.dawn,
+    name: 'Dawn',
+    horizonsId: '-203',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 20,
+    launchUtc: '2007-09-27T11:34:00Z',
+    operator: 'NASA',
+    color: '#b0a0d0',
+  }),
+  spacecraft({
+    id: 'kepler',
+    shape: MORE_SHAPES.kepler,
+    name: 'Kepler',
+    horizonsId: '-227',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 4.7,
+    launchUtc: '2009-03-07T03:49:57Z',
+    operator: 'NASA',
+    color: '#a0c0a8',
+  }),
+  spacecraft({
+    id: 'spitzer',
+    shape: MORE_SHAPES.spitzer,
+    name: 'Spitzer',
+    horizonsId: '-79',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 4.5,
+    launchUtc: '2003-08-25T05:35:39Z',
+    operator: 'NASA',
+    color: '#d0a8a8',
+  }),
+  // At other planets.
+  spacecraft({
+    id: 'cassini',
+    shape: MORE_SHAPES.cassini,
+    name: 'Cassini',
+    horizonsId: '-82',
+    parent: 'saturn',
+    parentHorizonsId: '699',
+    stepDays: 1,
+    spanM: 13,
+    launchUtc: '1997-10-15T08:43:00Z',
+    operator: 'NASA / ESA / ASI',
+    color: '#d8c898',
+  }),
+  spacecraft({
+    id: 'akatsuki',
+    shape: MORE_SHAPES.akatsuki,
+    name: 'Akatsuki',
+    horizonsId: '-5',
+    parent: 'venus',
+    parentHorizonsId: '299',
+    stepDays: 1,
+    spanM: 5.1,
+    launchUtc: '2010-05-20T21:58:22Z',
+    operator: 'JAXA',
+    color: '#e0b8a0',
   }),
 ];
 
@@ -1451,6 +2045,7 @@ export const CATALOG: readonly BodyDefinition[] = [
   },
   ...MOONS,
   ...SPACECRAFT,
+  ...MORE_SPACECRAFT,
 ];
 
 /** Look up a body by id. Throws rather than returning undefined: ids are ours. */

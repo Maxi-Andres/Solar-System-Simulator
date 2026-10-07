@@ -25,9 +25,26 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 | `parker-solar-probe.glb` | Parker Solar Probe | https://science.nasa.gov/resource/parker-solar-probe-3d-model/ — `PSP.glb`, credit NASA VTAD |
 | `jwst.glb` | James Webb Space Telescope | https://science.nasa.gov/3d-resources/james-webb-space-telescope-b/ — `James Webb Space Telescope (B).glb` |
 | `europa-clipper.glb` | Europa Clipper | https://science.nasa.gov/resource/europa-clipper-3d-model/ — `clipper_spacecraft.glb`, credit NASA VTAD |
+| `ace.glb` | ACE | https://science.nasa.gov/3d-resources/advanced-composition-explorer/ — `Advanced Composition Explorer.glb` |
+| `dscovr.glb` | DSCOVR | https://science.nasa.gov/3d-resources/deep-space-climate-observatory-dscovr-triana/ — `Deep Space Climate Observatory (DSCOVR) (Triana).glb` |
+| `soho.glb` | SOHO | NASA 3D Resources mirror, `3D Models/Solar and Heliospheric Observatory/Solar and Heliospheric Observatory.glb` (https://github.com/nasa/NASA-3D-Resources); its science.nasa.gov page carries printable files only |
+| `roman.glb` | Roman Space Telescope | https://science.nasa.gov/3d-resources/nancy-grace-roman-space-telescope-b/ — `Nancy Grace Roman Space Telescope (B).glb` |
+| `tess.glb` | TESS | https://science.nasa.gov/3d-resources/transiting-exoplanet-survey-satellite-tess-a/ — `Transiting Exoplanet Survey Satellite (TESS) (A).glb` |
+| `stereo.glb` | STEREO-A | NASA 3D Resources mirror, `3D Models/Solar TErrestrial RElations Observatory (STEREO)/…(STEREO).glb` |
+| `osiris-rex.glb` | OSIRIS-APEX | https://science.nasa.gov/3d-resources/origins-spectral-interpretation-resource-identification-and-security-regolith-explorer-osiris-rex/ — `OSIRIS-REx.glb` |
+| `cassini.glb` | Cassini | https://science.nasa.gov/3d-resources/cassini-huygens-a/ — `Cassini-Huygens (A) (without Hyugens).glb` (NASA's spelling): the orbiter alone, as it flew after Huygens left in 2004 |
+| `dawn.glb` | Dawn | https://science.nasa.gov/3d-resources/dawn/ — `Dawn.glb` |
+| `kepler.glb` | Kepler | https://science.nasa.gov/3d-resources/kepler-a/ — `Kepler (A).glb` |
+| `spitzer.glb` | Spitzer | https://science.nasa.gov/3d-resources/spitzer-space-telescope/ — `Spitzer Space Telescope.glb` |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
 alike, and no model of the second of either has been published.
+
+Seven of the second batch's eleven are in arbitrary units, not metres -- ACE, DSCOVR,
+SOHO, Roman, TESS, STEREO and OSIRIS-REx. They are scaled in the app by one published
+dimension each; `SHAPES` and `MORE_SHAPES` in `tools/src/catalog.ts` give the factor and
+where it comes from. NASA's Wind model is not used: it draws the craft's 100 m wire
+antennas a few metres long.
 
 ## Not here
 
@@ -35,6 +52,11 @@ Juice, Lucy and Psyche are drawn as plain boxes of their published dimensions in
 Juice's model is on ESA's SPICE server with no licence stated; Lucy's and Psyche's exist
 only as NASA Eyes runtime assets, with no terms published. Using any of them would be
 using something nobody has said may be used.
+
+The same goes for ESA's models of Solar Orbiter, BepiColombo, Hera, Euclid, Gaia and
+SOHO (on its SPICE server and Scifleet), JAXA's none for Hayabusa2 or Akatsuki, and
+NASA's printable-only DART: boxes, or -- for Gaia and Aditya-L1, whose three dimensions
+are not published -- the marker alone.
 
 ## Processing
 

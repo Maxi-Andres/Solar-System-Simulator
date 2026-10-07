@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { VectorTable } from '../types.ts';
 import { retryDelayMs } from './client.ts';
-import { concatTables, planChunks } from './fetchVectors.ts';
+import { concatTables, planChunks, validRun } from './fetchVectors.ts';
 
 /**
  * Regression tests for the CI failure where Horizons returned 503 four times for
@@ -191,5 +191,51 @@ describe('retryDelayMs', () => {
     expect(retryDelayMs(1, 12)).toBe(12_000);
     // ...but still bounded.
     expect(retryDelayMs(1, 9999)).toBe(45_000);
+  });
+});
+
+describe('validRun', () => {
+  /** A table of `pattern`: 1 for a real sample, 0 for one Horizons filled with zeros. */
+  function table(pattern: readonly number[]): VectorTable {
+    const column = (k: number) => pattern.map((real, i) => (real === 1 ? 1000 + i + k : 0));
+    return {
+      id: 'probe',
+      horizonsId: '-1',
+      center: '500@399',
+      count: pattern.length,
+      t: pattern.map((_, i) => 2_461_000.5 + i),
+      x: column(0),
+      y: column(1),
+      z: column(2),
+      vx: column(3),
+      vy: column(4),
+      vz: column(5),
+    };
+  }
+
+  it('keeps a table with nothing missing whole', () => {
+    expect(validRun(table([1, 1, 1, 1]))).toEqual({ first: 0, last: 3 });
+  });
+
+  it('trims a hole at the end, as Wind ends in one', () => {
+    expect(validRun(table([1, 1, 1, 0, 0]))).toEqual({ first: 0, last: 2 });
+  });
+
+  it('trims a hole at the start', () => {
+    expect(validRun(table([0, 1, 1]))).toEqual({ first: 1, last: 2 });
+  });
+
+  it('refuses a hole in the middle rather than drawing across it', () => {
+    expect(() => validRun(table([1, 0, 1]))).toThrow(/between real ones/);
+  });
+
+  it('has nothing to offer when every sample is a hole', () => {
+    expect(validRun(table([0, 0]))).toBeNull();
+  });
+
+  it('does not take a craft merely passing through zero on one axis for a hole', () => {
+    const crossing = table([1, 1, 1]);
+    const t: VectorTable = { ...crossing, x: [0, 0, 0] };
+    expect(validRun(t)).toEqual({ first: 0, last: 2 });
   });
 });

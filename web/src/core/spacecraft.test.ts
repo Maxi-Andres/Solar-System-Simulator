@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { labelRank } from '../scene/LabelProjector.tsx';
 import { rebaseVisibleFrame } from '../scene/satellites.ts';
-import { craftUnavailability } from '../ui/BodyPicker.tsx';
+import { craftGroup, craftUnavailability } from '../ui/BodyPicker.tsx';
 import { EphemerisStore } from './ephemerisStore.ts';
 
 /**
@@ -47,8 +47,10 @@ function body(id: string, kind: BodyDefinition['kind'], parent: string | null): 
       ? {
           launchUtc: '2025-01-01T00:00:00Z',
           operator: 'Test',
+          endUtc: null,
           shape: {
             model: null,
+            metresPerUnit: 1,
             boxM: [10, 5, 2],
             pointsAt: 'sun',
             pointingPart: 'solar-arrays',
@@ -196,5 +198,27 @@ describe('labelRank', () => {
     expect(labelRank('moon', 'jupiter')).toBe(1);
     expect(labelRank('spacecraft', null)).toBe(2);
     expect(labelRank('spacecraft', 'earth')).toBe(2);
+  });
+});
+
+describe('craftGroup', () => {
+  const store = makeStore();
+
+  it('lists a craft about the Sun as interplanetary', () => {
+    expect(craftGroup(store, store.body('probe'))).toBe('interplanetary');
+  });
+
+  it('lists a craft hung off a planet other than Earth with the planets', () => {
+    // The fixture's planet is not Earth; JWST, hung off Earth, is near Earth instead.
+    expect(craftGroup(store, store.body('scope'))).toBe('planets');
+  });
+
+  it('lists Earth’s and the Moon’s craft as near Earth', () => {
+    const earthCraft = { ...store.body('scope'), parent: 'earth' };
+    const fake = {
+      body: (id: string) => (id === 'moon' ? { parent: 'earth' } : { parent: null }),
+    } as unknown as EphemerisStore;
+    expect(craftGroup(fake, earthCraft)).toBe('near-earth');
+    expect(craftGroup(fake, { ...earthCraft, parent: 'moon' })).toBe('near-earth');
   });
 });

@@ -73,6 +73,12 @@ export async function fetchCoverage(
       },
       `${body.name} coverage`,
     );
+    // A path that reaches the probe itself has no edge on that side to report: Kepler's
+    // file runs its heliocentric drift out past 2200. The probe is then the edge, and
+    // the window cuts it down anyway.
+    if (response.result.includes('$$SOE')) {
+      return at;
+    }
     const limit = parseCoverageLimit(response.result);
     if (limit === null || limit.side !== side) {
       throw new Error(
@@ -88,4 +94,68 @@ export async function fetchCoverage(
     probe(PROBE_AFTER, 'stop'),
   ]);
   return { start, stop };
+}
+
+/** True when Horizons has a state at `at`; see `lastWithData`. */
+export type DataProbe = (at: Date) => Promise<boolean>;
+
+/**
+ * The last instant, to a day, at which a craft's path really has data.
+ *
+ * The coverage Horizons states is the span of the trajectory files it has loaded, and
+ * inside it there can be stretches no file covers. At the far end that is not a refusal
+ * but an answer of another kind -- "Insufficient ephemeris data has been loaded to
+ * compute the state of -135 (DART)" -- which DART's stated coverage runs years past its
+ * impact into. So when the stated end has no data, the real one is found by bisection:
+ * a dozen single-instant questions for a twenty-year span, and none for a craft whose
+ * stated end is good.
+ *
+ * Assumes the data is one run that stops, which is what a craft that ended looks like.
+ * A hole in the middle is not this function's to find; it fails later, loudly.
+ */
+export async function lastWithData(start: Date, stop: Date, hasData: DataProbe): Promise<Date> {
+  if (await hasData(stop)) {
+    return stop;
+  }
+  if (!(await hasData(start))) {
+    throw new Error(`No data at ${start.toISOString()}, the start of the stated coverage.`);
+  }
+  const day = 86_400_000;
+  let good = start.getTime();
+  let bad = stop.getTime();
+  while (bad - good > day) {
+    const middle = good + Math.floor((bad - good) / 2 / 60_000) * 60_000;
+    if (await hasData(new Date(middle))) {
+      good = middle;
+    } else {
+      bad = middle;
+    }
+  }
+  return new Date(good);
+}
+
+/** Asks Horizons for one state at `at`, and says whether one came back. */
+export function horizonsProbe(body: BodyDefinition): DataProbe {
+  return async (instant) => {
+    // Down to the whole minute Horizons takes times in: the stated coverage edges carry
+    // milliseconds, and the minute before an edge is inside it. The question ends at
+    // that minute rather than starting there -- asking for the minute after an edge is
+    // refused, and read as no data it cost a needless bisection and up to a day.
+    const end = new Date(Math.floor(instant.getTime() / 60_000) * 60_000);
+    const at = new Date(end.getTime() - 60_000);
+    const response = await callHorizons(
+      {
+        COMMAND: body.horizonsId,
+        OBJ_DATA: 'NO',
+        MAKE_EPHEM: 'YES',
+        EPHEM_TYPE: 'VECTORS',
+        CENTER: body.center,
+        START_TIME: toHorizonsDate(at),
+        STOP_TIME: toHorizonsDate(new Date(at.getTime() + 60_000)),
+        STEP_SIZE: '1m',
+      },
+      `${body.name} data probe`,
+    );
+    return response.result.includes('$$SOE');
+  };
 }

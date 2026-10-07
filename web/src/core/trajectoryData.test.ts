@@ -122,8 +122,11 @@ describeWithData('spacecraft paths, as written', () => {
         const tolerance = Math.max(info.floorKm, info.angularTolerance * nearest);
         worst = Math.max(worst, miss / tolerance);
       }
-      // A millimetre of rounding on top, which against a kilometre floor is nothing.
-      expect(worst).toBeLessThanOrEqual(1.001);
+      // Plus the files' own rounding: a sample's instant is kept to 1e-8 day, 0.43 ms,
+      // and at BepiColombo's 48 km/s about the Sun in Mercury orbit that is 21 m between
+      // where the instant says the craft was and where the position says. Against the
+      // one-kilometre floor that is 2%; the generator checked before rounding.
+      expect(worst).toBeLessThanOrEqual(1.025);
     },
     60_000,
   );

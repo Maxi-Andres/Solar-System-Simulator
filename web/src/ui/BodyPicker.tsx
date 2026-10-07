@@ -184,6 +184,29 @@ export function craftUnavailability(store: EphemerisStore, id: BodyId, jd: numbe
   return null;
 }
 
+/** Where a spacecraft is, for grouping the list: what it moves with. */
+export type CraftGroup = 'interplanetary' | 'near-earth' | 'planets';
+
+/** The groups in the order they are listed, with their headings. */
+export const CRAFT_GROUPS: readonly { readonly id: CraftGroup; readonly label: string }[] = [
+  { id: 'interplanetary', label: 'Interplanetary' },
+  { id: 'near-earth', label: 'Near Earth' },
+  { id: 'planets', label: 'At other planets' },
+];
+
+/**
+ * Which group a craft is listed under, from what it hangs off in the frame tree: nothing
+ * for one in orbit about the Sun, Earth or the Moon for one that moves with Earth -- the
+ * Lagrange-point observatories, the lunar missions -- and another planet otherwise.
+ */
+export function craftGroup(store: EphemerisStore, body: BodyDefinition): CraftGroup {
+  if (body.parent === null) {
+    return 'interplanetary';
+  }
+  const nearEarth = body.parent === 'earth' || store.body(body.parent).parent === 'earth';
+  return nearEarth ? 'near-earth' : 'planets';
+}
+
 /** The calendar year a Julian day falls in, near enough for a label. */
 function calendarYear(jd: number): number {
   return new Date((jd - 2440587.5) * 86_400_000).getUTCFullYear();
@@ -206,8 +229,13 @@ function BodyList({
   const focusBody = store.body(focus);
   const system = focusBody.parent ?? focusBody.id;
 
-  // The system you are in starts unfolded; the rest start folded.
-  const [expanded, setExpanded] = useState<ReadonlySet<BodyId>>(() => new Set([system]));
+  // The system you are in starts unfolded, and so does the focused craft's group; the
+  // rest start folded. Group keys share the set, prefixed so no body id can collide.
+  const [expanded, setExpanded] = useState<ReadonlySet<BodyId>>(() =>
+    focusBody.kind === 'spacecraft'
+      ? new Set([system, `craft:${craftGroup(store, focusBody)}`])
+      : new Set([system]),
+  );
 
   const primaries = store.bodies.filter(
     (body) => body.parent === null && body.kind !== 'spacecraft' && visibleKinds.has(body.kind),
@@ -328,17 +356,69 @@ function BodyList({
           >
             Spacecraft
           </div>
-          {craft.map((body) => (
-            <Row
-              key={body.id}
-              body={body}
-              active={body.id === focus}
-              inSystem={false}
-              onChoose={onChoose}
-              unavailable={craftUnavailability(store, body.id, jd)}
-              trailing={null}
-            />
-          ))}
+          {CRAFT_GROUPS.map((group) => {
+            const members = craft.filter((body) => craftGroup(store, body) === group.id);
+            if (members.length === 0) {
+              return null;
+            }
+            const key = `craft:${group.id}`;
+            const unfolded = expanded.has(key);
+            return (
+              <div key={key}>
+                <button
+                  type="button"
+                  aria-expanded={unfolded}
+                  aria-label={`${unfolded ? 'Hide' : 'Show'} ${group.label.toLowerCase()} spacecraft`}
+                  onClick={() => toggle(key)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '0.25rem',
+                    padding: '0.3rem 0.45rem',
+                    cursor: 'pointer',
+                    color: '#8a8a8a',
+                    fontFamily: 'inherit',
+                    fontSize: '0.7rem',
+                    letterSpacing: '0.04em',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ flex: 1 }}>{group.label}</span>
+                  <span style={{ color: '#5a5a5a', fontSize: '0.62rem' }}>{members.length}</span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: 'inline-block',
+                      transform: unfolded ? 'rotate(90deg)' : 'none',
+                      transition: 'transform 160ms ease',
+                      fontSize: '0.8rem',
+                      lineHeight: 1,
+                      color: '#6a6a6a',
+                    }}
+                  >
+                    &rsaquo;
+                  </span>
+                </button>
+                {unfolded &&
+                  members.map((body) => (
+                    <Row
+                      key={body.id}
+                      body={body}
+                      indent
+                      active={body.id === focus}
+                      inSystem={false}
+                      onChoose={onChoose}
+                      unavailable={craftUnavailability(store, body.id, jd)}
+                      trailing={null}
+                    />
+                  ))}
+              </div>
+            );
+          })}
         </>
       )}
     </div>

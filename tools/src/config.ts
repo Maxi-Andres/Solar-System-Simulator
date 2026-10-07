@@ -52,18 +52,47 @@ export const SHORT_WINDOW_YEARS_FORWARD = 1;
  * above Europa, and Juice passes 8,640 km above Earth on 2026-09-28. A kilometre is 4%
  * of the first and a fraction of a pixel at every distance the second is framed from.
  *
- * Cheap, because it is only paid where it is needed. Cruise at one sample a day is
- * already well inside it; the refinement goes finer only inside encounters,
- * perihelia and burns. See refine.ts.
+ * It is the floor, not the rule everywhere: away from every body the tolerance is an
+ * angle instead -- SPACECRAFT_ANGULAR_TOLERANCE -- and only near one does it come down
+ * to this kilometre. See refine.ts.
  */
 export const SPACECRAFT_TOLERANCE_KM = 1;
+
+/**
+ * How far a spacecraft may stray from JPL's path, as an angle seen from the nearest body:
+ * ten microradians, never less than SPACECRAFT_TOLERANCE_KM.
+ *
+ * A kilometre everywhere was the first rule, and it chased the wrong thing. JPL's paths
+ * for the craft at the Sun-Earth L1 point are stitched from trajectory files that
+ * disagree by a few kilometres where they meet, about weekly -- ACE five times in
+ * January 2024, by 3 to 33 km, between stretches smooth to 0.3 m an hour. Following
+ * each down to a kilometre cost ACE over 400 requests to Horizons before it was stopped,
+ * and DSCOVR the same; the whole L1 group would have been thousands per run. So the
+ * rule became the one the trails already use, tighter: what the error looks like from
+ * where a camera can stand.
+ *
+ *   where                         nearest body       tolerance
+ *   Juice at Earth, 15,000 km     Earth              1 km (the floor)
+ *   L1, 1.5 million km            Earth              15 km
+ *   Parker at perihelion          Sun, 6.9 M km      69 km
+ *   1 AU cruise                   Sun                1,500 km
+ *
+ * Fifteen kilometres at L1 is about a fortieth of a pixel seen from Earth on a 1080-line
+ * screen; and seen from the craft itself there is nothing near enough to compare it
+ * with. A seam is still found and published once it is larger than about eight times
+ * the local tolerance -- the refinement sees half a jump at the one-minute floor, through
+ * an estimate that divides a miss by sixteen and multiplies it by ESTIMATE_MARGIN -- so
+ * 120 km at L1 and 8 km at a flyby. Below that it is smoothed over a single minute.
+ */
+export const SPACECRAFT_ANGULAR_TOLERANCE = 1e-5;
 
 /** The finest step the spacecraft refinement may reach, minutes: Horizons' own unit. */
 export const SPACECRAFT_MIN_STEP_MINUTES = 1;
 
 /**
- * Largest spacecraft table shipped as one file, in samples. Anything longer is split
- * into chunks of about this size and fetched as the clock reaches them, like a moon's.
+ * Largest spacecraft chunk, in samples. Every craft's table is split into chunks of about
+ * this size -- one, for the Voyagers -- and fetched as the clock reaches them, like a
+ * moon's. None is loaded before the first frame.
  */
 export const SPACECRAFT_CHUNK_SAMPLES = 1500;
 

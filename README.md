@@ -215,10 +215,21 @@ So spacecraft are **sampled adaptively** (`tools/src/horizons/refine.ts`). Fetch
 coarse step; drop every other sample and interpolate it back from its neighbours — Hermite
 error goes as the fourth power of the spacing, so that miss over 16 is the error of the
 table as stored; re-fetch only the intervals over the tolerance, at the step the
-fourth-power law says they need; repeat, down to a minute. The tolerance is **1 km**,
-with a safety factor of 4 on the estimate because at flybys it was measured running up to
-2.1× low against one-minute truth. Every refined step divides the one it refines, so the
-grids nest and splice without seams of our own.
+fourth-power law says they need; repeat, down to a minute. A run that fits in one
+request at a minute is fetched at a minute straight away, and the surplus samples are
+**thinned** back out afterwards, each one checked against JPL's own minute-by-minute
+states. The safety factor on the estimate is 4, because at flybys it was measured running
+up to 2.1× low against one-minute truth. Every refined step divides the one it refines,
+so the grids nest and splice without seams of our own.
+
+The tolerance is **an angle, with a floor**: a kilometre near a body, and away from one
+ten microradians seen from the nearest of the Sun, the planets, Pluto and the Moon —
+15 km at the L1 point, 69 km at Parker's perihelion. A flat kilometre everywhere was the
+first rule, and it chased the few-kilometre steps where JPL's trajectory files for the L1
+craft meet, about weekly: ACE alone passed 400 requests before it was stopped.
+
+Where Horizons' files have a hole it answers with **zero vectors** rather than an error
+— Wind's last four days of coverage — and those are cut off, never drawn at Earth's centre.
 
 What JPL covers is asked on every run, from Horizons' own refusal to answer outside it,
 because it moves: an active mission gets a new predicted trajectory every few weeks. A
@@ -251,13 +262,14 @@ to the start of its path.
 
 ### Spacecraft up close
 
-Six craft are drawn with **NASA's own 3D models** (NASA 3D Resources; Voyager's serves
-both Voyagers, Pioneer 10's both Pioneers), compressed with meshopt and WebP from 50 MB
-to 5.8 MB and fetched only once a craft is six pixels across. None documents its units;
-each measures in metres against a published dimension, within 10%, and a test checks
-the compressed files still measure what NASA's did. Juice, Lucy and Psyche have no model
-that may be used, so each is a **white box of its published size** — array span by array
-width by body depth.
+Seventeen craft are drawn with **NASA's own 3D models** (NASA 3D Resources; Voyager's
+serves both Voyagers, Pioneer 10's both Pioneers), compressed with meshopt and WebP to
+9.3 MB in all and fetched only once a craft is six pixels across. None documents its
+units; most measure in metres, and the seven in arbitrary units are scaled by one
+published dimension each. A test checks every compressed file still measures what NASA's
+did, and comes out at its published size. Craft with no model that may be used are a
+**white box of their published size**, marked NO MODEL — array span by array width by
+body depth — and Gaia and Aditya-L1, with no three dimensions published, keep their marker.
 
 Which way a craft faces is **modelled**: dish to Earth for Voyager, Pioneer and New
 Horizons, heat shield or sunshield to the Sun for Parker and JWST, arrays to the Sun for
@@ -344,13 +356,10 @@ about 1500 samples — 51 KB each, compressed — and a chunk is fetched only on
 system has opened up on screen: from the default view of the Sun, not one. Approaching
 Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB.
 
-The spacecraft add about **58 KB** to it: the Voyagers, the Pioneers and New Horizons
-ship whole, because coasting out of the Solar System they need a sample a month. The
-other six ship in ~1500-sample chunks of about 60 KB each, and since a craft is drawn
-from anywhere, one chunk of each — about 350 KB — arrives in the first moments rather
-than before the first frame. Parker is 63 chunks, one per few weeks of its orbits.
-Their trails come the same way, after the first frame: about 200 KB for all eleven
-paths, 89 KB of it Europa Clipper's.
+The spacecraft add **nothing** to it: every craft's table ships in chunks of at most
+1500 samples, fetched as the clock reaches them, even the Voyagers' single one. A craft
+is drawn from anywhere, so one chunk of each arrives in the first moments rather than
+before the first frame. Their trails come the same way.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
@@ -390,8 +399,9 @@ two, never drawn somewhere approximate and then moved.
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
   The twenty-one major moons are in, with positions, orbits, rotation, shapes and
-  surface maps. Eleven interplanetary spacecraft are in at their real positions, with
-  their trajectories drawn from JPL's samples; planet-centred views are next.
+  surface maps. Thirty-nine spacecraft are in at their real positions — interplanetary,
+  at the Lagrange points, around the Moon — with their trails drawn from JPL's samples
+  and NASA's models up close. The close planet orbiters (Mars, Juno, LRO) are next.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { VectorTable } from '../types.ts';
-import { parseCoverageLimit } from './coverage.ts';
+import { lastWithData, parseCoverageLimit } from './coverage.ts';
 import { splitTable } from './fetchVectors.ts';
+import { thinTable } from '../paths.ts';
 import {
   alignStop,
   estimateIntervalErrors,
@@ -261,5 +262,117 @@ describe('parseCoverageLimit', () => {
   it('returns null for anything else, rather than guessing', () => {
     expect(parseCoverageLimit('$$SOE\n2461000.5, ...\n$$EOE')).toBeNull();
     expect(parseCoverageLimit('No ephemeris for target "X" prior to A.D. 2018-XYZ-12 08:16:23 TDB')).toBeNull();
+  });
+});
+
+describe('refineSamples, straight to the floor', () => {
+  const options = { toleranceKm: 1, minStepMinutes: 1, margin: 4, samplesPerRequest: 1500 };
+
+  it('finds a jump in two requests instead of descending to it', async () => {
+    // The seam that cost eleven requests a level at a time: a run of a day or less at a
+    // minute is one request, so the floor is reached at once.
+    const path = encounter(4.5, 60, 0, 950);
+    const levelled = await refineSamples(samplerFor(path).sampler, START, new Date(START.getTime() + 9 * MS_PER_DAY), 1440, {
+      toleranceKm: 1,
+      minStepMinutes: 1,
+      margin: 4,
+    });
+    const direct = await refineSamples(samplerFor(path).sampler, START, new Date(START.getTime() + 9 * MS_PER_DAY), 1440, options);
+    expect(direct.requests).toBeLessThan(levelled.requests);
+    expect(direct.requests).toBeLessThanOrEqual(3);
+    expect(direct.discontinuities).toHaveLength(1);
+    expect(direct.discontinuities[0]!.jumpKm).toBeGreaterThan(900);
+  });
+
+  it('meets the tolerance through an encounter with no more requests', async () => {
+    const path = encounter(10, 60, 300);
+    const stop = new Date(START.getTime() + 20 * MS_PER_DAY);
+    const levelled = await refineSamples(samplerFor(path).sampler, START, stop, 1440, {
+      toleranceKm: 1,
+      minStepMinutes: 1,
+      margin: 4,
+    });
+    const direct = await refineSamples(samplerFor(path).sampler, START, stop, 1440, options);
+    expect(direct.requests).toBeLessThanOrEqual(levelled.requests);
+    expect(trueError(direct.table, path)).toBeLessThan(1);
+  });
+
+  it('is thinned back to what the curve needs, and still meets the tolerance', async () => {
+    const path = encounter(10, 60, 300);
+    const stop = new Date(START.getTime() + 20 * MS_PER_DAY);
+    const direct = await refineSamples(samplerFor(path).sampler, START, stop, 1440, options);
+    const thinned = thinTable(direct.table, [], 0.5);
+    // The flagged run comes back at a minute -- hundreds of samples -- and the swerve
+    // needs a small fraction of them.
+    expect(direct.table.count).toBeGreaterThan(500);
+    expect(thinned.count).toBeLessThan(direct.table.count / 4);
+    expect(trueError(thinned, path)).toBeLessThan(1);
+  });
+});
+
+describe('refineSamples, with a tolerance that varies along the path', () => {
+  it('leaves a seam smaller than the local tolerance alone, and finds one larger', async () => {
+    // A 30 km step, as ACE's trajectory files meet: chased at a fixed kilometre, let be
+    // where the tolerance is 50 km, found again where it is 3. A seam is published once
+    // it is about eight times the tolerance; see SPACECRAFT_ANGULAR_TOLERANCE.
+    const path = encounter(4.5, 60, 0, 30);
+    const stop = new Date(START.getTime() + 9 * MS_PER_DAY);
+    const base = { toleranceKm: 1, minStepMinutes: 1, margin: 4, samplesPerRequest: 1500 };
+
+    const fixed = await refineSamples(samplerFor(path).sampler, START, stop, 1440, base);
+    const loose = await refineSamples(samplerFor(path).sampler, START, stop, 1440, {
+      ...base,
+      toleranceAt: () => 50,
+    });
+    const tight = await refineSamples(samplerFor(path).sampler, START, stop, 1440, {
+      ...base,
+      toleranceAt: () => 3,
+    });
+
+    expect(fixed.discontinuities).toHaveLength(1);
+    expect(loose.requests).toBe(1);
+    expect(loose.discontinuities).toEqual([]);
+    expect(tight.discontinuities).toHaveLength(1);
+  });
+
+  it('never goes below the fixed tolerance, whatever the varying one asks', async () => {
+    const path = encounter(10, 60, 300);
+    const stop = new Date(START.getTime() + 20 * MS_PER_DAY);
+    const options = { toleranceKm: 1, minStepMinutes: 1, margin: 4, samplesPerRequest: 1500 };
+    const plain = await refineSamples(samplerFor(path).sampler, START, stop, 1440, options);
+    const asksLess = await refineSamples(samplerFor(path).sampler, START, stop, 1440, {
+      ...options,
+      toleranceAt: () => 0.001,
+    });
+    expect(asksLess.table.count).toBe(plain.table.count);
+  });
+});
+
+describe('lastWithData', () => {
+  const start = new Date(Date.UTC(2021, 10, 24));
+  const stated = new Date(Date.UTC(2031, 0, 1));
+  const impact = new Date(Date.UTC(2022, 8, 26, 23, 14));
+  const probe = (calls: { n: number }) => async (at: Date) => {
+    calls.n += 1;
+    return at.getTime() <= impact.getTime();
+  };
+
+  it('keeps a stated end that has data, in one question', async () => {
+    const calls = { n: 0 };
+    expect(await lastWithData(start, impact, probe(calls))).toEqual(impact);
+    expect(calls.n).toBe(1);
+  });
+
+  it('finds where the data really stops, to a day, in a dozen questions', async () => {
+    // DART: Horizons states years past the impact; the data stops at it.
+    const calls = { n: 0 };
+    const end = await lastWithData(start, stated, probe(calls));
+    expect(end.getTime()).toBeLessThanOrEqual(impact.getTime());
+    expect(impact.getTime() - end.getTime()).toBeLessThan(86_400_000);
+    expect(calls.n).toBeLessThan(16);
+  });
+
+  it('refuses a span with no data even at its start', async () => {
+    await expect(lastWithData(start, stated, async () => false)).rejects.toThrow(/No data/);
   });
 });
