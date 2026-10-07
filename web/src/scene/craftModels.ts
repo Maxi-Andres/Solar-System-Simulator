@@ -81,17 +81,61 @@ export async function loadCraftModel(file: string): Promise<THREE.Object3D> {
   return holder;
 }
 
+/** What the box says on its broad faces, so nobody takes it for the craft. */
+export const NO_MODEL_TEXT = 'NO MODEL';
+
+/**
+ * The label for a box face `widthM` by `heightM`: white, with NO MODEL across it.
+ *
+ * Drawn at the face's own proportions so the letters are not stretched, at a height
+ * that is a fixed share of the shorter side; the canvas is sized so the text is crisp
+ * at the closest the camera comes.
+ */
+function noModelTexture(widthM: number, heightM: number): THREE.Texture {
+  const width = 1024;
+  const height = Math.max(64, Math.round((width * heightM) / widthM));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = '#6b6b6b';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  const size = Math.min(height * 0.3, (width * 0.8) / (NO_MODEL_TEXT.length * 0.75));
+  context.font = `600 ${size}px Inter, 'Segoe UI', system-ui, sans-serif`;
+  context.fillText(NO_MODEL_TEXT, width / 2, height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
 /**
  * The stand-in for a craft with no model: a box, white, of its published size.
  *
  * Matte rather than shiny, because it claims no material either; lit by the Sun like
- * everything else, so it has a day side and a night side and reads as a solid.
+ * everything else, so it has a day side and a night side and reads as a solid. Its two
+ * broad faces -- the ones that face the Sun and away, where the arrays would be -- say
+ * NO MODEL, because a white box this size could otherwise pass for a design.
  */
 export function craftBox(sizeM: readonly [number, number, number]): THREE.Object3D {
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(sizeM[0], sizeM[1], sizeM[2]),
-    new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, metalness: 0 }),
-  );
+  const plain = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, metalness: 0 });
+  const labelled = new THREE.MeshStandardMaterial({
+    map: noModelTexture(sizeM[0], sizeM[1]),
+    roughness: 0.85,
+    metalness: 0,
+  });
+  // BoxGeometry's groups run +x, -x, +y, -y, +z, -z; the broad faces are +z and -z.
+  const box = new THREE.Mesh(new THREE.BoxGeometry(sizeM[0], sizeM[1], sizeM[2]), [
+    plain,
+    plain,
+    plain,
+    plain,
+    labelled,
+    labelled,
+  ]);
   const holder = new THREE.Group();
   holder.scale.setScalar(UNITS_PER_METRE);
   holder.add(box);
