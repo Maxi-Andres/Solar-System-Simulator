@@ -116,6 +116,13 @@ function addYears(date: Date, years: number): Date {
   return shifted;
 }
 
+/** Adds whole months to a date, as Date.setUTCMonth does. */
+function addMonths(date: Date, months: number): Date {
+  const shifted = new Date(date);
+  shifted.setUTCMonth(shifted.getUTCMonth() + months);
+  return shifted;
+}
+
 /** Midnight UTC today: the reference instant the whole run is built around. */
 function todayUtcMidnight(): Date {
   const now = new Date();
@@ -145,9 +152,24 @@ async function fetchSpacecraft(
   body: BodyDefinition,
   epoch: Date,
   frames: ReferenceFrames,
-): Promise<BodyResult> {
-  const { start, stop } = windowFor(body.vectorWindow, epoch);
+): Promise<BodyResult | null> {
+  // The whole window, or -- for a craft in close orbit -- a few months either side.
+  const months = body.mission?.windowMonths ?? null;
+  const { start, stop } =
+    months === null
+      ? windowFor(body.vectorWindow, epoch)
+      : { start: addMonths(epoch, -months), stop: addMonths(epoch, months) };
   const stated = await fetchCoverage(body);
+  // A craft whose data ends before its window opens -- MAVEN, whose path stops at
+  // 2026-03-01, against a window three months either side of the build -- is left out
+  // of this run rather than failing it. It comes back by itself if the window reaches it.
+  if (stated.stop.getTime() <= start.getTime() || stated.start.getTime() >= stop.getTime()) {
+    console.log(
+      `[fetch-data] ${body.name}: no data inside its window ` +
+        `(${stated.start.toISOString().slice(0, 10)} .. ${stated.stop.toISOString().slice(0, 10)}); left out`,
+    );
+    return null;
+  }
   // Where the stated span outruns the data -- DART's runs years past its impact -- the
   // end is pulled back to the last day that has any. See `lastWithData`.
   // And never past the instant the craft stopped existing.
@@ -314,6 +336,18 @@ async function writePaths(
   for (const result of results.filter((candidate) => candidate.body.vectorWindow === 'mission')) {
     const { body, vectors } = result;
     const seams = locateSeams(vectors, result.discontinuities);
+    // A craft followed only briefly is one that goes round fast: its trail is drawn from
+    // its table. See PathInfo.count.
+    if (body.mission !== null && body.mission.windowMonths !== null) {
+      paths[body.id] = {
+        count: null,
+        angularTolerance: PATH_ANGULAR_TOLERANCE,
+        floorKm: SPACECRAFT_TOLERANCE_KM,
+        seams: seams.map(serializeSeam),
+      };
+      console.log(`[fetch-data] ${body.name.padEnd(9)} trail from its table, no path file`);
+      continue;
+    }
     const origin = body.parent === null ? atBarycentre : barycentric(body.parent);
     const path = simplifyPath(
       vectors,
@@ -368,7 +402,11 @@ async function main(): Promise<void> {
     MAX_CONCURRENT_REQUESTS,
     (body) => fetchSpacecraft(body, epoch, frames),
   );
-  const results = [...natural, ...craft];
+  const results = [...natural, ...craft.filter((result) => result !== null)];
+  // What this run publishes: every body that came back. A craft left out above is in
+  // neither the catalog nor the manifest, so the app never asks for its table.
+  const published = new Set(results.map((result) => result.body.id));
+  const catalog = CATALOG.filter((body) => published.has(body.id));
 
   const stars = buildStarCatalog({
     hipparcos: hipparcosRows,
@@ -424,7 +462,7 @@ async function main(): Promise<void> {
 
   const paths = await writePaths(results, frames);
 
-  await writeCatalog(CATALOG);
+  await writeCatalog(catalog);
   await writeStars(stars);
 
   // The window every full-window body can answer for: the intersection of their
@@ -462,7 +500,7 @@ async function main(): Promise<void> {
       startUtc: fromJulianDay(startJd).toISOString(),
       stopUtc: fromJulianDay(stopJd).toISOString(),
     },
-    bodies: CATALOG.map((body) => body.id),
+    bodies: catalog.map((body) => body.id),
     tables,
     paths,
   };

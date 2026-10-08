@@ -231,6 +231,21 @@ craft meet, about weekly: ACE alone passed 400 requests before it was stopped.
 Where Horizons' files have a hole it answers with **zero vectors** rather than an error
 — Wind's last four days of coverage — and those are cut off, never drawn at Earth's centre.
 
+The **close orbiters** — MRO, Odyssey, Mars Express, TGO and Hope at Mars; LRO, Danuri,
+Chandrayaan-2 and the two ARTEMIS probes at the Moon — are the expensive case: MRO goes
+round Mars every 112 minutes, all of it inside the kilometre floor. They are followed for
+**three months either side of the build** rather than ten years, and are absent outside
+that. Even so MRO is 26,740 samples, and Odyssey and TGO, which want a sample every six
+minutes for six months, 41,521 and 44,161. Juno, on a 33-day orbit, is cheap enough for
+the whole window. A run of flagged intervals is fetched as one request when the gaps
+between them are short, which took MAVEN's periapsis passes from 69 requests per ten days
+to 15. MAVEN itself is in the catalog and not in the data: its JPL trajectory ends on
+2026-03-01, outside the window, and a craft with nothing inside its window is left out.
+
+DART's trajectory ends at impact, 2022-09-26 23:14 UTC, which is not on any coarse grid:
+the stretch from the last whole day to the end is fetched by itself, at the finest step
+that still fits one request, and spliced on.
+
 What JPL covers is asked on every run, from Horizons' own refusal to answer outside it,
 because it moves: an active mission gets a new predicted trajectory every few weeks. A
 craft is absent outside that span, never propagated — there is no conic to propagate.
@@ -260,20 +275,31 @@ Eyes draws one: only where the craft has been, one period of its current orbit b
 fading linearly with age. A craft on a hyperbola has no period, and its trail reaches back
 to the start of its path.
 
+A close orbiter has **no path file**. Its six months are thousands of turns, and a path
+that has to stay within a few hundred metres of a two-hour orbit keeps nearly every
+sample: MRO's kept 26,739 of 26,740, and the Mars orbiters together came to a million
+chords and 10 MB to draw two hours of trail each. Its trail is one turn, and the table
+chunk the craft is placed with already holds that turn, so the line is built from those
+samples — one turn and a quarter at a time, rebuilt as the clock moves on.
+
 ### Spacecraft up close
 
-Twenty-one craft are drawn with **NASA's own 3D models** — nineteen files from NASA 3D
-Resources; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, and DART's is
-NASA's printable STL, converted — compressed with meshopt and WebP to 14 MB in all and fetched only once a craft is six pixels across. None documents its
+Twenty-seven craft are drawn with **NASA's own 3D models** — twenty-five files from NASA
+3D Resources; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, THEMIS's both
+ARTEMIS probes, DART's is NASA's printable STL, converted, and MAVEN's waits for a MAVEN
+in the data — compressed with meshopt and WebP to 16 MB in all and fetched only once a
+craft is six pixels across. None documents its
 units; most measure in metres, and the nine in arbitrary units are scaled by one
 published dimension each. A test checks every compressed file still measures what NASA's
-did, and comes out at its published size. Craft with no model that may be used are a
+did, measured from every decoded vertex, and comes out at its published size. Craft with no model that may be used are a
 **white box of their published size**, marked NO MODEL — array span by array width by
 body depth — and Gaia and Aditya-L1, with no three dimensions published, keep their marker.
 
 Which way a craft faces is **modelled**: dish to Earth for Voyager, Pioneer and New
-Horizons, heat shield or sunshield to the Sun for Parker and JWST, arrays to the Sun for
-the rest. The roll about that axis is a convention. JPL's attitude kernels would be the
+Horizons, MRO, MAVEN and Juno, heat shield or sunshield to the Sun for Parker and JWST,
+spin axis to the south ecliptic pole for Wind and ARTEMIS, arrays to the Sun for the rest.
+The Mars and lunar orbiters really point their instruments at the ground below and turn
+their dishes and arrays on gimbals; what is drawn is the dish or the arrays, not that. The roll about that axis is a convention. JPL's attitude kernels would be the
 measured answer for some of them; they are gigabytes of binary and do not exist for
 Pioneer, Parker or JWST.
 
@@ -399,9 +425,9 @@ two, never drawn somewhere approximate and then moved.
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
   The twenty-one major moons are in, with positions, orbits, rotation, shapes and
-  surface maps. Thirty-nine spacecraft are in at their real positions — interplanetary,
-  at the Lagrange points, around the Moon — with their trails drawn from JPL's samples
-  and NASA's models up close. The close planet orbiters (Mars, Juno, LRO) are next.
+  surface maps. Fifty spacecraft are in at their real positions — interplanetary, at the
+  Lagrange points, in orbit around Mars, the Moon and Jupiter — with their trails drawn
+  from JPL's samples and NASA's models up close. Craft on the surface of Mars are next.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a

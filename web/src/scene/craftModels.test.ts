@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { CATALOG } from '@sss/tools/catalog';
 import type { CraftShape } from '@sss/tools/types';
 import * as THREE from 'three';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { describe, expect, it } from 'vitest';
 
 import { craftOrientation } from './craftModels.ts';
@@ -42,6 +43,12 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'spitzer.glb': [1.62, 4.49, 2.11],
   'wind.glb': [41.62, 52.43, 37.3],
   'dart.glb': [40.34, 4.46, 5.45],
+  'mro.glb': [13.18, 4.88, 6.71],
+  'maven.glb': [13.13, 5.42, 8.22],
+  'odyssey.glb': [5.67, 3.36, 8.22],
+  'lro.glb': [5.45, 3.66, 5.51],
+  'juno.glb': [17.65, 4.26, 18.54],
+  'themis.glb': [6.09, 7.21, 6.09],
 };
 
 /**
@@ -64,8 +71,22 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'stereo.glb': { axis: 0, metres: 6.47, within: 0.01 },
   'osiris-rex.glb': { axis: 2, metres: 6.2, within: 0.01 },
   'dart.glb': { axis: 0, metres: 18.3, within: 0.01 },
+  'mro.glb': { axis: 0, metres: 13.6, within: 0.04 },
+  'maven.glb': { axis: 0, metres: 11.4, within: 0.01 },
+  'odyssey.glb': { axis: 0, metres: 5.7, within: 0.01 },
+  'juno.glb': { axis: 2, metres: 20, within: 0.08 },
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
+
+interface MeshoptView {
+  readonly buffer: number;
+  readonly byteOffset?: number;
+  readonly byteLength: number;
+  readonly byteStride: number;
+  readonly count: number;
+  readonly mode: 'ATTRIBUTES' | 'TRIANGLES' | 'INDICES';
+  readonly filter?: 'NONE' | 'OCTAHEDRAL' | 'QUATERNION' | 'EXPONENTIAL';
+}
 
 interface Gltf {
   readonly scene?: number;
@@ -79,41 +100,90 @@ interface Gltf {
     readonly scale?: readonly number[];
   }[];
   readonly meshes: readonly {
-    readonly primitives: readonly { readonly attributes: { readonly POSITION: number } }[];
+    readonly primitives: readonly {
+      readonly attributes: { readonly POSITION: number };
+    }[];
   }[];
   readonly accessors: readonly {
+    readonly bufferView: number;
+    readonly byteOffset?: number;
     readonly componentType: number;
     readonly normalized?: boolean;
-    readonly min: readonly number[];
-    readonly max: readonly number[];
+    readonly count: number;
+  }[];
+  readonly bufferViews: readonly {
+    readonly byteOffset?: number;
+    readonly byteLength: number;
+    readonly byteStride?: number;
+    readonly extensions?: { readonly EXT_meshopt_compression?: MeshoptView };
   }[];
 }
 
-/** The JSON chunk of a GLB: everything a bounding box needs, without decoding a vertex. */
-async function readGltf(file: string): Promise<Gltf> {
+/** A GLB's JSON and its binary chunk. */
+async function readGlb(file: string): Promise<{ gltf: Gltf; bin: Uint8Array }> {
   const bytes = await readFile(join(MODELS, file));
-  const length = bytes.readUInt32LE(12);
-  return JSON.parse(bytes.subarray(20, 20 + length).toString('utf8')) as Gltf;
+  const jsonLength = bytes.readUInt32LE(12);
+  const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString('utf8')) as Gltf;
+  const binStart = 20 + jsonLength;
+  const binLength = bytes.readUInt32LE(binStart);
+  return {
+    gltf,
+    bin: new Uint8Array(bytes.buffer, bytes.byteOffset + binStart + 8, binLength),
+  };
 }
 
-/** A normalised integer accessor's stored value, back to the float it stands for. */
-function dequantise(value: number, componentType: number, normalized: boolean): number {
-  if (!normalized) {
-    return value;
+/** A buffer view's bytes, decoded from meshopt where it is compressed, and its stride. */
+async function viewBytes(
+  gltf: Gltf,
+  bin: Uint8Array,
+  index: number,
+): Promise<{ bytes: Uint8Array; stride: number }> {
+  const view = gltf.bufferViews[index]!;
+  const meshopt = view.extensions?.EXT_meshopt_compression;
+  if (meshopt !== undefined) {
+    await MeshoptDecoder.ready;
+    const out = new Uint8Array(meshopt.count * meshopt.byteStride);
+    const start = meshopt.byteOffset ?? 0;
+    MeshoptDecoder.decodeGltfBuffer(
+      out,
+      meshopt.count,
+      meshopt.byteStride,
+      bin.subarray(start, start + meshopt.byteLength),
+      meshopt.mode,
+      meshopt.filter ?? 'NONE',
+    );
+    return { bytes: out, stride: meshopt.byteStride };
   }
-  const scale = { 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 }[componentType] ?? 1;
-  return Math.max(value / scale, -1);
+  const start = view.byteOffset ?? 0;
+  return {
+    bytes: bin.subarray(start, start + view.byteLength),
+    stride: view.byteStride ?? 0,
+  };
 }
+
+/** Bytes per component, and how a normalised one is scaled back to [-1, 1] or [0, 1]. */
+const COMPONENTS: Record<
+  number,
+  { size: number; scale: number; read: (d: DataView, o: number) => number }
+> = {
+  5120: { size: 1, scale: 127, read: (d, o) => d.getInt8(o) },
+  5121: { size: 1, scale: 255, read: (d, o) => d.getUint8(o) },
+  5122: { size: 2, scale: 32767, read: (d, o) => d.getInt16(o, true) },
+  5123: { size: 2, scale: 65535, read: (d, o) => d.getUint16(o, true) },
+  5126: { size: 4, scale: 1, read: (d, o) => d.getFloat32(o, true) },
+};
 
 /**
- * The model's bounds in its own frame, metres: every primitive's POSITION min and max,
- * dequantised, through its node's world transform. The corners of each box are
- * transformed, which is exact for the translation-and-scale nodes quantisation adds.
+ * The model's bounds in its own frame: every vertex, decoded and dequantised, through
+ * its node's world transform. Exact, whatever the nodes do -- an earlier version
+ * transformed each primitive's min/max box instead, and a rotated node turned that box
+ * into a larger one.
  */
 async function extentOf(file: string): Promise<[number, number, number]> {
-  const gltf = await readGltf(file);
+  const { gltf, bin } = await readGlb(file);
   const bounds = new THREE.Box3();
-  const visit = (index: number, parent: THREE.Matrix4): void => {
+  const point = new THREE.Vector3();
+  const visit = async (index: number, parent: THREE.Matrix4): Promise<void> => {
     const node = gltf.nodes[index]!;
     const local = new THREE.Matrix4();
     if (node.matrix !== undefined) {
@@ -132,24 +202,30 @@ async function extentOf(file: string): Promise<[number, number, number]> {
     if (node.mesh !== undefined) {
       for (const primitive of gltf.meshes[node.mesh]!.primitives) {
         const accessor = gltf.accessors[primitive.attributes.POSITION]!;
-        const normalized = accessor.normalized === true;
-        const min = accessor.min.map((v) => dequantise(v, accessor.componentType, normalized));
-        const max = accessor.max.map((v) => dequantise(v, accessor.componentType, normalized));
-        for (const x of [min[0]!, max[0]!]) {
-          for (const y of [min[1]!, max[1]!]) {
-            for (const z of [min[2]!, max[2]!]) {
-              bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(world));
-            }
-          }
+        const component = COMPONENTS[accessor.componentType]!;
+        const { bytes, stride } = await viewBytes(gltf, bin, accessor.bufferView);
+        const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const step = stride || component.size * 3;
+        // A normalised signed integer maps its most negative value to -1 as well.
+        const value =
+          accessor.normalized === true
+            ? (at: number) => Math.max(component.read(data, at) / component.scale, -1)
+            : (at: number) => component.read(data, at);
+        for (let i = 0; i < accessor.count; i += 1) {
+          const at = (accessor.byteOffset ?? 0) + i * step;
+          point
+            .set(value(at), value(at + component.size), value(at + 2 * component.size))
+            .applyMatrix4(world);
+          bounds.expandByPoint(point);
         }
       }
     }
     for (const child of node.children ?? []) {
-      visit(child, world);
+      await visit(child, world);
     }
   };
   for (const root of gltf.scenes[gltf.scene ?? 0]!.nodes) {
-    visit(root, new THREE.Matrix4());
+    await visit(root, new THREE.Matrix4());
   }
   const size = bounds.getSize(new THREE.Vector3());
   return [size.x, size.y, size.z];
@@ -158,7 +234,7 @@ async function extentOf(file: string): Promise<[number, number, number]> {
 describe('the spacecraft models', () => {
   it('gives every craft but two a shape: a model, or a box of positive size', () => {
     // Gaia and Aditya-L1 have no three published dimensions, and keep their markers.
-    expect(shapes).toHaveLength(37);
+    expect(shapes).toHaveLength(49);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();

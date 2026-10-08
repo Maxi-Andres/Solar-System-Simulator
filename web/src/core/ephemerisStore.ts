@@ -8,7 +8,7 @@ import type {
   VectorTable,
 } from '@sss/tools/types';
 
-import { ChunkedTable, type ChunkLoader, RETRY_AFTER_MS } from './chunkedTable.ts';
+import { ChunkedTable, type ChunkLoader, RETRY_AFTER_MS, samplesBetween } from './chunkedTable.ts';
 import { FrameTree } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
@@ -245,7 +245,8 @@ export class EphemerisStore {
   /** Asks for a trajectory, once; resolves when it has arrived or has failed. */
   requestPath(id: BodyId): Promise<void> {
     const load = this.#data.loadPath;
-    if (this.#paths.has(id) || this.pathInfo(id) === null || load === null) {
+    // A craft whose trail is drawn from its table has no path file to ask for.
+    if (this.#paths.has(id) || (this.pathInfo(id)?.count ?? null) === null || load === null) {
       return Promise.resolve();
     }
     const pending = this.#pathsPending.get(id);
@@ -270,6 +271,18 @@ export class EphemerisStore {
       });
     this.#pathsPending.set(id, promise);
     return promise;
+  }
+
+  /**
+   * A body's own samples from `startJd` to `stopJd` (see samplesBetween), from data
+   * already here; null otherwise. Never fetches.
+   */
+  loadedSamples(id: BodyId, startJd: number, stopJd: number): VectorTable | null {
+    const table = this.#data.vectors.get(id);
+    if (table !== undefined) {
+      return samplesBetween([table], startJd, stopJd);
+    }
+    return this.#chunked.get(id)?.samplesIfLoaded(startJd, stopJd) ?? null;
   }
 
   /**

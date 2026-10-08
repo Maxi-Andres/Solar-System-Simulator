@@ -63,7 +63,13 @@ import {
   MODEL_REQUEST_PX,
   SHAPE_SHOWN_PX,
 } from './craftModels.ts';
-import { orbitalPeriodDays, TRAIL_COLOR, TrajectoryLine } from './trajectoryLine.ts';
+import {
+  orbitalPeriodDays,
+  TableTrail,
+  tablePath,
+  TRAIL_COLOR,
+  TrajectoryLine,
+} from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import {
   angularRadiusPixels,
@@ -199,7 +205,7 @@ interface BodyHandles {
    * body. The group is in the scene from the start so the line can be added to it late.
    */
   readonly trajectoryGroup: THREE.Group | null;
-  trajectory: TrajectoryLine | null;
+  trajectory: TrajectoryLine | TableTrail | null;
   /** Ring system mesh, for the one body here that has one. */
   readonly ring: THREE.Mesh | null;
   /**
@@ -1062,10 +1068,20 @@ export function SolarSystem({
         // Asked for only once the line is wanted: a layer that is off costs nothing.
         const wantedLine = showTrails && satellite > 0.005 && origin !== undefined;
         if (wantedLine && handle.trajectory === null) {
-          const path = store.path(id);
-          if (path !== null) {
-            handle.trajectory = new TrajectoryLine(path, TRAIL_COLOR);
+          const info = store.pathInfo(id);
+          if (info !== null && info.count === null) {
+            // A close orbiter: its trail from its own table, one turn at a time.
+            handle.trajectory = new TableTrail((startJd, stopJd) => {
+              const table = store.loadedSamples(id, startJd, stopJd);
+              return table === null ? null : tablePath(table, info.seams, info.floorKm);
+            }, TRAIL_COLOR);
             handle.trajectoryGroup.add(handle.trajectory.object);
+          } else {
+            const path = store.path(id);
+            if (path !== null) {
+              handle.trajectory = new TrajectoryLine(path, TRAIL_COLOR);
+              handle.trajectoryGroup.add(handle.trajectory.object);
+            }
           }
         }
 

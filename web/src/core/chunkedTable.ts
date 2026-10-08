@@ -21,6 +21,66 @@ import type { StateVector } from './vec3.ts';
  * so any instant inside a chunk interpolates from that chunk alone.
  */
 
+/**
+ * The samples of `tables` -- consecutive pieces of one table, in time order -- from the
+ * last at or before `startJd` to the first at or after `stopJd`, as one table.
+ *
+ * Neighbouring chunks share their boundary sample, and it is kept once. Where the
+ * tables do not reach that far either way, they are taken to their end.
+ */
+export function samplesBetween(
+  tables: readonly VectorTable[],
+  startJd: number,
+  stopJd: number,
+): VectorTable | null {
+  const first = tables[0];
+  if (first === undefined) {
+    return null;
+  }
+  const t: number[] = [];
+  const x: number[] = [];
+  const y: number[] = [];
+  const z: number[] = [];
+  const vx: number[] = [];
+  const vy: number[] = [];
+  const vz: number[] = [];
+  for (const table of tables) {
+    for (let k = 0; k < table.count; k += 1) {
+      const time = table.t[k]!;
+      const next = table.t[k + 1];
+      const previousKept = t.at(-1);
+      // Before the start, unless the next sample is past it; after the stop, once one
+      // sample past it is kept; and the boundary sample a second time.
+      if (next !== undefined && next <= startJd && time < startJd) {
+        continue;
+      }
+      if (previousKept !== undefined && (time <= previousKept || previousKept >= stopJd)) {
+        continue;
+      }
+      t.push(time);
+      x.push(table.x[k]!);
+      y.push(table.y[k]!);
+      z.push(table.z[k]!);
+      vx.push(table.vx[k]!);
+      vy.push(table.vy[k]!);
+      vz.push(table.vz[k]!);
+    }
+  }
+  return {
+    id: first.id,
+    horizonsId: first.horizonsId,
+    center: first.center,
+    count: t.length,
+    t,
+    x,
+    y,
+    z,
+    vx,
+    vy,
+    vz,
+  };
+}
+
 /** Fetches chunk `index` of a body's table. */
 export type ChunkLoader = (id: BodyId, index: number) => Promise<VectorTable>;
 
@@ -143,6 +203,31 @@ export class ChunkedTable {
     const index = this.indexAt(jd);
     const table = index < 0 ? undefined : this.#tables[index];
     return table === undefined ? null : interpolateState(table, jd);
+  }
+
+  /**
+   * The table's own samples spanning `startJd` to `stopJd` (see samplesBetween), if
+   * every chunk they are in is here; null if one is not, and nothing asked for.
+   *
+   * For a trail drawn from the table itself: one turn of a close orbiter's orbit is a few
+   * hours, inside the chunk the craft is being placed with, or the neighbour the clock
+   * has already prefetched.
+   */
+  samplesIfLoaded(startJd: number, stopJd: number): VectorTable | null {
+    const first = this.indexAt(Math.max(startJd, this.startJd));
+    const last = this.indexAt(Math.min(stopJd, this.stopJd));
+    if (first < 0 || last < 0 || last < first) {
+      return null;
+    }
+    const tables: VectorTable[] = [];
+    for (let index = first; index <= last; index += 1) {
+      const table = this.#tables[index];
+      if (table === undefined) {
+        return null;
+      }
+      tables.push(table);
+    }
+    return samplesBetween(tables, startJd, stopJd);
   }
 
   /**

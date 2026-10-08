@@ -143,7 +143,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
             items={[
               'Positions and velocities, interpolated from JPL state vectors. Error against JPL at finer resolution: 32 m for Earth, 9.7 km for Mercury.',
               'Twenty-one moons — every one massive enough to have pulled itself round, plus Phobos and Deimos — from JPL’s own satellite ephemerides, measured from their planet’s centre. Each is sampled finely enough to land within a hundredth of its own radius, which for Phobos, round Mars every 7 hours 39 minutes, means every fifteen minutes. Its worst error is 48 metres.',
-              'Thirty-nine spacecraft — the ones travelling between the planets, the observatories at the Lagrange points, the lunar missions, and five that ended inside the window, Cassini among them — each from its own JPL trajectory, reconstructed from tracking where it has been and predicted where it is going. A spacecraft’s path is not an orbit, so no single step can follow it: Juice cruises for months on a curve one sample a day follows well inside a kilometre, then passes 8,640 km above Earth at 13 km/s. So the sampling refines itself, down to a minute, wherever the curve would stray from JPL’s by more than its tolerance: a kilometre near a body, and away from one an angle — ten microradians seen from the nearest, 15 km at the L1 point. That is about a fortieth of a pixel from Earth, and it is what stops the sampling chasing the few-kilometre steps where JPL’s trajectory files for those craft meet, about weekly.',
+              `${capitalised(spelled(craftCount(store)))} spacecraft — the ones travelling between the planets, the observatories at the Lagrange points, the craft orbiting Mars, the Moon and Jupiter, and five that ended inside the window, Cassini among them — each from its own JPL trajectory, reconstructed from tracking where it has been and predicted where it is going. A spacecraft’s path is not an orbit, so no single step can follow it: Juice cruises for months on a curve one sample a day follows well inside a kilometre, then passes 8,640 km above Earth at 13 km/s. So the sampling refines itself, down to a minute, wherever the curve would stray from JPL’s by more than its tolerance: a kilometre near a body, and away from one an angle — ten microradians seen from the nearest, 15 km at the L1 point. That is about a fortieth of a pixel from Earth, and it is what stops the sampling chasing the few-kilometre steps where JPL’s trajectory files for those craft meet, about weekly. The orbiters of Mars and the Moon are the expensive ones — MRO goes round Mars every 112 minutes, all of it within the kilometre — so they are followed for ${spelled(CLOSE_ORBIT_MONTHS)} months either side of the build rather than ten years, and are absent outside that; Juno, whose orbit takes weeks, for the whole window.`,
               'Radii and polar flattening from the IAU 2015 report — Saturn really is 9.8% shorter pole to pole.',
               'Rotation at each body’s real sidereal rate, retrograde where it is retrograde: Venus, Uranus and Pluto.',
               'Axis direction and prime meridian from the IAU rotational elements, so each body is turned the way it is actually turned. Checked against JPL’s own sub-solar point for every planet: worst disagreement 0.0026°.',
@@ -172,7 +172,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
               `A spacecraft exists only where JPL has its path: from launch, and until its trajectory ends — for a mission still flying, until its latest prediction does. Outside that it is not drawn and cannot be chosen, because there is nothing honest to propagate it with. Where JPL’s path is stitched from two trajectory files that disagree, it jumps in a single minute. ${seamSentence(store)} The jumps are JPL’s and they are kept: the craft moves across them, and its trail breaks there rather than drawing a stroke nothing flew along.`,
               'Up close, spacecraft are NASA’s own 3D models, at their true size in metres — Europa Clipper is 30.5 m across against a 3,100 km Europa. Models courtesy of NASA. Juice, Lucy and Psyche have no model that may be used — ESA states no licence for Juice’s, and Lucy’s and Psyche’s are not published — so each is a plain white box of its published size, marked NO MODEL: as long as its solar-array span, as wide as one array, as deep as its body. A box says how big a craft is and claims nothing about its shape.',
-              'Not every spacecraft is here — thirty-nine are: those between the planets, at the Lagrange points and around the Moon, and Cassini and Akatsuki at their planets. NASA Eyes shows 174, a chosen set of science missions. JPL Horizons, the source of every path here, carries about 276 spacecraft, spent rocket stages included. And around Earth alone tens of thousands of objects are tracked — mostly communications constellations such as Starlink, weather and navigation satellites, and debris — and none of them is shown yet. They come in stages: next the ones orbiting other planets closely, such as the Mars orbiters, then Earth’s own satellites, from the public orbital elements CelesTrak publishes, propagated live.',
+              `Not every spacecraft is here — ${spelled(craftCount(store))} are: those between the planets, at the Lagrange points, around the Moon and Mars, and Juno, Cassini and Akatsuki at their planets. NASA Eyes shows 174, a chosen set of science missions. JPL Horizons, the source of every path here, carries about 276 spacecraft, spent rocket stages included. And around Earth alone tens of thousands of objects are tracked — mostly communications constellations such as Starlink, weather and navigation satellites, and debris — and none of them is shown yet. They come next, from the public orbital elements CelesTrak publishes, propagated live.`,
               'Which way a spacecraft faces is modelled, not measured. JPL’s attitude records exist for some of them, as gigabytes of binary, and for none of Pioneer, Parker or JWST. So each is drawn by the rule it flies by: Voyager, Pioneer and New Horizons keep their dish on Earth; Parker keeps its heat shield on the Sun, JWST its sunshield, and the solar-powered craft their arrays. The roll about that axis is not published at all and is a convention here.',
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does. The moons have a narrower window than the planets — a year either side of the build, against ten — because Phobos alone needs 35,000 samples a year. Their data arrives in pieces as the clock reaches it, so a moon can be missing for a moment, never misplaced.',
               'The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager photographed them through clear filters, and the colour versions that exist are enhanced into the ultraviolet and infrared. The Moon is in natural colour, Titan is its surface at 938 nm seen through the haze, and Io and Triton carry uncalibrated mission colour.',
@@ -268,6 +268,58 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
 }
 
 /** Radius of the progress ring, in the SVG's own units. */
+/**
+ * How far either side of the build the close orbiters are followed, months. The
+ * generator's CLOSE_ORBIT_WINDOW_MONTHS, restated: the web app does not import the tools'
+ * configuration, and a test holds the two equal.
+ */
+export const CLOSE_ORBIT_MONTHS = 3;
+
+/** The spacecraft in this data. Counted, because a craft with no data in the window is left out of it. */
+export function craftCount(store: EphemerisStore): number {
+  return store.bodies.filter((body) => body.kind === 'spacecraft').length;
+}
+
+const ONES = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+/** A count in words, as prose spells one; digits from a hundred on. */
+export function spelled(n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n >= 100) {
+    return n.toLocaleString('en-US');
+  }
+  if (n < 20) {
+    return ONES[n]!;
+  }
+  const tens = TENS[Math.floor(n / 10)]!;
+  return n % 10 === 0 ? tens : `${tens}-${ONES[n % 10]!}`;
+}
+
+function capitalised(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** A jump this size or larger is named in the About text; smaller ones are counted. */
 export const NOTABLE_JUMP_KM = 1000;
 

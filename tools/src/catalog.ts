@@ -1,3 +1,4 @@
+import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
 import type { BodyDefinition, CraftShape, TextureSetId } from './types.ts';
 
@@ -634,6 +635,8 @@ interface SpacecraftSpec {
   readonly operator: string;
   /** See Mission.endUtc: only for a craft that was destroyed. */
   readonly endUtc?: string;
+  /** See Mission.windowMonths: only for a craft in close orbit about another body. */
+  readonly windowMonths?: number;
   readonly color: string;
   /** See CraftShape, and SHAPES below for where each one comes from. */
   readonly shape: CraftShape | null;
@@ -678,6 +681,7 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
       launchUtc: spec.launchUtc,
       operator: spec.operator,
       endUtc: spec.endUtc ?? null,
+      windowMonths: spec.windowMonths ?? null,
       shape: spec.shape,
     },
   };
@@ -1584,6 +1588,293 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
 ];
 
+/**
+ * The shapes of the close orbiters, step A5c. Same rules as SHAPES.
+ *
+ * **Models**, NASA 3D Resources, every one in metres in the file except MAVEN's:
+ *
+ *   model          measured              published
+ *   MRO (C)        13.18 m across        13.6 m array span (MRO press kit)
+ *   Odyssey        5.67 m across         5.7 m array, tip to tip (press kit)
+ *   LRO (B)        5.45 x 3.66 x 5.51    array 4.27 x 3.20 m, HGA boom 2.59 m
+ *   Juno (A)       18.54 m across        "over 20 m" (NASA mission page)
+ *   THEMIS         7.21 m, axial booms   6.9 m axial booms (Angelopoulos et al.)
+ *   MAVEN (B)      13.13 units           11.4 m wingspan (NASA) -> 0.868 m/unit
+ *
+ * MAVEN (B) is the textured variant; it lacks the wire booms, which (A) has, untextured,
+ * at 1.75 million triangles. THEMIS's model is all five probes', and serves ARTEMIS P1
+ * and P2, two of them.
+ *
+ * **Axes**, read off the geometry: MRO's dish opens to -y, MAVEN's to +y, Juno's to +y
+ * along its spin axis with the three arrays at 120 degrees in xz; THEMIS spins about y,
+ * its wire booms in xz. Odyssey's arrays lie in xy and LRO's in xz; which side carries
+ * the cells is not determinable from the models, and is a choice.
+ *
+ * **Rules**: MRO and MAVEN keep their dishes on Earth, Juno its spin axis; Odyssey and
+ * LRO their arrays on the Sun. The real rule for the Mars and lunar orbiters is nadir --
+ * instruments on the surface below -- with arrays and dish gimballed; this draws the
+ * dish or the arrays, not the body's nadir, and says so. ARTEMIS's spin axis is held
+ * near the ecliptic pole.
+ *
+ * **Boxes**, every figure published (L x W x D, metres):
+ *
+ *   Mars Express   12 x 1.8 x 1.4    arrays 12 m across; bus 1.5 x 1.8 x 1.4 (ESA).
+ *                                    The 40 m MARSIS antennas are not drawn.
+ *   ExoMars TGO    17.5 x 3.2 x 2    (Horizons summary)
+ *   Hope           7.9 x 3.0 x 2.9   7.9 m across; bus 2.37 x 2.90 (Horizons)
+ *   Danuri         6.3 x 3.18 x 2.67 (NASA/KARI launch press kit)
+ *   Chandrayaan-2  5.8 x 3.2 x 2.1   (ISRO GSLV Mk III-M1 brochure)
+ */
+const CLOSE_SHAPES = {
+  mro: {
+    model: 'mro.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  maven: {
+    model: 'maven.glb',
+    metresPerUnit: 0.868,
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'dish',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  odyssey: {
+    model: 'odyssey.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, -1],
+    rollAxis: [0, 1, 0],
+  },
+  juno: {
+    model: 'juno.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'earth',
+    pointingPart: 'spin-axis',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  lro: {
+    model: 'lro.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  themis: {
+    model: 'themis.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'ecliptic-south',
+    pointingPart: 'spin-axis',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  marsExpress: { ...BOX, boxM: [12, 1.8, 1.4] },
+  tgo: { ...BOX, boxM: [17.5, 3.2, 2.0] },
+  hope: { ...BOX, boxM: [7.9, 3.0, 2.9] },
+  danuri: { ...BOX, boxM: [6.3, 3.18, 2.67] },
+  chandrayaan2: { ...BOX, boxM: [5.8, 3.2, 2.1] },
+} as const satisfies Record<string, CraftShape>;
+
+/**
+ * The close orbiters, step A5c: the craft circling Mars, the Moon and Jupiter.
+ *
+ * Each hangs off the body it orbits, so its path is followed in that body's frame and
+ * its trail is one turn of its own orbit -- two hours for MRO. Near a body the tolerance
+ * is the kilometre floor, which is what makes them costly: every one but Juno covers only
+ * CLOSE_ORBIT_WINDOW_MONTHS either side of the build. Juno's orbit is cheap enough to
+ * follow for the whole window: 52.8 days until 2021, 32.7 since 2024, measured from
+ * perijove to perijove in the run of 2026-10-08.
+ *
+ * Sources for each launch instant, operator and span: the Horizons object summaries, the
+ * MRO, Odyssey and Danuri press kits, NASA's mission pages, ESA's Mars Express fact
+ * sheet, ISRO's Chandrayaan-2 brochure; recorded in the plan, step A5c.
+ *
+ * Left out: Tianwen-1, whose Horizons path stops at its arrival in 2021. MAVEN's ends on
+ * 2026-03-01, two months before NASA declared the mission over, and is left out of a run
+ * whose window does not reach it -- see fetchSpacecraft.
+ */
+const CLOSE_ORBITERS: readonly BodyDefinition[] = [
+  spacecraft({
+    id: 'mro',
+    shape: CLOSE_SHAPES.mro,
+    name: 'Mars Reconnaissance Orbiter',
+    horizonsId: '-74',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 13.6,
+    launchUtc: '2005-08-12T11:43:00Z',
+    operator: 'NASA',
+    color: '#d8b090',
+  }),
+  spacecraft({
+    id: 'maven',
+    shape: CLOSE_SHAPES.maven,
+    name: 'MAVEN',
+    horizonsId: '-202',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 11.4,
+    launchUtc: '2013-11-18T18:28:00Z',
+    operator: 'NASA',
+    color: '#c8a8c8',
+  }),
+  spacecraft({
+    id: 'mars-odyssey',
+    shape: CLOSE_SHAPES.odyssey,
+    name: 'Mars Odyssey',
+    horizonsId: '-53',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 6,
+    launchUtc: '2001-04-07T15:02:00Z',
+    operator: 'NASA',
+    color: '#d0c090',
+  }),
+  spacecraft({
+    id: 'mars-express',
+    shape: CLOSE_SHAPES.marsExpress,
+    name: 'Mars Express',
+    horizonsId: '-41',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 12,
+    launchUtc: '2003-06-02T17:45:26Z',
+    operator: 'ESA',
+    color: '#e0a080',
+  }),
+  spacecraft({
+    id: 'exomars-tgo',
+    shape: CLOSE_SHAPES.tgo,
+    name: 'ExoMars TGO',
+    horizonsId: '-143',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 17.5,
+    launchUtc: '2016-03-14T09:31:00Z',
+    operator: 'ESA / Roscosmos',
+    color: '#b8c0d8',
+  }),
+  spacecraft({
+    id: 'hope',
+    shape: CLOSE_SHAPES.hope,
+    name: 'Hope',
+    horizonsId: '-62',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 7.9,
+    launchUtc: '2020-07-19T21:58:14Z',
+    operator: 'UAE Space Agency / MBRSC',
+    color: '#e8c8a0',
+  }),
+  spacecraft({
+    id: 'juno',
+    shape: CLOSE_SHAPES.juno,
+    name: 'Juno',
+    horizonsId: '-61',
+    parent: 'jupiter',
+    parentHorizonsId: '599',
+    stepDays: 1,
+    spanM: 20,
+    launchUtc: '2011-08-05T16:25:00Z',
+    operator: 'NASA',
+    color: '#d0b8a0',
+  }),
+  spacecraft({
+    id: 'lro',
+    shape: CLOSE_SHAPES.lro,
+    name: 'LRO',
+    horizonsId: '-85',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 4.27,
+    launchUtc: '2009-06-18T21:32:00Z',
+    operator: 'NASA',
+    color: '#c0c0c8',
+  }),
+  spacecraft({
+    id: 'danuri',
+    shape: CLOSE_SHAPES.danuri,
+    name: 'Danuri',
+    horizonsId: '-155',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 6.3,
+    launchUtc: '2022-08-04T23:08:00Z',
+    operator: 'KARI',
+    color: '#a8c0e0',
+  }),
+  spacecraft({
+    id: 'artemis-p1',
+    shape: CLOSE_SHAPES.themis,
+    name: 'ARTEMIS P1',
+    horizonsId: '-192',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 6.9,
+    launchUtc: '2007-02-17T23:01:00Z',
+    operator: 'NASA',
+    color: '#b0d0b8',
+  }),
+  spacecraft({
+    id: 'artemis-p2',
+    shape: CLOSE_SHAPES.themis,
+    name: 'ARTEMIS P2',
+    horizonsId: '-193',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 6.9,
+    launchUtc: '2007-02-17T23:01:00Z',
+    operator: 'NASA',
+    color: '#a0c8a8',
+  }),
+  spacecraft({
+    id: 'chandrayaan-2',
+    shape: CLOSE_SHAPES.chandrayaan2,
+    name: 'Chandrayaan-2',
+    horizonsId: '-152',
+    parent: 'moon',
+    parentHorizonsId: '301',
+    stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
+    spanM: 5.8,
+    launchUtc: '2019-07-22T09:13:00Z',
+    operator: 'ISRO',
+    color: '#e0c0a8',
+  }),
+];
+
 export const CATALOG: readonly BodyDefinition[] = [
   {
     id: 'sun',
@@ -2060,6 +2351,7 @@ export const CATALOG: readonly BodyDefinition[] = [
   ...MOONS,
   ...SPACECRAFT,
   ...MORE_SPACECRAFT,
+  ...CLOSE_ORBITERS,
 ];
 
 /** Look up a body by id. Throws rather than returning undefined: ids are ours. */

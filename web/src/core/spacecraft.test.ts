@@ -48,6 +48,7 @@ function body(id: string, kind: BodyDefinition['kind'], parent: string | null): 
           launchUtc: '2025-01-01T00:00:00Z',
           operator: 'Test',
           endUtc: null,
+          windowMonths: null,
           shape: {
             model: null,
             metresPerUnit: 1,

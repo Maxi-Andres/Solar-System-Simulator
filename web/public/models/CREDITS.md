@@ -37,6 +37,12 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 | `kepler.glb` | Kepler | https://science.nasa.gov/3d-resources/kepler-a/ — `Kepler (A).glb` |
 | `spitzer.glb` | Spitzer | https://science.nasa.gov/3d-resources/spitzer-space-telescope/ — `Spitzer Space Telescope.glb` |
 | `wind.glb` | Wind | https://science.nasa.gov/3d-resources/wind/ — `Wind.glb` |
+| `mro.glb` | Mars Reconnaissance Orbiter | https://science.nasa.gov/3d-resources/mars-reconnaissance-orbiter-mro-c/ — `Mars Reconnaissance Orbiter (MRO) (C).glb` |
+| `maven.glb` | MAVEN | https://science.nasa.gov/3d-resources/mars-atmosphere-and-volatile-evolution-maven-b/ — `Mars Atmosphere and Volatile EvolutioN (MAVEN) (B).glb` |
+| `odyssey.glb` | Mars Odyssey | https://science.nasa.gov/3d-resources/mars-odyssey/ — `Mars Odyssey.glb` |
+| `lro.glb` | LRO | https://science.nasa.gov/3d-resources/lunar-reconnaissance-orbiter-b/ — `Lunar Reconnaissance Orbiter (B).glb` |
+| `juno.glb` | Juno | https://science.nasa.gov/3d-resources/juno-a/ — `Juno (A).glb` |
+| `themis.glb` | ARTEMIS P1, ARTEMIS P2 | https://science.nasa.gov/3d-resources/time-history-of-events-and-macroscale-interactions-during-substorms-themis/ — `…(THEMIS).glb`; one model for every THEMIS probe, two of which are ARTEMIS |
 | `dart.glb` | DART | https://science.nasa.gov/3d-resources/double-asteroid-redirection-test-dart/ — the printable `Double Asteroid Redirection Test (DART).stl`, converted to GLB here (one mesh, flat grey; no textures exist) |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built

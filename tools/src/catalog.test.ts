@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody, SSB_CENTER, SUN_CENTER } from './catalog.ts';
+import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { stepMinutes } from './horizons/queries.ts';
 
 const primaries = CATALOG.filter((body) => body.kind !== 'moon' && body.kind !== 'spacecraft');
@@ -265,7 +266,21 @@ describe('the spacecraft', () => {
   it('never list one craft twice, by name or by Horizons id', () => {
     expect(new Set(craft.map((body) => body.id)).size).toBe(craft.length);
     expect(new Set(craft.map((body) => body.horizonsId)).size).toBe(craft.length);
-    expect(craft.length).toBe(39);
+    expect(craft.length).toBe(51);
+  });
+
+  it('follow the close orbiters for a few months only, and in their planet’s frame', () => {
+    const close = craft.filter((body) => body.mission!.windowMonths !== null);
+    expect(close.map((body) => body.id).sort()).toEqual(
+      [
+        'artemis-p1', 'artemis-p2', 'chandrayaan-2', 'danuri', 'exomars-tgo', 'hope', 'lro',
+        'mars-express', 'mars-odyssey', 'maven', 'mro',
+      ].sort(),
+    );
+    for (const body of close) {
+      expect(body.mission!.windowMonths, body.id).toBe(CLOSE_ORBIT_WINDOW_MONTHS);
+      expect(['mars', 'moon'], body.id).toContain(body.parent);
+    }
   });
 
   it('take the mission window, and nothing that belongs to a natural body', () => {

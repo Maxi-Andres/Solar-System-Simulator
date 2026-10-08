@@ -3,7 +3,15 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { indicatorOpacity, INDICATOR_FADE_START, scrollState } from './AboutPanel.tsx';
+import { CLOSE_ORBIT_WINDOW_MONTHS } from '@sss/tools/config';
+
+import {
+  CLOSE_ORBIT_MONTHS,
+  indicatorOpacity,
+  INDICATOR_FADE_START,
+  scrollState,
+  spelled,
+} from './AboutPanel.tsx';
 
 /**
  * The About screen's own scrolling.
@@ -188,5 +196,19 @@ describe('hiding a kind', () => {
         expect(source, file).toContain('visibleKinds');
       }
     }
+  });
+});
+
+describe('the About text’s numbers', () => {
+  it('spells counts as prose does', () => {
+    expect(spelled(7)).toBe('seven');
+    expect(spelled(19)).toBe('nineteen');
+    expect(spelled(40)).toBe('forty');
+    expect(spelled(51)).toBe('fifty-one');
+    expect(spelled(174)).toBe('174');
+  });
+
+  it('states the close orbiters’ window the generator uses', () => {
+    expect(CLOSE_ORBIT_MONTHS).toBe(CLOSE_ORBIT_WINDOW_MONTHS);
   });
 });

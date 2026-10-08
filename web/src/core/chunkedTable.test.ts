@@ -1,7 +1,7 @@
 import type { TableInfo, VectorTable } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { ChunkedTable, RETRY_AFTER_MS } from './chunkedTable.ts';
+import { ChunkedTable, RETRY_AFTER_MS, samplesBetween } from './chunkedTable.ts';
 
 /**
  * A straight-line body sampled once a day, split into chunks of `size` samples that
@@ -148,5 +148,36 @@ describe('ChunkedTable', () => {
     expect(
       () => new ChunkedTable('probe', { startJd: 0, stopJd: 1, chunks: null }, null),
     ).toThrow(/not a chunked table/);
+  });
+});
+
+describe('samples over a stretch of time', () => {
+  it('joins chunks on their shared sample, keeping it once', () => {
+    const { tables } = fixture(3);
+    // Chunks span 1000..1010, 1010..1020, 1020..1030.
+    const joined = samplesBetween(tables, 1008.5, 1021.5)!;
+    expect(joined.t).toEqual([
+      1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022,
+    ]);
+    expect(joined.count).toBe(15);
+    expect(joined.x[0]).toBe(8 * 86_400);
+  });
+
+  it('starts and stops on samples when the stretch does', () => {
+    const { tables } = fixture(1);
+    expect(samplesBetween(tables, 1002, 1004)!.t).toEqual([1002, 1003, 1004]);
+  });
+
+  it('answers only from chunks already here, and asks for none', async () => {
+    const { info, tables } = fixture(3);
+    const { load, requested, settle } = controlledLoader(tables);
+    const table = new ChunkedTable('probe', info, load);
+    void table.request(1);
+    settle.get(1)!.resolve();
+    await table.request(1);
+    expect(table.samplesIfLoaded(1012, 1014)!.t).toEqual([1012, 1013, 1014]);
+    // Reaching back into chunk 0, which is not here.
+    expect(table.samplesIfLoaded(1008, 1012)).toBeNull();
+    expect(requested).toEqual([1]);
   });
 });

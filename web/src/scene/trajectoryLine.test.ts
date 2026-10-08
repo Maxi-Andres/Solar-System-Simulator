@@ -11,6 +11,9 @@ import {
   CLOSE_IN_STEPS,
   closeInTimes,
   orbitalPeriodDays,
+  TABLE_TRAIL_MARGIN,
+  TableTrail,
+  tablePath,
   tessellatePath,
   TRAIL_OPACITY,
   trailFade,
@@ -291,5 +294,68 @@ describe('orbitalPeriodDays', () => {
       SUN_GM,
     );
     expect(period).toBeNull();
+  });
+});
+
+describe('a trail drawn from the table', () => {
+  it('breaks at a seam, and keeps every sample', () => {
+    const table = circlePath(10, 1);
+    const seam = { startJd: table.t[3]!, stopJd: table.t[4]!, jumpKm: 50 };
+    const path = tablePath(table, [seam], 1);
+    expect(path.gaps).toEqual([3]);
+    expect(path.count).toBe(table.count);
+    expect(path.toleranceKm).toHaveLength(table.count - 1);
+  });
+
+  it('is built for one turn and a margin, and rebuilt only once the clock leaves it', () => {
+    const table = circlePath(1, 1);
+    const asked: [number, number][] = [];
+    const trail = new TableTrail((startJd, stopJd) => {
+      asked.push([startJd, stopJd]);
+      const first = table.t.findIndex((t) => t >= startJd) - 1;
+      const last = table.t.findIndex((t) => t >= stopJd);
+      const pick = <T>(column: readonly T[]) => column.slice(Math.max(first, 0), last + 1);
+      return tablePath(
+        {
+          ...table,
+          t: pick(table.t),
+          x: pick(table.x),
+          y: pick(table.y),
+          z: pick(table.z),
+          vx: pick(table.vx),
+          vy: pick(table.vy),
+          vz: pick(table.vz),
+          count: pick(table.t).length,
+        },
+        [],
+        1,
+      );
+    }, '#ffffff');
+    const origin = { x: 0, y: 0, z: 0 };
+    const none = () => null;
+    const span = 20;
+
+    trail.update(START + 100, origin, 1, none, span);
+    expect(asked).toHaveLength(1);
+    expect(trail.built.startJd).toBeCloseTo(START + 100 - span * (1 + TABLE_TRAIL_MARGIN));
+    expect(trail.built.stopJd).toBeCloseTo(START + 100 + span * TABLE_TRAIL_MARGIN);
+
+    // Inside the margin: the same line.
+    trail.update(START + 104, origin, 1, none, span);
+    expect(asked).toHaveLength(1);
+    // Past it: a new one.
+    trail.update(START + 106, origin, 1, none, span);
+    expect(asked).toHaveLength(2);
+    // And back in time just the same.
+    trail.update(START + 80, origin, 1, none, span);
+    expect(asked).toHaveLength(3);
+    expect(trail.object.visible).toBe(true);
+    expect(trail.object.children).toHaveLength(1);
+  });
+
+  it('shows nothing while the data for it is not here', () => {
+    const trail = new TableTrail(() => null, '#ffffff');
+    trail.update(START, { x: 0, y: 0, z: 0 }, 1, () => null, 1);
+    expect(trail.object.visible).toBe(false);
   });
 });

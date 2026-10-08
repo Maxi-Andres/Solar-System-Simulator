@@ -1,4 +1,4 @@
-import type { PathTable } from '@sss/tools/types';
+import type { PathTable, Seam, VectorTable } from '@sss/tools/types';
 import * as THREE from 'three';
 
 import { findInterval, interpolateState } from '../core/hermite.ts';
@@ -471,5 +471,118 @@ export class TrajectoryLine {
     this.#trail.geometry.dispose();
     this.#near.geometry.dispose();
     this.#material.dispose();
+  }
+}
+
+/** Two instants this close, days, are the same sample: the files round time to 1e-8. */
+const SAME_INSTANT_DAYS = 1e-7;
+
+/**
+ * A stretch of a craft's own table as a path: every sample kept, each interval held to
+ * `toleranceKm`, and an interval that spans one of `seams` a gap.
+ */
+export function tablePath(
+  table: VectorTable,
+  seams: readonly Seam[],
+  toleranceKm: number,
+): PathTable {
+  const gaps: number[] = [];
+  for (let i = 0; i + 1 < table.count; i += 1) {
+    const start = table.t[i]!;
+    const stop = table.t[i + 1]!;
+    if (
+      seams.some(
+        (seam) =>
+          seam.startJd >= start - SAME_INSTANT_DAYS && seam.stopJd <= stop + SAME_INSTANT_DAYS,
+      )
+    ) {
+      gaps.push(i);
+    }
+  }
+  return {
+    ...table,
+    toleranceKm: new Array<number>(Math.max(table.count - 1, 0)).fill(toleranceKm),
+    gaps,
+  };
+}
+
+/** Fetches the path for a stretch of time, or null while the data for it is not here. */
+export type PathSource = (startJd: number, stopJd: number) => PathTable | null;
+
+/**
+ * How much more than the trail a table trail is built for, as a fraction of its span,
+ * ahead and behind. The line is rebuilt once the clock carries the trail out of it: at
+ * a quarter, every quarter of an orbit -- every 28 minutes for MRO at normal speed.
+ */
+export const TABLE_TRAIL_MARGIN = 0.25;
+
+/** Span of a table trail with no orbit to measure one from, days. */
+export const TABLE_TRAIL_FALLBACK_DAYS = 1;
+
+/**
+ * A trail drawn from the craft's own table, for a close orbiter with no path file.
+ *
+ * The same line as TrajectoryLine, built only over the stretch the trail covers -- one
+ * turn, plus a margin -- and rebuilt as the clock moves on. See PathInfo.count in tools
+ * for why: two hours of MRO's trail do not need six months of its orbits.
+ */
+export class TableTrail {
+  readonly object = new THREE.Group();
+
+  readonly #source: PathSource;
+  readonly #color: string;
+  #line: TrajectoryLine | null = null;
+  #builtStart = Infinity;
+  #builtStop = -Infinity;
+  #fade = 1;
+
+  constructor(source: PathSource, color: string) {
+    this.#source = source;
+    this.#color = color;
+  }
+
+  /** The stretch the current line was built for, days; empty before the first. */
+  get built(): { readonly startJd: number; readonly stopJd: number } {
+    return { startJd: this.#builtStart, stopJd: this.#builtStop };
+  }
+
+  setFade(fade: number): void {
+    this.#fade = fade;
+    this.#line?.setFade(fade);
+  }
+
+  update(
+    jd: number,
+    originKm: Vec3,
+    anchorToleranceKm: number,
+    sample: PathSampler,
+    spanDays: number | null = null,
+  ): void {
+    const span = spanDays ?? TABLE_TRAIL_FALLBACK_DAYS;
+    if (jd - span < this.#builtStart || jd > this.#builtStop) {
+      const startJd = jd - span * (1 + TABLE_TRAIL_MARGIN);
+      const stopJd = jd + span * TABLE_TRAIL_MARGIN;
+      const path = this.#source(startJd, stopJd);
+      if (path === null || path.count < 2) {
+        // Not here yet: nothing rather than a trail of somewhere else.
+        this.object.visible = false;
+        return;
+      }
+      this.#line?.dispose();
+      if (this.#line !== null) {
+        this.object.remove(this.#line.object);
+      }
+      this.#line = new TrajectoryLine(path, this.#color);
+      this.#line.setFade(this.#fade);
+      this.object.add(this.#line.object);
+      this.#builtStart = startJd;
+      this.#builtStop = stopJd;
+    }
+    this.object.visible = true;
+    this.#line!.update(jd, originKm, anchorToleranceKm, sample, spanDays ?? span);
+  }
+
+  dispose(): void {
+    this.#line?.dispose();
   }
 }

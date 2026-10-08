@@ -53,7 +53,28 @@ async function fullTable(s: EphemerisStore, id: string): Promise<VectorTable> {
 
 describeWithData('spacecraft paths, as written', () => {
   const s = store!;
-  const crafts = Object.keys(s.manifest.paths);
+  // The close orbiters have no path file: their trails are drawn from their tables.
+  const crafts = Object.keys(s.manifest.paths).filter((id) => s.pathInfo(id)!.count !== null);
+  const fromTables = Object.keys(s.manifest.paths).filter((id) => s.pathInfo(id)!.count === null);
+
+  it('has no path file for exactly the craft followed only briefly', () => {
+    const brief = s.bodies
+      .filter((body) => body.mission !== null && body.mission.windowMonths !== null)
+      .map((body) => body.id);
+    expect(fromTables.sort()).toEqual(brief.sort());
+    expect(fromTables.length).toBeGreaterThan(0);
+  });
+
+  it.each(fromTables)('%s: every seam is two neighbouring samples of its table', async (id) => {
+    // What a trail drawn from the table breaks at, so the seam must fall between two
+    // samples it has: see tablePath.
+    const full = await fullTable(s, id);
+    for (const seam of s.pathInfo(id)!.seams) {
+      const k = full.t.indexOf(seam.startJd);
+      expect(k, String(seam.startJd)).toBeGreaterThanOrEqual(0);
+      expect(full.t[k + 1]).toBe(seam.stopJd);
+    }
+  });
   // What the tolerance is measured from: every body with a full-window table.
   const references = s.bodies
     .filter((body) => body.vectorWindow === 'full')

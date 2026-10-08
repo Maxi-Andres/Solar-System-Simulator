@@ -86,6 +86,26 @@ export const SPACECRAFT_TOLERANCE_KM = 1;
  */
 export const SPACECRAFT_ANGULAR_TOLERANCE = 1e-5;
 
+/**
+ * The window for a spacecraft in close orbit about another body, months either side of
+ * the build: three.
+ *
+ * Near a body the tolerance is the kilometre floor, and a craft circling Mars every two
+ * hours needs a sample every six minutes to hold it. Measured over ten days of 2026:
+ *
+ *   craft                              samples a year   requests a year
+ *   MRO, Odyssey, TGO, LRO, Danuri,    ~88,000 each     ~150 each
+ *     Chandrayaan-2
+ *   MAVEN                              ~43,000          ~550
+ *   Mars Express                       ~29,000          ~440
+ *   ARTEMIS P1, P2                     ~10,000 each     ~440 each
+ *
+ * Twenty years of that would be ten million samples. A year either side, the moons'
+ * window, would still be 6,000 requests a run; three months is about 1,500, and covers
+ * LIVE and half a year around it. Outside, the craft is absent, as before its launch.
+ */
+export const CLOSE_ORBIT_WINDOW_MONTHS = 3;
+
 /** The finest step the spacecraft refinement may reach, minutes: Horizons' own unit. */
 export const SPACECRAFT_MIN_STEP_MINUTES = 1;
 

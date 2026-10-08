@@ -292,6 +292,12 @@ export interface Mission {
    */
   readonly endUtc: string | null;
   /**
+   * Months either side of the build the craft's path covers, or null for the whole
+   * window. Set for the craft in close orbit about another body, whose paths cost too
+   * much to follow for twenty years -- see CLOSE_ORBIT_WINDOW_MONTHS.
+   */
+  readonly windowMonths: number | null;
+  /**
    * What is drawn in its place when it is close enough to have a size; null for a craft
    * whose dimensions have not been published, which keeps its marker at any range.
    */
@@ -466,8 +472,16 @@ export interface Seam {
 
 /** A spacecraft's drawable trajectory: what is in its path file, and how it was cut. */
 export interface PathInfo {
-  /** Samples in `paths/<id>.json`. */
-  readonly count: number;
+  /**
+   * Samples in `paths/<id>.json`; null when there is no such file, and the trail is
+   * drawn from the craft's own table instead.
+   *
+   * A close orbiter goes round thousands of times in its window, so its path cannot be
+   * light: MRO's kept 26,739 of its 26,740 samples, Odyssey's 3.4 MB of them, and
+   * opening Mars drew a million chords to show two hours of trail. Its trail is one
+   * turn, and the table chunk the craft is placed with already holds that turn.
+   */
+  readonly count: number | null;
   /**
    * The tolerance the path was simplified to, as an angle: radians, seen from the
    * nearest of the Sun, the planets, Pluto and the Moon. See paths.ts.
