@@ -994,7 +994,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  * CREDITS.md for the files.
  *
  * **Scale.** Four NASA models are in metres (Cassini, Dawn, Kepler, Spitzer, each within
- * 7% of a published dimension). Seven are in arbitrary units and are scaled by one
+ * 7% of a published dimension). Nine are in arbitrary units and are scaled by one
  * published dimension against the same extent measured in the file:
  *
  *   model        extent in the file        published                       metres/unit
@@ -1005,6 +1005,14 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *   SOHO         43.27 along x (arrays)    9.5 m span (SOHO fact sheet)    0.21955
  *   Roman        411.92 along x (tube)     12.8 m tall, cover open (SVS)   0.031074
  *   TESS         37.10 along x (arrays)    3.9 m deployed                  0.10512
+ *   Wind         3.06 across the drum      2.4 m (Wind CMAD)               0.784
+ *   DART         40.34 along x (arrays)    18.3 m: two 8.5 m arrays (APL)  0.4537
+ *                                          on a 1.3 m bus, summed
+ *
+ * Wind's model draws its 100 m wire antennas a few metres long; they are 0.38 mm thick
+ * and would not show at any length. DART's is NASA's printable STL, converted to GLB:
+ * one untextured mesh, its arrays' cell side not determinable from a closed print
+ * shell, so the sign of its pointing axis is a choice.
  *
  * TESS's 3.9 m is the manufacturer's figure as carried by spaceflight101 -- no NASA page
  * states it -- and SOHO's model is longer for its height than the craft is, so it is
@@ -1022,9 +1030,6 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *
  * **Boxes**, every figure published (L x W x D, metres; the broad face to the Sun):
  *
- *   Wind           2.4 x 2.4 x 1.8   bus, 2.4 m across, 1.8 m high (Wind CMAD). Its
- *                                    100 m wire antennas are not drawn, and NASA's model
- *                                    draws them a few metres long, so it is not used.
  *   IMAP           2.4 x 2.4 x 0.9   deck (NASA IMAP blog, 2025-09-24)
  *   Euclid         4.7 x 3.7 x 3.7   4.7 m tall, 3.7 m across (ESA overview)
  *   Artemis I, II  18.9 x 7.9 x 5.0  arrays 18.9 m wide; crew and service modules
@@ -1037,8 +1042,6 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *                                    the stack 3.9 x 3.6 x 6.3 (ESA factsheet)
  *   Hayabusa2      6 x 4.23 x 1.25   paddles deployed (JAXA)
  *   Hera           11.5 x 2.2 x 1.8  11.5 m across; body 2.2 x 2 x 1.8 (ESA)
- *   DART           18.3 x 1.3 x 1.2  two 8.5 m arrays (APL) across a 1.3 m bus: the
- *                                    18.3 is their sum
  *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
  *   ESCAPADE       4.88 x 1.65 x 1.09  deployed (Horizons; NASA SVS spec sheet)
  *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
@@ -1052,13 +1055,14 @@ const SPACECRAFT: readonly BodyDefinition[] = [
 const BOX = { model: null, metresPerUnit: 1, ...SUN_FACING_BOX } as const;
 const MORE_SHAPES = {
   wind: {
-    model: null,
-    metresPerUnit: 1,
-    boxM: [2.4, 2.4, 1.8],
+    model: 'wind.glb',
+    // The drum is 3.06 units across in the file and 2.4 m in the CMAD.
+    metresPerUnit: 0.784,
+    boxM: null,
     pointsAt: 'ecliptic-south',
     pointingPart: 'spin-axis',
-    pointingAxis: [0, 0, 1],
-    rollAxis: [0, 1, 0],
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
   },
   ace: {
     model: 'ace.glb',
@@ -1131,7 +1135,17 @@ const MORE_SHAPES = {
   },
   hayabusa2: { ...BOX, boxM: [6, 4.23, 1.25] },
   hera: { ...BOX, boxM: [11.5, 2.2, 1.8] },
-  dart: { ...BOX, boxM: [18.3, 1.3, 1.2] },
+  dart: {
+    model: 'dart.glb',
+    // 40.34 units across the arrays in the file; 18.3 m, two 8.5 m ROSA wings on a
+    // 1.3 m bus (APL).
+    metresPerUnit: 0.4537,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
   liciacube: { ...BOX, boxM: [0.3, 0.2, 0.1] },
   escapade: { ...BOX, boxM: [4.88, 1.65, 1.09] },
   cassini: {

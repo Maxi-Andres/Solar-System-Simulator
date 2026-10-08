@@ -36,6 +36,8 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 | `dawn.glb` | Dawn | https://science.nasa.gov/3d-resources/dawn/ — `Dawn.glb` |
 | `kepler.glb` | Kepler | https://science.nasa.gov/3d-resources/kepler-a/ — `Kepler (A).glb` |
 | `spitzer.glb` | Spitzer | https://science.nasa.gov/3d-resources/spitzer-space-telescope/ — `Spitzer Space Telescope.glb` |
+| `wind.glb` | Wind | https://science.nasa.gov/3d-resources/wind/ — `Wind.glb` |
+| `dart.glb` | DART | https://science.nasa.gov/3d-resources/double-asteroid-redirection-test-dart/ — the printable `Double Asteroid Redirection Test (DART).stl`, converted to GLB here (one mesh, flat grey; no textures exist) |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
 alike, and no model of the second of either has been published.
@@ -43,8 +45,10 @@ alike, and no model of the second of either has been published.
 Seven of the second batch's eleven are in arbitrary units, not metres -- ACE, DSCOVR,
 SOHO, Roman, TESS, STEREO and OSIRIS-REx. They are scaled in the app by one published
 dimension each; `SHAPES` and `MORE_SHAPES` in `tools/src/catalog.ts` give the factor and
-where it comes from. NASA's Wind model is not used: it draws the craft's 100 m wire
-antennas a few metres long.
+where it comes from. NASA's Wind model draws the craft's 100 m wire antennas a few metres
+long; at 0.38 mm thick they would not show at any length. DART's only NASA model is a
+printable STL, converted to GLB with glTF-Transform's core library (positions and face
+normals, welded) before the same compression.
 
 ## Not here
 

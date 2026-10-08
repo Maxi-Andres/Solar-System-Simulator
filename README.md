@@ -262,10 +262,10 @@ to the start of its path.
 
 ### Spacecraft up close
 
-Seventeen craft are drawn with **NASA's own 3D models** (NASA 3D Resources; Voyager's
-serves both Voyagers, Pioneer 10's both Pioneers), compressed with meshopt and WebP to
-9.3 MB in all and fetched only once a craft is six pixels across. None documents its
-units; most measure in metres, and the seven in arbitrary units are scaled by one
+Twenty-one craft are drawn with **NASA's own 3D models** — nineteen files from NASA 3D
+Resources; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, and DART's is
+NASA's printable STL, converted — compressed with meshopt and WebP to 14 MB in all and fetched only once a craft is six pixels across. None documents its
+units; most measure in metres, and the nine in arbitrary units are scaled by one
 published dimension each. A test checks every compressed file still measures what NASA's
 did, and comes out at its published size. Craft with no model that may be used are a
 **white box of their published size**, marked NO MODEL — array span by array width by

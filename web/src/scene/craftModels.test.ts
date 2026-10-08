@@ -40,6 +40,8 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'dawn.glb': [19.7, 2.2, 2.22],
   'kepler.glb': [2.65, 5.01, 2.66],
   'spitzer.glb': [1.62, 4.49, 2.11],
+  'wind.glb': [41.62, 52.43, 37.3],
+  'dart.glb': [40.34, 4.46, 5.45],
 };
 
 /**
@@ -61,6 +63,8 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'tess.glb': { axis: 0, metres: 3.9, within: 0.01 },
   'stereo.glb': { axis: 0, metres: 6.47, within: 0.01 },
   'osiris-rex.glb': { axis: 2, metres: 6.2, within: 0.01 },
+  'dart.glb': { axis: 0, metres: 18.3, within: 0.01 },
+  // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
 
 interface Gltf {
