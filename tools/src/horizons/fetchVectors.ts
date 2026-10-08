@@ -247,6 +247,39 @@ export function validRun(table: VectorTable): { first: number; last: number } | 
   return { first, last };
 }
 
+/**
+ * The step for the tail of a path: the finest whole number of minutes that divides it
+ * exactly -- so the last sample lands on the coverage edge -- with the samples still
+ * fitting one request. Finest, because the refinement judges a run by its own samples,
+ * and a tail of two would have nothing to judge; the surplus is thinned away after. A
+ * tail is under one coarse step: at most a day for most craft, 32 days for the Voyagers.
+ */
+export function tailStep(minutes: number, samplesPerRequest: number): number {
+  for (let step = Math.max(1, Math.ceil(minutes / (samplesPerRequest - 1))); step < minutes; step += 1) {
+    if (minutes % step === 0) {
+      return step;
+    }
+  }
+  return minutes;
+}
+
+/** Two tables where the second starts on the first's last sample. */
+function joinTables(head: VectorTable, tail: VectorTable): VectorTable {
+  const rest = <K extends keyof VectorTable>(key: K) =>
+    [...(head[key] as readonly number[]), ...(tail[key] as readonly number[]).slice(1)];
+  return {
+    ...head,
+    count: head.count + tail.count - 1,
+    t: rest('t'),
+    x: rest('x'),
+    y: rest('y'),
+    z: rest('z'),
+    vx: rest('vx'),
+    vy: rest('vy'),
+    vz: rest('vz'),
+  };
+}
+
 /** Rounds a date to the nearest whole minute. */
 function nearestMinute(date: Date): Date {
   return new Date(Math.round(date.getTime() / 60_000) * 60_000);
@@ -263,9 +296,10 @@ function toMinute(date: Date, direction: 'up' | 'down'): Date {
  *
  * The span is the requested window where JPL covers all of it, and JPL's edge where it
  * does not -- rounded inwards to the minute, so the first and last requests are never
- * refused. The end is then pulled back onto the coarse grid, which can drop up to one
- * coarse step at the end of coverage: a day, for a craft whose trajectory stops inside
- * the window, and it is where its prediction ends anyway.
+ * refused. The coarse grid stops at its last whole step before that edge, and the
+ * remainder -- under a step -- is sampled on its own and spliced on: see `tailStep`.
+ * Without it a craft lost up to a day at the end of its path, which for DART was the
+ * last sixteen hours before it struck Dimorphos.
  */
 export async function fetchMissionVectors(
   body: BodyDefinition,
@@ -337,7 +371,22 @@ export async function fetchMissionVectors(
     );
   }
 
-  const result = await refineSamples(sampler, validStart, validStop, base, options);
+  const main = await refineSamples(sampler, validStart, validStop, base, options);
+  // The tail past the last whole step, where the path really ends there -- not where
+  // Horizons' zeros cut it, whose edge is only known to the coarse step.
+  let result = main;
+  const tailMinutes = Math.round((end.getTime() - stop.getTime()) / 60_000);
+  if (run.last === coarse.count - 1 && tailMinutes > 0) {
+    const step = tailStep(tailMinutes, options.samplesPerRequest ?? MAX_SAMPLES_PER_REQUEST);
+    const tail = await refineSamples(sampler, stop, end, step, options);
+    result = {
+      table: joinTables(main.table, tail.table),
+      requests: main.requests + tail.requests,
+      finestStepMinutes: Math.min(main.finestStepMinutes, tail.finestStepMinutes),
+      worstEstimatedErrorKm: Math.max(main.worstEstimatedErrorKm, tail.worstEstimatedErrorKm),
+      discontinuities: [...main.discontinuities, ...tail.discontinuities],
+    };
+  }
   // Thinned to half the tolerance, so a sample dropped here and the estimate the
   // refinement stopped at cannot add up to more than one and a half times it.
   const seams = locateSeams(result.table, result.discontinuities);

@@ -99,6 +99,12 @@ export interface Discontinuity {
   readonly jumpKm: number;
 }
 
+/**
+ * How many unflagged intervals may separate two flagged runs before they are fetched
+ * apart rather than together. Only with `samplesPerRequest`, which brings the thinning.
+ */
+export const MERGE_GAP_INTERVALS = 8;
+
 /** One run of the table sampled at a single step: what the error estimate works on. */
 interface Segment {
   readonly stepMinutes: number;
@@ -302,9 +308,33 @@ export async function refineSamples(
       // fourth-power law is asked to bring down to one.
       let j = i;
       let runWorst = 0;
-      while (j < flagged.length && flagged[j]) {
-        runWorst = Math.max(runWorst, errors[j]! / tolerances[j]!);
-        j += 1;
+      for (;;) {
+        while (j < flagged.length && flagged[j]) {
+          runWorst = Math.max(runWorst, errors[j]! / tolerances[j]!);
+          j += 1;
+        }
+        // Runs a few intervals apart become one request. MAVEN dips to periapsis five
+        // times a day, and each dip was a request of its own -- 69 in ten days; fetched
+        // as one, the stretch between costs samples, which the thinning takes back.
+        if (options.samplesPerRequest === undefined) {
+          break;
+        }
+        // Merged when the gap is short, or when the run with the next one added still
+        // fits one request at the floor -- a day at a minute, so a day of periapses is
+        // one request however far apart they are.
+        const floorSpan = (options.samplesPerRequest - 1) * options.minStepMinutes;
+        let next = j;
+        while (next < flagged.length && !flagged[next]) {
+          next += 1;
+        }
+        if (next >= flagged.length) {
+          break;
+        }
+        const mergedMinutes = (segment.table.t[next + 1]! - segment.table.t[i]!) * 1440;
+        if (next - j > MERGE_GAP_INTERVALS && mergedMinutes > floorSpan) {
+          break;
+        }
+        j = next;
       }
       // Straight to the floor when the whole run fits in one request there. The
       // fourth-power law picks a step that should suffice, and for a smooth bend it

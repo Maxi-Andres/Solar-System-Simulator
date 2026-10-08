@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { VectorTable } from '../types.ts';
 import { retryDelayMs } from './client.ts';
-import { concatTables, planChunks, validRun } from './fetchVectors.ts';
+import { concatTables, planChunks, tailStep, validRun } from './fetchVectors.ts';
 
 /**
  * Regression tests for the CI failure where Horizons returned 503 four times for
@@ -237,5 +237,23 @@ describe('validRun', () => {
     const crossing = table([1, 1, 1]);
     const t: VectorTable = { ...crossing, x: [0, 0, 0] };
     expect(validRun(t)).toEqual({ first: 0, last: 2 });
+  });
+});
+
+describe('tailStep', () => {
+  it('lands the last sample exactly on the edge, in one request', () => {
+    // DART: the grid stopped at 07:18, the impact was at 23:14 -- 956 minutes on.
+    for (const minutes of [956, 1439, 46079, 7, 1]) {
+      const step = tailStep(minutes, 1500);
+      expect(minutes % step, String(minutes)).toBe(0);
+      expect(minutes / step + 1, String(minutes)).toBeLessThanOrEqual(1500);
+    }
+  });
+
+  it('takes the finest such step, so the refinement has samples to judge', () => {
+    expect(tailStep(956, 1500)).toBe(1);
+    // 32 days less a minute, for a Voyager: 46,079 = 11 x 59 x 71. A minute would be
+    // 31 requests; 59 minutes is the finest divisor that fits one.
+    expect(tailStep(46_079, 1500)).toBe(59);
   });
 });
