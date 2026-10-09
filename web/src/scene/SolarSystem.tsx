@@ -283,7 +283,7 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
     }
     return;
   }
-  loadCraftModel(shape.model, shape.metresPerUnit)
+  loadCraftModel(shape.model, shape.metresPerUnit, shape.pivot)
     .then(attach)
     .catch((error: unknown) => {
       handle.craftShapeRequested = false;

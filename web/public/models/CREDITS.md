@@ -8,12 +8,32 @@ Every file added here must be recorded below with its source and licence.
 
 ## Licence
 
-All six are NASA's, from NASA 3D Resources. NASA's media guidelines
+### NASA
+
+The NASA models are from NASA 3D Resources and NASA's mission pages. NASA's media guidelines
 (https://www.nasa.gov/nasa-brand-center/images-and-media/) say its 3D content — "texture
 maps and polygon data in any format" — is "generally not subject to copyright in the
 United States", and may be used for "computer graphical simulations and Internet Web
 pages". **NASA should be acknowledged as the source**, which is what this file and the
 About panel do. No NASA endorsement is implied, and no NASA insignia is used.
+
+### ESA — by written permission
+
+ESA's models are used **by written permission only**: ESA's general terms forbid
+redistributing them. The permission was given by email, received 2026-10-09, from ESA's
+Communication Department (Image Distribution for Professionals). It covers the ESA 3D models of **JUICE, Solar Orbiter, BepiColombo, Hera, Euclid
+and Gaia** — no others — in this open-source, non-commercial educational simulator, and
+its conditions are:
+
+- the models may be converted to glTF/GLB, compressed where necessary, and hosted on
+  this project's site, **provided the original geometry is preserved** — so these files
+  are converted and compressed, never simplified;
+- the attribution **"3D models © ESA (European Space Agency)."** is shown wherever the
+  models are used — the info panel of every craft drawn with one, and the About panel;
+- any use for commercial purposes, or outside this project, needs ESA's separate
+  authorization. These files are not covered by any licence this repository's code may
+  carry;
+- any further restriction of the original model sources is respected: see each row.
 
 ## Files
 
@@ -46,6 +66,12 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 | `dart.glb` | DART | https://science.nasa.gov/3d-resources/double-asteroid-redirection-test-dart/ — the printable `Double Asteroid Redirection Test (DART).stl`, converted to GLB here (one mesh, flat grey; no textures exist) |
 | `curiosity.glb` | Curiosity | https://science.nasa.gov/resource/curiosity-rover-3d-model/ — `24584_Curiosity_static.glb`, credit NASA/JPL-Caltech (no GLB of Curiosity is in NASA 3D Resources itself) |
 | `perseverance.glb` | Perseverance | https://science.nasa.gov/3d-resources/mars-2020-perseverance-rover/ — `Mars 2020 Perseverance Rover.glb`, NASA/JPL; posed here, see below |
+| `juice.glb` | Juice | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/JUICE/misc/cosmo/models/ — 34 `.3ds` parts assembled as `config/spacecraft_JUICE_arcs.json` places them, with `fk/juice_v46.tf`, `spk/juice_struct_v22.bsp` and the boom CKs; booms deployed. Sci-Fleet's own Juice is not to scale. |
+| `solar-orbiter.glb` | Solar Orbiter | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/solar_orbiter/solar_orbiter.fbx, converted |
+| `bepicolombo.glb` | BepiColombo | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/bepi_mcs/bepi_mcs.fbx — the cruise stack (MTM, MPO, Mio in its sunshade), converted |
+| `hera.glb` | Hera | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/HERA/misc/cosmo/models/3ds/ — 16 `.3ds` parts assembled as `config/spacecraft_hera_arcs.json` places them, with `fk/hera_v16.tf` and `spk/hera_struct_v02.bsp`. Not on Sci-Fleet. |
+| `euclid.glb` | Euclid | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/euclid/euclid.fbx, converted; the FBX root's 116° presentation rotation removed |
+| `gaia.glb` | Gaia | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/gaia/gaia.fbx, converted |
 | `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
@@ -65,6 +91,17 @@ it and then works the arm; every animated part was set to its pose at 3 s -- mas
 still stowed, as the rover drives -- and the animations dropped. InSight's origin is at
 its deck, 0.664 m above the lowest point, the seismometer it set on the ground; the whole
 file was moved up by that, so it stands on the ground it is placed on.
+
+ESA's six were converted with FBX2glTF (Sci-Fleet) or assembled from SPICE's `.3ds`
+parts in the common frame their Cosmographia configuration and SPICE kernels define,
+then compressed as above. Their geometry is ESA's, as the permission requires: nothing
+was simplified, and each file has exactly its source's triangle count -- Juice 959,923,
+Hera 479,908, Euclid 136,061, BepiColombo 111,536, Gaia 45,634, Solar Orbiter 9,596.
+Unused camera and sky nodes from the FBX scenes were dropped, identical vertices
+welded, and the zero-length normals the converter left on degenerate triangles
+replaced. Neither Sci-Fleet nor the SPICE packages state terms of their own for the
+models; Sci-Fleet's footer points to ESA's general terms, which the permission above
+lifts for these six.
 
 ## Not here
 

@@ -400,6 +400,25 @@ export interface CraftShape {
   /** File under web/public/models/, or null to draw the box instead. */
   readonly model: string | null;
   /**
+   * Whose model it is, where that is not NASA: ESA's are used by its written permission,
+   * which asks that "3D models © ESA (European Space Agency)." be shown wherever they
+   * are -- see ESA_MODEL_CREDIT in web/src/scene/craftModels.ts. Absent for NASA's and
+   * for boxes.
+   */
+  readonly modelOwner?: 'ESA';
+  /**
+   * The point of the model, in its own units, that is placed at the craft's position.
+   *
+   * JPL's position is the craft's centre of mass, and a model's origin is wherever its
+   * author left it: BepiColombo's file has its origin 1.7 m outside the craft, and the
+   * trail, which ends at the true position, ran 3.7 m beside the body. So each model in
+   * space is pinned at the median of its vertices, which lands on the dense body rather
+   * than on a boom or an array -- a stand-in for the centre of mass, which no file
+   * gives. Absent for a craft on the ground, whose origin is where its wheels or feet
+   * touch, and for boxes, which are centred already.
+   */
+  readonly pivot?: readonly [number, number, number];
+  /**
    * Metres per model unit. One for a model authored in metres; otherwise the published
    * dimension over the same extent measured in the file -- see SHAPES in the catalog.
    */

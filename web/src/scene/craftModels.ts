@@ -63,7 +63,11 @@ const cache = new Map<string, Promise<THREE.Object3D>>();
  *
  * Scaled from metres to scene units; its own frame is the catalog's, untouched.
  */
-export async function loadCraftModel(file: string, metresPerUnit = 1): Promise<THREE.Object3D> {
+export async function loadCraftModel(
+  file: string,
+  metresPerUnit = 1,
+  pivot: readonly [number, number, number] = [0, 0, 0],
+): Promise<THREE.Object3D> {
   let pending = cache.get(file);
   if (pending === undefined) {
     pending = gltfLoader()
@@ -75,6 +79,9 @@ export async function loadCraftModel(file: string, metresPerUnit = 1): Promise<T
   }
   const scene = await pending;
   const copy = scene.clone(true);
+  // The pivot, not the file's origin, goes where the craft is, and the craft turns
+  // about it. See CraftShape.pivot.
+  copy.position.set(-pivot[0], -pivot[1], -pivot[2]);
   const holder = new THREE.Group();
   // A model authored in arbitrary units carries its own factor to metres; see SHAPES.
   holder.scale.setScalar(UNITS_PER_METRE * metresPerUnit);
@@ -142,6 +149,13 @@ export function craftBox(sizeM: readonly [number, number, number]): THREE.Object
   holder.add(box);
   return holder;
 }
+
+/**
+ * The attribution ESA's permission asks for, word for word, "wherever the models are
+ * used": in the info panel of each craft drawn with one, and in About. The permission
+ * itself is recorded in web/public/models/CREDITS.md.
+ */
+export const ESA_MODEL_CREDIT = '3D models © ESA (European Space Agency).';
 
 const ECLIPTIC_NORTH = new THREE.Vector3(0, 0, 1);
 const scratchTarget = new THREE.Vector3();

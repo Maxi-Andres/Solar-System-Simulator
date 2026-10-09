@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { describe, expect, it } from 'vitest';
 
-import { craftOrientation } from './craftModels.ts';
+import { craftOrientation, ESA_MODEL_CREDIT } from './craftModels.ts';
 
 const MODELS = join(import.meta.dirname, '../../public/models');
 
@@ -53,6 +53,12 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   // Posed, mast raised: NASA's file stands 1.85 m tall with it stowed.
   'perseverance.glb': [2.71, 2.23, 3.11],
   'insight.glb': [6.14, 2.19, 4.35],
+  'juice.glb': [16.6, 13.63, 26.76],
+  'solar-orbiter.glb': [674.1, 1406.6, 1790.8],
+  'bepicolombo.glb': [2998.5, 837.8, 616.5],
+  'hera.glb': [2.15, 2.16, 11.45],
+  'euclid.glb': [339.1, 529.5, 340.6],
+  'gaia.glb': [197.46, 79.24, 197.44],
 };
 
 /**
@@ -82,6 +88,14 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'curiosity.glb': { axis: 0, metres: 2.7, within: 0.04 },
   'perseverance.glb': { axis: 0, metres: 2.7, within: 0.01 },
   'insight.glb': { axis: 0, metres: 6, within: 0.03 },
+  'juice.glb': { axis: 2, metres: 27.1, within: 0.02 },
+  'solar-orbiter.glb': { axis: 2, metres: 18, within: 0.01 },
+  'bepicolombo.glb': { axis: 0, metres: 30, within: 0.01 },
+  'hera.glb': { axis: 2, metres: 11.5, within: 0.01 },
+  // ESA's file, in centimetres like its siblings, is 13% taller than ESA's 4.7 m: its
+  // antenna hangs below the body. Kept as ESA made it.
+  'euclid.glb': { axis: 1, metres: 4.7, within: 0.14 },
+  'gaia.glb': { axis: 0, metres: 10.2, within: 0.001 },
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
 
@@ -193,8 +207,29 @@ async function extentOf(file: string): Promise<[number, number, number]> {
 
 /** The same bounds, as a box. */
 async function boundsOf(file: string): Promise<THREE.Box3> {
-  const { gltf, bin } = await readGlb(file);
   const bounds = new THREE.Box3();
+  await forEachVertex(file, (point) => bounds.expandByPoint(point));
+  return bounds;
+}
+
+/** The median of every vertex, axis by axis: where the dense body of the craft is. */
+async function medianOf(file: string): Promise<[number, number, number]> {
+  const axes: [number[], number[], number[]] = [[], [], []];
+  await forEachVertex(file, (point) => {
+    axes[0].push(point.x);
+    axes[1].push(point.y);
+    axes[2].push(point.z);
+  });
+  const median = (values: number[]) => values.sort((a, b) => a - b)[values.length >> 1]!;
+  return [median(axes[0]), median(axes[1]), median(axes[2])];
+}
+
+/** Every vertex of the model, decoded, dequantised and through its node's transform. */
+async function forEachVertex(
+  file: string,
+  visitPoint: (point: THREE.Vector3) => void,
+): Promise<void> {
+  const { gltf, bin } = await readGlb(file);
   const point = new THREE.Vector3();
   const visit = async (index: number, parent: THREE.Matrix4): Promise<void> => {
     const node = gltf.nodes[index]!;
@@ -229,7 +264,7 @@ async function boundsOf(file: string): Promise<THREE.Box3> {
           point
             .set(value(at), value(at + component.size), value(at + 2 * component.size))
             .applyMatrix4(world);
-          bounds.expandByPoint(point);
+          visitPoint(point);
         }
       }
     }
@@ -240,13 +275,12 @@ async function boundsOf(file: string): Promise<THREE.Box3> {
   for (const root of gltf.scenes[gltf.scene ?? 0]!.nodes) {
     await visit(root, new THREE.Matrix4());
   }
-  return bounds;
 }
 
 describe('the spacecraft models', () => {
   it('gives every craft but two a shape: a model, or a box of positive size', () => {
-    // Gaia and Aditya-L1 have no three published dimensions, and keep their markers.
-    expect(shapes).toHaveLength(52);
+    // Aditya-L1 has no three published dimensions, and keeps its marker.
+    expect(shapes).toHaveLength(53);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();
@@ -258,6 +292,25 @@ describe('the spacecraft models', () => {
       }
     }
   });
+
+  it.each(shapes.filter(({ shape }) => shape.model !== null))(
+    '$id is placed by the dense body of its model, not where its file’s origin fell',
+    async ({ id, shape }) => {
+      // The trail ends at the craft's centre of mass; the model must sit on it. See
+      // CraftShape.pivot. A craft on the ground stands on its origin instead.
+      const onGround = shape.pointsAt === 'zenith';
+      expect(shape.pivot === undefined, id).toBe(onGround);
+      if (onGround) {
+        return;
+      }
+      const median = await medianOf(shape.model!);
+      const span = Math.max(...(await extentOf(shape.model!)));
+      for (let axis = 0; axis < 3; axis += 1) {
+        expect(Math.abs(shape.pivot![axis]! - median[axis]!), id).toBeLessThan(0.002 * span);
+      }
+    },
+    60_000,
+  );
 
   it('points along two perpendicular unit axes', () => {
     for (const { shape } of shapes) {
@@ -351,5 +404,38 @@ describe('craftOrientation', () => {
     const q = craftOrientation(parker, toSun);
     const expected = new THREE.Vector3(toSun.x, toSun.y, toSun.z).normalize();
     expect(turned(parker.pointingAxis, q).distanceTo(expected)).toBeLessThan(1e-9);
+  });
+});
+
+describe('ESA’s models, by its written permission', () => {
+  const esa = CATALOG.filter((body) => body.mission?.shape?.modelOwner === 'ESA');
+
+  it('are the six the permission names, and no others', () => {
+    // Juice, Solar Orbiter, BepiColombo, Hera, Euclid and Gaia. Mars Express and TGO are
+    // ESA's too, and not covered: they stay boxes until ESA says otherwise.
+    expect(esa.map((body) => body.id).sort()).toEqual(
+      ['bepicolombo', 'euclid', 'gaia', 'hera', 'juice', 'solar-orbiter'].sort(),
+    );
+    for (const id of ['mars-express', 'exomars-tgo']) {
+      expect(CATALOG.find((body) => body.id === id)?.mission?.shape?.model).toBeNull();
+    }
+  });
+
+  it('carry the credit ESA asked for, word for word, wherever they are used', async () => {
+    expect(ESA_MODEL_CREDIT).toBe('3D models © ESA (European Space Agency).');
+    const info = await readFile(join(import.meta.dirname, '../ui/InfoPanel.tsx'), 'utf8');
+    const about = await readFile(join(import.meta.dirname, '../ui/AboutPanel.tsx'), 'utf8');
+    expect(info).toContain('ESA_MODEL_CREDIT');
+    expect(about).toContain('ESA_MODEL_CREDIT');
+  });
+
+  it('are recorded as ESA’s, by permission, in the credits', async () => {
+    const credits = await readFile(join(MODELS, 'CREDITS.md'), 'utf8');
+    expect(credits).toContain(ESA_MODEL_CREDIT);
+    for (const body of esa) {
+      const file = body.mission!.shape!.model!;
+      const row = credits.split(/\r?\n/).find((line) => line.startsWith('| `' + file + '`'));
+      expect(row, body.id).toContain('ESA, by permission');
+    }
   });
 });

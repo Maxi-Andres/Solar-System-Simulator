@@ -715,20 +715,13 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
  * sunshield by the telescope standing on its +Y side, Clipper's cells by their normals
  * (+Z, all 3,200 of them).
  *
- * **Boxes**, for the three with no model that may be used: Juice's is ESA's, with no
- * licence stated, and Lucy's and Psyche's exist only inside NASA Eyes, with no terms
- * published. Each box is as long as the craft's solar-array span, as wide as one array,
- * and as deep as its body, every figure published:
+ * **Boxes**, for the two with no model that may be used: Lucy's and Psyche's exist only
+ * inside NASA Eyes, with no terms published. (Juice was the third; it is ESA's model now,
+ * by permission -- see ESA_SHAPES.) Each box is as long as the craft's solar-array span,
+ * as wide as one array, and as deep as its body, every figure published:
  *
  *   Lucy     15.82 x 7.28 x 2.00 m   NASA: width, height deployed, depth
  *   Psyche   24.76 x 7.34 x 2.4 m    JPL: flight system long x wide; bus deep
- *   Juice    27.1 x 3.5 x 2.86 m     ESA: across the arrays; one panel's long side
- *                                    (ten 2.5 x 3.5 m panels, five a wing); the
- *                                    smallest side of the stowed craft
- *
- * Juice's full deployed envelope is 16.8 x 27.1 x 13.7 m, but most of that is the
- * 16 m radar antenna and the 10.6 m magnetometer boom; a solid box that size would
- * be a brick with nothing of the craft in it.
  *
  * The boxes face the Sun with their broad side, as the arrays they stand for do.
  */
@@ -741,6 +734,7 @@ const SUN_FACING_BOX = {
 const SHAPES = {
   voyager: {
     model: 'voyager.glb',
+    pivot: [0.0025109, 0.92104, 1.5063],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -750,6 +744,7 @@ const SHAPES = {
   },
   pioneer: {
     model: 'pioneer.glb',
+    pivot: [-0.067796, 0.16485, 0.59646],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -759,6 +754,7 @@ const SHAPES = {
   },
   newHorizons: {
     model: 'new-horizons.glb',
+    pivot: [0.00035658, 0.13364, -0.021865],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -768,6 +764,7 @@ const SHAPES = {
   },
   parker: {
     model: 'parker-solar-probe.glb',
+    pivot: [0.089903, 0.26138, -0.086697],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -777,6 +774,7 @@ const SHAPES = {
   },
   jwst: {
     model: 'jwst.glb',
+    pivot: [-0.017468, -0.72433, 0.19388],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -786,6 +784,7 @@ const SHAPES = {
   },
   europaClipper: {
     model: 'europa-clipper.glb',
+    pivot: [-0.39818, 0.31118, 1.7586],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -793,9 +792,118 @@ const SHAPES = {
     pointingAxis: [0, 0, 1],
     rollAxis: [0, 1, 0],
   },
-  juice: { model: null, metresPerUnit: 1, boxM: [27.1, 3.5, 2.86], ...SUN_FACING_BOX },
   lucy: { model: null, metresPerUnit: 1, boxM: [15.82, 7.28, 2.0], ...SUN_FACING_BOX },
   psyche: { model: null, metresPerUnit: 1, boxM: [24.76, 7.34, 2.4], ...SUN_FACING_BOX },
+} as const satisfies Record<string, CraftShape>;
+
+/**
+ * ESA's models, step A5e: used by ESA's written permission, received 2026-10-09, for
+ * these six only -- see web/public/models/CREDITS.md. Its conditions: the original
+ * geometry preserved (converted and compressed, never simplified: every file keeps its
+ * source's triangle count, checked), and "3D models © ESA (European Space Agency)."
+ * shown wherever they are used, which `modelOwner` drives.
+ *
+ * Sources: ESA Sci-Fleet (scifleet.esa.int/data/satellites.json, files under
+ * /downloads/<id>/), converted from FBX; where Sci-Fleet has none or it is not to scale,
+ * the ESA SPICE Cosmographia parts (spiftp.esac.esa.int/data/SPICE/<MISSION>/misc/cosmo/),
+ * assembled as the mission's Cosmographia configuration places them, with its frame and
+ * structure kernels:
+ *
+ *   model          source              unit     measured              published
+ *   Juice          SPICE, 34 parts     m        26.76 m tip to tip    27.1 m (ESA specs)
+ *   Solar Orbiter  Sci-Fleet           cm       17.91 m across        18 m (factsheet)
+ *   BepiColombo    Sci-Fleet, stack    cm       29.99 m across        ~30 m (factsheet)
+ *   Hera           SPICE, 16 parts     m        11.45 m across        11.5 m (ESA)
+ *   Euclid         Sci-Fleet           cm       5.30 m tall           4.7 m (ESA)
+ *   Gaia           Sci-Fleet           note     197.46 units          10.2 m shield (ESA)
+ *
+ * Sci-Fleet's Juice is a stylised 12 m model, not to scale, so the SPICE CAD parts are
+ * used instead, booms deployed, arrays and medium-gain antenna at their zero angle.
+ * Hera is not on Sci-Fleet at all. Euclid reads as centimetres like its siblings but is
+ * 13% taller than ESA's 4.7 m and 8% narrower than its 3.7 m -- the antenna hanging
+ * below counts in the height -- and is kept as the file has it. Gaia's file is in no
+ * metric unit: its shield, 197.46 units across, is scaled to ESA's 10.2 m.
+ *
+ * **Axes**, read off the geometry and, for the SPICE models, their frame kernels:
+ * Juice's arrays face -x at zero angle, as does its high-gain antenna (the frame kernel:
+ * the arrays' zero is "aligned to bus -X, nominal direction of HGA"); Solar Orbiter's
+ * heat shield faces +x; BepiColombo's transfer-module wings lie along x with their
+ * cells on +-y, which side is not determinable and +y is a choice; Hera's arrays face
+ * +-x, with its antenna opening to +x; Euclid's sunshield faces +x; Gaia's shield faces
+ * -y, along its spin axis.
+ *
+ * **Rules**, as before: arrays, heat shield or sunshield to the Sun. Gaia's is a
+ * simplification: it spins with its axis 45 degrees from the Sun, the axis precessing
+ * every 63 days, and the shield is drawn square on.
+ */
+const ESA_SHAPES = {
+  juice: {
+    model: 'juice.glb',
+    pivot: [1.0942, 3.1561, 0.093976],
+    modelOwner: 'ESA',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [-1, 0, 0],
+    rollAxis: [0, 1, 0],
+  },
+  solarOrbiter: {
+    model: 'solar-orbiter.glb',
+    pivot: [114.66, 327.1, -55.003],
+    modelOwner: 'ESA',
+    metresPerUnit: 0.01,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'heat-shield',
+    pointingAxis: [1, 0, 0],
+    rollAxis: [0, 1, 0],
+  },
+  bepicolombo: {
+    model: 'bepicolombo.glb',
+    pivot: [18.06, 353.24, 89.878],
+    modelOwner: 'ESA',
+    metresPerUnit: 0.01,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  hera: {
+    model: 'hera.glb',
+    pivot: [0.010667, 1.2753, -0.0083835],
+    modelOwner: 'ESA',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [1, 0, 0],
+    rollAxis: [0, 1, 0],
+  },
+  euclid: {
+    model: 'euclid.glb',
+    pivot: [13.235, 13.72, 3.4906],
+    modelOwner: 'ESA',
+    metresPerUnit: 0.01,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'sunshield',
+    pointingAxis: [1, 0, 0],
+    rollAxis: [0, 1, 0],
+  },
+  gaia: {
+    model: 'gaia.glb',
+    pivot: [0, 4.965, -8.1452],
+    modelOwner: 'ESA',
+    // 197.46 units across the shield in the file; 10.2 m deployed (ESA, sci.esa.int).
+    metresPerUnit: 0.051656,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'sunshield',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [1, 0, 0],
+  },
 } as const satisfies Record<string, CraftShape>;
 
 /**
@@ -942,7 +1050,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'juice',
-    shape: SHAPES.juice,
+    shape: ESA_SHAPES.juice,
     name: 'Juice',
     horizonsId: '-28',
     parent: null,
@@ -1036,31 +1144,25 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  * **Boxes**, every figure published (L x W x D, metres; the broad face to the Sun):
  *
  *   IMAP           2.4 x 2.4 x 0.9   deck (NASA IMAP blog, 2025-09-24)
- *   Euclid         4.7 x 3.7 x 3.7   4.7 m tall, 3.7 m across (ESA overview)
  *   Artemis I, II  18.9 x 7.9 x 5.0  arrays 18.9 m wide; crew and service modules
  *                                    7.9 m tall, 5 m across (Orion by the numbers)
  *   CAPSTONE       0.61 x 0.34 x 0.34  a 12U CubeSat (NSSDC); its arrays' span is
  *                                    not published, so only the body is drawn
- *   Solar Orbiter  18 x 3.1 x 2.5    18 m across (Mueller et al. 2020, ESA);
- *                                    body 2.5 x 3.1 x 2.7 (ESA factsheet)
- *   BepiColombo    30 x 6.3 x 3.9    ~30 m across the transfer module's wings;
- *                                    the stack 3.9 x 3.6 x 6.3 (ESA factsheet)
  *   Hayabusa2      6 x 4.23 x 1.25   paddles deployed (JAXA)
- *   Hera           11.5 x 2.2 x 1.8  11.5 m across; body 2.2 x 2 x 1.8 (ESA)
  *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
  *   ESCAPADE       4.88 x 1.65 x 1.09  deployed (Horizons; NASA SVS spec sheet)
  *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
  *                                    (JAXA ISAS)
  *
- * **No shape** for Gaia and Aditya-L1: ESA publishes only Gaia's 10 m across, ISRO only
- * Aditya-L1's 6 m magnetometer boom, and a box needs three dimensions. Their markers
- * stay at any range. ESA's own models of Euclid, Gaia, Solar Orbiter, BepiColombo and
- * Hera exist, with terms that do not say they may be used on a public site.
+ * **No shape** for Aditya-L1: ISRO publishes only its 6 m magnetometer boom, and a box
+ * needs three dimensions. Its marker stays at any range. Euclid, Gaia, Solar Orbiter,
+ * BepiColombo and Hera, boxes here once, are ESA's own models now: see ESA_SHAPES.
  */
 const BOX = { model: null, metresPerUnit: 1, ...SUN_FACING_BOX } as const;
 const MORE_SHAPES = {
   wind: {
     model: 'wind.glb',
+    pivot: [0.012575, -0.15971, 0.000063682],
     // The drum is 3.06 units across in the file and 2.4 m in the CMAD.
     metresPerUnit: 0.784,
     boxM: null,
@@ -1071,6 +1173,7 @@ const MORE_SHAPES = {
   },
   ace: {
     model: 'ace.glb',
+    pivot: [2.6687, 31.716, 7.8418],
     metresPerUnit: 0.0061697,
     boxM: null,
     pointsAt: 'sun',
@@ -1080,6 +1183,7 @@ const MORE_SHAPES = {
   },
   dscovr: {
     model: 'dscovr.glb',
+    pivot: [0.68235, -5.9166, 4.8345],
     metresPerUnit: 0.02296,
     boxM: null,
     pointsAt: 'earth',
@@ -1089,6 +1193,7 @@ const MORE_SHAPES = {
   },
   soho: {
     model: 'soho.glb',
+    pivot: [-0.08121, 5.8378, -2.0078],
     metresPerUnit: 0.21955,
     boxM: null,
     pointsAt: 'sun',
@@ -1097,9 +1202,9 @@ const MORE_SHAPES = {
     rollAxis: [0, 0, 1],
   },
   imap: { ...BOX, boxM: [2.4, 2.4, 0.9], pointingPart: 'spin-axis' },
-  euclid: { ...BOX, boxM: [4.7, 3.7, 3.7], pointingPart: 'sunshield' },
   roman: {
     model: 'roman.glb',
+    pivot: [138.91, 3.2855, 0],
     metresPerUnit: 0.031074,
     boxM: null,
     pointsAt: 'sun',
@@ -1109,6 +1214,7 @@ const MORE_SHAPES = {
   },
   tess: {
     model: 'tess.glb',
+    pivot: [0.038496, 4.2025, 0.043025],
     metresPerUnit: 0.10512,
     boxM: null,
     pointsAt: 'sun',
@@ -1118,9 +1224,9 @@ const MORE_SHAPES = {
   },
   orion: { ...BOX, boxM: [18.9, 7.9, 5.0] },
   capstone: { ...BOX, boxM: [0.61, 0.34, 0.34] },
-  solarOrbiter: { ...BOX, boxM: [18, 3.1, 2.5], pointingPart: 'heat-shield' },
   stereo: {
     model: 'stereo.glb',
+    pivot: [-36.92, 74.623, 68.039],
     metresPerUnit: 0.0020591,
     boxM: null,
     pointsAt: 'sun',
@@ -1128,9 +1234,9 @@ const MORE_SHAPES = {
     pointingAxis: [0, 1, 0],
     rollAxis: [0, 0, 1],
   },
-  bepicolombo: { ...BOX, boxM: [30, 6.3, 3.9] },
   osirisApex: {
     model: 'osiris-rex.glb',
+    pivot: [-0.58751, -0.69961, -0.023793],
     metresPerUnit: 0.17893,
     boxM: null,
     pointsAt: 'sun',
@@ -1139,9 +1245,9 @@ const MORE_SHAPES = {
     rollAxis: [0, 0, 1],
   },
   hayabusa2: { ...BOX, boxM: [6, 4.23, 1.25] },
-  hera: { ...BOX, boxM: [11.5, 2.2, 1.8] },
   dart: {
     model: 'dart.glb',
+    pivot: [-0.06403, 1.5789, -0.38501],
     // 40.34 units across the arrays in the file; 18.3 m, two 8.5 m ROSA wings on a
     // 1.3 m bus (APL).
     metresPerUnit: 0.4537,
@@ -1155,6 +1261,7 @@ const MORE_SHAPES = {
   escapade: { ...BOX, boxM: [4.88, 1.65, 1.09] },
   cassini: {
     model: 'cassini.glb',
+    pivot: [-0.029293, 0.1474, -0.013459],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -1164,6 +1271,7 @@ const MORE_SHAPES = {
   },
   dawn: {
     model: 'dawn.glb',
+    pivot: [0.00029985, -0.36889, -0.0084164],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -1173,6 +1281,7 @@ const MORE_SHAPES = {
   },
   kepler: {
     model: 'kepler.glb',
+    pivot: [-0.25154, -1.6507, -0.14107],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -1182,6 +1291,7 @@ const MORE_SHAPES = {
   },
   spitzer: {
     model: 'spitzer.glb',
+    pivot: [0.0024968, -0.077404, -0.1486],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -1298,7 +1408,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   // Near Earth: the Sun-Earth L2 point, and beyond.
   spacecraft({
     id: 'euclid',
-    shape: MORE_SHAPES.euclid,
+    shape: ESA_SHAPES.euclid,
     name: 'Euclid',
     horizonsId: '-680',
     parent: 'earth',
@@ -1311,7 +1421,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'gaia',
-    shape: null,
+    shape: ESA_SHAPES.gaia,
     name: 'Gaia',
     horizonsId: '-139479',
     parent: 'earth',
@@ -1391,7 +1501,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   // Interplanetary.
   spacecraft({
     id: 'solar-orbiter',
-    shape: MORE_SHAPES.solarOrbiter,
+    shape: ESA_SHAPES.solarOrbiter,
     name: 'Solar Orbiter',
     horizonsId: '-144',
     parent: null,
@@ -1417,7 +1527,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'bepicolombo',
-    shape: MORE_SHAPES.bepicolombo,
+    shape: ESA_SHAPES.bepicolombo,
     name: 'BepiColombo',
     horizonsId: '-121',
     parent: null,
@@ -1456,7 +1566,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'hera',
-    shape: MORE_SHAPES.hera,
+    shape: ESA_SHAPES.hera,
     name: 'Hera',
     horizonsId: '-91',
     parent: null,
@@ -1629,6 +1739,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
 const CLOSE_SHAPES = {
   mro: {
     model: 'mro.glb',
+    pivot: [-0.046258, 1.0482, 0.85516],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -1638,6 +1749,7 @@ const CLOSE_SHAPES = {
   },
   maven: {
     model: 'maven.glb',
+    pivot: [0.10724, 0.47224, 0.082479],
     metresPerUnit: 0.868,
     boxM: null,
     pointsAt: 'earth',
@@ -1647,6 +1759,7 @@ const CLOSE_SHAPES = {
   },
   odyssey: {
     model: 'odyssey.glb',
+    pivot: [0.11309, -0.019433, -0.43392],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -1656,6 +1769,7 @@ const CLOSE_SHAPES = {
   },
   juno: {
     model: 'juno.glb',
+    pivot: [0.071865, 0.12539, 0.0051623],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'earth',
@@ -1665,6 +1779,7 @@ const CLOSE_SHAPES = {
   },
   lro: {
     model: 'lro.glb',
+    pivot: [0.35377, -0.9448, -0.13986],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'sun',
@@ -1674,6 +1789,7 @@ const CLOSE_SHAPES = {
   },
   themis: {
     model: 'themis.glb',
+    pivot: [0.00014094, -0.0056682, -0.014302],
     metresPerUnit: 1,
     boxM: null,
     pointsAt: 'ecliptic-south',

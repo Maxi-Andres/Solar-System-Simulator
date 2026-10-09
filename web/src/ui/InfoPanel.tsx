@@ -2,6 +2,7 @@ import type { CraftShape, Seam } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
+import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
 import { Panel } from './Panel.tsx';
 
@@ -156,8 +157,14 @@ function CraftFacts({
           {mission.shape !== null && mission.shape !== undefined && (
             <>
               <Row label="Drawn as">
-                {mission.shape.model === null ? 'Box, published size' : 'NASA 3D model'}
+                {mission.shape.model === null
+                  ? 'Box, published size'
+                  : `${mission.shape.modelOwner ?? 'NASA'} 3D model`}
               </Row>
+              {/* ESA's permission asks for its credit wherever its models are used. */}
+              {mission.shape.model !== null && mission.shape.modelOwner === 'ESA' && (
+                <Row label="Model">{ESA_MODEL_CREDIT}</Row>
+              )}
               {site === null && (
                 <Row label="Facing (modelled)">{facingRule(mission.shape)}</Row>
               )}

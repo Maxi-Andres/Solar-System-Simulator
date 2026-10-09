@@ -285,19 +285,31 @@ samples — one turn and a quarter at a time, rebuilt as the clock moves on.
 
 ### Spacecraft up close
 
-Thirty craft are drawn with **NASA's own 3D models** — twenty-eight files from NASA 3D
-Resources and NASA's mission pages; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, THEMIS's both
-ARTEMIS probes, DART's is NASA's printable STL, converted, and MAVEN's waits for a MAVEN
-in the data — compressed with meshopt and WebP to 23 MB in all and fetched only once a
-craft is six pixels across. None documents its
-units; most measure in metres, and the nine in arbitrary units are scaled by one
-published dimension each. A test checks every compressed file still measures what NASA's
-did, measured from every decoded vertex, and comes out at its published size. Craft with no model that may be used are a
-**white box of their published size**, marked NO MODEL — array span by array width by
-body depth — and Gaia and Aditya-L1, with no three dimensions published, keep their marker.
+Thirty-six craft are drawn with **their agencies' own 3D models**: thirty with NASA's —
+twenty-eight files from NASA 3D Resources and NASA's mission pages; Voyager's serves both
+Voyagers, Pioneer 10's both Pioneers, THEMIS's both ARTEMIS probes, DART's is NASA's
+printable STL, converted, and MAVEN's waits for a MAVEN in the data — and six with
+**ESA's, by ESA's written permission**: Juice, Solar Orbiter, BepiColombo, Hera, Euclid
+and Gaia. The permission asks that their geometry be kept as ESA made it — nothing is
+simplified, and each keeps its source's triangle count, Juice's 959,923 among them — and
+that "3D models © ESA (European Space Agency)." be shown wherever they are used, which
+the info panel and About do. All 34 files are compressed with meshopt and WebP to 36 MB
+and fetched only once a craft is six pixels across. None documents its units; most
+measure in metres or centimetres, and those in arbitrary units are scaled by one
+published dimension each. A test checks every compressed file still measures what its
+source did, measured from every decoded vertex, and comes out at its published size.
+Each is placed by its **pivot**: JPL's position is the craft's centre of mass, and a
+file's origin is wherever its author left it — BepiColombo's sat 1.7 m outside the
+craft, and its trail ran 3.7 m beside the body. The pivot is the median of the model's
+vertices, which lands on the dense body rather than a boom or an array; a test holds
+each one to its file.
+Craft with no model that may be used are a **white box of their published size**,
+marked NO MODEL — array span by array width by body depth — and Aditya-L1, with no three
+dimensions published, keeps its marker.
 
 Which way a craft faces is **modelled**: dish to Earth for Voyager, Pioneer and New
-Horizons, MRO, MAVEN and Juno, heat shield or sunshield to the Sun for Parker and JWST,
+Horizons, MRO, MAVEN and Juno, heat shield or sunshield to the Sun for Parker, JWST, Solar
+Orbiter, Euclid and Gaia,
 spin axis to the south ecliptic pole for Wind and ARTEMIS, arrays to the Sun for the rest.
 The Mars and lunar orbiters really point their instruments at the ground below and turn
 their dishes and arrays on gimbals; what is drawn is the dish or the arrays, not that. The roll about that axis is a convention. JPL's attitude kernels would be the
