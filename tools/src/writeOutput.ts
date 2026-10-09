@@ -15,6 +15,7 @@ import type {
   PathTable,
   Seam,
   StarCatalog,
+  SurfaceTrack,
   VectorTable,
 } from './types.ts';
 
@@ -55,6 +56,7 @@ export async function prepareOutputDir(): Promise<void> {
   await mkdir(join(OUTPUT_DIR, 'vectors'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'elements'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'paths'), { recursive: true });
+  await mkdir(join(OUTPUT_DIR, 'surface'), { recursive: true });
 }
 
 function serializeTable(table: VectorTable): VectorTable {
@@ -115,6 +117,22 @@ export async function writePath(path: PathTable): Promise<void> {
     // A metre is far inside every tolerance here; the floor alone is a kilometre.
     toleranceKm: roundAll(path.toleranceKm, 3),
     gaps: path.gaps,
+  });
+}
+
+/**
+ * A surface craft's stops, as surface/<id>.json. Coordinates to 1e-8 degree, a
+ * fifth of a millimetre on Mars; headings to a hundredth of a degree.
+ */
+export async function writeSurface(track: SurfaceTrack): Promise<void> {
+  await writeCompactJson(join(OUTPUT_DIR, 'surface', `${track.id}.json`), {
+    ...track,
+    t: roundAll(track.t, TIME_DECIMALS),
+    latitudeDeg: roundAll(track.latitudeDeg, 8),
+    longitudeDeg: roundAll(track.longitudeDeg, 8),
+    headingDeg: track.headingDeg.map((heading) =>
+      heading === null ? null : Math.round(heading * 100) / 100,
+    ),
   });
 }
 

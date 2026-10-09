@@ -154,8 +154,11 @@ export interface RotationalElements {
  * the craft, which starts at launch and, for a mission still flying, ends wherever its
  * latest predicted trajectory does. It is sampled adaptively rather than at one step
  * -- see refine.ts -- and shipped whole or chunked by its size.
+ *
+ * `surface` is a craft on another body's ground, and it has no state vectors at all: it
+ * is placed at a latitude and longitude, turned with its host -- see SurfaceTrack.
  */
-export type VectorWindow = 'full' | 'short' | 'mission';
+export type VectorWindow = 'full' | 'short' | 'mission' | 'surface';
 
 /**
  * A body in the catalog.
@@ -297,11 +300,82 @@ export interface Mission {
    * much to follow for twenty years -- see CLOSE_ORBIT_WINDOW_MONTHS.
    */
   readonly windowMonths: number | null;
+  /** Where it stands, for a craft on another body's surface; null for one in space. */
+  readonly site: SurfaceSite | null;
   /**
    * What is drawn in its place when it is close enough to have a size; null for a craft
    * whose dimensions have not been published, which keeps its marker at any range.
    */
   readonly shape: CraftShape | null;
+}
+
+/**
+ * How a surface craft's position is known.
+ *
+ * A rover drives, and NASA publishes where every drive ended: `traverse` names that
+ * file. A lander does not move, and its site is a published pair of coordinates.
+ */
+export type SurfaceSite =
+  | {
+      readonly kind: 'traverse';
+      /** The body it stands on. */
+      readonly host: BodyId;
+      /** Touchdown, ISO 8601 UTC, spacecraft event time: sol 0 is the local day it falls in. */
+      readonly landingUtc: string;
+      /** NASA's waypoint file: GeoJSON, one point per drive, with its sol. */
+      readonly traverseUrl: string;
+    }
+  | {
+      readonly kind: 'fixed';
+      readonly host: BodyId;
+      readonly landingUtc: string;
+      /** Planetocentric latitude, degrees north. */
+      readonly latitudeDeg: number;
+      /** East longitude, degrees. */
+      readonly longitudeDeg: number;
+      /** Which way its front faces, degrees clockwise from north; null where unpublished. */
+      readonly headingDeg: number | null;
+    };
+
+/**
+ * Where a craft on another body's surface stood, stop by stop.
+ *
+ * Each stop holds from its instant until the next one's: the rover is drawn where a
+ * drive ended, never anywhere in between, because the file says where it stopped and
+ * not the way it went. A stop's instant is the end of the sol its drive happened in --
+ * the file gives the sol, not the hour -- so on a driving sol the rover is drawn at the
+ * previous stop until that sol is over.
+ *
+ * Coordinates are the host's own: planetocentric latitude and east longitude, against
+ * the same IAU prime meridian the host's maps are aligned to.
+ */
+export interface SurfaceTrack {
+  readonly id: BodyId;
+  readonly host: BodyId;
+  readonly count: number;
+  /** When each stop begins, Julian day TDB. The first is touchdown. */
+  readonly t: readonly number[];
+  readonly latitudeDeg: readonly number[];
+  readonly longitudeDeg: readonly number[];
+  /** Front's heading, degrees clockwise from north; null where unpublished. */
+  readonly headingDeg: readonly (number | null)[];
+  /** The mission sol each stop began on: 0 for touchdown. */
+  readonly sol: readonly number[];
+}
+
+/** A surface craft's entry in the manifest: what its track file covers. */
+export interface SurfaceInfo {
+  readonly host: BodyId;
+  /** When the craft is drawn, Julian day TDB: from touchdown, or the window's start. */
+  readonly startJd: number;
+  /**
+   * Until when. A lander that cannot move is known for the whole window. A rover is
+   * known only up to the run: after its last reported drive it is drawn where that one
+   * ended, until the data was built, and not past it.
+   */
+  readonly stopJd: number;
+  /** Stops in `surface/<id>.json`. */
+  readonly count: number;
 }
 
 /** An axis in a craft's own frame: a unit vector along one of its model axes. */
@@ -339,12 +413,21 @@ export interface CraftShape {
    * What the craft keeps `pointingAxis` on: the Earth, the Sun, or -- for Wind, whose
    * spin axis is held within a degree of it -- the south ecliptic pole.
    */
-  readonly pointsAt: 'earth' | 'sun' | 'ecliptic-south';
+  readonly pointsAt: 'earth' | 'sun' | 'ecliptic-south' | 'zenith';
   /** What it keeps there, for saying so on screen. */
-  readonly pointingPart: 'dish' | 'heat-shield' | 'sunshield' | 'solar-arrays' | 'spin-axis';
+  readonly pointingPart:
+    | 'dish'
+    | 'heat-shield'
+    | 'sunshield'
+    | 'solar-arrays'
+    | 'spin-axis'
+    | 'deck';
   /** In the craft's own frame: the dish's boresight, the shield's or the arrays' normal. */
   readonly pointingAxis: CraftAxis;
-  /** In the craft's own frame, perpendicular to `pointingAxis`: held toward ecliptic north. */
+  /**
+   * In the craft's own frame, perpendicular to `pointingAxis`: held toward ecliptic north
+   * -- or, for a craft on the ground, its front, along its heading.
+   */
   readonly rollAxis: CraftAxis;
 }
 
@@ -448,6 +531,11 @@ export interface Manifest {
    * Each entry's samples are in `paths/<id>.json`. See PathTable.
    */
   readonly paths: Readonly<Record<BodyId, PathInfo>>;
+  /**
+   * Every craft on another body's surface, keyed by body. These have no entry in
+   * `tables`: they are placed, not interpolated. See SurfaceTrack.
+   */
+  readonly surfaces: Readonly<Record<BodyId, SurfaceInfo>>;
 }
 
 /**

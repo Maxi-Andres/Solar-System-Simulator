@@ -71,6 +71,8 @@ import {
   TrajectoryLine,
 } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
+import { headingDirection, surfaceFrame } from '../core/surface.ts';
+import { PATCH_SHOWN_KM, SurfaceGround } from './surfaceGround.ts';
 import {
   angularRadiusPixels,
   focusOrbitOpacity,
@@ -241,6 +243,20 @@ interface BodyHandles {
    */
   craftShape: THREE.Object3D | null;
   craftShapeRequested: boolean;
+  /**
+   * For a craft on another body's surface: the ground drawn under it and the way it
+   * came, once its stops have arrived. See surfaceGround.ts.
+   */
+  surfaceGround: SurfaceGround | null;
+}
+
+/**
+ * The longitude a body's map starts at, as its mesh is turned this frame: the image on
+ * the material, or the incoming one before any has arrived. See the orientation call.
+ */
+function meshMapOriginDeg(handle: BodyHandles): number {
+  const variant = handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null;
+  return handle.shownFile === null ? (variant?.longitudeOriginDeg ?? 0) : handle.shownOriginDeg;
 }
 
 /**
@@ -558,9 +574,14 @@ export function SolarSystem({
         ringRequested: false,
         craftShape: null,
         craftShapeRequested: false,
+        surfaceGround: null,
       };
     });
   }, [store]);
+  const handleById = useMemo(
+    () => new Map(handles.map((handle) => [handle.definition.id, handle] as const)),
+    [handles],
+  );
 
   const { size, camera, gl } = useThree();
 
@@ -720,14 +741,60 @@ export function SolarSystem({
         handle.craftShape.visible = pixelRadius > SHAPE_SHOWN_PX;
         if (handle.craftShape.visible) {
           // Its pointing rule, toward the Earth or the Sun as seen from the craft -- or,
-          // for Wind, the south ecliptic pole, a direction rather than a body.
-          const toTarget =
-            craftShape.pointsAt === 'ecliptic-south'
-              ? ECLIPTIC_SOUTH
-              : store.stateRelativeTo(craftShape.pointsAt, handle.definition.id, jd)?.position;
-          if (toTarget !== undefined) {
-            craftOrientation(craftShape, toTarget, handle.craftShape.quaternion);
+          // for Wind, the south ecliptic pole, a direction rather than a body. A craft on
+          // the ground stands on it, its front along the heading NASA reports.
+          if (craftShape.pointsAt === 'zenith') {
+            const stop = store.surfaceStopAt(handle.definition.id, jd);
+            if (stop !== null) {
+              const { track, index } = stop;
+              const frame = surfaceFrame(
+                store.body(track.host),
+                track.latitudeDeg[index]!,
+                track.longitudeDeg[index]!,
+                jd,
+              );
+              craftOrientation(
+                craftShape,
+                frame.up,
+                handle.craftShape.quaternion,
+                headingDirection(frame, track.headingDeg[index] ?? null),
+              );
+            }
+          } else {
+            const toTarget =
+              craftShape.pointsAt === 'ecliptic-south'
+                ? ECLIPTIC_SOUTH
+                : store.stateRelativeTo(craftShape.pointsAt, handle.definition.id, jd)?.position;
+            if (toTarget !== undefined) {
+              craftOrientation(craftShape, toTarget, handle.craftShape.quaternion);
+            }
           }
+        }
+      }
+
+      // The ground under a craft on another body, turned with that body's mesh -- which
+      // the loop has already turned this frame, its host coming first in the catalog.
+      const site = craft?.site ?? null;
+      if (site !== null && site !== undefined) {
+        const stop = store.surfaceStopAt(handle.definition.id, jd);
+        const host = handleById.get(site.host);
+        if (stop !== null && host !== undefined) {
+          if (handle.surfaceGround === null) {
+            handle.surfaceGround = new SurfaceGround(
+              host.definition,
+              stop.track,
+              host.mesh.material as THREE.Material,
+            );
+            handle.group.add(handle.surfaceGround.object);
+          }
+          handle.surfaceGround.object.quaternion.copy(host.mesh.quaternion);
+          handle.surfaceGround.update(
+            stop.index,
+            meshMapOriginDeg(host),
+            distanceKm < PATCH_SHOWN_KM,
+            showTrails && satellite > 0.005,
+            satellite,
+          );
         }
       }
 

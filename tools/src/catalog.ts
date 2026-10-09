@@ -1,6 +1,6 @@
 import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
-import type { BodyDefinition, CraftShape, TextureSetId } from './types.ts';
+import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
 
 /**
  * Body catalog: the Sun, the eight planets, Pluto, their major moons, and the
@@ -682,6 +682,7 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
       operator: spec.operator,
       endUtc: spec.endUtc ?? null,
       windowMonths: spec.windowMonths ?? null,
+      site: null,
       shape: spec.shape,
     },
   };
@@ -1875,6 +1876,148 @@ const CLOSE_ORBITERS: readonly BodyDefinition[] = [
   }),
 ];
 
+/**
+ * The craft on the surface of Mars, step A5d: two rovers and a lander. See surface.ts
+ * for where they stand and from when.
+ *
+ * **Models**, NASA/JPL-Caltech (credit as JPL asks), every one in metres, +y up and
+ * +z forward:
+ *
+ *   model          measured, length x width x height       published
+ *   Curiosity      3.00 x 2.78 x 2.22 without the arm       3 x 2.7 x 2.2 m, "not including
+ *                                                           the arm" (NASA mission page)
+ *   Perseverance   3.11 x 2.71 x 2.23, mast raised          3 x 2.7 x 2.2 m (NASA)
+ *   InSight        6.14 m across the arrays                 6 m "wingspan" (NASA)
+ *
+ * Curiosity's is science.nasa.gov's Curiosity_static; no GLB of it is in NASA 3D
+ * Resources. Perseverance's ships with its mast stowed and an animation that raises it,
+ * then works the arm: it is baked at 3 s, mast up and arm stowed, as it drives. InSight's
+ * origin is at its deck, so the file is lifted 0.664 m, onto its feet and the
+ * instruments it set down. Axes: the mast stands at -x, which with +y up and +z forward
+ * is the rover's right, where the real masts are.
+ *
+ * **Rules**: deck to the zenith -- perpendicular to the ellipsoid -- and the front along
+ * the heading NASA reports for each stop. That is measured, not modelled: the traverse
+ * files give it. InSight's heading is not published, and it is drawn facing north.
+ */
+const SURFACE_SHAPES = {
+  curiosity: {
+    model: 'curiosity.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'zenith',
+    pointingPart: 'deck',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  perseverance: {
+    model: 'perseverance.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'zenith',
+    pointingPart: 'deck',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  insight: {
+    model: 'insight.glb',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'zenith',
+    pointingPart: 'deck',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+} as const satisfies Record<string, CraftShape>;
+
+/** A craft standing on another body: a spacecraft with a site and no state vectors. */
+function surfaceCraft(spec: SpacecraftSpec & { readonly site: SurfaceSite }): BodyDefinition {
+  const body = spacecraft(spec);
+  return { ...body, vectorWindow: 'surface', mission: { ...body.mission!, site: spec.site } };
+}
+
+/**
+ * NASA's mission maps (MMGIS): one GeoJSON point per drive, east longitude and latitude
+ * on the 3,396.19 km Mars sphere -- planetocentric -- the sol, and the rover's yaw,
+ * degrees clockwise from north (the PDS SITE frame: x north, y east).
+ */
+const MMGIS = 'https://mars.nasa.gov/mmgis-maps';
+
+/**
+ * Landing instants are spacecraft event time, touchdown at Mars:
+ *
+ *   Curiosity     05:17:57.3 UTC, JPL's landing timeline.
+ *   Perseverance  20:55 UTC received, less the 11 min 22 s light time in the landing
+ *                 press kit; NASA states no seconds for it.
+ *   InSight       19:44:52 UTC, the Horizons object summary; 19:52:59 received less
+ *                 8 min 7 s, as JPL gives both.
+ *
+ * InSight's site is the HiRISE fix, 4.502384 N 135.623447 E (Golombek et al. 2020,
+ * Nature Communications 11:1014). Its mission ended with last contact on 2022-12-15;
+ * the lander is still there, and it is drawn there.
+ */
+const SURFACE_CRAFT: readonly BodyDefinition[] = [
+  surfaceCraft({
+    id: 'curiosity',
+    shape: SURFACE_SHAPES.curiosity,
+    name: 'Curiosity',
+    horizonsId: '-76',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    spanM: 3,
+    launchUtc: '2011-11-26T15:02:00Z',
+    operator: 'NASA',
+    color: '#e0b090',
+    site: {
+      kind: 'traverse',
+      host: 'mars',
+      landingUtc: '2012-08-06T05:17:57Z',
+      traverseUrl: `${MMGIS}/MSL/Layers/json/MSL_waypoints.json`,
+    },
+  }),
+  surfaceCraft({
+    id: 'perseverance',
+    shape: SURFACE_SHAPES.perseverance,
+    name: 'Perseverance',
+    horizonsId: '-168',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    spanM: 3,
+    launchUtc: '2020-07-30T11:50:00Z',
+    operator: 'NASA',
+    color: '#e8c8a8',
+    site: {
+      kind: 'traverse',
+      host: 'mars',
+      landingUtc: '2021-02-18T20:43:38Z',
+      traverseUrl: `${MMGIS}/M20/Layers/json/M20_waypoints.json`,
+    },
+  }),
+  surfaceCraft({
+    id: 'insight',
+    shape: SURFACE_SHAPES.insight,
+    name: 'InSight',
+    horizonsId: '-189',
+    parent: 'mars',
+    parentHorizonsId: '499',
+    stepDays: 1,
+    spanM: 6,
+    launchUtc: '2018-05-05T11:05:00Z',
+    operator: 'NASA',
+    color: '#c8b8a0',
+    site: {
+      kind: 'fixed',
+      host: 'mars',
+      landingUtc: '2018-11-26T19:44:52Z',
+      latitudeDeg: 4.502384,
+      longitudeDeg: 135.623447,
+      headingDeg: null,
+    },
+  }),
+];
+
 export const CATALOG: readonly BodyDefinition[] = [
   {
     id: 'sun',
@@ -2352,6 +2495,7 @@ export const CATALOG: readonly BodyDefinition[] = [
   ...SPACECRAFT,
   ...MORE_SPACECRAFT,
   ...CLOSE_ORBITERS,
+  ...SURFACE_CRAFT,
 ];
 
 /** Look up a body by id. Throws rather than returning undefined: ids are ours. */

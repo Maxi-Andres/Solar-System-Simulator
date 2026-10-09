@@ -145,6 +145,7 @@ export function craftBox(sizeM: readonly [number, number, number]): THREE.Object
 
 const ECLIPTIC_NORTH = new THREE.Vector3(0, 0, 1);
 const scratchTarget = new THREE.Vector3();
+const scratchRoll = new THREE.Vector3();
 const scratchUp = new THREE.Vector3();
 const scratchThird = new THREE.Vector3();
 const scratchA = new THREE.Vector3();
@@ -163,14 +164,19 @@ const vector = (axis: CraftAxis, out: THREE.Vector3): THREE.Vector3 =>
  * `toTarget` is the direction from the craft to the Earth or the Sun, in the scene's
  * frame -- ecliptic J2000, z toward its north pole. Where the target lies straight
  * along that pole the roll has nothing to hold to, and ecliptic x stands in.
+ *
+ * `rollToward` replaces ecliptic north for a craft whose roll is known: a rover's
+ * front, along its heading.
  */
 export function craftOrientation(
   shape: CraftShape,
   toTarget: Vec3,
   out = new THREE.Quaternion(),
+  rollToward: Vec3 = ECLIPTIC_NORTH,
 ): THREE.Quaternion {
   const target = scratchTarget.set(toTarget.x, toTarget.y, toTarget.z).normalize();
-  const up = scratchUp.copy(ECLIPTIC_NORTH).addScaledVector(target, -target.dot(ECLIPTIC_NORTH));
+  const roll = scratchRoll.set(rollToward.x, rollToward.y, rollToward.z);
+  const up = scratchUp.copy(roll).addScaledVector(target, -target.dot(roll));
   if (up.lengthSq() < 1e-12) {
     up.set(1, 0, 0).addScaledVector(target, -target.x);
   }

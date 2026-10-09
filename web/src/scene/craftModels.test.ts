@@ -49,6 +49,10 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'lro.glb': [5.45, 3.66, 5.51],
   'juno.glb': [17.65, 4.26, 18.54],
   'themis.glb': [6.09, 7.21, 6.09],
+  'curiosity.glb': [2.78, 2.22, 3.95],
+  // Posed, mast raised: NASA's file stands 1.85 m tall with it stowed.
+  'perseverance.glb': [2.71, 2.23, 3.11],
+  'insight.glb': [6.14, 2.19, 4.35],
 };
 
 /**
@@ -75,6 +79,9 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'maven.glb': { axis: 0, metres: 11.4, within: 0.01 },
   'odyssey.glb': { axis: 0, metres: 5.7, within: 0.01 },
   'juno.glb': { axis: 2, metres: 20, within: 0.08 },
+  'curiosity.glb': { axis: 0, metres: 2.7, within: 0.04 },
+  'perseverance.glb': { axis: 0, metres: 2.7, within: 0.01 },
+  'insight.glb': { axis: 0, metres: 6, within: 0.03 },
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
 
@@ -180,6 +187,12 @@ const COMPONENTS: Record<
  * into a larger one.
  */
 async function extentOf(file: string): Promise<[number, number, number]> {
+  const size = (await boundsOf(file)).getSize(new THREE.Vector3());
+  return [size.x, size.y, size.z];
+}
+
+/** The same bounds, as a box. */
+async function boundsOf(file: string): Promise<THREE.Box3> {
   const { gltf, bin } = await readGlb(file);
   const bounds = new THREE.Box3();
   const point = new THREE.Vector3();
@@ -227,14 +240,13 @@ async function extentOf(file: string): Promise<[number, number, number]> {
   for (const root of gltf.scenes[gltf.scene ?? 0]!.nodes) {
     await visit(root, new THREE.Matrix4());
   }
-  const size = bounds.getSize(new THREE.Vector3());
-  return [size.x, size.y, size.z];
+  return bounds;
 }
 
 describe('the spacecraft models', () => {
   it('gives every craft but two a shape: a model, or a box of positive size', () => {
     // Gaia and Aditya-L1 have no three published dimensions, and keep their markers.
-    expect(shapes).toHaveLength(49);
+    expect(shapes).toHaveLength(52);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();
@@ -275,6 +287,14 @@ describe('the spacecraft models', () => {
       expect(Math.abs(extent[axis]! - expected[axis]!)).toBeLessThan(0.02 * expected[axis]! + 0.01);
     }
   });
+
+  it.each(['curiosity.glb', 'perseverance.glb', 'insight.glb'])(
+    '%s stands on its origin, which is placed on the ground',
+    async (file) => {
+      // Wheels or feet at y = 0, give or take InSight's 2.8 cm of seismometer below them.
+      expect(Math.abs((await boundsOf(file)).min.y)).toBeLessThan(0.03);
+    },
+  );
 
   it.each(Object.keys(PUBLISHED))('%s comes out at its published size', async (file) => {
     const { axis, metres, within } = PUBLISHED[file]!;

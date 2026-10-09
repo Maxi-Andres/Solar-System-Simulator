@@ -130,6 +130,9 @@ function CraftFacts({
     (largest, seam) => (largest === null || seam.jumpKm > largest.jumpKm ? seam : largest),
     null,
   );
+  // A craft on the ground: where it stands, from NASA's traverse.
+  const site = mission?.site ?? null;
+  const stop = site === null ? null : store.surfaceStopAt(focus, jd);
 
   return (
     <>
@@ -155,7 +158,31 @@ function CraftFacts({
               <Row label="Drawn as">
                 {mission.shape.model === null ? 'Box, published size' : 'NASA 3D model'}
               </Row>
-              <Row label="Facing (modelled)">{facingRule(mission.shape)}</Row>
+              {site === null && (
+                <Row label="Facing (modelled)">{facingRule(mission.shape)}</Row>
+              )}
+            </>
+          )}
+        </>
+      )}
+      {site !== null && (
+        <>
+          <Row label="Landed">{site.landingUtc.slice(0, 10)}</Row>
+          {stop !== null && (
+            <>
+              <Row label="Stands at">
+                {formatLatLon(stop.track.latitudeDeg[stop.index]!, stop.track.longitudeDeg[stop.index]!)}
+              </Row>
+              <Row label="Heading">
+                {stop.track.headingDeg[stop.index] === null
+                  ? 'Unpublished; drawn north'
+                  : `${Math.round(stop.track.headingDeg[stop.index]!)}° from north (NASA)`}
+              </Row>
+              {stop.index > 0 && (
+                <Row label="Last drive">
+                  {`Sol ${stop.track.sol[stop.index]!}, ended by ${formatTdbDate(stop.track.t[stop.index]!)}`}
+                </Row>
+              )}
             </>
           )}
         </>
@@ -168,7 +195,9 @@ function CraftFacts({
         </Row>
       )}
       {coverage !== null && (
-        <Row label="JPL path until">{formatTdbDate(coverage.stopJd)}</Row>
+        <Row label={site === null ? 'JPL path until' : 'Position known until'}>
+          {formatTdbDate(coverage.stopJd)}
+        </Row>
       )}
       {largestSeam !== null && (
         <Row label="Largest path jump">
@@ -292,9 +321,22 @@ function facingRule(shape: CraftShape): string {
     sunshield: 'Sunshield',
     'solar-arrays': 'Solar arrays',
     'spin-axis': 'Spin axis',
+    deck: 'Deck',
   }[shape.pointingPart];
-  const target = { earth: 'Earth', sun: 'Sun', 'ecliptic-south': 'ecliptic south' }[shape.pointsAt];
+  const target = {
+    earth: 'Earth',
+    sun: 'Sun',
+    'ecliptic-south': 'ecliptic south',
+    zenith: 'zenith',
+  }[shape.pointsAt];
   return `${part} to ${target}`;
+}
+
+/** A place on a body, as maps write it: "4.825° S, 137.389° E". */
+function formatLatLon(latitudeDeg: number, longitudeDeg: number): string {
+  const east = ((longitudeDeg % 360) + 360) % 360;
+  const lat = `${Math.abs(latitudeDeg).toFixed(3)}° ${latitudeDeg < 0 ? 'S' : 'N'}`;
+  return `${lat}, ${east.toFixed(3)}° E`;
 }
 
 /** A TDB Julian day as a calendar date, which is all a coverage edge needs. */

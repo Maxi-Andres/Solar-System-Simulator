@@ -5,6 +5,8 @@ import type {
   OsculatingElements,
   PathInfo,
   PathTable,
+  SurfaceInfo,
+  SurfaceTrack,
   VectorTable,
 } from '@sss/tools/types';
 
@@ -12,6 +14,7 @@ import { ChunkedTable, type ChunkLoader, RETRY_AFTER_MS, samplesBetween } from '
 import { FrameTree } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
+import { stopIndexAt, surfaceState } from './surface.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
 
 /**
@@ -63,7 +66,12 @@ export interface EphemerisData {
   readonly loadChunk: ChunkLoader | null;
   /** Fetches a spacecraft's trajectory, or null where nothing may be fetched. */
   readonly loadPath: PathLoader | null;
+  /** Fetches a surface craft's stops; absent or null where nothing may be fetched. */
+  readonly loadSurface?: SurfaceLoader | null;
 }
+
+/** Fetches the stops of a craft on another body's surface. */
+export type SurfaceLoader = (id: BodyId) => Promise<SurfaceTrack>;
 
 /** Fetches the drawable trajectory of a spacecraft. */
 export type PathLoader = (id: BodyId) => Promise<PathTable>;
@@ -89,7 +97,12 @@ export async function loadEphemerisData(
   if (!hasPaths) {
     console.warn('The published data predates spacecraft trajectories. Regenerate it to draw them.');
   }
-  const manifest: Manifest = hasPaths ? published : { ...published, paths: {} };
+  // Likewise data from before the rovers, which simply has none.
+  const manifest: Manifest = {
+    ...published,
+    paths: hasPaths ? published.paths : {},
+    surfaces: published.surfaces ?? {},
+  };
   const bodies = (await fetcher(`${basePath}data/bodies.json`)) as BodyDefinition[];
 
   // Data generated before the moons has no table index. Say so plainly, rather than
@@ -126,6 +139,8 @@ export async function loadEphemerisData(
     loadChunk: async (id, index) =>
       (await fetcher(`${basePath}data/vectors/${id}/${index}.json`)) as VectorTable,
     loadPath: async (id) => (await fetcher(`${basePath}data/paths/${id}.json`)) as PathTable,
+    loadSurface: async (id) =>
+      (await fetcher(`${basePath}data/surface/${id}.json`)) as SurfaceTrack,
   };
 }
 
@@ -136,12 +151,19 @@ export class EphemerisStore {
   readonly #paths = new Map<BodyId, PathTable>();
   readonly #pathsPending = new Map<BodyId, Promise<void>>();
   readonly #pathsFailedAt = new Map<BodyId, number>();
+  readonly #surfaces = new Map<BodyId, SurfaceTrack>();
+  readonly #surfacesPending = new Map<BodyId, Promise<void>>();
+  readonly #surfacesFailedAt = new Map<BodyId, number>();
 
   constructor(data: EphemerisData) {
     this.#data = data;
     this.#tree = new FrameTree(data.bodies);
 
     for (const id of data.manifest.bodies) {
+      // A surface craft is placed, not interpolated: it has no table.
+      if (data.manifest.surfaces[id] !== undefined) {
+        continue;
+      }
       const info = data.manifest.tables[id];
       if (info === undefined) {
         throw new Error(`Manifest lists "${id}" but has no table entry for it.`);
@@ -181,7 +203,7 @@ export class EphemerisStore {
 
   /** The span a body's vectors cover, or null for a body with no table. */
   coverage(id: BodyId): { readonly startJd: number; readonly stopJd: number } | null {
-    return this.#data.manifest.tables[id] ?? null;
+    return this.#data.manifest.tables[id] ?? this.#data.manifest.surfaces[id] ?? null;
   }
 
   /**
@@ -218,7 +240,90 @@ export class EphemerisStore {
    * for a frame or two. It exists for tests, which need an answer rather than a frame.
    */
   async whenLoadedAt(jd: number, ids: readonly BodyId[] = this.#data.manifest.bodies): Promise<void> {
-    await Promise.all(ids.map((id) => this.#chunked.get(id)?.whenLoadedAt(jd)));
+    await Promise.all(
+      ids.map((id) =>
+        this.surfaceInfo(id) !== null ? this.requestSurface(id) : this.#chunked.get(id)?.whenLoadedAt(jd),
+      ),
+    );
+  }
+
+  /** Where a surface craft stands and over what span; null for anything else. */
+  surfaceInfo(id: BodyId): SurfaceInfo | null {
+    return this.#data.manifest.surfaces[id] ?? null;
+  }
+
+  /**
+   * A surface craft's stops, or null until they have arrived. Asked for on the first
+   * call, like a path: a few tens of kilobytes, fetched once the craft is wanted.
+   */
+  surfaceTrack(id: BodyId): SurfaceTrack | null {
+    const track = this.#surfaces.get(id);
+    if (track !== undefined) {
+      return track;
+    }
+    void this.requestSurface(id);
+    return null;
+  }
+
+  /** Asks for a surface craft's stops, once; resolves when they have arrived or failed. */
+  requestSurface(id: BodyId): Promise<void> {
+    const load = this.#data.loadSurface ?? null;
+    if (this.#surfaces.has(id) || this.surfaceInfo(id) === null || load === null) {
+      return Promise.resolve();
+    }
+    const pending = this.#surfacesPending.get(id);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const failedAt = this.#surfacesFailedAt.get(id);
+    if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) {
+      return Promise.resolve();
+    }
+    const promise = load(id)
+      .then((track) => {
+        this.#surfaces.set(id, track);
+        this.#surfacesFailedAt.delete(id);
+      })
+      .catch((error: unknown) => {
+        this.#surfacesFailedAt.set(id, Date.now());
+        console.error(`Could not load where ${id} stands`, error);
+      })
+      .finally(() => {
+        this.#surfacesPending.delete(id);
+      });
+    this.#surfacesPending.set(id, promise);
+    return promise;
+  }
+
+  /**
+   * The stop a surface craft is at, at `jd`: its index in the track, or null outside
+   * the craft's span or before its stops have arrived.
+   */
+  surfaceStopAt(id: BodyId, jd: number): { readonly track: SurfaceTrack; readonly index: number } | null {
+    if (!this.isCoveredAt(id, jd)) {
+      return null;
+    }
+    const track = this.surfaceTrack(id);
+    if (track === null) {
+      return null;
+    }
+    const index = stopIndexAt(track, jd);
+    return index < 0 ? null : { track, index };
+  }
+
+  /** A surface craft's state relative to its host, or null. See surface.ts. */
+  #surfaceState(id: BodyId, jd: number): StateVector | null {
+    const stop = this.surfaceStopAt(id, jd);
+    if (stop === null) {
+      return null;
+    }
+    const { track, index } = stop;
+    return surfaceState(
+      this.body(track.host),
+      track.latitudeDeg[index]!,
+      track.longitudeDeg[index]!,
+      jd,
+    );
   }
 
   /** How a spacecraft's trajectory was cut, and where it jumps; null for anything else. */
@@ -292,6 +397,9 @@ export class EphemerisStore {
    * with: exactly the curve the craft itself is drawn on, wherever that curve is loaded.
    */
   loadedLocalState(id: BodyId, jd: number): StateVector | null {
+    if (this.surfaceInfo(id) !== null) {
+      return this.#surfaces.has(id) ? this.#surfaceState(id, jd) : null;
+    }
     const table = this.#data.vectors.get(id);
     if (table !== undefined) {
       return interpolateState(table, jd);
@@ -306,6 +414,10 @@ export class EphemerisStore {
    * `stateInRoot` or `stateRelativeTo` instead.
    */
   localState(id: BodyId, jd: number): BodyState | null {
+    if (this.surfaceInfo(id) !== null) {
+      const state = this.#surfaceState(id, jd);
+      return state === null ? null : { ...state, approximate: false };
+    }
     const table = this.#data.vectors.get(id);
     if (table) {
       const interpolated = interpolateState(table, jd);

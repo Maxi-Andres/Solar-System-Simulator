@@ -37,7 +37,7 @@ import { fetchCoverage, horizonsProbe, lastWithData } from './horizons/coverage.
 import { fetchMissionVectors, fetchVectors, splitTable } from './horizons/fetchVectors.ts';
 import { type Discontinuity, ESTIMATE_MARGIN } from './horizons/refine.ts';
 import { parseElements } from './horizons/parseElements.ts';
-import { elementsQuery, fromJulianDay, stepSize } from './horizons/queries.ts';
+import { elementsQuery, fromJulianDay, stepSize, toJulianDay } from './horizons/queries.ts';
 import {
   locateSeams,
   nearestBodyTolerance,
@@ -46,6 +46,7 @@ import {
   simplifyPath,
 } from './paths.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
+import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
 import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
 import type {
   BodyDefinition,
@@ -54,6 +55,8 @@ import type {
   Manifest,
   OsculatingElements,
   PathInfo,
+  SurfaceInfo,
+  SurfaceTrack,
   TableInfo,
   VectorTable,
   VectorWindow,
@@ -66,6 +69,7 @@ import {
   serializeSeam,
   writePath,
   writeStars,
+  writeSurface,
   writeVectorChunk,
   writeVectors,
 } from './writeOutput.ts';
@@ -265,6 +269,46 @@ async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult>
   };
 }
 
+/** A craft on another body's surface, and what of it the manifest publishes. */
+interface SurfaceResult {
+  readonly body: BodyDefinition;
+  readonly track: SurfaceTrack;
+  readonly info: SurfaceInfo;
+}
+
+/**
+ * A surface craft's stops, from NASA's traverse for a rover or its published site for a
+ * lander. See surface.ts.
+ *
+ * It is drawn from touchdown, or from the window's start. A lander cannot move, so it is
+ * known to the window's end; a rover only up to this run, standing where its last
+ * reported drive ended. Every stop is kept, those before the window too: they are the
+ * way it came, and the app draws that.
+ */
+async function fetchSurfaceCraft(body: BodyDefinition, epoch: Date): Promise<SurfaceResult | null> {
+  const site = body.mission?.site ?? null;
+  if (site === null) {
+    throw new Error(`${body.id} is a surface craft with no site.`);
+  }
+  const track =
+    site.kind === 'traverse'
+      ? traverseTrack(body.id, site, parseTraverse(await fetchTraverse(site.traverseUrl, body.name)))
+      : fixedTrack(body.id, site);
+
+  const window = windowFor('full', epoch);
+  const startJd = Math.max(track.t[0]!, toJulianDay(window.start));
+  const stopJd = toJulianDay(site.kind === 'traverse' ? epoch : window.stop);
+  if (stopJd <= startJd) {
+    console.log(`[fetch-data] ${body.name}: not on the ground inside the window; left out`);
+    return null;
+  }
+  console.log(
+    `[fetch-data] ${body.name.padEnd(9)} ${String(track.count).padStart(5)} stops on ${site.host}, ` +
+      `sol ${track.sol.at(-1)}, ${logDate(startJd)} .. ${logDate(stopJd)}`,
+  );
+  return { body, track, info: { host: site.host, startJd, stopJd, count: track.count } };
+}
+
 /** First and last instant of a table, or a loud failure if it has none. */
 function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
   const startJd = table.t[0];
@@ -386,7 +430,7 @@ async function main(): Promise<void> {
   // VizieR and comes back long before Horizons has finished with the planets.
   const [natural, hipparcosRows, tycho2Rows] = await Promise.all([
     mapWithConcurrency(
-      CATALOG.filter((body) => body.vectorWindow !== 'mission'),
+      CATALOG.filter((body) => body.vectorWindow === 'full' || body.vectorWindow === 'short'),
       MAX_CONCURRENT_REQUESTS,
       (body) => fetchBody(body, epoch),
     ),
@@ -403,9 +447,18 @@ async function main(): Promise<void> {
     (body) => fetchSpacecraft(body, epoch, frames),
   );
   const results = [...natural, ...craft.filter((result) => result !== null)];
+  const surface = (
+    await Promise.all(
+      CATALOG.filter((body) => body.vectorWindow === 'surface').map((body) =>
+        fetchSurfaceCraft(body, epoch),
+      ),
+    )
+  ).filter((result) => result !== null);
   // What this run publishes: every body that came back. A craft left out above is in
   // neither the catalog nor the manifest, so the app never asks for its table.
-  const published = new Set(results.map((result) => result.body.id));
+  const published = new Set(
+    [...results, ...surface].map((result) => result.body.id),
+  );
   const catalog = CATALOG.filter((body) => published.has(body.id));
 
   const stars = buildStarCatalog({
@@ -462,6 +515,12 @@ async function main(): Promise<void> {
 
   const paths = await writePaths(results, frames);
 
+  const surfaces: Record<BodyId, SurfaceInfo> = {};
+  for (const result of surface) {
+    await writeSurface(result.track);
+    surfaces[result.body.id] = result.info;
+  }
+
   await writeCatalog(catalog);
   await writeStars(stars);
 
@@ -503,6 +562,7 @@ async function main(): Promise<void> {
     bodies: catalog.map((body) => body.id),
     tables,
     paths,
+    surfaces,
   };
 
   await writeManifest(manifest);

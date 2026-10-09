@@ -49,6 +49,7 @@ function body(id: string, kind: BodyDefinition['kind'], parent: string | null): 
           operator: 'Test',
           endUtc: null,
           windowMonths: null,
+          site: null,
           shape: {
             model: null,
             metresPerUnit: 1,
@@ -130,6 +131,7 @@ function makeStore(): EphemerisStore {
       ]),
     ),
     paths: {},
+    surfaces: {},
   };
   return new EphemerisStore({
     manifest,

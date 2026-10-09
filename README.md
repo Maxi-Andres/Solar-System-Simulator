@@ -135,6 +135,7 @@ web/public/data/
 ├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
 ├─ vectors/<id>/<n>.json  # the same, split into ~1500-sample chunks (fast moons, long spacecraft paths)
 ├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
+├─ surface/<id>.json      # a craft on Mars: where each drive ended, and from when
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -284,10 +285,10 @@ samples — one turn and a quarter at a time, rebuilt as the clock moves on.
 
 ### Spacecraft up close
 
-Twenty-seven craft are drawn with **NASA's own 3D models** — twenty-five files from NASA
-3D Resources; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, THEMIS's both
+Thirty craft are drawn with **NASA's own 3D models** — twenty-eight files from NASA 3D
+Resources and NASA's mission pages; Voyager's serves both Voyagers, Pioneer 10's both Pioneers, THEMIS's both
 ARTEMIS probes, DART's is NASA's printable STL, converted, and MAVEN's waits for a MAVEN
-in the data — compressed with meshopt and WebP to 16 MB in all and fetched only once a
+in the data — compressed with meshopt and WebP to 23 MB in all and fetched only once a
 craft is six pixels across. None documents its
 units; most measure in metres, and the nine in arbitrary units are scaled by one
 published dimension each. A test checks every compressed file still measures what NASA's
@@ -302,6 +303,31 @@ The Mars and lunar orbiters really point their instruments at the ground below a
 their dishes and arrays on gimbals; what is drawn is the dish or the arrays, not that. The roll about that axis is a convention. JPL's attitude kernels would be the
 measured answer for some of them; they are gigabytes of binary and do not exist for
 Pioneer, Parker or JWST.
+
+### Spacecraft on Mars
+
+Curiosity, Perseverance and InSight have **no ephemeris** here. Horizons keeps Curiosity
+at its 2012 landing site, fourteen kilometres from where it has driven since, and stops
+Perseverance's file in February 2026. What NASA does publish is each rover's traverse, as
+its mission maps (MMGIS) show it: one point per drive, with the sol, latitude, longitude
+and heading where the rover stopped (`tools/src/surface.ts`). A sol becomes an instant
+by Mars time — the Mars24 algorithm, checked against its own worked example — and each
+stop holds from the end of the sol its drive happened in. InSight never moved: it is at
+its HiRISE fix, 4.502384° N 135.623447° E (Golombek et al. 2020).
+
+In the app a rover is **placed, not interpolated** (`web/src/core/surface.ts`): its
+latitude and longitude on the reference ellipsoid, turned with Mars by the same IAU
+rotation the surface map is drawn with, every frame. Nothing is sampled, so nothing can
+drift off the ground. Its model stands on the ellipsoid's normal, its front along the
+heading NASA reports — measured, unlike every attitude in space here.
+
+The ground needed one more thing. The planet is a 64 × 32 sphere whose flat faces sag up
+to **4 km** inside the ellipsoid between their corners, and a 3 m rover on the true
+surface would float that far above them. So under each surface craft the ellipsoid
+itself is drawn, two degrees across in 1.2 km faces that sag by 5 cm, with the planet's
+own material on it (`web/src/scene/surfaceGround.ts`), and the traverse is draped on it.
+Mars has no terrain here: Curiosity really stands 4.5 km below the ellipsoid, at the
+bottom of Gale crater.
 
 ### Freshness
 
@@ -412,6 +438,7 @@ two, never drawn somewhere approximate and then moved.
 | Source | Used for |
 |---|---|
 | [JPL Horizons API](https://ssd.jpl.nasa.gov/api/horizons.api) | Positions and velocities of planets, moons and spacecraft, and what span each spacecraft's path covers |
+| [NASA/JPL Mars mission maps (MMGIS)](https://science.nasa.gov/mission/msl-curiosity/location-map/) | Where Curiosity and Perseverance ended each drive, and their heading — courtesy NASA/JPL-Caltech |
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
@@ -425,9 +452,10 @@ two, never drawn somewhere approximate and then moved.
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
   The twenty-one major moons are in, with positions, orbits, rotation, shapes and
-  surface maps. Fifty spacecraft are in at their real positions — interplanetary, at the
+  surface maps. Fifty-three spacecraft are in at their real positions — interplanetary, at the
   Lagrange points, in orbit around Mars, the Moon and Jupiter — with their trails drawn
-  from JPL's samples and NASA's models up close. Craft on the surface of Mars are next.
+  from JPL's samples and NASA's models up close. Curiosity, Perseverance and InSight stand on Mars, where NASA's
+  traverse maps put them.
 - **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
   propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a

@@ -266,7 +266,7 @@ describe('the spacecraft', () => {
   it('never list one craft twice, by name or by Horizons id', () => {
     expect(new Set(craft.map((body) => body.id)).size).toBe(craft.length);
     expect(new Set(craft.map((body) => body.horizonsId)).size).toBe(craft.length);
-    expect(craft.length).toBe(51);
+    expect(craft.length).toBe(54);
   });
 
   it('follow the close orbiters for a few months only, and in their planet’s frame', () => {
@@ -285,7 +285,8 @@ describe('the spacecraft', () => {
 
   it('take the mission window, and nothing that belongs to a natural body', () => {
     for (const body of craft) {
-      expect(body.vectorWindow, body.id).toBe('mission');
+      // A craft on the ground has no window of state vectors at all: it is placed.
+      expect(body.vectorWindow, body.id).toBe((body.mission?.site ?? null) === null ? 'mission' : 'surface');
       // Not conics, so no ellipse; no shape, so no sphere's worth of rotation or maps.
       expect(body.drawOrbit, body.id).toBe(false);
       expect(body.rotation, body.id).toBeNull();

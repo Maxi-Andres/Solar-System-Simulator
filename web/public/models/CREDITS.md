@@ -44,6 +44,9 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 | `juno.glb` | Juno | https://science.nasa.gov/3d-resources/juno-a/ — `Juno (A).glb` |
 | `themis.glb` | ARTEMIS P1, ARTEMIS P2 | https://science.nasa.gov/3d-resources/time-history-of-events-and-macroscale-interactions-during-substorms-themis/ — `…(THEMIS).glb`; one model for every THEMIS probe, two of which are ARTEMIS |
 | `dart.glb` | DART | https://science.nasa.gov/3d-resources/double-asteroid-redirection-test-dart/ — the printable `Double Asteroid Redirection Test (DART).stl`, converted to GLB here (one mesh, flat grey; no textures exist) |
+| `curiosity.glb` | Curiosity | https://science.nasa.gov/resource/curiosity-rover-3d-model/ — `24584_Curiosity_static.glb`, credit NASA/JPL-Caltech (no GLB of Curiosity is in NASA 3D Resources itself) |
+| `perseverance.glb` | Perseverance | https://science.nasa.gov/3d-resources/mars-2020-perseverance-rover/ — `Mars 2020 Perseverance Rover.glb`, NASA/JPL; posed here, see below |
+| `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
 alike, and no model of the second of either has been published.
@@ -55,6 +58,13 @@ where it comes from. NASA's Wind model draws the craft's 100 m wire antennas a f
 long; at 0.38 mm thick they would not show at any length. DART's only NASA model is a
 printable STL, converted to GLB with glTF-Transform's core library (positions and face
 normals, welded) before the same compression.
+
+Two of the Mars models were changed before compression, and nothing else about them.
+Perseverance's file ships with its mast stowed and a demonstration animation that raises
+it and then works the arm; every animated part was set to its pose at 3 s -- mast up, arm
+still stowed, as the rover drives -- and the animations dropped. InSight's origin is at
+its deck, 0.664 m above the lowest point, the seismometer it set on the ground; the whole
+file was moved up by that, so it stands on the ground it is placed on.
 
 ## Not here
 

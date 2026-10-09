@@ -185,21 +185,26 @@ export function craftUnavailability(store: EphemerisStore, id: BodyId, jd: numbe
 }
 
 /** Where a spacecraft is, for grouping the list: what it moves with. */
-export type CraftGroup = 'interplanetary' | 'near-earth' | 'planets';
+export type CraftGroup = 'interplanetary' | 'near-earth' | 'planets' | 'surface';
 
 /** The groups in the order they are listed, with their headings. */
 export const CRAFT_GROUPS: readonly { readonly id: CraftGroup; readonly label: string }[] = [
   { id: 'interplanetary', label: 'Interplanetary' },
   { id: 'near-earth', label: 'Near Earth' },
   { id: 'planets', label: 'At other planets' },
+  { id: 'surface', label: 'On the surface' },
 ];
 
 /**
  * Which group a craft is listed under, from what it hangs off in the frame tree: nothing
  * for one in orbit about the Sun, Earth or the Moon for one that moves with Earth -- the
- * Lagrange-point observatories, the lunar missions -- and another planet otherwise.
+ * Lagrange-point observatories, the lunar missions -- and another planet otherwise. A
+ * craft standing on a body is apart from all of them.
  */
 export function craftGroup(store: EphemerisStore, body: BodyDefinition): CraftGroup {
+  if ((body.mission?.site ?? null) !== null) {
+    return 'surface';
+  }
   if (body.parent === null) {
     return 'interplanetary';
   }
