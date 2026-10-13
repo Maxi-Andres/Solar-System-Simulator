@@ -136,6 +136,7 @@ web/public/data/
 ├─ vectors/<id>/<n>.json  # the same, split into ~1500-sample chunks (fast moons, long spacecraft paths)
 ├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
 ├─ surface/<id>.json      # a craft on Mars: where each drive ended, and from when
+├─ small-moons/<planet>.json  # a planet's small moons, fetched when its system is entered
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -197,6 +198,36 @@ inside a hundredth of its radius, and their orbits are short: a year of all twen
 moons take a narrower window — a year either side of the build — and ship in chunks,
 and a visitor fetches one chunk per moon, only once that moon's system has opened up on
 screen. The full measurement, moon by moon, is in `tools/src/catalog.ts`.
+
+### The small moons
+
+Beyond the twenty-one, JPL publishes **437 more** that Horizons can answer for — 284 of
+them Saturn's, after 128 were announced in 2025. (A 438th, S/2025 U 1, is in JPL's tables
+but not yet in Horizons, where its number, 75052, is an asteroid's: it was fetched as that,
+a billion kilometres from Uranus, until the list was checked against Horizons' own.) The list is built by `pnpm moons:list` (`tools/src/moons/`) from
+JPL's satellite tables — mean elements for every moon, physical parameters where
+measured, the Horizons summary where only an estimate exists — and committed, so a data
+run never scrapes a web page. For most, an orbit is all that is known: JPL gives a size
+for 52, and the other 385 are drawn as **markers**, never as spheres of an unmeasured
+size.
+
+The major moons' rule — a hundredth of the radius — would have cost 26,000 to 66,000
+samples a year for each of the forty-one inner small moons, ~3.8 million in all, and for
+a 1 km moon it means holding JPL's numbers to ten metres when JPL places the faintest of
+them only to hundreds of kilometres. So they are sampled **adaptively**, as the
+spacecraft are, to a hundredth of the radius but **never finer than a kilometre** — and
+far from the planet to the spacecraft's ten microradians seen from it, 200 km for an
+irregular moon 20 million km out — over
+**three months** either side of the build for the inner moons and **a year** for the
+rest, and propagated, flagged approximate, outside it. A moon JPL has nothing for inside
+its window is left out (Daphnis's ephemeris stops in 2018).
+
+They **cost nothing until you go there**. None of them is in the startup files: each
+planet's small moons are one file, `small-moons/<planet>.json` — definitions, elements,
+table index; Jupiter's 20 KB compressed, Saturn's 47 KB — fetched the first time that
+planet's system is entered, and only then do they exist in the app. Inside it, the
+visible ones fetch their first chunk of positions: 0.9 MB at Jupiter, 1.9 MB at Saturn.
+They share one sphere, and a small moon's orbit is drawn only while it is the focus.
 
 One thing the moons exposed about the planets: **Jupiter's own table is 0.013 of its
 radius out at worst**, 956 km across 2026 at six-hour spacing, slightly more than the
@@ -285,15 +316,15 @@ samples — one turn and a quarter at a time, rebuilt as the clock moves on.
 
 ### Spacecraft up close
 
-Thirty-six craft are drawn with **their agencies' own 3D models**: thirty with NASA's —
+Thirty-eight craft are drawn with **their agencies' own 3D models**: thirty with NASA's —
 twenty-eight files from NASA 3D Resources and NASA's mission pages; Voyager's serves both
 Voyagers, Pioneer 10's both Pioneers, THEMIS's both ARTEMIS probes, DART's is NASA's
-printable STL, converted, and MAVEN's waits for a MAVEN in the data — and six with
-**ESA's, by ESA's written permission**: Juice, Solar Orbiter, BepiColombo, Hera, Euclid
-and Gaia. The permission asks that their geometry be kept as ESA made it — nothing is
+printable STL, converted, and MAVEN's waits for a MAVEN in the data — and eight with
+**ESA's, by ESA's written permission**: Juice, Solar Orbiter, BepiColombo, Hera, Euclid,
+Gaia, Mars Express (its 40 m MARSIS antenna drawn) and the Trace Gas Orbiter. The permission asks that their geometry be kept as ESA made it — nothing is
 simplified, and each keeps its source's triangle count, Juice's 959,923 among them — and
 that "3D models © ESA (European Space Agency)." be shown wherever they are used, which
-the info panel and About do. All 34 files are compressed with meshopt and WebP to 36 MB
+the info panel and About do. All 36 files are compressed with meshopt and WebP to 37 MB
 and fetched only once a craft is six pixels across. None documents its units; most
 measure in metres or centimetres, and those in arbitrary units are scaled by one
 published dimension each. A test checks every compressed file still measures what its
@@ -464,7 +495,8 @@ two, never drawn somewhere approximate and then moved.
   was tried here and withdrawn: a photograph is the wrong instrument for a sky.
 - **Phase A** — moons and spacecraft, using the reference-frame tree already in place.
   The twenty-one major moons are in, with positions, orbits, rotation, shapes and
-  surface maps. Fifty-three spacecraft are in at their real positions — interplanetary, at the
+  surface maps, and every small moon Horizons publishes, 437 more, fetched planet by
+  planet as their systems are entered. Fifty-three spacecraft are in at their real positions — interplanetary, at the
   Lagrange points, in orbit around Mars, the Moon and Jupiter — with their trails drawn
   from JPL's samples and NASA's models up close. Curiosity, Perseverance and InSight stand on Mars, where NASA's
   traverse maps put them.

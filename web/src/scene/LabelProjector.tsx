@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import { bodiesToResolve } from './floatingOrigin.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
 
@@ -169,9 +170,11 @@ export function LabelProjector({
   const widths = useMemo(() => new Map<BodyId, number>(), []);
   // The labels shown last frame, which keep their places. See `declutterLabels`.
   const held = useMemo(() => new Set<BodyId>(), []);
+  // Re-derived when a planet's small moons arrive, as the scene's is.
+  const version = useStoreVersion(store);
   const wanted = useMemo(
-    () => bodiesToResolve(store, visibleKinds, focus),
-    [store, visibleKinds, focus],
+    () => (void version, bodiesToResolve(store, visibleKinds, focus)),
+    [store, visibleKinds, focus, version],
   );
 
   useFrame(() => {

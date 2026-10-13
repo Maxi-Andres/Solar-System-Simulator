@@ -31,8 +31,17 @@ const MONTHS: Readonly<Record<string, number>> = {
   JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
 };
 
+/**
+ * The refusal, for the target -- or for the centre it is asked about. A small moon of
+ * Neptune whose own file runs on past 2200 is refused at Neptune's edge instead:
+ *
+ *   No ephemeris for center "Neptune" after A.D. 2199-DEC-30 00:00:00.0000 TDB
+ *
+ * and that is as real a limit as the moon's own: there is nothing to measure it from
+ * beyond it.
+ */
 const LIMIT_PATTERN =
-  /No ephemeris for target ".*" (prior to|after) A\.D\. (\d{4})-([A-Z]{3})-(\d{2}) (\d{2}):(\d{2}):(\d{2}(?:\.\d+)?) TDB/;
+  /No ephemeris for (?:target|center) ".*" (prior to|after) A\.D\. (\d{4})-([A-Z]{3})-(\d{2}) (\d{2}):(\d{2}):(\d{2}(?:\.\d+)?) TDB/;
 
 /** A coverage edge from Horizons' refusal, or null when the text holds none. */
 export function parseCoverageLimit(

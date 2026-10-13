@@ -1,4 +1,11 @@
-import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
+import {
+  CLOSE_ORBIT_WINDOW_MONTHS,
+  INNER_MOON_PERIOD_DAYS,
+  SMALL_MOON_RADIUS_FRACTION,
+  SMALL_MOON_TOLERANCE_FLOOR_KM,
+  SMALL_MOON_WINDOW_MONTHS,
+} from './config.ts';
+import { SMALL_MOON_RECORDS } from './moons/smallMoons.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
 import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
 
@@ -1727,11 +1734,21 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
  * dish or the arrays, not the body's nadir, and says so. ARTEMIS's spin axis is held
  * near the ecliptic pole.
  *
+ * **ESA's models** of Mars Express and the Trace Gas Orbiter, by ESA's second written
+ * permission (2026-10-13, all of ESA's models; see web/public/models/CREDITS.md), from
+ * Sci-Fleet (mars_express.fbx, trace_gas_orbiter.fbx), converted, not simplified:
+ *
+ *   model          unit   measured                       published
+ *   Mars Express   cm     12.26 m across the arrays      12 m (ESA)
+ *                         42.7 m across MARSIS           two 20 m dipole booms (ESA)
+ *   ExoMars TGO    m      17.69 m across the arrays      17.5 m (Horizons summary)
+ *
+ * Mars Express's span is MARSIS's now that the antenna is drawn. Both models' arrays
+ * lie with their cells on +-y -- Mars Express's along x, TGO's along z -- and which side
+ * carries the cells is not determinable from the files: +y is a choice.
+ *
  * **Boxes**, every figure published (L x W x D, metres):
  *
- *   Mars Express   12 x 1.8 x 1.4    arrays 12 m across; bus 1.5 x 1.8 x 1.4 (ESA).
- *                                    The 40 m MARSIS antennas are not drawn.
- *   ExoMars TGO    17.5 x 3.2 x 2    (Horizons summary)
  *   Hope           7.9 x 3.0 x 2.9   7.9 m across; bus 2.37 x 2.90 (Horizons)
  *   Danuri         6.3 x 3.18 x 2.67 (NASA/KARI launch press kit)
  *   Chandrayaan-2  5.8 x 3.2 x 2.1   (ISRO GSLV Mk III-M1 brochure)
@@ -1797,8 +1814,28 @@ const CLOSE_SHAPES = {
     pointingAxis: [0, 1, 0],
     rollAxis: [1, 0, 0],
   },
-  marsExpress: { ...BOX, boxM: [12, 1.8, 1.4] },
-  tgo: { ...BOX, boxM: [17.5, 3.2, 2.0] },
+  marsExpress: {
+    model: 'mars-express.glb',
+    pivot: [72.798, -605.63, -73.953],
+    modelOwner: 'ESA',
+    metresPerUnit: 0.01,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  tgo: {
+    model: 'exomars-tgo.glb',
+    pivot: [0.065815, 0.21771, 0.057327],
+    modelOwner: 'ESA',
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
   hope: { ...BOX, boxM: [7.9, 3.0, 2.9] },
   danuri: { ...BOX, boxM: [6.3, 3.18, 2.67] },
   chandrayaan2: { ...BOX, boxM: [5.8, 3.2, 2.1] },
@@ -1874,7 +1911,8 @@ const CLOSE_ORBITERS: readonly BodyDefinition[] = [
     parentHorizonsId: '499',
     stepDays: 1,
     windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
-    spanM: 12,
+    // MARSIS, 40 m tip to tip, deployed 2005: the craft's largest dimension.
+    spanM: 40,
     launchUtc: '2003-06-02T17:45:26Z',
     operator: 'ESA',
     color: '#e0a080',
@@ -2133,6 +2171,116 @@ const SURFACE_CRAFT: readonly BodyDefinition[] = [
     },
   }),
 ];
+
+/** Each planet's Horizons body id: the centre its small moons are fetched about. */
+const PLANET_HORIZONS_IDS: Record<string, string> = {
+  mars: '499',
+  jupiter: '599',
+  saturn: '699',
+  uranus: '799',
+  neptune: '899',
+  pluto: '999',
+};
+
+/**
+ * Names as the IAU spells them, where JPL's elements table does not: its name column
+ * stops at twelve characters, and it carries one misspelling.
+ */
+const NAME_CORRECTIONS: Record<string, string> = {
+  Philophrosyn: 'Philophrosyne',
+  Magaclite: 'Megaclite',
+};
+
+/** A provisional designation as it is written: S2004_S31 -> "S/2004 S 31". */
+export function smallMoonName(jplName: string): string {
+  const provisional = /^S(\d{4})_([A-Z])_?(\d+)$/.exec(jplName);
+  if (provisional !== null) {
+    return `S/${provisional[1]} ${provisional[2]} ${provisional[3]}`;
+  }
+  return NAME_CORRECTIONS[jplName] ?? jplName;
+}
+
+/** The id a small moon goes by here: its name, lower-cased, words joined by hyphens. */
+export function smallMoonId(jplName: string): string {
+  return smallMoonName(jplName)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * The coarse step a small moon's sampling starts from: a fortieth of its period, in
+ * whole minutes, at most four days. The refinement goes finer wherever the curve needs
+ * it -- see refine.ts -- so this only has to be fine enough to see the orbit at all.
+ */
+function smallMoonStepDays(periodDays: number): number {
+  const minutes = Math.max(1, Math.min(4 * 1440, Math.floor((periodDays * 1440) / 40)));
+  return minutes / 1440;
+}
+
+/**
+ * The small moons, step A6: every natural satellite JPL publishes beyond the major ones
+ * -- 438 of them, 2026-10-13, Saturn's 284 among them after 2025's 128 discoveries. Read
+ * from moons/smallMoons.ts, which buildMoonList.ts writes from JPL's satellite tables.
+ *
+ * What is known of most of them is an orbit and nothing else. **Radius**: 25 have one in
+ * JPL's physical-parameter table, 27 more an estimate in their Horizons summary, and the
+ * other 386 none at all; those are drawn as a marker and never as a sphere, with a
+ * nominal kilometre for the camera (radiusPublished: false). **GM**: where measured, and
+ * otherwise nothing -- they move nothing here. No rotation and no maps exist, so they are
+ * flat grey, the dark grey of the irregular moons' measured albedos (0.04 to 0.06).
+ *
+ * **Sampling**: adaptive, as the spacecraft are, to a hundredth of the radius but never
+ * finer than a kilometre (SMALL_MOON_TOLERANCE_FLOOR_KM), and far from the planet to the
+ * spacecraft's ten microradians seen from it; three months either side of
+ * the build for the inner moons, a year for the rest. Their tables are JPL's satellite
+ * ephemerides, which for the irregular moons are themselves uncertain by hundreds of
+ * kilometres. Outside the window they are propagated from their elements and flagged
+ * approximate, like every moon outside its table.
+ */
+const SMALL_MOONS: readonly BodyDefinition[] = SMALL_MOON_RECORDS.map((record) => {
+  const parentHorizonsId = PLANET_HORIZONS_IDS[record.parent];
+  if (parentHorizonsId === undefined) {
+    throw new Error(`No Horizons id for ${record.parent}, parent of ${record.name}.`);
+  }
+  const center = `500@${parentHorizonsId}`;
+  const published = record.radiusKm !== null;
+  const radiusKm = record.radiusKm ?? 1;
+  const gm = record.gmKm3S2 ?? 0;
+  const inner = record.periodDays < INNER_MOON_PERIOD_DAYS;
+  return {
+    id: smallMoonId(record.name),
+    name: smallMoonName(record.name),
+    horizonsId: record.horizonsId,
+    stepDays: smallMoonStepDays(record.periodDays),
+    vectorWindow: 'short',
+    center,
+    elementsCenter: center,
+    parent: record.parent,
+    kind: 'moon',
+    radiusEquatorialKm: radiusKm,
+    radiusPolarKm: radiusKm,
+    triaxialRadiiKm: null,
+    gmKm3S2: gm,
+    gmBodyOnlyKm3S2: gm,
+    rotationPeriodHours: null,
+    axialTiltDeg: null,
+    rotation: null,
+    color: '#8a8580',
+    drawOrbit: true,
+    textures: null,
+    rings: null,
+    mission: null,
+    sampling: {
+      toleranceKm: Math.max(
+        SMALL_MOON_TOLERANCE_FLOOR_KM,
+        SMALL_MOON_RADIUS_FRACTION * (record.radiusKm ?? 0),
+      ),
+      windowMonths: inner ? CLOSE_ORBIT_WINDOW_MONTHS : SMALL_MOON_WINDOW_MONTHS,
+    },
+    ...(published ? {} : { radiusPublished: false }),
+  } satisfies BodyDefinition;
+});
 
 export const CATALOG: readonly BodyDefinition[] = [
   {
@@ -2608,6 +2756,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     mission: null,
   },
   ...MOONS,
+  ...SMALL_MOONS,
   ...SPACECRAFT,
   ...MORE_SPACECRAFT,
   ...CLOSE_ORBITERS,

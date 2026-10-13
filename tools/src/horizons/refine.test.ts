@@ -259,6 +259,15 @@ describe('parseCoverageLimit', () => {
     ).toEqual({ side: 'stop', date: new Date('2100-01-01T00:00:00.000Z') });
   });
 
+  it('takes the centre’s edge when that is where Horizons stops', () => {
+    // Halimede's own file runs past 2200; Neptune's, which it is measured from, does not.
+    expect(
+      parseCoverageLimit(
+        'No ephemeris for center "Neptune" after A.D. 2199-DEC-30 00:00:00.0000 TDB',
+      ),
+    ).toEqual({ side: 'stop', date: new Date('2199-12-30T00:00:00.000Z') });
+  });
+
   it('returns null for anything else, rather than guessing', () => {
     expect(parseCoverageLimit('$$SOE\n2461000.5, ...\n$$EOE')).toBeNull();
     expect(parseCoverageLimit('No ephemeris for target "X" prior to A.D. 2018-XYZ-12 08:16:23 TDB')).toBeNull();

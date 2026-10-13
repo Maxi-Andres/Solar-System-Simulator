@@ -11,6 +11,7 @@
   "description": "Static ephemeris generator backed by the JPL Horizons API",
   "scripts": {
     "fetch:data": "node src/fetchData.ts",
+    "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

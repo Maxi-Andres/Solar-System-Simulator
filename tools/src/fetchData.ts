@@ -13,6 +13,8 @@
  *     Position, proper motion, magnitude and colour index for every star drawn.
  */
 
+import { pathToFileURL } from 'node:url';
+
 import { CATALOG, SSB_CENTER } from './catalog.ts';
 import {
   HORIZONS_API_URL,
@@ -55,6 +57,7 @@ import type {
   Manifest,
   OsculatingElements,
   PathInfo,
+  SmallMoonCount,
   SurfaceInfo,
   SurfaceTrack,
   TableInfo,
@@ -65,6 +68,7 @@ import {
   prepareOutputDir,
   writeCatalog,
   writeElements,
+  writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
   writePath,
@@ -235,6 +239,85 @@ async function fetchSpacecraft(
     sourceVersion,
     discontinuities: result.discontinuities,
   };
+}
+
+/**
+ * A small moon: sampled adaptively, as a spacecraft is, over its own window -- see
+ * SMALL_MOONS in the catalog. Null when JPL has nothing for it inside that window
+ * (Daphnis's ephemeris stops in 2018), or no elements to propagate it with outside: a
+ * moon the app could neither place nor fall back on is left out of the run.
+ */
+export async function fetchSmallMoon(
+  body: BodyDefinition,
+  epoch: Date,
+): Promise<BodyResult | null> {
+  const sampling = body.sampling;
+  if (sampling === undefined) {
+    throw new Error(`${body.id} is not sampled adaptively.`);
+  }
+  const start = addMonths(epoch, -sampling.windowMonths);
+  const stop = addMonths(epoch, sampling.windowMonths);
+  const stated = await fetchCoverage(body);
+  if (stated.stop.getTime() <= start.getTime() || stated.start.getTime() >= stop.getTime()) {
+    console.log(
+      `[fetch-data] ${body.name}: no data inside its window ` +
+        `(${stated.start.toISOString().slice(0, 10)} .. ${stated.stop.toISOString().slice(0, 10)}); left out`,
+    );
+    return null;
+  }
+  const statedEnd = new Date(Math.min(stop.getTime(), stated.stop.getTime()));
+  const dataEnd = await lastWithData(
+    new Date(Math.max(start.getTime(), stated.start.getTime()) + 120_000),
+    statedEnd,
+    horizonsProbe(body),
+  );
+  let elements: OsculatingElements;
+  try {
+    elements = parseElements(
+      (await callHorizons(elementsQuery(body, epoch), `${body.name} elements`)).result,
+      body,
+    );
+  } catch (error) {
+    console.log(`[fetch-data] ${body.name}: no elements at the build (${String(error).slice(0, 120)}); left out`);
+    return null;
+  }
+  // A moon is bound to its planet. An open orbit means Horizons answered for some other
+  // object under that number -- see majorBodyIds in moons/buildMoonList.ts.
+  if (!(elements.eccentricity < 1)) {
+    console.log(
+      `[fetch-data] ${body.name}: unbound about ${body.parent} (e = ${elements.eccentricity.toFixed(3)}), ` +
+        'not the moon; left out',
+    );
+    return null;
+  }
+  const { table, sourceVersion, result } = await fetchMissionVectors(
+    body,
+    start,
+    stop,
+    { start: stated.start, stop: dataEnd },
+    {
+      toleranceKm: sampling.toleranceKm,
+      // Far out, the spacecraft's angle: ten microradians seen from the planet, 200 km
+      // for an irregular moon 20 million km out and a thirtieth of a pixel from there.
+      // Held to its kilometre instead, every small jump between JPL's ephemeris files
+      // was refined to two minutes, and opening Jupiter cost 6 MB of them.
+      toleranceAt: (_jd, position) =>
+        Math.max(
+          sampling.toleranceKm,
+          SPACECRAFT_ANGULAR_TOLERANCE * Math.hypot(position[0], position[1], position[2]),
+        ),
+      minStepMinutes: SPACECRAFT_MIN_STEP_MINUTES,
+      margin: ESTIMATE_MARGIN,
+      samplesPerRequest: MAX_SAMPLES_PER_REQUEST,
+    },
+  );
+  const parts = splitTable(table, SPACECRAFT_CHUNK_SAMPLES);
+  console.log(
+    `[fetch-data] ${body.name.padEnd(12)} ${String(table.count).padStart(6)} samples, ` +
+      `adaptive ${stepSize(body.stepDays)} .. ${result.finestStepMinutes}m to ${sampling.toleranceKm.toFixed(2)} km ` +
+      `(${result.requests} requests), ${logDate(table.t[0]!)} .. ${logDate(table.t.at(-1)!)}`,
+  );
+  return { body, vectors: table, parts, elements, sourceVersion, discontinuities: [] };
 }
 
 async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
@@ -430,7 +513,11 @@ async function main(): Promise<void> {
   // VizieR and comes back long before Horizons has finished with the planets.
   const [natural, hipparcosRows, tycho2Rows] = await Promise.all([
     mapWithConcurrency(
-      CATALOG.filter((body) => body.vectorWindow === 'full' || body.vectorWindow === 'short'),
+      CATALOG.filter(
+        (body) =>
+          (body.vectorWindow === 'full' || body.vectorWindow === 'short') &&
+          body.sampling === undefined,
+      ),
       MAX_CONCURRENT_REQUESTS,
       (body) => fetchBody(body, epoch),
     ),
@@ -446,7 +533,30 @@ async function main(): Promise<void> {
     MAX_CONCURRENT_REQUESTS,
     (body) => fetchSpacecraft(body, epoch, frames),
   );
-  const results = [...natural, ...craft.filter((result) => result !== null)];
+  // The small moons last: they need nothing of the others, and the requests are spread
+  // out rather than doubled up against Horizons.
+  //
+  // One that Horizons keeps failing on, after every retry, is left out with a line in the
+  // log rather than failing the run: four hundred moons are four hundred chances of a
+  // bad minute at JPL, and losing the planets' data to one of them would be the worse
+  // trade. The major bodies and the craft still fail it.
+  const smallMoons = await mapWithConcurrency(
+    CATALOG.filter((body) => body.sampling !== undefined),
+    MAX_CONCURRENT_REQUESTS,
+    async (body) => {
+      try {
+        return await fetchSmallMoon(body, epoch);
+      } catch (error) {
+        console.log(`[fetch-data] ${body.name}: failed (${String(error).slice(0, 160)}); left out`);
+        return null;
+      }
+    },
+  );
+  const results = [
+    ...natural,
+    ...craft.filter((result) => result !== null),
+    ...smallMoons.filter((result) => result !== null),
+  ];
   const surface = (
     await Promise.all(
       CATALOG.filter((body) => body.vectorWindow === 'surface').map((body) =>
@@ -508,10 +618,33 @@ async function main(): Promise<void> {
       }
       tables[result.body.id] = { startJd: first.startJd, stopJd: last.stopJd, chunks };
     }
-    if (result.elements !== null) {
+    // The small moons' go into their planet's bundle, below.
+    if (result.elements !== null && result.body.sampling === undefined) {
       await writeElements(result.elements);
     }
   }
+
+  // The small moons leave the startup files altogether: each planet's ship in one file
+  // of their own, with their definitions, elements and table index, and the manifest
+  // only counts them. See Manifest.smallMoons.
+  const smallMoonCounts: Record<BodyId, SmallMoonCount> = {};
+  const smallResults = results.filter((result) => result.body.sampling !== undefined);
+  for (const planet of new Set(smallResults.map((result) => result.body.parent!))) {
+    const mine = smallResults.filter((result) => result.body.parent === planet);
+    await writeSmallMoonBundle(planet, {
+      bodies: mine.map((result) => result.body),
+      elements: Object.fromEntries(mine.map((result) => [result.body.id, result.elements!])),
+      tables: Object.fromEntries(mine.map((result) => [result.body.id, tables[result.body.id]!])),
+    });
+    for (const result of mine) {
+      delete tables[result.body.id];
+    }
+    smallMoonCounts[planet] = {
+      count: mine.length,
+      sized: mine.filter((result) => result.body.radiusPublished !== false).length,
+    };
+  }
+  const startupCatalog = catalog.filter((body) => body.sampling === undefined);
 
   const paths = await writePaths(results, frames);
 
@@ -521,7 +654,7 @@ async function main(): Promise<void> {
     surfaces[result.body.id] = result.info;
   }
 
-  await writeCatalog(catalog);
+  await writeCatalog(startupCatalog);
   await writeStars(stars);
 
   // The window every full-window body can answer for: the intersection of their
@@ -559,10 +692,11 @@ async function main(): Promise<void> {
       startUtc: fromJulianDay(startJd).toISOString(),
       stopUtc: fromJulianDay(stopJd).toISOString(),
     },
-    bodies: catalog.map((body) => body.id),
+    bodies: startupCatalog.map((body) => body.id),
     tables,
     paths,
     surfaces,
+    smallMoons: smallMoonCounts,
   };
 
   await writeManifest(manifest);
@@ -576,4 +710,7 @@ async function main(): Promise<void> {
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
 }
 
-await main();
+// Run when invoked, not when imported -- a script trying one moon imports fetchSmallMoon.
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

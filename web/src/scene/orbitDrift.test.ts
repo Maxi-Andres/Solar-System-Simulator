@@ -182,7 +182,28 @@ describeWithData('orbit drawn from the live state', () => {
         expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
       }
     }
-  });
+  }, 300_000);
+
+  it('keeps every small moon on its own orbit too, each planet’s once fetched', async () => {
+    // The check that caught S/2025 U 1: its number was an asteroid's in Horizons, and
+    // the "moon" was a billion kilometres from Uranus, on no orbit about it. A small
+    // moon with no published size is held to its nominal kilometre.
+    for (const planet of Object.keys(s.manifest.smallMoons ?? {})) {
+      await s.loadSmallMoons(planet);
+    }
+    const small = s.bodies.filter((candidate) => candidate.sampling !== undefined);
+    expect(small.length).toBeGreaterThan(400);
+    for (const body of small) {
+      const span = s.coverage(body.id)!;
+      for (const fraction of [0.003, 0.61]) {
+        const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
+        await s.whenLoadedAt(jd, [body.id]);
+        const drift = driftInRadii(s, body.id, jd);
+        expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
+        expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
+      }
+    }
+  }, 300_000);
 
   it('keeps every planet on its own orbit across the whole 20-year window', () => {
     for (const body of s.bodies.filter(

@@ -5,6 +5,8 @@ import type {
   OsculatingElements,
   PathInfo,
   PathTable,
+  SmallMoonBundle,
+  TableInfo,
   SurfaceInfo,
   SurfaceTrack,
   VectorTable,
@@ -68,6 +70,8 @@ export interface EphemerisData {
   readonly loadPath: PathLoader | null;
   /** Fetches a surface craft's stops; absent or null where nothing may be fetched. */
   readonly loadSurface?: SurfaceLoader | null;
+  /** Fetches one planet's small moons; absent or null where nothing may be fetched. */
+  readonly loadSmallMoons?: ((planet: BodyId) => Promise<SmallMoonBundle>) | null;
 }
 
 /** Fetches the stops of a craft on another body's surface. */
@@ -102,6 +106,7 @@ export async function loadEphemerisData(
     ...published,
     paths: hasPaths ? published.paths : {},
     surfaces: published.surfaces ?? {},
+    smallMoons: published.smallMoons ?? {},
   };
   const bodies = (await fetcher(`${basePath}data/bodies.json`)) as BodyDefinition[];
 
@@ -123,6 +128,7 @@ export async function loadEphemerisData(
     ),
   );
 
+  // The small moons are not here at all: see loadSmallMoons.
   const elementBodies = bodies.filter((body) => body.drawOrbit);
   const elementList = await Promise.all(
     elementBodies.map(
@@ -141,12 +147,26 @@ export async function loadEphemerisData(
     loadPath: async (id) => (await fetcher(`${basePath}data/paths/${id}.json`)) as PathTable,
     loadSurface: async (id) =>
       (await fetcher(`${basePath}data/surface/${id}.json`)) as SurfaceTrack,
+    loadSmallMoons: async (planet) =>
+      (await fetcher(`${basePath}data/small-moons/${planet}.json`)) as SmallMoonBundle,
   };
 }
 
 export class EphemerisStore {
   readonly #data: EphemerisData;
-  readonly #tree: FrameTree;
+  #tree: FrameTree;
+  /**
+   * The bodies, their elements and their tables: the startup files' at first, and each
+   * planet's small moons added once its system is entered. See loadSmallMoons.
+   */
+  readonly #bodies: BodyDefinition[];
+  readonly #elements: Map<BodyId, OsculatingElements>;
+  readonly #tables: Map<BodyId, TableInfo>;
+  readonly #smallMoonsLoaded = new Set<BodyId>();
+  readonly #smallMoonsPending = new Map<BodyId, Promise<void>>();
+  readonly #smallMoonsFailedAt = new Map<BodyId, number>();
+  #version = 0;
+  readonly #listeners = new Set<() => void>();
   readonly #chunked = new Map<BodyId, ChunkedTable>();
   readonly #paths = new Map<BodyId, PathTable>();
   readonly #pathsPending = new Map<BodyId, Promise<void>>();
@@ -158,6 +178,9 @@ export class EphemerisStore {
   constructor(data: EphemerisData) {
     this.#data = data;
     this.#tree = new FrameTree(data.bodies);
+    this.#bodies = [...data.bodies];
+    this.#elements = new Map(data.elements);
+    this.#tables = new Map(Object.entries(data.manifest.tables));
 
     for (const id of data.manifest.bodies) {
       // A surface craft is placed, not interpolated: it has no table.
@@ -181,7 +204,89 @@ export class EphemerisStore {
   }
 
   get bodies(): readonly BodyDefinition[] {
-    return this.#data.bodies;
+    return this.#bodies;
+  }
+
+  /**
+   * Goes up by one each time bodies are added. Anything that lists the bodies -- the
+   * scene, the labels, the picker -- subscribes and redraws.
+   */
+  get version(): number {
+    return this.#version;
+  }
+
+  /** Calls `listener` whenever bodies are added; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /** How many small moons a planet has, and how many have a size; null for none. */
+  smallMoonCount(planet: BodyId): { readonly count: number; readonly sized: number } | null {
+    return this.#data.manifest.smallMoons?.[planet] ?? null;
+  }
+
+  /** True once a planet's small moons have been added. */
+  hasSmallMoons(planet: BodyId): boolean {
+    return this.#smallMoonsLoaded.has(planet);
+  }
+
+  /**
+   * Fetches a planet's small moons and adds them: one file, asked for once, the first
+   * time its system is entered. Until then they cost the app nothing -- not a body, not
+   * a label, not a byte. A failure is logged and may be asked for again later.
+   */
+  loadSmallMoons(planet: BodyId): Promise<void> {
+    const load = this.#data.loadSmallMoons ?? null;
+    if (this.#smallMoonsLoaded.has(planet) || this.smallMoonCount(planet) === null || load === null) {
+      return Promise.resolve();
+    }
+    const pending = this.#smallMoonsPending.get(planet);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const failedAt = this.#smallMoonsFailedAt.get(planet);
+    if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) {
+      return Promise.resolve();
+    }
+    const promise = load(planet)
+      .then((bundle) => {
+        this.#addSmallMoons(bundle);
+        this.#smallMoonsLoaded.add(planet);
+        this.#smallMoonsFailedAt.delete(planet);
+      })
+      .catch((error: unknown) => {
+        this.#smallMoonsFailedAt.set(planet, Date.now());
+        console.error(`Could not load the small moons of ${planet}`, error);
+      })
+      .finally(() => {
+        this.#smallMoonsPending.delete(planet);
+      });
+    this.#smallMoonsPending.set(planet, promise);
+    return promise;
+  }
+
+  #addSmallMoons(bundle: SmallMoonBundle): void {
+    for (const body of bundle.bodies) {
+      const table = bundle.tables[body.id];
+      const elements = bundle.elements[body.id];
+      if (this.#tree.has(body.id) || table === undefined || table.chunks === null) {
+        continue;
+      }
+      this.#bodies.push(body);
+      this.#tables.set(body.id, table);
+      this.#chunked.set(body.id, new ChunkedTable(body.id, table, this.#data.loadChunk));
+      if (elements !== undefined) {
+        this.#elements.set(body.id, elements);
+      }
+    }
+    this.#tree = new FrameTree(this.#bodies);
+    this.#version += 1;
+    for (const listener of this.#listeners) {
+      listener();
+    }
   }
 
   get tree(): FrameTree {
@@ -198,12 +303,12 @@ export class EphemerisStore {
   }
 
   elementsFor(id: BodyId): OsculatingElements | null {
-    return this.#data.elements.get(id) ?? null;
+    return this.#elements.get(id) ?? null;
   }
 
   /** The span a body's vectors cover, or null for a body with no table. */
   coverage(id: BodyId): { readonly startJd: number; readonly stopJd: number } | null {
-    return this.#data.manifest.tables[id] ?? this.#data.manifest.surfaces[id] ?? null;
+    return this.#tables.get(id) ?? this.#data.manifest.surfaces[id] ?? null;
   }
 
   /**
@@ -218,7 +323,7 @@ export class EphemerisStore {
     // its table it is simply not there: before launch, or past the end of its
     // trajectory, there is nowhere honest to put it.
     return ids.every(
-      (id) => this.isCoveredAt(id, jd) || !this.#data.elements.has(id),
+      (id) => this.isCoveredAt(id, jd) || !this.#elements.has(id),
     );
   }
 
@@ -438,7 +543,7 @@ export class EphemerisStore {
     // Outside the window. The elements were requested against the same center as the
     // vectors -- the Sun for a planet, the planet for a moon -- so propagating them
     // gives a state in the frame the tree expects either way.
-    const elements = this.#data.elements.get(id);
+    const elements = this.#elements.get(id);
     if (elements) {
       return { ...propagate(elements, jd), approximate: true };
     }
@@ -477,7 +582,7 @@ export class EphemerisStore {
   /** Every body's state in the root frame, for one instant. */
   allStatesInRoot(jd: number): Map<BodyId, BodyState> {
     const states = new Map<BodyId, BodyState>();
-    for (const body of this.#data.bodies) {
+    for (const body of this.#bodies) {
       const state = this.stateInRoot(body.id, jd);
       if (state !== null) {
         states.set(body.id, state);

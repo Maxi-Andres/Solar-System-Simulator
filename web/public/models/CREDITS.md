@@ -20,20 +20,24 @@ About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 ### ESA — by written permission
 
 ESA's models are used **by written permission only**: ESA's general terms forbid
-redistributing them. The permission was given by email, received 2026-10-09, from ESA's
-Communication Department (Image Distribution for Professionals). It covers the ESA 3D models of **JUICE, Solar Orbiter, BepiColombo, Hera, Euclid
-and Gaia** — no others — in this open-source, non-commercial educational simulator, and
-its conditions are:
+redistributing them. The permission was given by email from ESA's Communication
+Department (Image Distribution for Professionals): first, received 2026-10-09, for the
+models of JUICE, Solar Orbiter, BepiColombo, Hera, Euclid and Gaia; then, received
+2026-10-13, for **ESA's 3D models generally**, used to represent spacecraft and other
+space-related objects in this open-source, non-commercial educational simulator. The
+conditions of the two together:
 
 - the models may be converted to glTF/GLB, compressed where necessary, and hosted on
-  this project's site, **provided the original geometry is preserved** — so these files
-  are converted and compressed, never simplified;
+  this project's site, **provided the original geometry is preserved and the models are
+  not misrepresented** — so these files are converted and compressed, never simplified,
+  and each stands for the craft it is a model of;
 - the attribution **"3D models © ESA (European Space Agency)."** is shown wherever the
   models are used — the info panel of every craft drawn with one, and the About panel;
 - any use for commercial purposes, or outside this project, needs ESA's separate
   authorization. These files are not covered by any licence this repository's code may
   carry;
-- any further restriction of the original model sources is respected: see each row.
+- any copyright notice or licensing condition attached to an individual model is kept,
+  and respected: see each row. None of the sources here carries one.
 
 ## Files
 
@@ -72,6 +76,8 @@ its conditions are:
 | `hera.glb` | Hera | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/HERA/misc/cosmo/models/3ds/ — 16 `.3ds` parts assembled as `config/spacecraft_hera_arcs.json` places them, with `fk/hera_v16.tf` and `spk/hera_struct_v02.bsp`. Not on Sci-Fleet. |
 | `euclid.glb` | Euclid | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/euclid/euclid.fbx, converted; the FBX root's 116° presentation rotation removed |
 | `gaia.glb` | Gaia | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/gaia/gaia.fbx, converted |
+| `mars-express.glb` | Mars Express | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/mars_express/mars_express.fbx, converted; MARSIS deployed |
+| `exomars-tgo.glb` | ExoMars TGO | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/trace_gas_orbiter/trace_gas_orbiter.fbx, converted (the orbiter alone; Schiaparelli separated in 2016) |
 | `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
@@ -96,7 +102,8 @@ ESA's six were converted with FBX2glTF (Sci-Fleet) or assembled from SPICE's `.3
 parts in the common frame their Cosmographia configuration and SPICE kernels define,
 then compressed as above. Their geometry is ESA's, as the permission requires: nothing
 was simplified, and each file has exactly its source's triangle count -- Juice 959,923,
-Hera 479,908, Euclid 136,061, BepiColombo 111,536, Gaia 45,634, Solar Orbiter 9,596.
+Hera 479,908, Euclid 136,061, BepiColombo 111,536, Gaia 45,634, Mars Express 33,298,
+TGO 27,288, Solar Orbiter 9,596.
 Unused camera and sky nodes from the FBX scenes were dropped, identical vertices
 welded, and the zero-length normals the converter left on degenerate triangles
 replaced. Neither Sci-Fleet nor the SPICE packages state terms of their own for the

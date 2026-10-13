@@ -115,7 +115,8 @@ function separationDeg(a: number, b: number): number {
   return Math.abs(raw > 180 ? raw - 360 : raw);
 }
 
-const moons = CATALOG.filter((body) => body.kind === 'moon');
+// The major moons: the small ones carry no rotation, and nothing here to check.
+const moons = CATALOG.filter((body) => body.kind === 'moon' && body.sampling === undefined);
 
 describe("the moons' poles, against JPL", () => {
   it('points every one of the twenty-one axes where JPL does, to a hundredth of a degree', () => {

@@ -226,7 +226,10 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
 
   return (
     <>
-      {body.triaxialRadiiKm === null ? (
+      {body.radiusPublished === false ? (
+        // Most of the small irregular moons: an orbit and no measured size.
+        <Row label="Radius">Not published by JPL</Row>
+      ) : body.triaxialRadiiKm === null ? (
         <>
           <Row label="Equatorial radius">
             {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
@@ -241,7 +244,10 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
           {`${body.triaxialRadiiKm.map((radius) => radius.toLocaleString('en-US')).join(' × ')} km`}
         </Row>
       )}
-      <Row label="GM">{`${body.gmKm3S2.toLocaleString('en-US')} km³/s²`}</Row>
+      {/* A zero GM here means unmeasured, not massless: the small moons have none. */}
+      <Row label="GM">
+        {body.gmKm3S2 === 0 ? 'Not measured' : `${body.gmKm3S2.toLocaleString('en-US')} km³/s²`}
+      </Row>
       {rotationHours !== null && (
         <Row label="Rotation period">
           {`${Math.abs(rotationHours).toFixed(2)} h${

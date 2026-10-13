@@ -179,7 +179,8 @@ describeWithData('a moon whose data has not arrived', () => {
     rebaseVisibleFrame(counting, 'sun', jd, bodiesToResolve(counting, kinds, 'sun'), sunView, 1080, 27);
     expect(requested).toEqual([]);
 
-    // Jupiter in focus from eight of its radii: its four moons, and nothing else.
+    // Jupiter in focus from eight of its radii: its four moons, and nothing else -- its
+    // small moons are not even in the store until their file is fetched (below).
     const jupiterView = { x: 0, y: 0, z: 8 * 71.492 };
     rebaseVisibleFrame(
       counting,
@@ -191,6 +192,43 @@ describeWithData('a moon whose data has not arrived', () => {
       27,
     );
     expect(requested.sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
+  });
+
+  it('adds a planet’s small moons only when asked, and fetches them only in its system', async () => {
+    const requested: string[] = [];
+    const counting = new EphemerisStore({
+      ...data!,
+      loadChunk: (id) => {
+        requested.push(id);
+        return new Promise(() => {});
+      },
+    });
+    const kinds = new Set(['star', 'planet', 'dwarf-planet', 'moon']);
+    const startup = counting.bodies.length;
+    expect(counting.bodies.some((body) => body.sampling !== undefined)).toBe(false);
+    const expected = counting.smallMoonCount('jupiter')!.count;
+    expect(expected).toBeGreaterThan(100);
+
+    let notified = 0;
+    counting.subscribe(() => {
+      notified += 1;
+    });
+    await counting.loadSmallMoons('jupiter');
+    expect(counting.hasSmallMoons('jupiter')).toBe(true);
+    expect(counting.bodies).toHaveLength(startup + expected);
+    expect(notified).toBe(1);
+    // Asked again, nothing more happens.
+    await counting.loadSmallMoons('jupiter');
+    expect(notified).toBe(1);
+
+    // From the Sun, none of them is wanted, loaded or not.
+    const jd = counting.coverage('io')!.startJd + 100;
+    rebaseVisibleFrame(counting, 'sun', jd, bodiesToResolve(counting, kinds, 'sun'), { x: 0, y: 0, z: 8 * 695.7 }, 1080, 27);
+    expect(requested).toEqual([]);
+    // At Jupiter they are, and only Jupiter's moons are fetched.
+    rebaseVisibleFrame(counting, 'jupiter', jd, bodiesToResolve(counting, kinds, 'jupiter'), { x: 0, y: 0, z: 8 * 71.492 }, 1080, 27);
+    expect(requested.length).toBeGreaterThan(4);
+    expect(requested.every((id) => counting.body(id).parent === 'jupiter')).toBe(true);
   });
 });
 

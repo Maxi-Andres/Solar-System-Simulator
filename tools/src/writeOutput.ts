@@ -14,6 +14,7 @@ import type {
   OsculatingElements,
   PathTable,
   Seam,
+  SmallMoonBundle,
   StarCatalog,
   SurfaceTrack,
   VectorTable,
@@ -57,6 +58,7 @@ export async function prepareOutputDir(): Promise<void> {
   await mkdir(join(OUTPUT_DIR, 'elements'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'paths'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'surface'), { recursive: true });
+  await mkdir(join(OUTPUT_DIR, 'small-moons'), { recursive: true });
 }
 
 function serializeTable(table: VectorTable): VectorTable {
@@ -150,6 +152,14 @@ export function serializeSeam(seam: Seam): Seam {
 
 export async function writeElements(elements: OsculatingElements): Promise<void> {
   await writeJson(join(OUTPUT_DIR, 'elements', `${elements.id}.json`), elements);
+}
+
+/**
+ * One planet's small moons, as small-moons/<planet>.json. See SmallMoonBundle: the app
+ * fetches it only once that planet's system is entered.
+ */
+export async function writeSmallMoonBundle(planet: string, bundle: SmallMoonBundle): Promise<void> {
+  await writeCompactJson(join(OUTPUT_DIR, 'small-moons', `${planet}.json`), bundle);
 }
 
 /**

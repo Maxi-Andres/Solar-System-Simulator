@@ -71,6 +71,7 @@ import {
   TrajectoryLine,
 } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { headingDirection, surfaceFrame } from '../core/surface.ts';
 import { PATCH_SHOWN_KM, SurfaceGround } from './surfaceGround.ts';
 import {
@@ -117,6 +118,13 @@ const MARKER_PIXELS = 11;
 
 /** Sphere tessellation. Generous, because a focused planet fills the screen. */
 const SPHERE_SEGMENTS = 64;
+
+/**
+ * The small moons' sphere: unit radius, scaled per moon. Coarse, because the largest of
+ * them that has a published size is Himalia at 85 km, and at 32 segments its faces sag
+ * by 0.5% of the radius.
+ */
+const SMALL_MOON_SPHERE = new THREE.SphereGeometry(1, 32, 16);
 
 /**
  * Which of the catalog's surface-map sets is drawn.
@@ -189,7 +197,8 @@ interface BodyHandles {
   readonly group: THREE.Group;
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
-  readonly orbit: OrbitLine | null;
+  /** Null for a body with no orbit drawn -- and for a small moon until it is focused. */
+  orbit: OrbitLine | null;
   /**
    * What the orbit is drawn around: the Sun for a planet, the planet for a moon.
    *
@@ -311,13 +320,22 @@ export function SolarSystem({
    * inflated for visibility. Oblateness is applied by scaling the polar axis, which
    * makes Saturn and Jupiter visibly flattened, as they are.
    */
+  // A body's handle is built once and kept: when a planet's small moons are added, only
+  // theirs are built, and every other body keeps its meshes, maps and lines.
+  const version = useStoreVersion(store);
+  const handleCache = useMemo(() => new Map<BodyId, BodyHandles>(), [store]);
   const handles = useMemo<BodyHandles[]>(() => {
-    return store.bodies.map((definition) => {
+    const build = (definition: BodyDefinition): BodyHandles => {
       const group = new THREE.Group();
       group.name = definition.id;
 
       const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
-      const geometry = new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
+      // The small moons share one coarse unit sphere, scaled below: four hundred spheres
+      // of their own would be 30 MB of geometry for bodies a few kilometres across.
+      const smallMoon = definition.sampling !== undefined;
+      const geometry = smallMoon
+        ? SMALL_MOON_SPHERE
+        : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
       // The Sun emits rather than receives, so it gets an unlit material -- and one
       // driven far past full scale, because a light source is not a lit surface. See
@@ -359,6 +377,9 @@ export function SolarSystem({
         definition.radiusPolarKm / definition.radiusEquatorialKm,
         triaxial === null ? 1 : triaxial[1] / triaxial[0],
       );
+      if (smallMoon) {
+        mesh.scale.multiplyScalar(radiusUnits);
+      }
       group.add(mesh);
 
       const marker = new THREE.Sprite(
@@ -506,7 +527,8 @@ export function SolarSystem({
 
       let orbit: OrbitLine | null = null;
       const elements = store.elementsFor(definition.id);
-      if (definition.drawOrbit && elements !== null) {
+      // A small moon's orbit is made when it is first focused: see the frame loop.
+      if (definition.drawOrbit && elements !== null && !smallMoon) {
         // Segment count and float32 anchoring are both handled inside OrbitLine;
         // see that file for why a fixed 512 segments put Pluto 93 radii off its own
         // orbit.
@@ -576,8 +598,20 @@ export function SolarSystem({
         craftShapeRequested: false,
         surfaceGround: null,
       };
+    };
+    void version;
+    return store.bodies.map((definition) => {
+      const cached = handleCache.get(definition.id);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const handle = build(definition);
+      handleCache.set(definition.id, handle);
+      return handle;
     });
-  }, [store]);
+  }, [store, version, handleCache]);
+  // Orbits made after the first render -- a small moon's, once focused -- hang here.
+  const lateOrbits = useMemo(() => new THREE.Group(), []);
   const handleById = useMemo(
     () => new Map(handles.map((handle) => [handle.definition.id, handle] as const)),
     [handles],
@@ -587,8 +621,8 @@ export function SolarSystem({
 
   // Hidden layers are not resolved at all, which for the moons means not fetched.
   const wanted = useMemo(
-    () => bodiesToResolve(store, visibleKinds, focus),
-    [store, visibleKinds, focus],
+    () => (void version, bodiesToResolve(store, visibleKinds, focus)),
+    [store, visibleKinds, focus, version],
   );
   // The markers shown last frame, which keep their places. See markerDeclutter.ts.
   const heldMarkers = useMemo(() => new Set<BodyId>(), []);
@@ -734,9 +768,12 @@ export function SolarSystem({
       if (craftShape !== null) {
         requestCraftShape(handle, craftShape, pixelRadius);
       }
-      const shaped = craft === null || handle.craftShape !== null;
+      // A moon whose size JPL does not publish is a marker at any range, like a craft
+      // with no shape: a sphere would claim a size nobody has measured.
+      const sized = handle.definition.radiusPublished !== false;
+      const shaped = craft === null ? sized : handle.craftShape !== null;
       const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
-      const sphereOpacity = craft === null ? meshOpacity(pixelRadius) : 0;
+      const sphereOpacity = craft === null && sized ? meshOpacity(pixelRadius) : 0;
       if (handle.craftShape !== null && craftShape !== null) {
         handle.craftShape.visible = pixelRadius > SHAPE_SHOWN_PX;
         if (handle.craftShape.visible) {
@@ -1071,6 +1108,21 @@ export function SolarSystem({
           });
       }
 
+      // A small moon's orbit is drawn only while it is the focus. Hundreds of them would
+      // be a scribble round Saturn, and each, sized to its kilometre, thousands of segments.
+      const smallMoonOrbit = handle.definition.sampling !== undefined;
+      if (smallMoonOrbit && handle.orbit === null && handle.definition.id === focus) {
+        const elements = store.elementsFor(handle.definition.id);
+        if (elements !== null) {
+          handle.orbit = new OrbitLine(
+            elements,
+            handle.definition.radiusEquatorialKm,
+            handle.definition.color,
+          );
+          lateOrbits.add(handle.orbit.line);
+        }
+      }
+
       if (handle.orbit !== null) {
         // The focused body's own orbit fades out once the body overflows the frame. By
         // then the visible piece of it is a straight line drawn across the picture rather
@@ -1085,7 +1137,11 @@ export function SolarSystem({
         // Orbits live in their parent's frame, so they follow the parent's rebased
         // position: the Sun's for a planet, the planet's for a moon.
         const parent = snapshot.bodies.get(handle.orbitParent);
-        handle.orbit.line.visible = showOrbits && parent !== undefined && fade > 0.005;
+        handle.orbit.line.visible =
+          showOrbits &&
+          parent !== undefined &&
+          fade > 0.005 &&
+          (!smallMoonOrbit || handle.definition.id === focus);
         // A hidden line is left as it is. It re-derives itself on the first frame it is
         // shown again, and twenty moon orbits a frame is not free.
         if (parent !== undefined && handle.orbit.line.visible) {
@@ -1231,6 +1287,7 @@ export function SolarSystem({
         .map((handle) => (
           <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!.line} />
         ))}
+      <primitive object={lateOrbits} />
       {handles
         .filter((handle) => handle.trajectoryGroup !== null)
         .map((handle) => (

@@ -83,7 +83,8 @@ export function ReadoutPanel({
         </thead>
         <tbody>
           {store.bodies
-            .filter((body) => visibleKinds.has(body.kind))
+            // Not the small moons: a hundred rows of Jupiter's would bury the table.
+            .filter((body) => visibleKinds.has(body.kind) && body.sampling === undefined)
             .map((body) => {
               const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);
               const speed = store.speedRelativeTo(body.id, 'sun', jd);

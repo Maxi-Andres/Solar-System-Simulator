@@ -5,7 +5,8 @@ import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { stepMinutes } from './horizons/queries.ts';
 
 const primaries = CATALOG.filter((body) => body.kind !== 'moon' && body.kind !== 'spacecraft');
-const moons = CATALOG.filter((body) => body.kind === 'moon');
+// The major moons; the small ones have their own tests in moons/smallMoons.test.ts.
+const moons = CATALOG.filter((body) => body.kind === 'moon' && body.sampling === undefined);
 const craft = CATALOG.filter((body) => body.kind === 'spacecraft');
 
 describe('CATALOG', () => {
@@ -305,9 +306,9 @@ describe('the spacecraft', () => {
 
   it('are sized by their span, metres rather than kilometres', () => {
     for (const body of craft) {
-      // LICIACube is a 30 cm CubeSat; Europa Clipper spans 30.5 m.
+      // LICIACube is a 30 cm CubeSat; Mars Express spans 40 m across its MARSIS antenna.
       expect(body.radiusEquatorialKm, body.id).toBeGreaterThanOrEqual(0.0001);
-      expect(body.radiusEquatorialKm, body.id).toBeLessThan(0.016);
+      expect(body.radiusEquatorialKm, body.id).toBeLessThanOrEqual(0.02);
     }
   });
 

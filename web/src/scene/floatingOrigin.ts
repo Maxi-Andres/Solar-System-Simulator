@@ -93,6 +93,12 @@ export function rebaseFrame(
  * the focus is the origin itself. Skipping the rest is not about arithmetic, which is
  * cheap -- it is that resolving a moon fetches its data, and a layer that is switched
  * off should cost nothing.
+ *
+ * The small moons are wanted only inside their own planet's system: with the planet,
+ * one of its moons or a craft about it in focus. Their orbits are tens of millions of
+ * kilometres across, so by the rule the other moons follow -- shown once the orbit is a
+ * dozen pixels -- Jupiter's hundred would crowd round it from the inner Solar System,
+ * and the default view would fetch four hundred files.
  */
 export function bodiesToResolve(
   store: EphemerisStore,
@@ -100,7 +106,11 @@ export function bodiesToResolve(
   focus: BodyId,
 ): Set<BodyId> {
   const wanted = new Set<BodyId>(['sun', focus, ...store.tree.ancestorsOf(focus)]);
+  const system = systemOf(store, focus);
   for (const body of store.bodies) {
+    if (body.sampling !== undefined && body.parent !== system && body.id !== focus) {
+      continue;
+    }
     if (visibleKinds.has(body.kind)) {
       wanted.add(body.id);
       for (const ancestor of store.tree.ancestorsOf(body.id)) {
@@ -109,6 +119,18 @@ export function bodiesToResolve(
     }
   }
   return wanted;
+}
+
+/**
+ * The planet whose system a body is in: itself for a planet, its planet for a moon or a
+ * craft hung from one -- the top of its branch of the frame tree, short of the Sun.
+ */
+export function systemOf(store: EphemerisStore, id: BodyId): BodyId {
+  let current = id;
+  for (let parent = store.body(current).parent; parent !== null; parent = store.body(current).parent) {
+    current = parent;
+  }
+  return current;
 }
 
 /**

@@ -274,6 +274,17 @@ export interface BodyDefinition {
   readonly rings: RingSystem | null;
   /** Who flies it and when it left, for a spacecraft; null for a natural body. */
   readonly mission: Mission | null;
+  /**
+   * For a natural body sampled adaptively, as the spacecraft are, rather than at one
+   * step: the small moons. Absent for every other body. See SMALL_MOONS in the catalog.
+   */
+  readonly sampling?: AdaptiveSampling;
+  /**
+   * False for a body whose size JPL does not publish -- most of the small irregular
+   * moons. It is drawn as a marker only, never as a sphere, and its radius fields hold a
+   * nominal kilometre that only frames the camera. Absent means published.
+   */
+  readonly radiusPublished?: boolean;
 }
 
 /**
@@ -376,6 +387,14 @@ export interface SurfaceInfo {
   readonly stopJd: number;
   /** Stops in `surface/<id>.json`. */
   readonly count: number;
+}
+
+/** How an adaptively sampled natural body is fetched. See BodyDefinition.sampling. */
+export interface AdaptiveSampling {
+  /** How far the interpolated curve may stray from JPL's, km. */
+  readonly toleranceKm: number;
+  /** Months either side of the build its table covers; outside it, it is propagated. */
+  readonly windowMonths: number;
 }
 
 /** An axis in a craft's own frame: a unit vector along one of its model axes. */
@@ -555,6 +574,31 @@ export interface Manifest {
    * `tables`: they are placed, not interpolated. See SurfaceTrack.
    */
   readonly surfaces: Readonly<Record<BodyId, SurfaceInfo>>;
+  /**
+   * How many small moons each planet has, and how many of those have a published size.
+   * The moons themselves are not in \`bodies\`, \`tables\` or bodies.json: each planet's
+   * are in \`small-moons/<planet>.json\`, fetched only once its system is entered, so the
+   * app starts as fast as it did before there were any. Absent in older data.
+   */
+  readonly smallMoons?: Readonly<Record<BodyId, SmallMoonCount>>;
+}
+
+/** A planet's small moons, counted for the manifest. See Manifest.smallMoons. */
+export interface SmallMoonCount {
+  readonly count: number;
+  readonly sized: number;
+}
+
+/**
+ * One planet's small moons, as `small-moons/<planet>.json`: their definitions, their
+ * elements and the index of their chunked tables -- everything the startup files would
+ * otherwise carry for them. Their vectors are under `vectors/<id>/`, as every chunked
+ * table's are.
+ */
+export interface SmallMoonBundle {
+  readonly bodies: readonly BodyDefinition[];
+  readonly elements: Readonly<Record<BodyId, OsculatingElements>>;
+  readonly tables: Readonly<Record<BodyId, TableInfo>>;
 }
 
 /**

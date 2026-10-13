@@ -106,6 +106,35 @@ export const SPACECRAFT_ANGULAR_TOLERANCE = 1e-5;
  */
 export const CLOSE_ORBIT_WINDOW_MONTHS = 3;
 
+/**
+ * The small moons' tolerance: a hundredth of the moon's radius, as for the major moons
+ * (step A1), but never finer than a kilometre -- the spacecraft's floor.
+ *
+ * A hundredth of a radius is ten metres for a 1 km moon, and JPL does not know where such
+ * a moon is to within hundreds of kilometres; holding our interpolation to ten metres of
+ * its numbers would be precision about nothing. Measured against JPL, 2026-10-13, the
+ * strict rule would have cost 26,000 to 66,000 samples a year for each of the forty-one
+ * inner moons (Aegaeon, 0.33 km, the worst), ~3.8 million samples in all.
+ *
+ * Far from the planet the spacecraft's angle takes over (SPACECRAFT_ANGULAR_TOLERANCE,
+ * seen from the planet): 200 km for an irregular moon 20 million km out. Held to the
+ * kilometre there instead, every small jump between JPL's ephemeris files was refined to
+ * two minutes -- Himalia 1,795 samples against 191 -- and opening Jupiter fetched 6 MB.
+ */
+export const SMALL_MOON_RADIUS_FRACTION = 0.01;
+export const SMALL_MOON_TOLERANCE_FLOOR_KM = 1;
+
+/**
+ * A small moon going round in less than this is an inner moon -- Metis, Pan, the ring
+ * shepherds, Uranus's and Neptune's inner families -- sampled every few minutes and
+ * followed only CLOSE_ORBIT_WINDOW_MONTHS either side of the build. Slower ones, the
+ * irregular moons with periods of months to years, take SMALL_MOON_WINDOW_MONTHS.
+ * Outside its window a moon is propagated from its elements and flagged approximate,
+ * like every moon outside its table.
+ */
+export const INNER_MOON_PERIOD_DAYS = 5;
+export const SMALL_MOON_WINDOW_MONTHS = 12;
+
 /** The finest step the spacecraft refinement may reach, minutes: Horizons' own unit. */
 export const SPACECRAFT_MIN_STEP_MINUTES = 1;
 

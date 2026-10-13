@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DistanceMode } from './core/ephemerisStore.ts';
 import { useSimulation } from './core/useSimulation.ts';
+import { useStoreVersion } from './core/useStoreVersion.ts';
+import { systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
@@ -66,6 +68,17 @@ export function App() {
   // and neither, measured from it, does anything else. So it steps back too, to what it
   // flies with.
   const jdNow = clock.tdbJulianDay;
+
+  // A planet's small moons are fetched when its system is entered -- the planet, one of
+  // its moons or a craft about it in focus -- and not a moment before. The labels below
+  // list every body, so the app redraws when they arrive.
+  useStoreVersion(store);
+  useEffect(() => {
+    if (store !== null) {
+      void store.loadSmallMoons(systemOf(store, focus));
+    }
+  }, [store, focus]);
+
   useEffect(() => {
     if (store === null) {
       return;

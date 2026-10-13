@@ -52,7 +52,9 @@ describeWithData('EphemerisStore against the generated data', () => {
     // The Sun, eight planets, Pluto, twenty-one moons and eleven spacecraft.
     // Every body the manifest lists, and the natural ones all there: 31 of them.
     expect(s.bodies).toHaveLength(s.manifest.bodies.length);
-    expect(s.bodies.filter((body) => body.kind !== 'spacecraft')).toHaveLength(31);
+    expect(
+      s.bodies.filter((body) => body.kind !== 'spacecraft' && body.sampling === undefined),
+    ).toHaveLength(31);
     expect(s.manifest.bodies).toContain('earth');
     expect(s.manifest.frame.center).toBe('500@0');
     expect(s.generatedAt.getTime()).toBeLessThanOrEqual(Date.now());

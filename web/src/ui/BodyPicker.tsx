@@ -2,6 +2,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
 /**
@@ -231,15 +232,20 @@ function BodyList({
   onChoose: (id: BodyId) => void;
 }) {
   const closing = useClosing();
+  // Redrawn when a planet's small moons arrive.
+  useStoreVersion(store);
   const focusBody = store.body(focus);
   const system = focusBody.parent ?? focusBody.id;
 
   // The system you are in starts unfolded, and so does the focused craft's group; the
   // rest start folded. Group keys share the set, prefixed so no body id can collide.
+  // A focused small moon unfolds its planet's small moons too.
   const [expanded, setExpanded] = useState<ReadonlySet<BodyId>>(() =>
     focusBody.kind === 'spacecraft'
       ? new Set([system, `craft:${craftGroup(store, focusBody)}`])
-      : new Set([system]),
+      : focusBody.sampling !== undefined
+        ? new Set([system, `small:${system}`])
+        : new Set([system]),
   );
 
   const primaries = store.bodies.filter(
@@ -286,6 +292,11 @@ function BodyList({
       {primaries.map((body) => {
         const moons = moonsOf(body.id);
         const open = expanded.has(body.id);
+        // The small moons are counted from the manifest until they are fetched.
+        const smallCount = visibleKinds.has('moon') ? (store.smallMoonCount(body.id)?.count ?? 0) : 0;
+        const moonCount = store.hasSmallMoons(body.id)
+          ? moons.length
+          : moons.length + smallCount;
         return (
           <div key={body.id}>
             <Row
@@ -294,7 +305,7 @@ function BodyList({
               inSystem={body.id === system && body.id !== focus}
               onChoose={onChoose}
               trailing={
-                moons.length > 0 && (
+                moonCount > 0 && (
                   <button
                     type="button"
                     aria-label={`${open ? 'Hide' : 'Show'} the moons of ${body.name}`}
@@ -314,7 +325,7 @@ function BodyList({
                       borderRadius: '0.2rem',
                     }}
                   >
-                    {moons.length}
+                    {moonCount}
                     <span
                       aria-hidden="true"
                       style={{
@@ -332,17 +343,35 @@ function BodyList({
               }
             />
             {open &&
-              moons.map((moon) => (
-                <Row
-                  key={moon.id}
-                  body={moon}
-                  indent
-                  active={moon.id === focus}
-                  inSystem={false}
-                  onChoose={onChoose}
-                  trailing={null}
-                />
-              ))}
+              moons
+                .filter((moon) => moon.sampling === undefined)
+                .map((moon) => (
+                  <Row
+                    key={moon.id}
+                    body={moon}
+                    indent
+                    active={moon.id === focus}
+                    inSystem={false}
+                    onChoose={onChoose}
+                    trailing={null}
+                  />
+                ))}
+            {open && (
+              <SmallMoons
+                planet={body}
+                moons={moons.filter((moon) => moon.sampling !== undefined)}
+                count={smallCount}
+                loaded={store.hasSmallMoons(body.id)}
+                open={expanded.has(`small:${body.id}`)}
+                onToggle={() => {
+                  // Unfolding the list is a request for it.
+                  void store.loadSmallMoons(body.id);
+                  toggle(`small:${body.id}`);
+                }}
+                focus={focus}
+                onChoose={onChoose}
+              />
+            )}
           </div>
         );
       })}
@@ -427,6 +456,92 @@ function BodyList({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * A planet's small moons, folded behind one row: Saturn has 284 of them, and listed
+ * with the major moons they would bury Titan.
+ */
+function SmallMoons({
+  planet,
+  moons,
+  count,
+  loaded,
+  open,
+  onToggle,
+  focus,
+  onChoose,
+}: {
+  planet: BodyDefinition;
+  moons: readonly BodyDefinition[];
+  /** How many the manifest says there are; the list itself waits for the fetch. */
+  count: number;
+  loaded: boolean;
+  open: boolean;
+  onToggle: () => void;
+  focus: BodyId;
+  onChoose: (id: BodyId) => void;
+}) {
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`${open ? 'Hide' : 'Show'} the small moons of ${planet.name}`}
+        aria-expanded={open}
+        onClick={onToggle}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.35rem',
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          padding: '0.3rem 0.45rem 0.3rem 1.6rem',
+          cursor: 'pointer',
+          color: '#6a6a6a',
+          fontSize: '0.68rem',
+          letterSpacing: '0.04em',
+          textAlign: 'left',
+          borderRadius: '0.2rem',
+        }}
+      >
+        Small moons
+        <span style={{ color: '#4a4a4a' }}>{loaded ? moons.length : count}</span>
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-block',
+            transform: open ? 'rotate(90deg)' : 'none',
+            transition: 'transform 160ms ease',
+            fontSize: '0.8rem',
+            lineHeight: 1,
+          }}
+        >
+          &rsaquo;
+        </span>
+      </button>
+      {open && !loaded && (
+        <div style={{ padding: '0.3rem 0.45rem 0.3rem 1.6rem', color: '#4a4a4a', fontSize: '0.68rem' }}>
+          Loading…
+        </div>
+      )}
+      {open &&
+        moons.map((moon) => (
+          <Row
+            key={moon.id}
+            body={moon}
+            indent
+            active={moon.id === focus}
+            inSystem={false}
+            onChoose={onChoose}
+            trailing={null}
+          />
+        ))}
+    </>
   );
 }
 

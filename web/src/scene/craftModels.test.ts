@@ -59,6 +59,8 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'hera.glb': [2.15, 2.16, 11.45],
   'euclid.glb': [339.1, 529.5, 340.6],
   'gaia.glb': [197.46, 79.24, 197.44],
+  'mars-express.glb': [1226.48, 1063.23, 4273.08],
+  'exomars-tgo.glb': [5.76, 4.95, 17.69],
 };
 
 /**
@@ -96,6 +98,8 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   // antenna hangs below the body. Kept as ESA made it.
   'euclid.glb': { axis: 1, metres: 4.7, within: 0.14 },
   'gaia.glb': { axis: 0, metres: 10.2, within: 0.001 },
+  'mars-express.glb': { axis: 0, metres: 12, within: 0.025 },
+  'exomars-tgo.glb': { axis: 2, metres: 17.5, within: 0.015 },
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
 
@@ -410,15 +414,14 @@ describe('craftOrientation', () => {
 describe('ESA’s models, by its written permission', () => {
   const esa = CATALOG.filter((body) => body.mission?.shape?.modelOwner === 'ESA');
 
-  it('are the six the permission names, and no others', () => {
-    // Juice, Solar Orbiter, BepiColombo, Hera, Euclid and Gaia. Mars Express and TGO are
-    // ESA's too, and not covered: they stay boxes until ESA says otherwise.
+  it('are every ESA craft here, each drawn with ESA’s own model', () => {
+    // The first permission named six; the second covers ESA's models generally.
     expect(esa.map((body) => body.id).sort()).toEqual(
-      ['bepicolombo', 'euclid', 'gaia', 'hera', 'juice', 'solar-orbiter'].sort(),
+      [
+        'bepicolombo', 'euclid', 'exomars-tgo', 'gaia', 'hera', 'juice', 'mars-express',
+        'solar-orbiter',
+      ].sort(),
     );
-    for (const id of ['mars-express', 'exomars-tgo']) {
-      expect(CATALOG.find((body) => body.id === id)?.mission?.shape?.model).toBeNull();
-    }
   });
 
   it('carry the credit ESA asked for, word for word, wherever they are used', async () => {
