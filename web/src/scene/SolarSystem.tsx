@@ -26,7 +26,7 @@ import {
   WATER_IOR,
   type EarthExtrasUniforms,
 } from './earthExtras.ts';
-import { bodiesToResolve } from './floatingOrigin.ts';
+import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
@@ -197,7 +197,7 @@ interface BodyHandles {
   readonly group: THREE.Group;
   readonly mesh: THREE.Mesh;
   readonly marker: THREE.Sprite;
-  /** Null for a body with no orbit drawn -- and for a small moon until it is focused. */
+  /** Null for a body with no orbit drawn -- and for a small moon while it is not focused. */
   orbit: OrbitLine | null;
   /**
    * What the orbit is drawn around: the Sun for a planet, the planet for a moon.
@@ -674,7 +674,7 @@ export function SolarSystem({
       }
 
       // A body switched off in the layers panel disappears entirely, orbit and all.
-      const kindVisible = visibleKinds.has(handle.definition.kind);
+      const kindVisible = isShown(handle.definition, visibleKinds);
       handle.group.visible = kindVisible;
       if (!kindVisible) {
         if (handle.orbit !== null) {
@@ -1108,12 +1108,18 @@ export function SolarSystem({
           });
       }
 
-      // A small moon's orbit is drawn only while it is the focus. Hundreds of them would
-      // be a scribble round Saturn, and each, sized to its kilometre, thousands of segments.
-      const smallMoonOrbit = handle.definition.sampling !== undefined;
-      if (smallMoonOrbit && handle.orbit === null && handle.definition.id === focus) {
+      // A small moon's orbit is drawn only while it is the focus: Saturn's together are a
+      // tangle of hundreds, and each, sized to its kilometre, thousands of segments. Made
+      // when it is focused and let go when it is not.
+      if (handle.definition.sampling !== undefined) {
+        const focused = handle.definition.id === focus;
+        if (handle.orbit !== null && !focused) {
+          lateOrbits.remove(handle.orbit.line);
+          handle.orbit.dispose();
+          handle.orbit = null;
+        }
         const elements = store.elementsFor(handle.definition.id);
-        if (elements !== null) {
+        if (focused && handle.orbit === null && elements !== null) {
           handle.orbit = new OrbitLine(
             elements,
             handle.definition.radiusEquatorialKm,
@@ -1137,11 +1143,7 @@ export function SolarSystem({
         // Orbits live in their parent's frame, so they follow the parent's rebased
         // position: the Sun's for a planet, the planet's for a moon.
         const parent = snapshot.bodies.get(handle.orbitParent);
-        handle.orbit.line.visible =
-          showOrbits &&
-          parent !== undefined &&
-          fade > 0.005 &&
-          (!smallMoonOrbit || handle.definition.id === focus);
+        handle.orbit.line.visible = showOrbits && parent !== undefined && fade > 0.005;
         // A hidden line is left as it is. It re-derives itself on the first frame it is
         // shown again, and twenty moon orbits a frame is not free.
         if (parent !== undefined && handle.orbit.line.visible) {

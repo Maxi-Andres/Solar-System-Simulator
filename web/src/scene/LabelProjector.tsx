@@ -5,7 +5,7 @@ import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
-import { bodiesToResolve } from './floatingOrigin.ts';
+import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
@@ -225,7 +225,7 @@ export function LabelProjector({
 
     for (const body of store.bodies) {
       // A kind that is switched off has nothing on screen to be labelled.
-      if (!visibleKinds.has(body.kind)) {
+      if (!visibleKinds.has(body.kind) || !isShown(body, visibleKinds)) {
         continue;
       }
 

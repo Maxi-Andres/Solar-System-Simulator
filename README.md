@@ -227,7 +227,8 @@ planet's small moons are one file, `small-moons/<planet>.json` — definitions, 
 table index; Jupiter's 20 KB compressed, Saturn's 47 KB — fetched the first time that
 planet's system is entered, and only then do they exist in the app. Inside it, the
 visible ones fetch their first chunk of positions: 0.9 MB at Jupiter, 1.9 MB at Saturn.
-They share one sphere, and a small moon's orbit is drawn only while it is the focus.
+They share one sphere, a small moon's orbit is drawn only while it is the focus, and they
+are **off by default**: the **Small Moons** switch in the Layers panel turns them on.
 
 One thing the moons exposed about the planets: **Jupiter's own table is 0.013 of its
 radius out at worst**, 956 km across 2026 at six-hour spacing, slightly more than the

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
+import { isShown, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
 /**
@@ -254,7 +255,9 @@ function BodyList({
   // Moons only: JWST hangs off Earth in the frame tree, and is listed with the craft.
   const moonsOf = (id: BodyId): BodyDefinition[] =>
     visibleKinds.has('moon')
-      ? store.bodies.filter((body) => body.parent === id && body.kind === 'moon')
+      ? store.bodies.filter(
+          (body) => body.parent === id && body.kind === 'moon' && isShown(body, visibleKinds),
+        )
       : [];
   const craft = visibleKinds.has('spacecraft')
     ? store.bodies.filter((body) => body.kind === 'spacecraft')
@@ -293,7 +296,10 @@ function BodyList({
         const moons = moonsOf(body.id);
         const open = expanded.has(body.id);
         // The small moons are counted from the manifest until they are fetched.
-        const smallCount = visibleKinds.has('moon') ? (store.smallMoonCount(body.id)?.count ?? 0) : 0;
+        const smallCount =
+          visibleKinds.has('moon') && visibleKinds.has(SMALL_MOON_LAYER)
+            ? (store.smallMoonCount(body.id)?.count ?? 0)
+            : 0;
         const moonCount = store.hasSmallMoons(body.id)
           ? moons.length
           : moons.length + smallCount;

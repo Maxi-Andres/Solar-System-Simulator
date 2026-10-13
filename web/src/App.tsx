@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DistanceMode } from './core/ephemerisStore.ts';
 import { useSimulation } from './core/useSimulation.ts';
 import { useStoreVersion } from './core/useStoreVersion.ts';
-import { systemOf } from './scene/floatingOrigin.ts';
+import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
@@ -30,6 +30,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   planets: ['planet', 'star'],
   dwarfPlanets: ['dwarf-planet'],
   moons: ['moon'],
+  smallMoons: [SMALL_MOON_LAYER],
   spacecraft: ['spacecraft'],
 };
 
@@ -74,10 +75,11 @@ export function App() {
   // list every body, so the app redraws when they arrive.
   useStoreVersion(store);
   useEffect(() => {
-    if (store !== null) {
+    // Nothing is fetched while the Small Moons layer is off.
+    if (store !== null && visibleKinds.has('moon') && visibleKinds.has(SMALL_MOON_LAYER)) {
       void store.loadSmallMoons(systemOf(store, focus));
     }
-  }, [store, focus]);
+  }, [store, focus, visibleKinds]);
 
   useEffect(() => {
     if (store === null) {
@@ -85,7 +87,7 @@ export function App() {
     }
     const body = store.body(focus);
     const craft = body.kind === 'spacecraft';
-    if (!visibleKinds.has(body.kind) && (body.parent !== null || craft)) {
+    if (!isShown(body, visibleKinds) && (body.parent !== null || craft)) {
       setFocus(body.parent ?? 'sun');
     } else if (craft && !store.isCoveredAt(focus, jdNow)) {
       setFocus(body.parent ?? 'sun');
@@ -116,7 +118,7 @@ export function App() {
   // twenty, so the answer depends on whether the moons are shown at all.
   const exact = store.isExactAt(
     jd,
-    store.bodies.filter((body) => visibleKinds.has(body.kind)).map((body) => body.id),
+    store.bodies.filter((body) => isShown(body, visibleKinds)).map((body) => body.id),
   );
   const uiVisible = layers.userInterface;
 

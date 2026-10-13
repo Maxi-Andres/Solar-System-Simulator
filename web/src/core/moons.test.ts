@@ -3,7 +3,12 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { bodiesToResolve, rebaseFrame } from '../scene/floatingOrigin.ts';
+import {
+  bodiesToResolve,
+  isShown,
+  rebaseFrame,
+  SMALL_MOON_LAYER,
+} from '../scene/floatingOrigin.ts';
 import { rebaseVisibleFrame } from '../scene/satellites.ts';
 import {
   EphemerisStore,
@@ -203,7 +208,7 @@ describeWithData('a moon whose data has not arrived', () => {
         return new Promise(() => {});
       },
     });
-    const kinds = new Set(['star', 'planet', 'dwarf-planet', 'moon']);
+    const kinds = new Set(['star', 'planet', 'dwarf-planet', 'moon', SMALL_MOON_LAYER]);
     const startup = counting.bodies.length;
     expect(counting.bodies.some((body) => body.sampling !== undefined)).toBe(false);
     const expected = counting.smallMoonCount('jupiter')!.count;
@@ -254,5 +259,30 @@ describeWithData('a moon outside its window', () => {
     // Two years back the planets are still exact; Titan is not.
     expect(store.isExactAt(past, planets)).toBe(true);
     expect(store.isExactAt(past, [...planets, 'titan'])).toBe(false);
+  });
+});
+
+describe('the Small Moons layer', () => {
+  it('hides the small moons, and their fetches, when it is off', async () => {
+    const requested: string[] = [];
+    const counting = new EphemerisStore({
+      ...data!,
+      loadChunk: (id) => {
+        requested.push(id);
+        return new Promise(() => {});
+      },
+    });
+    await counting.loadSmallMoons('jupiter');
+    const small = counting.bodies.find((body) => body.sampling !== undefined)!;
+    const withoutSmall = new Set(['star', 'planet', 'dwarf-planet', 'moon']);
+    const withSmall = new Set([...withoutSmall, SMALL_MOON_LAYER]);
+    expect(isShown(small, withoutSmall)).toBe(false);
+    expect(isShown(small, withSmall)).toBe(true);
+    expect(isShown(counting.body('io'), withoutSmall)).toBe(true);
+    expect([...bodiesToResolve(counting, withoutSmall, 'jupiter')].some((id) => counting.body(id).sampling !== undefined)).toBe(false);
+
+    const jd = counting.coverage('io')!.startJd + 100;
+    rebaseVisibleFrame(counting, 'jupiter', jd, bodiesToResolve(counting, withoutSmall, 'jupiter'), { x: 0, y: 0, z: 8 * 71.492 }, 1080, 27);
+    expect(requested.sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
   });
 });

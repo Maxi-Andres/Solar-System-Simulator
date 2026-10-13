@@ -1,4 +1,4 @@
-import type { BodyId } from '@sss/tools/types';
+import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { Vec3 } from '../core/vec3.ts';
@@ -100,6 +100,20 @@ export function rebaseFrame(
  * dozen pixels -- Jupiter's hundred would crowd round it from the inner Solar System,
  * and the default view would fetch four hundred files.
  */
+/**
+ * The Small Moons layer, among the visible kinds. Not a catalog kind -- the small moons
+ * are kind 'moon' -- but the switch that adds them to the Moons layer.
+ */
+export const SMALL_MOON_LAYER = 'small-moon';
+
+/** Whether a body's layers are on: its kind's, and for a small moon the Small Moons too. */
+export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>): boolean {
+  return (
+    visibleKinds.has(body.kind) &&
+    (body.sampling === undefined || visibleKinds.has(SMALL_MOON_LAYER))
+  );
+}
+
 export function bodiesToResolve(
   store: EphemerisStore,
   visibleKinds: ReadonlySet<string>,
@@ -111,7 +125,7 @@ export function bodiesToResolve(
     if (body.sampling !== undefined && body.parent !== system && body.id !== focus) {
       continue;
     }
-    if (visibleKinds.has(body.kind)) {
+    if (isShown(body, visibleKinds)) {
       wanted.add(body.id);
       for (const ancestor of store.tree.ancestorsOf(body.id)) {
         wanted.add(ancestor);

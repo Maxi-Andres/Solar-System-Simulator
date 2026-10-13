@@ -61,6 +61,7 @@ export type LayerId =
   | 'planets'
   | 'dwarfPlanets'
   | 'moons'
+  | 'smallMoons'
   | 'asteroids'
   | 'comets'
   | 'spacecraft'
@@ -85,6 +86,8 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'planets', label: 'Planets', pending: null, startsGroup: true },
   { id: 'dwarfPlanets', label: 'Dwarf Planets', pending: null },
   { id: 'moons', label: 'Moons', pending: null },
+  // The 437 beyond the major moons. They need Moons on too: they are moons.
+  { id: 'smallMoons', label: 'Small Moons', pending: null },
   { id: 'asteroids', label: 'Asteroids', pending: 'Phase B' },
   { id: 'comets', label: 'Comets', pending: 'Phase B' },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
@@ -106,6 +109,8 @@ const DEFAULT_LAYERS: LayerState = {
   planets: true,
   dwarfPlanets: true,
   moons: true,
+  // Off until asked for: four hundred markers round the giants are not a first view.
+  smallMoons: false,
   asteroids: false,
   comets: false,
   spacecraft: true,
@@ -164,6 +169,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   setLighting: (mode) => {
     set({ lighting: mode });
   },
+
 
   togglePanel: (id) => {
     set((state) => ({ openPanel: state.openPanel === id ? null : id }));
