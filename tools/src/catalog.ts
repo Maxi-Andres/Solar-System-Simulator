@@ -722,15 +722,10 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
  * sunshield by the telescope standing on its +Y side, Clipper's cells by their normals
  * (+Z, all 3,200 of them).
  *
- * **Boxes**, for the two with no model that may be used: Lucy's and Psyche's exist only
- * inside NASA Eyes, with no terms published. (Juice was the third; it is ESA's model now,
- * by permission -- see ESA_SHAPES.) Each box is as long as the craft's solar-array span,
- * as wide as one array, and as deep as its body, every figure published:
- *
- *   Lucy     15.82 x 7.28 x 2.00 m   NASA: width, height deployed, depth
- *   Psyche   24.76 x 7.34 x 2.4 m    JPL: flight system long x wide; bus deep
- *
- * The boxes face the Sun with their broad side, as the arrays they stand for do.
+ * **Boxes**, where no model may be used, are as long as the craft's solar-array span,
+ * as wide as one array and as deep as its body, every figure published, and face the Sun
+ * with their broad side, as the arrays they stand for do. Juice, Lucy and Psyche were
+ * boxes here once: see ESA_SHAPES and EYES_SHAPES.
  */
 const SUN_FACING_BOX = {
   pointsAt: 'sun',
@@ -799,8 +794,95 @@ const SHAPES = {
     pointingAxis: [0, 0, 1],
     rollAxis: [0, 1, 0],
   },
-  lucy: { model: null, metresPerUnit: 1, boxM: [15.82, 7.28, 2.0], ...SUN_FACING_BOX },
-  psyche: { model: null, metresPerUnit: 1, boxM: [24.76, 7.34, 2.4], ...SUN_FACING_BOX },
+} as const satisfies Record<string, CraftShape>;
+
+/**
+ * NASA's own models from Eyes on the Solar System (eyes.nasa.gov/assets/static/models/),
+ * step A5f, credited NASA/JPL-Caltech. No licence is stated in them or around them; NASA
+ * Eyes was asked on 2026-10-08 and had not answered, and Maxi chose to use them under
+ * NASA's media guidelines. Every one is in metres -- Eyes itself loads them at 0.001, to
+ * kilometres:
+ *
+ *   model       measured                       published
+ *   Lucy        15.60 m across the arrays      15.8 m (NASA)
+ *   Psyche      24.74 m across the arrays      24.76 m (JPL)
+ *   IMAP        2.57 m across the body         2.4 m deck; its boom reaches 3.8 m out
+ *   ESCAPADE    4.89 m across the arrays       4.88 m (Horizons; NASA SVS)
+ *   CAPSTONE    1.43 m across the arrays       the 12U bus only (0.37 m): the arrays'
+ *                                              span is NASA's model's, not published
+ *   Orion       19.34 m tip to tip, the X      18.9 m (Orion by the numbers)
+ *               of its four wings
+ *
+ * **Axes**, from the geometry and which side the cell texture is on: Lucy's arrays and
+ * high-gain antenna both face +z; Psyche's cells +y; IMAP spins about +y, its sunward
+ * deck; ESCAPADE's cells face (0, 0.643, 0.766), +z tilted 40 degrees; CAPSTONE's -z;
+ * Orion's -y, aft, the crew module's apex at +y. One model serves both ESCAPADE probes,
+ * and one both Orions (Artemis I and II), as in Eyes.
+ *
+ * **Rules**, as for the boxes they replace: arrays to the Sun; IMAP's spin axis.
+ */
+const EYES_SHAPES = {
+  lucy: {
+    model: 'lucy.glb',
+    pivot: [0, -1.2711, 0.010649],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
+  },
+  psyche: {
+    model: 'psyche.glb',
+    pivot: [-0.11403, 1.4469, 1.2501],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [0, 0, 1],
+  },
+  imap: {
+    model: 'imap.glb',
+    pivot: [-0.31871, 0.43419, 0.076169],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'spin-axis',
+    pointingAxis: [0, 1, 0],
+    rollAxis: [1, 0, 0],
+  },
+  escapade: {
+    model: 'escapade.glb',
+    pivot: [-0.066054, 0.56698, -0.084687],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    // The cells' normal, +z tilted 40 degrees toward +y: (0, sin 40, cos 40).
+    pointingAxis: [0, 0.6427876096865393, 0.766044443118978],
+    rollAxis: [1, 0, 0],
+  },
+  capstone: {
+    model: 'capstone.glb',
+    pivot: [0.00091695, -0.13809, 0.040807],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, -1],
+    rollAxis: [1, 0, 0],
+  },
+  orion: {
+    model: 'orion.glb',
+    pivot: [0.014319, -1.791, 0.091866],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [1, 0, 0],
+  },
 } as const satisfies Record<string, CraftShape>;
 
 /**
@@ -823,6 +905,10 @@ const SHAPES = {
  *   Hera           SPICE, 16 parts     m        11.45 m across        11.5 m (ESA)
  *   Euclid         Sci-Fleet           cm       5.30 m tall           4.7 m (ESA)
  *   Gaia           Sci-Fleet           note     197.46 units          10.2 m shield (ESA)
+ *
+ * The SPICE models are cited as the SPICE Service asks, by their datasets' DOIs:
+ *   ESA SPICE Service, JUICE Operational SPICE Kernel Dataset, https://doi.org/10.5270/esa-ybmj68p
+ *   ESA SPICE Service, Hera Operational SPICE Kernel Dataset, https://doi.org/10.57780/esa-k25x2cv
  *
  * Sci-Fleet's Juice is a stylised 12 m model, not to scale, so the SPICE CAD parts are
  * used instead, booms deployed, arrays and medium-gain antenna at their zero angle.
@@ -1083,7 +1169,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'lucy',
-    shape: SHAPES.lucy,
+    shape: EYES_SHAPES.lucy,
     name: 'Lucy',
     horizonsId: '-49',
     parent: null,
@@ -1096,7 +1182,7 @@ const SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'psyche',
-    shape: SHAPES.psyche,
+    shape: EYES_SHAPES.psyche,
     name: 'Psyche',
     horizonsId: '-255',
     parent: null,
@@ -1150,20 +1236,15 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *
  * **Boxes**, every figure published (L x W x D, metres; the broad face to the Sun):
  *
- *   IMAP           2.4 x 2.4 x 0.9   deck (NASA IMAP blog, 2025-09-24)
- *   Artemis I, II  18.9 x 7.9 x 5.0  arrays 18.9 m wide; crew and service modules
- *                                    7.9 m tall, 5 m across (Orion by the numbers)
- *   CAPSTONE       0.61 x 0.34 x 0.34  a 12U CubeSat (NSSDC); its arrays' span is
- *                                    not published, so only the body is drawn
  *   Hayabusa2      6 x 4.23 x 1.25   paddles deployed (JAXA)
  *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
- *   ESCAPADE       4.88 x 1.65 x 1.09  deployed (Horizons; NASA SVS spec sheet)
  *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
  *                                    (JAXA ISAS)
  *
  * **No shape** for Aditya-L1: ISRO publishes only its 6 m magnetometer boom, and a box
  * needs three dimensions. Its marker stays at any range. Euclid, Gaia, Solar Orbiter,
- * BepiColombo and Hera, boxes here once, are ESA's own models now: see ESA_SHAPES.
+ * BepiColombo and Hera, boxes here once, are ESA's own models now: see ESA_SHAPES; IMAP,
+ * Artemis I and II, CAPSTONE and ESCAPADE are NASA's, from Eyes: see EYES_SHAPES.
  */
 const BOX = { model: null, metresPerUnit: 1, ...SUN_FACING_BOX } as const;
 const MORE_SHAPES = {
@@ -1208,7 +1289,6 @@ const MORE_SHAPES = {
     pointingAxis: [0, 1, 0],
     rollAxis: [0, 0, 1],
   },
-  imap: { ...BOX, boxM: [2.4, 2.4, 0.9], pointingPart: 'spin-axis' },
   roman: {
     model: 'roman.glb',
     pivot: [138.91, 3.2855, 0],
@@ -1229,8 +1309,6 @@ const MORE_SHAPES = {
     pointingAxis: [0, -1, 0],
     rollAxis: [0, 0, 1],
   },
-  orion: { ...BOX, boxM: [18.9, 7.9, 5.0] },
-  capstone: { ...BOX, boxM: [0.61, 0.34, 0.34] },
   stereo: {
     model: 'stereo.glb',
     pivot: [-36.92, 74.623, 68.039],
@@ -1265,7 +1343,6 @@ const MORE_SHAPES = {
     rollAxis: [0, 0, 1],
   },
   liciacube: { ...BOX, boxM: [0.3, 0.2, 0.1] },
-  escapade: { ...BOX, boxM: [4.88, 1.65, 1.09] },
   cassini: {
     model: 'cassini.glb',
     pivot: [-0.029293, 0.1474, -0.013459],
@@ -1388,7 +1465,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'imap',
-    shape: MORE_SHAPES.imap,
+    shape: EYES_SHAPES.imap,
     name: 'IMAP',
     horizonsId: '-43',
     parent: 'earth',
@@ -1468,7 +1545,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   // Near Earth: the Moon.
   spacecraft({
     id: 'artemis-1',
-    shape: MORE_SHAPES.orion,
+    shape: EYES_SHAPES.orion,
     name: 'Artemis I',
     horizonsId: '-1023',
     parent: 'earth',
@@ -1481,7 +1558,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'artemis-2',
-    shape: MORE_SHAPES.orion,
+    shape: EYES_SHAPES.orion,
     name: 'Artemis II',
     horizonsId: '-1024',
     parent: 'earth',
@@ -1494,13 +1571,14 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'capstone',
-    shape: MORE_SHAPES.capstone,
+    shape: EYES_SHAPES.capstone,
     name: 'CAPSTONE',
     horizonsId: '-1176',
     parent: 'moon',
     parentHorizonsId: '301',
     stepDays: 1,
-    spanM: 0.61,
+    // Across the arrays in NASA's model; the span itself is not published (the bus is 0.37 m).
+    spanM: 1.43,
     launchUtc: '2022-06-28T09:55:00Z',
     operator: 'NASA / Advanced Space',
     color: '#b0b8a0',
@@ -1614,7 +1692,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'escapade-blue',
-    shape: MORE_SHAPES.escapade,
+    shape: EYES_SHAPES.escapade,
     name: 'ESCAPADE Blue',
     horizonsId: '-9',
     parent: null,
@@ -1627,7 +1705,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'escapade-gold',
-    shape: MORE_SHAPES.escapade,
+    shape: EYES_SHAPES.escapade,
     name: 'ESCAPADE Gold',
     horizonsId: '-10',
     parent: null,

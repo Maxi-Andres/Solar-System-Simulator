@@ -317,15 +317,19 @@ samples — one turn and a quarter at a time, rebuilt as the clock moves on.
 
 ### Spacecraft up close
 
-Thirty-eight craft are drawn with **their agencies' own 3D models**: thirty with NASA's —
+Forty-seven craft are drawn with **their agencies' own 3D models**: thirty-nine with NASA's —
 twenty-eight files from NASA 3D Resources and NASA's mission pages; Voyager's serves both
 Voyagers, Pioneer 10's both Pioneers, THEMIS's both ARTEMIS probes, DART's is NASA's
-printable STL, converted, and MAVEN's waits for a MAVEN in the data — and eight with
+printable STL, converted, MAVEN's waits for a MAVEN in the data, and six — Lucy, Psyche,
+IMAP, ESCAPADE's two, CAPSTONE and Orion's two flights — come from NASA's Eyes on the
+Solar System, credited NASA/JPL-Caltech — and eight with
 **ESA's, by ESA's written permission**: Juice, Solar Orbiter, BepiColombo, Hera, Euclid,
 Gaia, Mars Express (its 40 m MARSIS antenna drawn) and the Trace Gas Orbiter. The permission asks that their geometry be kept as ESA made it — nothing is
 simplified, and each keeps its source's triangle count, Juice's 959,923 among them — and
 that "3D models © ESA (European Space Agency)." be shown wherever they are used, which
-the info panel and About do. All 36 files are compressed with meshopt and WebP to 37 MB
+the info panel and About do; Juice's and Hera's, assembled from ESA's SPICE parts, also
+cite their SPICE kernel datasets by DOI. All 42 files are compressed with meshopt and WebP
+to 43 MB
 and fetched only once a craft is six pixels across. None documents its units; most
 measure in metres or centimetres, and those in arbitrary units are scaled by one
 published dimension each. A test checks every compressed file still measures what its

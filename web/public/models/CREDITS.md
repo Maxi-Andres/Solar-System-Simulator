@@ -17,6 +17,17 @@ United States", and may be used for "computer graphical simulations and Internet
 pages". **NASA should be acknowledged as the source**, which is what this file and the
 About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 
+### NASA's Eyes on the Solar System
+
+Six models come from NASA's Eyes on the Solar System, as its app loads them from
+eyes.nasa.gov/assets/static/models/: Lucy, Psyche, IMAP, ESCAPADE (both probes), CAPSTONE
+and Orion (Artemis I and II). They are credited **NASA/JPL-Caltech**. No licence or terms
+are stated in them, on the page, or in the app; NASA Eyes was asked for permission on
+2026-10-08 and had not answered when they were added (2026-10-14), and the project owner
+chose to use them under NASA's media guidelines above. Orion's textures carry the NASA
+and ESA logos as the real spacecraft does; they are part of the model and are not used
+as branding here.
+
 ### ESA — by written permission
 
 ESA's models are used **by written permission only**: ESA's general terms forbid
@@ -37,7 +48,12 @@ conditions of the two together:
   authorization. These files are not covered by any licence this repository's code may
   carry;
 - any copyright notice or licensing condition attached to an individual model is kept,
-  and respected: see each row. None of the sources here carries one.
+  and respected: see each row.
+
+The ESA SPICE Service also answered, received 2026-10-14: its models "are publicly
+distributed", free to use, each cited by the DOI of its mission's SPICE kernel dataset.
+Juice's and Hera's models here are assembled from SPICE parts, and their rows carry those
+citations; the other ESA models come from Sci-Fleet, not SPICE.
 
 ## Files
 
@@ -70,14 +86,20 @@ conditions of the two together:
 | `dart.glb` | DART | https://science.nasa.gov/3d-resources/double-asteroid-redirection-test-dart/ — the printable `Double Asteroid Redirection Test (DART).stl`, converted to GLB here (one mesh, flat grey; no textures exist) |
 | `curiosity.glb` | Curiosity | https://science.nasa.gov/resource/curiosity-rover-3d-model/ — `24584_Curiosity_static.glb`, credit NASA/JPL-Caltech (no GLB of Curiosity is in NASA 3D Resources itself) |
 | `perseverance.glb` | Perseverance | https://science.nasa.gov/3d-resources/mars-2020-perseverance-rover/ — `Mars 2020 Perseverance Rover.glb`, NASA/JPL; posed here, see below |
-| `juice.glb` | Juice | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/JUICE/misc/cosmo/models/ — 34 `.3ds` parts assembled as `config/spacecraft_JUICE_arcs.json` places them, with `fk/juice_v46.tf`, `spk/juice_struct_v22.bsp` and the boom CKs; booms deployed. Sci-Fleet's own Juice is not to scale. |
+| `juice.glb` | Juice | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/JUICE/misc/cosmo/models/ — 34 `.3ds` parts assembled as `config/spacecraft_JUICE_arcs.json` places them, with `fk/juice_v46.tf`, `spk/juice_struct_v22.bsp` and the boom CKs; booms deployed. Sci-Fleet's own Juice is not to scale. Cited as the SPICE Service asks: *ESA SPICE Service, JUICE Operational SPICE Kernel Dataset, https://doi.org/10.5270/esa-ybmj68p* |
 | `solar-orbiter.glb` | Solar Orbiter | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/solar_orbiter/solar_orbiter.fbx, converted |
 | `bepicolombo.glb` | BepiColombo | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/bepi_mcs/bepi_mcs.fbx — the cruise stack (MTM, MPO, Mio in its sunshade), converted |
-| `hera.glb` | Hera | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/HERA/misc/cosmo/models/3ds/ — 16 `.3ds` parts assembled as `config/spacecraft_hera_arcs.json` places them, with `fk/hera_v16.tf` and `spk/hera_struct_v02.bsp`. Not on Sci-Fleet. |
+| `hera.glb` | Hera | **ESA, by permission.** ESA SPICE Cosmographia parts, https://spiftp.esac.esa.int/data/SPICE/HERA/misc/cosmo/models/3ds/ — 16 `.3ds` parts assembled as `config/spacecraft_hera_arcs.json` places them, with `fk/hera_v16.tf` and `spk/hera_struct_v02.bsp`. Not on Sci-Fleet. Cited as the SPICE Service asks: *ESA SPICE Service, Hera Operational SPICE Kernel Dataset, https://doi.org/10.57780/esa-k25x2cv* |
 | `euclid.glb` | Euclid | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/euclid/euclid.fbx, converted; the FBX root's 116° presentation rotation removed |
 | `gaia.glb` | Gaia | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/gaia/gaia.fbx, converted |
 | `mars-express.glb` | Mars Express | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/mars_express/mars_express.fbx, converted; MARSIS deployed |
 | `exomars-tgo.glb` | ExoMars TGO | **ESA, by permission.** ESA Sci-Fleet, https://scifleet.esa.int/downloads/trace_gas_orbiter/trace_gas_orbiter.fbx, converted (the orbiter alone; Schiaparelli separated in 2016) |
+| `lucy.glb` | Lucy | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_lucy/lucy.gltf — packed as GLB |
+| `psyche.glb` | Psyche | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_psyche/psyche.gltf — packed as GLB |
+| `imap.glb` | IMAP | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_imap/imap.gltf — Draco decoded, KTX2 textures transcoded to JPEG/PNG |
+| `escapade.glb` | ESCAPADE Blue, ESCAPADE Gold | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_escapade/escapade.gltf — one model for both probes, as in Eyes; Draco decoded, KTX2 transcoded |
+| `capstone.glb` | CAPSTONE | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_capstone/capstone.gltf — packed as GLB |
+| `orion.glb` | Artemis I, Artemis II | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_artemis/artemis_ii.gltf — Orion with its service module and four wings; Eyes' one model for both flights; Draco decoded, KTX2 transcoded |
 | `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
@@ -104,6 +126,11 @@ then compressed as above. Their geometry is ESA's, as the permission requires: n
 was simplified, and each file has exactly its source's triangle count -- Juice 959,923,
 Hera 479,908, Euclid 136,061, BepiColombo 111,536, Gaia 45,634, Mars Express 33,298,
 TGO 27,288, Solar Orbiter 9,596.
+The six from NASA's Eyes came as glTF, three with Draco geometry and KTX2 (Basis)
+textures; those were decoded with three.js's own Basis transcoder to JPEG or PNG, then
+compressed as above. Five keep every triangle; IMAP lost 104 of 66,405, sub-tenth-of-a-
+millimetre slivers merged by the vertex weld.
+
 Unused camera and sky nodes from the FBX scenes were dropped, identical vertices
 welded, and the zero-length normals the converter left on degenerate triangles
 replaced. Neither Sci-Fleet nor the SPICE packages state terms of their own for the

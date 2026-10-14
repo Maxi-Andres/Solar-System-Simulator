@@ -61,6 +61,12 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'gaia.glb': [197.46, 79.24, 197.44],
   'mars-express.glb': [1226.48, 1063.23, 4273.08],
   'exomars-tgo.glb': [5.76, 4.95, 17.69],
+  'lucy.glb': [15.6, 7.07, 3.214],
+  'psyche.glb': [24.737, 4.944, 7.338],
+  'imap.glb': [5.311, 1.425, 2.834],
+  'escapade.glb': [4.888, 2.732, 1.126],
+  'capstone.glb': [1.426, 0.529, 0.33],
+  'orion.glb': [17.63, 7.256, 11.283],
 };
 
 /**
@@ -100,6 +106,11 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'gaia.glb': { axis: 0, metres: 10.2, within: 0.001 },
   'mars-express.glb': { axis: 0, metres: 12, within: 0.025 },
   'exomars-tgo.glb': { axis: 2, metres: 17.5, within: 0.015 },
+  'lucy.glb': { axis: 0, metres: 15.82, within: 0.02 },
+  'psyche.glb': { axis: 0, metres: 24.76, within: 0.01 },
+  'escapade.glb': { axis: 0, metres: 4.88, within: 0.01 },
+  // IMAP's box is its boom; CAPSTONE's arrays are unpublished; Orion's span is the
+  // diagonal of its X of wings, 19.34 m, along no one axis of the file.
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
 };
 
