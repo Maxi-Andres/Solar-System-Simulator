@@ -53,14 +53,17 @@ import {
 import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
-import { loadBodyTexture } from './textureCache.ts';
+import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
+import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { labelRank } from './LabelProjector.tsx';
 import {
   craftBox,
   craftOrientation,
+  disposeObject,
   loadCraftModel,
   MODEL_REQUEST_PX,
+  releaseCraftModel,
   SHAPE_SHOWN_PX,
 } from './craftModels.ts';
 import {
@@ -77,7 +80,6 @@ import { PATCH_SHOWN_KM, SurfaceGround } from './surfaceGround.ts';
 import {
   angularRadiusPixels,
   focusOrbitOpacity,
-  KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
   meshOpacity,
@@ -253,6 +255,12 @@ interface BodyHandles {
   craftShape: THREE.Object3D | null;
   craftShapeRequested: boolean;
   /**
+   * When the craft's shape and the body's maps were last big enough on screen to keep,
+   * from performance.now(); see detailRelease.ts. -Infinity until they first are.
+   */
+  craftShapeWantedAt: number;
+  texturesWantedAt: number;
+  /**
    * For a craft on another body's surface: the ground drawn under it and the way it
    * came, once its stops have arrived. See surfaceGround.ts.
    */
@@ -298,6 +306,78 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
       handle.craftShapeRequested = false;
       console.error(`Could not load the model of ${handle.definition.id}`, error);
     });
+}
+
+/**
+ * Lets go of a body's detail once it has been small long enough: the craft's model or
+ * box, and every map the body asked for. Each goes back to how it was before it was
+ * fetched -- the marker, the catalog colour, no night lights -- and is asked for again
+ * when the body grows back. See detailRelease.ts.
+ */
+function releaseUnusedDetail(handle: BodyHandles, nowMs: number): void {
+  if (handle.craftShape !== null && detailExpired(handle.craftShapeWantedAt, nowMs)) {
+    handle.group.remove(handle.craftShape);
+    const model = (handle.definition.mission?.shape as CraftShape | undefined)?.model ?? null;
+    if (model === null) {
+      // A box is this craft's alone.
+      disposeObject(handle.craftShape);
+    } else {
+      releaseCraftModel(model);
+    }
+    handle.craftShape = null;
+    handle.craftShapeRequested = false;
+  }
+
+  if (!detailExpired(handle.texturesWantedAt, nowMs)) {
+    return;
+  }
+
+  if (handle.requestedFile !== null) {
+    const material = handle.mesh.material as THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
+    material.map = null;
+    material.color.set(handle.definition.color);
+    if (handle.definition.kind === 'star') {
+      material.color.multiplyScalar(SUN_OVEREXPOSURE);
+    }
+    material.needsUpdate = true;
+    releaseBodyTexture(handle.requestedFile);
+    handle.requestedFile = null;
+    handle.shownFile = null;
+  }
+
+  if (handle.ringRequested && handle.definition.rings !== null && handle.ring !== null) {
+    const uniforms = (handle.ring.material as THREE.ShaderMaterial).uniforms;
+    uniforms.uMap!.value = null;
+    if (handle.ringShadow !== null) {
+      handle.ringShadow.uRingShadowMap.value = null;
+      handle.ringShadow.uRingShadowStrength.value = 0;
+    }
+    releaseBodyTexture(handle.definition.rings.texture);
+    handle.ringRequested = false;
+  }
+
+  const earth = handle.earth;
+  if (earth !== null) {
+    if (earth.nightRequested) {
+      earth.uniforms.uNightMap.value = null;
+      earth.uniforms.uNightStrength.value = 0;
+      releaseBodyTexture(EARTH_NIGHT_MAP);
+      earth.nightRequested = false;
+    }
+    if (earth.waterRequested) {
+      earth.uniforms.uWaterMask.value = null;
+      earth.uniforms.uWaterStrength.value = 0;
+      releaseBodyTexture(EARTH_WATER_MASK);
+      earth.waterRequested = false;
+    }
+    if (earth.cloudRequested) {
+      earth.cloudMaterial.alphaMap = null;
+      earth.cloudMaterial.needsUpdate = true;
+      earth.cloudReady = false;
+      releaseBodyTexture(EARTH_CLOUD_MAP);
+      earth.cloudRequested = false;
+    }
+  }
 }
 
 export function SolarSystem({
@@ -596,6 +676,8 @@ export function SolarSystem({
         ringRequested: false,
         craftShape: null,
         craftShapeRequested: false,
+        craftShapeWantedAt: -Infinity,
+        texturesWantedAt: -Infinity,
         surfaceGround: null,
       };
     };
@@ -645,7 +727,6 @@ export function SolarSystem({
       fov,
     );
     const focusRadiusKm = store.body(focus).radiusEquatorialKm;
-    const cameraDistanceUnits = camera.position.length();
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
     const sun = snapshot.bodies.get('sun');
@@ -657,6 +738,7 @@ export function SolarSystem({
     // frame's camera: CameraRig has moved it, and the render has not yet caught up.
     camera.updateMatrixWorld();
     const markerCandidates: MarkerCandidate[] = [];
+    const nowMs = performance.now();
     const markers = new Map<BodyId, THREE.Sprite>();
 
     for (const handle of handles) {
@@ -767,6 +849,13 @@ export function SolarSystem({
       const craftShape = (craft?.shape as CraftShape | undefined) ?? null;
       if (craftShape !== null) {
         requestCraftShape(handle, craftShape, pixelRadius);
+      }
+      // Still big enough to keep what it has; see releaseUnusedDetail below the loop.
+      if (detailWanted(pixelRadius, MODEL_REQUEST_PX)) {
+        handle.craftShapeWantedAt = nowMs;
+      }
+      if (detailWanted(pixelRadius, TEXTURE_REQUEST_PX)) {
+        handle.texturesWantedAt = nowMs;
       }
       // A moon whose size JPL does not publish is a marker at any range, like a craft
       // with no shape: a sphere would claim a size nobody has measured.
@@ -945,6 +1034,10 @@ export function SolarSystem({
             wrapS: THREE.ClampToEdgeWrapping,
           })
             .then((texture) => {
+              // Released while it was on its way: see releaseUnusedDetail.
+              if (!handle.ringRequested) {
+                return;
+              }
               uniforms.uMap!.value = texture;
               // The same map serves both: what the rings look like, and what they
               // block. It is already loaded, so the shadow costs no extra bytes.
@@ -1014,6 +1107,9 @@ export function SolarSystem({
             earth.nightRequested = true;
             void loadBodyTexture(EARTH_NIGHT_MAP, { anisotropy })
               .then((texture) => {
+                if (!earth.nightRequested) {
+                  return;
+                }
                 earth.uniforms.uNightMap.value = texture;
                 earth.uniforms.uNightStrength.value = 1;
               })
@@ -1032,6 +1128,9 @@ export function SolarSystem({
               colorSpace: THREE.NoColorSpace,
             })
               .then((texture) => {
+                if (!earth.waterRequested) {
+                  return;
+                }
                 earth.uniforms.uWaterMask.value = texture;
                 earth.uniforms.uWaterStrength.value = 1;
               })
@@ -1048,6 +1147,9 @@ export function SolarSystem({
               colorSpace: THREE.NoColorSpace,
             })
               .then((texture) => {
+                if (!earth.cloudRequested) {
+                  return;
+                }
                 earth.cloudMaterial.alphaMap = texture;
                 earth.cloudMaterial.needsUpdate = true;
                 earth.cloudReady = true;
@@ -1214,11 +1316,6 @@ export function SolarSystem({
         if (handle.trajectoryGroup.visible && handle.trajectory !== null && origin !== undefined) {
           // A JWST line waits for Earth's system to open up, like a moon's orbit.
           handle.trajectory.setFade(satellite);
-          // A float32 vertex at d km carries an error near d * 6e-8, and the chords
-          // nearest the camera sit about the camera's own distance from the focus. Let
-          // the anchor drift a hundred times that and the error is still a hundredth of a
-          // pixel; tighter would rebuild every chord every frame while following a craft.
-          const anchorToleranceKm = 100 * cameraDistanceUnits * KM_PER_UNIT;
           // The trail reaches one turn of the orbit it is on now back, about what it
           // orbits: the Sun, or Earth for JWST. Recomputed every frame, so after a flyby
           // it is the new orbit's turn.
@@ -1231,12 +1328,17 @@ export function SolarSystem({
           handle.trajectory.update(
             jd,
             origin,
-            anchorToleranceKm,
             (time) => store.loadedLocalState(id, time)?.position ?? null,
             spanDays,
           );
         }
       }
+    }
+
+    // Every body, shown or not: one switched off or out of its coverage was skipped
+    // above, and that is exactly the one whose detail should go.
+    for (const handle of handles) {
+      releaseUnusedDetail(handle, nowMs);
     }
 
     // Markers on top of each other: the one behind goes, and its label with it.

@@ -55,11 +55,18 @@ function gltfLoader(): Promise<GLTFLoader> {
   return loader;
 }
 
-const cache = new Map<string, Promise<THREE.Object3D>>();
+interface CachedModel {
+  readonly scene: Promise<THREE.Object3D>;
+  /** Copies handed out and not yet handed back. */
+  users: number;
+}
+
+const cache = new Map<string, CachedModel>();
 
 /**
  * A craft's model, ready to add to the scene: a fresh copy per call, sharing geometry
- * and materials with every other copy, since both Voyagers fly one file.
+ * and materials with every other copy, since both Voyagers fly one file. Each call must
+ * be matched by one `releaseCraftModel` once the copy is out of the scene.
  *
  * Scaled from metres to scene units; its own frame is the catalog's, untouched.
  */
@@ -68,16 +75,23 @@ export async function loadCraftModel(
   metresPerUnit = 1,
   pivot: readonly [number, number, number] = [0, 0, 0],
 ): Promise<THREE.Object3D> {
-  let pending = cache.get(file);
-  if (pending === undefined) {
-    pending = gltfLoader()
+  let entry = cache.get(file);
+  if (entry === undefined) {
+    const scene = gltfLoader()
       .then((gltf) => gltf.loadAsync(modelUrl(file)))
       .then((gltf) => gltf.scene);
+    const created: CachedModel = { scene, users: 0 };
     // A failed load must not be cached, or the craft could never be retried.
-    pending.catch(() => cache.delete(file));
-    cache.set(file, pending);
+    scene.catch(() => {
+      if (cache.get(file) === created) {
+        cache.delete(file);
+      }
+    });
+    cache.set(file, created);
+    entry = created;
   }
-  const scene = await pending;
+  entry.users += 1;
+  const scene = await entry.scene;
   const copy = scene.clone(true);
   // The pivot, not the file's origin, goes where the craft is, and the craft turns
   // about it. See CraftShape.pivot.
@@ -87,6 +101,63 @@ export async function loadCraftModel(
   holder.scale.setScalar(UNITS_PER_METRE * metresPerUnit);
   holder.add(copy);
   return holder;
+}
+
+/**
+ * Hands back one copy from `loadCraftModel`. The last one frees the file's geometry,
+ * materials and textures; a later request loads it again.
+ *
+ * A model's textures are most of what it costs -- Orion's thirty are 130 MB decoded --
+ * so a session that visits craft after craft must not keep every one it has seen.
+ */
+export function releaseCraftModel(file: string): void {
+  const entry = cache.get(file);
+  if (entry === undefined) {
+    return;
+  }
+  entry.users -= 1;
+  if (entry.users > 0) {
+    return;
+  }
+  cache.delete(file);
+  entry.scene.then(disposeObject, () => undefined);
+}
+
+/** Copies of `file` handed out and not handed back, for tests. */
+export function craftModelUsers(file: string): number {
+  return cache.get(file)?.users ?? 0;
+}
+
+/**
+ * Frees everything under `root` on the GPU: geometry, materials and every texture they
+ * hold. Decoded images are closed too, since the loader keeps them in memory beside
+ * the GPU copy.
+ */
+export function disposeObject(root: THREE.Object3D): void {
+  const textures = new Set<THREE.Texture>();
+  root.traverse((node) => {
+    const drawn = node as THREE.Mesh;
+    if (drawn.geometry === undefined) {
+      return;
+    }
+    drawn.geometry.dispose();
+    const materials = Array.isArray(drawn.material) ? drawn.material : [drawn.material];
+    for (const material of materials) {
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) {
+          textures.add(value);
+        }
+      }
+      material.dispose();
+    }
+  });
+  for (const texture of textures) {
+    texture.dispose();
+    const image: unknown = texture.source.data;
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+      image.close();
+    }
+  }
 }
 
 /** What the box says on its broad faces, so nobody takes it for the craft. */

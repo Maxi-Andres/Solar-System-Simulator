@@ -10,9 +10,11 @@ import * as THREE from 'three';
  * surface to mean anything, and until then the catalog colour is what shows. A
  * session that only ever looks at the Solar System from outside costs zero bytes here.
  *
- * Textures are cached forever once loaded. Ten 2k maps with mipmaps is roughly 110 MB
- * of GPU memory, which is fine for ten bodies and would not be for ten thousand; when
- * phase B brings asteroids this needs an eviction policy, not a bigger cache.
+ * A texture is kept while anything uses it and freed when the last user hands it back:
+ * a 2k map with its mipmaps is about 11 MB of GPU memory, and on a laptop's integrated
+ * GPU that is the same RAM the rest of the machine runs in. The scene hands a body's maps
+ * back once it has been a speck for a while (see detailRelease.ts), and asks again on the
+ * way back in -- from the browser's cache by then, so it costs a decode, not a download.
  */
 
 /**
@@ -22,7 +24,13 @@ import * as THREE from 'three';
  * Fine while every file has one use, which is the case today; a file wanted with two
  * different wrap modes would need the options in the key.
  */
-const cache = new Map<string, Promise<THREE.Texture>>();
+interface CachedTexture {
+  readonly texture: Promise<THREE.Texture>;
+  /** Callers that asked for it and have not handed it back. */
+  users: number;
+}
+
+const cache = new Map<string, CachedTexture>();
 
 /**
  * URL for a texture file, respecting the GitHub Pages base path.
@@ -65,6 +73,10 @@ export interface TextureOptions {
   readonly colorSpace?: THREE.ColorSpace;
 }
 
+/**
+ * A body's map, shared with every other caller that asked for the same file. Each call
+ * must be matched by one `releaseBodyTexture` once the map is no longer on screen.
+ */
 export function loadBodyTexture(
   file: string,
   options: TextureOptions = {},
@@ -72,7 +84,8 @@ export function loadBodyTexture(
   const url = textureUrl(file);
   const existing = cache.get(url);
   if (existing !== undefined) {
-    return existing;
+    existing.users += 1;
+    return existing.texture;
   }
 
   const pending = new Promise<THREE.Texture>((resolve, reject) => {
@@ -93,14 +106,43 @@ export function loadBodyTexture(
       (error: unknown) => {
         // A failed load must not be cached, or one bad network moment would leave
         // that body flat-coloured for the rest of the session.
-        cache.delete(url);
+        if (cache.get(url) === entry) {
+          cache.delete(url);
+        }
         reject(error instanceof Error ? error : new Error(`Could not load ${url}`));
       },
     );
   });
 
-  cache.set(url, pending);
+  const entry: CachedTexture = { texture: pending, users: 1 };
+  cache.set(url, entry);
   return pending;
+}
+
+/**
+ * Hands back one `loadBodyTexture` of `file`. The last one frees the texture, on the GPU
+ * and off it, once it has arrived; a later request fetches it again.
+ */
+export function releaseBodyTexture(file: string): void {
+  const url = textureUrl(file);
+  const entry = cache.get(url);
+  if (entry === undefined) {
+    return;
+  }
+  entry.users -= 1;
+  if (entry.users > 0) {
+    return;
+  }
+  cache.delete(url);
+  entry.texture.then(
+    (texture) => texture.dispose(),
+    () => undefined,
+  );
+}
+
+/** Callers holding `file`, for tests. */
+export function textureUsers(file: string): number {
+  return cache.get(textureUrl(file))?.users ?? 0;
 }
 
 /** Drops every cached texture. Exists for tests; the app never needs it. */

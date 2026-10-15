@@ -11,6 +11,7 @@ import {
   CLOSE_IN_STEPS,
   closeInTimes,
   orbitalPeriodDays,
+  splitDouble,
   TABLE_TRAIL_MARGIN,
   TableTrail,
   tablePath,
@@ -174,7 +175,7 @@ describe('TrajectoryLine', () => {
     const { firstChord } = tessellatePath(path);
     const jd = START + 123.4; // inside interval 12
 
-    line.update(jd, ORIGIN, 1, sampler(path), null);
+    line.update(jd, ORIGIN, sampler(path), null);
     const [trail, near] = parts(line);
     // The chords stop at the interval the craft is in; nothing after it is drawn.
     expect(trail.geometry.drawRange).toMatchObject({ start: 0, count: firstChord[12]! * 2 });
@@ -199,7 +200,7 @@ describe('TrajectoryLine', () => {
     const { chordStopJd } = tessellatePath(path);
     const jd = START + 180;
 
-    line.update(jd, ORIGIN, 1, sampler(path), 50);
+    line.update(jd, ORIGIN, sampler(path), 50);
     const oldest = trail.geometry.drawRange.start / 2;
     // The oldest chord drawn reaches past jd - 50 days and the one before it does not.
     expect(chordStopJd[oldest]).toBeGreaterThan(jd - 50);
@@ -217,7 +218,7 @@ describe('TrajectoryLine', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
     const [trail] = parts(line);
-    line.update(START + 180, ORIGIN, 1, sampler(path), null);
+    line.update(START + 180, ORIGIN, sampler(path), null);
     expect(trail.geometry.drawRange.start).toBe(0);
     expect(line.material.uniforms.uSpanDays!.value).toBe(180);
   });
@@ -225,7 +226,7 @@ describe('TrajectoryLine', () => {
   it('falls back to the path where the finer data is not loaded', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
-    line.update(START + 50.5, ORIGIN, 1, () => null);
+    line.update(START + 50.5, ORIGIN, () => null);
     const [, near] = parts(line);
     expect(near.geometry.drawRange.count).toBeGreaterThan(CLOSE_IN_STEPS);
   });
@@ -233,7 +234,7 @@ describe('TrajectoryLine', () => {
   it('draws nothing at the craft while it is crossing a seam', () => {
     const path = circlePath(10, 100, [7]);
     const line = new TrajectoryLine(path, '#ffffff');
-    line.update(START + 75, ORIGIN, 1, sampler(path));
+    line.update(START + 75, ORIGIN, sampler(path));
     const [, near] = parts(line);
     expect(near.geometry.drawRange.count).toBe(0);
   });
@@ -243,10 +244,10 @@ describe('TrajectoryLine', () => {
     const line = new TrajectoryLine(path, '#ffffff');
     const [trail] = parts(line);
 
-    line.update(START - 5, ORIGIN, 1, sampler(path));
+    line.update(START - 5, ORIGIN, sampler(path));
     expect(trail.geometry.drawRange.count).toBe(0);
 
-    line.update(START + 400, ORIGIN, 1, sampler(path));
+    line.update(START + 400, ORIGIN, sampler(path));
     expect(trail.geometry.drawRange).toMatchObject({ start: 0, count: line.chordCount * 2 });
   });
 
@@ -254,24 +255,79 @@ describe('TrajectoryLine', () => {
     const line = new TrajectoryLine(circlePath(10, 100), '#ffffff');
     line.setFade(0.5);
     expect(line.material.uniforms.uOpacity!.value).toBeCloseTo(TRAIL_OPACITY / 2, 12);
+    // The stretch at the craft has its own shader but the same fade.
+    const [, near] = parts(line);
+    const nearMaterial = near.material as THREE.ShaderMaterial;
+    expect(nearMaterial).not.toBe(line.material);
+    expect(nearMaterial.uniforms.uOpacity).toBe(line.material.uniforms.uOpacity);
   });
 
-  it('carries a small drift on the transform and rebuilds past the tolerance', () => {
+  it('uploads its chords once, however far the focus moves', () => {
     const path = circlePath(10, 100);
     const line = new TrajectoryLine(path, '#ffffff');
     const [trail] = parts(line);
-    const positions = trail.geometry.getAttribute('position');
+    const high = trail.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const low = trail.geometry.getAttribute('positionLow') as THREE.BufferAttribute;
+    const versions = [high.version, low.version];
 
-    line.update(START + 100, ORIGIN, 1000, sampler(path));
-    const before = positions.getX(0);
-
-    line.update(START + 100, { x: 500, y: 0, z: 0 }, 1000, sampler(path));
-    expect(positions.getX(0)).toBe(before);
-    expect(trail.position.x).toBeCloseTo(500 / KM_PER_UNIT, 9);
-
-    line.update(START + 100, { x: 5000, y: 0, z: 0 }, 1000, sampler(path));
-    expect(positions.getX(0)).toBeCloseTo((path.x[0]! + 5000) / KM_PER_UNIT, 1);
+    // Following a craft: the focus moves every frame, by a lot.
+    for (let step = 0; step < 10; step += 1) {
+      const origin = { x: step * 1e6, y: -step * 3e5, z: 7 };
+      line.update(START + 100 + step / 1440, origin, sampler(path));
+    }
+    expect([high.version, low.version]).toEqual(versions);
+    // The move rides on the uniforms instead, split the same way as the chords.
+    const high3 = line.material.uniforms.uOriginHigh!.value as THREE.Vector3;
+    const low3 = line.material.uniforms.uOriginLow!.value as THREE.Vector3;
+    expect(high3.x + low3.x).toBe(9e6);
     expect(trail.position.x).toBe(0);
+  });
+
+  it("keeps float64's precision where the focus is", () => {
+    // A vertex beside Voyager, 2.54e10 km out, 123 m from the focus at the craft. A plain
+    // float32 there is only good to 2048 km.
+    const vertexKm = 2.54e10 + 0.123;
+    const originKm = -2.54e10;
+    expect(Math.abs(Math.fround(vertexKm) + originKm - 0.123)).toBeGreaterThan(100);
+
+    // The shader's sum, step by step in float32: high with high, low with low.
+    const [vertexHigh, vertexLow] = splitDouble(vertexKm);
+    const [originHigh, originLow] = splitDouble(originKm);
+    const f = Math.fround;
+    const km = f(f(vertexHigh + originHigh) + f(vertexLow + originLow));
+    expect(Math.abs(km - 0.123)).toBeLessThan(1e-3);
+  });
+
+  it('uploads only what the stretch at the craft uses, and nothing when nothing moved', () => {
+    const path = circlePath(10, 100);
+    const line = new TrajectoryLine(path, '#ffffff');
+    const [, near] = parts(line);
+    const positions = near.geometry.getAttribute('position') as THREE.BufferAttribute;
+
+    line.update(START + 123.4, ORIGIN, sampler(path));
+    const count = near.geometry.drawRange.count;
+    expect(positions.updateRanges).toEqual([{ start: 0, count: count * 3 }]);
+
+    // Paused, focus still: the same line, not written again.
+    const version = positions.version;
+    line.update(START + 123.4, ORIGIN, sampler(path));
+    expect(positions.version).toBe(version);
+    // The clock moves on: written again.
+    line.update(START + 123.5, ORIGIN, sampler(path));
+    expect(positions.version).toBeGreaterThan(version);
+  });
+
+  it('draws the stretch at the craft again until the finer data is here', () => {
+    const path = circlePath(10, 100);
+    const line = new TrajectoryLine(path, '#ffffff');
+    const [, near] = parts(line);
+    const positions = near.geometry.getAttribute('position') as THREE.BufferAttribute;
+
+    line.update(START + 50.5, ORIGIN, () => null);
+    const version = positions.version;
+    // Same instant, same focus, but the stand-in was used: drawn again.
+    line.update(START + 50.5, ORIGIN, sampler(path));
+    expect(positions.version).toBeGreaterThan(version);
   });
 });
 
@@ -335,19 +391,19 @@ describe('a trail drawn from the table', () => {
     const none = () => null;
     const span = 20;
 
-    trail.update(START + 100, origin, 1, none, span);
+    trail.update(START + 100, origin, none, span);
     expect(asked).toHaveLength(1);
     expect(trail.built.startJd).toBeCloseTo(START + 100 - span * (1 + TABLE_TRAIL_MARGIN));
     expect(trail.built.stopJd).toBeCloseTo(START + 100 + span * TABLE_TRAIL_MARGIN);
 
     // Inside the margin: the same line.
-    trail.update(START + 104, origin, 1, none, span);
+    trail.update(START + 104, origin, none, span);
     expect(asked).toHaveLength(1);
     // Past it: a new one.
-    trail.update(START + 106, origin, 1, none, span);
+    trail.update(START + 106, origin, none, span);
     expect(asked).toHaveLength(2);
     // And back in time just the same.
-    trail.update(START + 80, origin, 1, none, span);
+    trail.update(START + 80, origin, none, span);
     expect(asked).toHaveLength(3);
     expect(trail.object.visible).toBe(true);
     expect(trail.object.children).toHaveLength(1);
@@ -355,7 +411,7 @@ describe('a trail drawn from the table', () => {
 
   it('shows nothing while the data for it is not here', () => {
     const trail = new TableTrail(() => null, '#ffffff');
-    trail.update(START, { x: 0, y: 0, z: 0 }, 1, () => null, 1);
+    trail.update(START, { x: 0, y: 0, z: 0 }, () => null, 1);
     expect(trail.object.visible).toBe(false);
   });
 });

@@ -34,8 +34,14 @@ import { KM_PER_UNIT } from './scale.ts';
  *     crowding in on the craft geometrically: at any zoom the line runs into the marker
  *     along the direction the craft is actually moving.
  *
- *  3. **Float32 anchoring**, as for the orbits: the points are kept in float64 and the
- *     GPU buffer is rebuilt around the current focus when it drifts. See OrbitLine.
+ *  3. **Float64 split across two float32s.** The chords are uploaded once, in km relative
+ *     to the path's own frame, each coordinate as a high float32 and the low remainder
+ *     beside it. The shader adds the frame's offset from the focus, split the same way,
+ *     high to high and low to low. The high parts are close to each other near the focus, so
+ *     their sum is exact there, and what is left keeps float64's precision where the camera
+ *     is. Rebuilding the buffer around the focus instead, as OrbitLine does, rewrote every
+ *     chord of every trail almost every frame while following a craft: tens of megabytes a
+ *     second, uploaded to a GPU that on a laptop shares the CPU's memory.
  *
  * A seam in JPL's path is a gap, never a stroke: nothing flew along it.
  */
@@ -226,14 +232,51 @@ export function closeInTimes(start: number, stop: number, chords: number, jd: nu
 export type PathSampler = (jd: number) => Vec3 | null;
 
 /**
- * The trail's shader: a plain line whose alpha falls linearly with age.
+ * A float64 as two float32s: the nearest float32, and what it missed by.
+ *
+ * Their sum is the value to about 1e-14 of itself: for Voyager, twenty-five billion km
+ * out, a tenth of a metre.
+ */
+export function splitDouble(value: number): readonly [number, number] {
+  const high = Math.fround(value);
+  return [high, Math.fround(value - high)];
+}
+
+/**
+ * The trail's shaders: a plain line whose alpha falls linearly with age.
  *
  * Each vertex carries its instant as days since the path began, in float32 -- 40 seconds
  * of resolution across eleven years, which a fade spread over months cannot show. The
  * log-depth chunks are not optional: the scene's depth buffer is logarithmic, and a line
  * without them would be sorted against the planets by the wrong depth.
+ *
+ * The chords' vertex shader places them relative to the focus from the split halves (see
+ * splitDouble). `position` is the high half, in km in the path's frame; `positionLow` is
+ * the low one. The stretch at the craft is rewritten every frame anyway, so it is written
+ * already relative to the focus, in scene units, and takes the plain shader.
  */
 const TRAIL_VERTEX_SHADER = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
+  attribute vec3 positionLow;
+  attribute float aDays;
+  uniform vec3 uOriginHigh;
+  uniform vec3 uOriginLow;
+  uniform float uUnitsPerKm;
+  varying float vDays;
+
+  void main() {
+    vDays = aDays;
+    // High with high first: near the focus the two nearly cancel, exactly, and the low
+    // halves then carry the precision float32 alone could not.
+    vec3 km = (position + uOriginHigh) + (positionLow + uOriginLow);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(km * uUnitsPerKm, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const NEAR_VERTEX_SHADER = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
 
@@ -270,16 +313,21 @@ export function trailFade(ageDays: number, spanDays: number): number {
   return Math.min(1, Math.max(0, 1 - ageDays / spanDays));
 }
 
-function trailMaterial(color: string): THREE.ShaderMaterial {
+/** The fade's uniforms, one set shared by the chords and the stretch at the craft. */
+function fadeUniforms(color: string): Record<string, THREE.IUniform> {
+  return {
+    uColor: { value: new THREE.Color(color) },
+    uOpacity: { value: TRAIL_OPACITY },
+    uNowDays: { value: 0 },
+    uSpanDays: { value: 1 },
+  };
+}
+
+function trailMaterial(vertexShader: string, uniforms: Record<string, THREE.IUniform>) {
   return new THREE.ShaderMaterial({
-    vertexShader: TRAIL_VERTEX_SHADER,
+    vertexShader,
     fragmentShader: TRAIL_FRAGMENT_SHADER,
-    uniforms: {
-      uColor: { value: new THREE.Color(color) },
-      uOpacity: { value: TRAIL_OPACITY },
-      uNowDays: { value: 0 },
-      uSpanDays: { value: 1 },
-    },
+    uniforms,
     transparent: true,
     depthWrite: false,
   });
@@ -293,37 +341,58 @@ export class TrajectoryLine {
   readonly object = new THREE.Group();
 
   readonly #path: PathTable;
-  readonly #tessellation: Tessellation;
+  /** The tessellation's index, kept; its float64 points are not, once split. */
+  readonly #firstChord: Int32Array;
+  readonly #chordStopJd: Float64Array;
   readonly #gaps: ReadonlySet<number>;
-  readonly #positions: Float32Array;
-  readonly #attribute: THREE.BufferAttribute;
   /** The trail's chords, drawn up to the interval the craft is in. */
   readonly #trail: THREE.LineSegments;
   /** That interval, from its start to the craft, redrawn every frame. */
   readonly #near: THREE.Line;
   readonly #material: THREE.ShaderMaterial;
+  readonly #nearMaterial: THREE.ShaderMaterial;
 
-  /** Path frame origin relative to the focus at the last rebuild, km. */
-  #anchorKm: Vec3 = { x: 0, y: 0, z: 0 };
-  #anchored = false;
+  /** What the stretch at the craft was last drawn for: the same again draws nothing. */
+  #nearJd = Number.NaN;
+  #nearInterval = -1;
+  #nearOriginKm: Vec3 = { x: Number.NaN, y: Number.NaN, z: Number.NaN };
 
   constructor(path: PathTable, color: string) {
     this.#path = path;
     this.#gaps = new Set(path.gaps);
-    this.#tessellation = tessellatePath(path);
-    this.#positions = new Float32Array(this.#tessellation.pointsKm.length);
-    this.#attribute = new THREE.BufferAttribute(this.#positions, 3);
-    this.#material = trailMaterial(color);
+    const { pointsKm, chordStartJd, chordStopJd, firstChord } = tessellatePath(path);
+    this.#firstChord = firstChord;
+    this.#chordStopJd = chordStopJd;
+
+    const uniforms = fadeUniforms(color);
+    this.#material = trailMaterial(TRAIL_VERTEX_SHADER, {
+      ...uniforms,
+      uOriginHigh: { value: new THREE.Vector3() },
+      uOriginLow: { value: new THREE.Vector3() },
+      uUnitsPerKm: { value: 1 / KM_PER_UNIT },
+    });
+    this.#nearMaterial = trailMaterial(NEAR_VERTEX_SHADER, uniforms);
+
+    // splitDouble, inlined: a close orbiter's trail is rebuilt every frame at high rates,
+    // and a tuple per coordinate there is garbage by the hundred thousand.
+    const high = new Float32Array(pointsKm.length);
+    const low = new Float32Array(pointsKm.length);
+    for (let k = 0; k < pointsKm.length; k += 1) {
+      const value = pointsKm[k]!;
+      const rounded = Math.fround(value);
+      high[k] = rounded;
+      low[k] = value - rounded;
+    }
 
     // Each chord's two ends, as days since the path began: what the fade is read from.
-    const { chordStartJd, chordStopJd } = this.#tessellation;
     const days = new Float32Array(chordStartJd.length * 2);
     for (let chord = 0; chord < chordStartJd.length; chord += 1) {
       days[chord * 2] = chordStartJd[chord]! - path.t[0]!;
       days[chord * 2 + 1] = chordStopJd[chord]! - path.t[0]!;
     }
     const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', this.#attribute);
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(high, 3));
+    trailGeometry.setAttribute('positionLow', new THREE.BufferAttribute(low, 3));
     trailGeometry.setAttribute('aDays', new THREE.BufferAttribute(days, 1));
     this.#trail = this.#prepare(new THREE.LineSegments(trailGeometry, this.#material));
 
@@ -337,7 +406,7 @@ export class TrajectoryLine {
       new THREE.BufferAttribute(new Float32Array(CLOSE_IN_CAPACITY), 1),
     );
     nearGeometry.setDrawRange(0, 0);
-    this.#near = this.#prepare(new THREE.Line(nearGeometry, this.#material));
+    this.#near = this.#prepare(new THREE.Line(nearGeometry, this.#nearMaterial));
   }
 
   #prepare<T extends THREE.Line>(line: T): T {
@@ -351,7 +420,7 @@ export class TrajectoryLine {
 
   /** Chords in the static line, for tests and for the curious. */
   get chordCount(): number {
-    return this.#tessellation.firstChord.at(-1)!;
+    return this.#firstChord.at(-1)!;
   }
 
   /** The material, for tests: the fade lives in its uniforms. */
@@ -368,25 +437,23 @@ export class TrajectoryLine {
    * Draws the trail for one frame.
    *
    * `originKm` is where the path's frame sits relative to the focus: the barycentre for
-   * a craft about the Sun, its planet for one like JWST. `anchorToleranceKm` is how far
-   * that may drift before the float32 buffer is rebuilt. `sample` answers for the
+   * a craft about the Sun, its planet for one like JWST. `sample` answers for the
    * stretch at the craft, and should be the very data the craft is drawn from.
    *
    * `spanDays` is how far back the trail reaches: one period of the orbit the craft is on,
    * so Parker shows the loop it has just flown rather than all twenty-four stacked. Null
    * for a craft on no orbit at all, whose trail reaches back to where its path starts.
    */
-  update(
-    jd: number,
-    originKm: Vec3,
-    anchorToleranceKm: number,
-    sample: PathSampler,
-    spanDays: number | null = null,
-  ): void {
-    this.#anchor(originKm, anchorToleranceKm);
+  update(jd: number, originKm: Vec3, sample: PathSampler, spanDays: number | null = null): void {
+    const { uOriginHigh, uOriginLow } = this.#material.uniforms;
+    const [xHigh, xLow] = splitDouble(originKm.x);
+    const [yHigh, yLow] = splitDouble(originKm.y);
+    const [zHigh, zLow] = splitDouble(originKm.z);
+    (uOriginHigh!.value as THREE.Vector3).set(xHigh, yHigh, zHigh);
+    (uOriginLow!.value as THREE.Vector3).set(xLow, yLow, zLow);
 
     const path = this.#path;
-    const { firstChord, chordStopJd } = this.#tessellation;
+    const firstChord = this.#firstChord;
     const total = firstChord.at(-1)!;
     const i = findInterval(path.t, jd);
     const start = path.t[0]!;
@@ -398,11 +465,23 @@ export class TrajectoryLine {
     // Up to the interval the craft is in; all of it once the path has ended, none of it
     // before it starts.
     const behind = i >= 0 ? firstChord[i]! : jd < start ? 0 : total;
-    const oldest = Math.min(firstChordEndingAfter(chordStopJd, jd - span), behind);
+    const oldest = Math.min(firstChordEndingAfter(this.#chordStopJd, jd - span), behind);
     this.#trail.geometry.setDrawRange(oldest * 2, (behind - oldest) * 2);
 
     if (i < 0 || this.#gaps.has(i)) {
       this.#near.geometry.setDrawRange(0, 0);
+      this.#nearInterval = -1;
+      return;
+    }
+    // With the clock paused and the focus still, it is the same line as last frame.
+    const last = this.#nearOriginKm;
+    if (
+      i === this.#nearInterval &&
+      jd === this.#nearJd &&
+      originKm.x === last.x &&
+      originKm.y === last.y &&
+      originKm.z === last.z
+    ) {
       return;
     }
     this.#drawNear(i, jd, originKm, sample);
@@ -410,6 +489,9 @@ export class TrajectoryLine {
 
   /** The interval the craft is in, from its start to the craft, from the best data. */
   #drawNear(i: number, jd: number, originKm: Vec3, sample: PathSampler): void {
+    this.#nearInterval = i;
+    this.#nearJd = jd;
+    this.#nearOriginKm = { x: originKm.x, y: originKm.y, z: originKm.z };
     const path = this.#path;
     const chords = chordsFor(path, i, this.#gaps);
     const times = closeInTimes(path.t[i]!, path.t[i + 1]!, chords, jd);
@@ -422,8 +504,13 @@ export class TrajectoryLine {
     for (let k = 0; k < count; k += 1) {
       const time = times[k]!;
       // Where the chunk is not loaded, the path table stands in: within its own
-      // tolerance, and a frame or two later the chunk is here anyway.
-      const point = sample(time) ?? pathPosition(path, time);
+      // tolerance, and a frame or two later the chunk is here anyway -- so a stretch
+      // drawn from it is not remembered, and the next frame draws it again.
+      let point = sample(time);
+      if (point === null) {
+        point = pathPosition(path, time);
+        this.#nearJd = Number.NaN;
+      }
       // Summed in float64 and narrowed once; these vertices are close to the camera
       // by construction, so they are small numbers.
       xyz[k * 3] = (point.x + originKm.x) / KM_PER_UNIT;
@@ -431,46 +518,22 @@ export class TrajectoryLine {
       xyz[k * 3 + 2] = (point.z + originKm.z) / KM_PER_UNIT;
       age[k] = time - path.t[0]!;
     }
+    // Only the vertices written go up: the buffer has room for 288, and the stretch
+    // usually needs a few dozen.
+    positions.clearUpdateRanges();
+    positions.addUpdateRange(0, count * 3);
     positions.needsUpdate = true;
+    days.clearUpdateRanges();
+    days.addUpdateRange(0, count);
     days.needsUpdate = true;
     this.#near.geometry.setDrawRange(0, count);
-  }
-
-  /** Rebuilds the float32 chords around a new anchor once the old one has drifted. */
-  #anchor(originKm: Vec3, toleranceKm: number): void {
-    const drift = this.#anchored
-      ? Math.hypot(
-          originKm.x - this.#anchorKm.x,
-          originKm.y - this.#anchorKm.y,
-          originKm.z - this.#anchorKm.z,
-        )
-      : Infinity;
-
-    if (drift > Math.max(toleranceKm, 1)) {
-      const points = this.#tessellation.pointsKm;
-      const positions = this.#positions;
-      for (let k = 0; k < positions.length; k += 3) {
-        positions[k] = (points[k]! + originKm.x) / KM_PER_UNIT;
-        positions[k + 1] = (points[k + 1]! + originKm.y) / KM_PER_UNIT;
-        positions[k + 2] = (points[k + 2]! + originKm.z) / KM_PER_UNIT;
-      }
-      this.#attribute.needsUpdate = true;
-      this.#anchorKm = { x: originKm.x, y: originKm.y, z: originKm.z };
-      this.#anchored = true;
-    }
-
-    // What drift remains rides on the object transform, a small number.
-    this.#trail.position.set(
-      (originKm.x - this.#anchorKm.x) / KM_PER_UNIT,
-      (originKm.y - this.#anchorKm.y) / KM_PER_UNIT,
-      (originKm.z - this.#anchorKm.z) / KM_PER_UNIT,
-    );
   }
 
   dispose(): void {
     this.#trail.geometry.dispose();
     this.#near.geometry.dispose();
     this.#material.dispose();
+    this.#nearMaterial.dispose();
   }
 }
 
@@ -551,13 +614,7 @@ export class TableTrail {
     this.#line?.setFade(fade);
   }
 
-  update(
-    jd: number,
-    originKm: Vec3,
-    anchorToleranceKm: number,
-    sample: PathSampler,
-    spanDays: number | null = null,
-  ): void {
+  update(jd: number, originKm: Vec3, sample: PathSampler, spanDays: number | null = null): void {
     const span = spanDays ?? TABLE_TRAIL_FALLBACK_DAYS;
     if (jd - span < this.#builtStart || jd > this.#builtStop) {
       const startJd = jd - span * (1 + TABLE_TRAIL_MARGIN);
@@ -579,7 +636,7 @@ export class TableTrail {
       this.#builtStop = stopJd;
     }
     this.object.visible = true;
-    this.#line!.update(jd, originKm, anchorToleranceKm, sample, spanDays ?? span);
+    this.#line!.update(jd, originKm, sample, spanDays ?? span);
   }
 
   dispose(): void {
