@@ -124,6 +124,13 @@ function jumpAcross(table: VectorTable, k: number): number {
   );
 }
 
+/**
+ * How much longer than the reported interval its neighbour may be and still count as the
+ * same refinement step: the file times are rounded, so two one-minute steps can differ by
+ * a few seconds' worth of rounding, never by a factor of two.
+ */
+const SAME_STEP_RATIO = 1.5;
+
 /** Index of the sample at exactly `jd`, or -1. The tables are sorted. */
 function sampleIndex(table: VectorTable, jd: number): number {
   let low = 0;
@@ -151,6 +158,13 @@ function sampleIndex(table: VectorTable, jd: number): number {
  * intervals either side of a dropped sample, so it reports the first of the two. Which
  * of them holds the jump is read off the table, and so is the size -- measured directly,
  * where the refinement's own figure is inferred from a miss.
+ *
+ * Only an interval as short as the reported one can take the seam from it. Both are
+ * refinement steps where the jump was found, and on a thinned table -- this runs again on
+ * the published one -- the next interval can be days long. Over days the trapezoid rule
+ * misses a curving path by tens of thousands of km, which read as a bigger jump than the
+ * real one: Europa Clipper's 1-minute seam of 2026-07-09 moved onto the 11.7 days after
+ * it, and the trail lost 27 million km of path that has no jump in it at all.
  */
 export function locateSeams(table: VectorTable, discontinuities: readonly Discontinuity[]): Seam[] {
   const seams: Seam[] = [];
@@ -162,7 +176,12 @@ export function locateSeams(table: VectorTable, discontinuities: readonly Discon
       );
     }
     let k = first;
-    if (first + 2 < table.count && jumpAcross(table, first + 1) > jumpAcross(table, first)) {
+    const width = (i: number) => table.t[i + 1]! - table.t[i]!;
+    if (
+      first + 2 < table.count &&
+      width(first + 1) <= width(first) * SAME_STEP_RATIO &&
+      jumpAcross(table, first + 1) > jumpAcross(table, first)
+    ) {
       k = first + 1;
     }
     if (seams.at(-1)?.startJd === table.t[k]) {

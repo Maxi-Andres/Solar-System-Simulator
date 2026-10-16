@@ -174,6 +174,39 @@ describe('seams', () => {
     expect(seams[0]!.jumpKm).toBeCloseTo(jumpKm, 3);
   });
 
+  it('keeps a one-minute seam when the interval after it is days long', () => {
+    // A published, thinned table on a real orbit: 1 AU, a year round. One minute across
+    // the seam, where the path steps 5,000 km; then nothing for 11.7 days, as on Europa
+    // Clipper's 2026-07-09 handover. Over those days the trapezoid rule misses the
+    // curving orbit by far more than 5,000 km, and that must not read as the jump.
+    const orbit = circle(1.496e8, 365.25);
+    const jumped = (jd: number): State => {
+      const state = orbit(jd);
+      return jd >= START_JD + seamDay ? { ...state, y: state.y + jumpKm } : state;
+    };
+    const before = START_JD + seamDay - 1 / 1440;
+    const times = [START_JD, before, START_JD + seamDay, START_JD + seamDay + 11.7];
+    const states = times.map(jumped);
+    const table: VectorTable = {
+      id: 'probe',
+      horizonsId: '-1',
+      center: '500@0',
+      count: times.length,
+      t: times,
+      x: states.map((s) => s.x),
+      y: states.map((s) => s.y),
+      z: states.map((s) => s.z),
+      vx: states.map((s) => s.vx),
+      vy: states.map((s) => s.vy),
+      vz: states.map((s) => s.vz),
+    };
+
+    const [seam] = locateSeams(table, [{ jd: before, jumpKm: 0 }]);
+    expect(seam!.startJd).toBe(before);
+    expect(seam!.stopJd).toBe(START_JD + seamDay);
+    expect(seam!.jumpKm).toBeCloseTo(jumpKm, -1);
+  });
+
   it('refuses a report that is not a sample', () => {
     const table = sampleTable(cruise, 0, 1, 60);
     expect(() => locateSeams(table, [{ jd: START_JD + 0.01, jumpKm: 1 }])).toThrow(/not a sample/);

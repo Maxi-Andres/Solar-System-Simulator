@@ -141,6 +141,16 @@ export function CameraRig({
     };
 
     const onWheel = (event: WheelEvent): void => {
+      // Over the scene, or over a body's name: the names are buttons laid on top of the
+      // canvas, so a wheel over one never reaches it, and zooming out from a planet
+      // stalled the moment the pointer crossed its label. Over a panel -- the body list,
+      // About -- the wheel is the panel's, to scroll.
+      const target = event.target;
+      const overLabel = target instanceof Element && target.closest('.tracks-scene') !== null;
+      const overScene = target === element || overLabel;
+      if (!overScene) {
+        return;
+      }
       event.preventDefault();
       // Multiplicative: every notch is the same ratio, so 10 km and 10 AU feel the
       // same to navigate.
@@ -156,14 +166,15 @@ export function CameraRig({
     element.addEventListener('pointermove', onPointerMove);
     element.addEventListener('pointerup', endDrag);
     element.addEventListener('pointercancel', endDrag);
-    element.addEventListener('wheel', onWheel, { passive: false });
+    // On the document rather than the canvas, to hear the wheel over the labels too.
+    document.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
       element.removeEventListener('pointerdown', onPointerDown);
       element.removeEventListener('pointermove', onPointerMove);
       element.removeEventListener('pointerup', endDrag);
       element.removeEventListener('pointercancel', endDrag);
-      element.removeEventListener('wheel', onWheel);
+      document.removeEventListener('wheel', onWheel);
     };
   }, [gl, minDistance, maxDistance]);
 
