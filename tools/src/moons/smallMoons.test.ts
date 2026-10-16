@@ -10,7 +10,9 @@ import {
 import { majorBodyIds, radiusFromSummary } from './buildMoonList.ts';
 import { SMALL_MOON_RECORDS } from './smallMoons.ts';
 
-const small = CATALOG.filter((body) => body.sampling !== undefined);
+// Sampled adaptively and hung from a planet; the small bodies about the Sun are sampled
+// the same way and are tested in smallBodies.test.ts.
+const small = CATALOG.filter((body) => body.sampling !== undefined && body.parent !== null);
 
 describe('the small moons', () => {
   it('are every one JPL lists, under the planet it lists them under', () => {

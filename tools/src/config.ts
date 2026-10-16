@@ -122,6 +122,18 @@ export const CLOSE_ORBIT_WINDOW_MONTHS = 3;
  * two minutes -- Himalia 1,795 samples against 191 -- and opening Jupiter fetched 6 MB.
  */
 export const SMALL_MOON_RADIUS_FRACTION = 0.01;
+
+/**
+ * The named small bodies' tolerance, km, everywhere along their orbits: the spacecraft's
+ * floor, because spacecraft fly beside them -- OSIRIS-REx a kilometre off Bennu, Hayabusa2
+ * at Ryugu, Hera arriving at Didymos in December 2026 -- and a craft held to a kilometre
+ * beside a body that is not would drift off it on screen by the body's error.
+ *
+ * Not the small moons' angle: these are not seen from a planet but visited, and none costs
+ * much at a kilometre. A body at 1 AU needs a sample every day or two for it, one in the
+ * Kuiper belt one every few weeks.
+ */
+export const SMALL_BODY_TOLERANCE_KM = SPACECRAFT_TOLERANCE_KM;
 export const SMALL_MOON_TOLERANCE_FLOOR_KM = 1;
 
 /**

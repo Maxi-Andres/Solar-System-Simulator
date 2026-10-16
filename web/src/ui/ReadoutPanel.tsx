@@ -1,4 +1,5 @@
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
+import { isSmallMoon } from '../scene/floatingOrigin.ts';
 import { useViewStore } from '../state/store.ts';
 import { Panel } from './Panel.tsx';
 
@@ -84,7 +85,7 @@ export function ReadoutPanel({
         <tbody>
           {store.bodies
             // Not the small moons: a hundred rows of Jupiter's would bury the table.
-            .filter((body) => visibleKinds.has(body.kind) && body.sampling === undefined)
+            .filter((body) => visibleKinds.has(body.kind) && !isSmallMoon(body))
             .map((body) => {
               const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);
               const speed = store.speedRelativeTo(body.id, 'sun', jd);

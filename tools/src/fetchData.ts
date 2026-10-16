@@ -242,12 +242,22 @@ async function fetchSpacecraft(
 }
 
 /**
- * A small moon: sampled adaptively, as a spacecraft is, over its own window -- see
- * SMALL_MOONS in the catalog. Null when JPL has nothing for it inside that window
- * (Daphnis's ephemeris stops in 2018), or no elements to propagate it with outside: a
- * moon the app could neither place nor fall back on is left out of the run.
+ * True for a small moon: sampled adaptively and shipped in its planet's bundle rather
+ * than with the startup files. A small body about the Sun is sampled the same way but
+ * published like any other body.
  */
-export async function fetchSmallMoon(
+export function isSmallMoon(body: BodyDefinition): boolean {
+  return body.sampling !== undefined && body.parent !== null;
+}
+
+/**
+ * A natural body sampled adaptively, as a spacecraft is: a small moon over its own
+ * window, or a named small body over the planets' -- see SMALL_MOONS and SMALL_BODIES in
+ * the catalog. Null when JPL has nothing for it inside that window (Daphnis's ephemeris
+ * stops in 2018), or no elements to propagate it with outside: a body the app could
+ * neither place nor fall back on is left out of the run.
+ */
+export async function fetchAdaptiveBody(
   body: BodyDefinition,
   epoch: Date,
 ): Promise<BodyResult | null> {
@@ -255,8 +265,11 @@ export async function fetchSmallMoon(
   if (sampling === undefined) {
     throw new Error(`${body.id} is not sampled adaptively.`);
   }
-  const start = addMonths(epoch, -sampling.windowMonths);
-  const stop = addMonths(epoch, sampling.windowMonths);
+  const months = sampling.windowMonths;
+  const { start, stop } =
+    months === null
+      ? windowFor('full', epoch)
+      : { start: addMonths(epoch, -months), stop: addMonths(epoch, months) };
   const stated = await fetchCoverage(body);
   if (stated.stop.getTime() <= start.getTime() || stated.start.getTime() >= stop.getTime()) {
     console.log(
@@ -281,8 +294,9 @@ export async function fetchSmallMoon(
     console.log(`[fetch-data] ${body.name}: no elements at the build (${String(error).slice(0, 120)}); left out`);
     return null;
   }
-  // A moon is bound to its planet. An open orbit means Horizons answered for some other
-  // object under that number -- see majorBodyIds in moons/buildMoonList.ts.
+  // A moon is bound to its planet, an asteroid to the Sun. An open orbit means Horizons
+  // answered for some other object under that number -- see majorBodyIds in
+  // moons/buildMoonList.ts.
   if (!(elements.eccentricity < 1)) {
     console.log(
       `[fetch-data] ${body.name}: unbound about ${body.parent} (e = ${elements.eccentricity.toFixed(3)}), ` +
@@ -297,15 +311,22 @@ export async function fetchSmallMoon(
     { start: stated.start, stop: dataEnd },
     {
       toleranceKm: sampling.toleranceKm,
-      // Far out, the spacecraft's angle: ten microradians seen from the planet, 200 km
-      // for an irregular moon 20 million km out and a thirtieth of a pixel from there.
-      // Held to its kilometre instead, every small jump between JPL's ephemeris files
-      // was refined to two minutes, and opening Jupiter cost 6 MB of them.
-      toleranceAt: (_jd, position) =>
-        Math.max(
-          sampling.toleranceKm,
-          SPACECRAFT_ANGULAR_TOLERANCE * Math.hypot(position[0], position[1], position[2]),
-        ),
+      // A small moon, far out, takes the spacecraft's angle: ten microradians seen from
+      // the planet, 200 km for an irregular moon 20 million km out and a thirtieth of a
+      // pixel from there. Held to its kilometre instead, every small jump between JPL's
+      // ephemeris files was refined to two minutes, and opening Jupiter cost 6 MB of them.
+      //
+      // A small body about the Sun keeps its kilometre everywhere. Spacecraft fly in
+      // formation with these -- OSIRIS-REx a kilometre off Bennu, Hera arriving at
+      // Didymos -- and the craft is held to a kilometre there, so the body must be too or
+      // the two would part on screen by the body's error, not the craft's.
+      toleranceAt: isSmallMoon(body)
+        ? (_jd, position) =>
+            Math.max(
+              sampling.toleranceKm,
+              SPACECRAFT_ANGULAR_TOLERANCE * Math.hypot(position[0], position[1], position[2]),
+            )
+        : () => sampling.toleranceKm,
       minStepMinutes: SPACECRAFT_MIN_STEP_MINUTES,
       margin: ESTIMATE_MARGIN,
       samplesPerRequest: MAX_SAMPLES_PER_REQUEST,
@@ -406,7 +427,11 @@ function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
 interface ReferenceFrames {
   /** A full-window body's barycentric position, walking its parents. */
   readonly barycentric: (id: BodyId) => PositionAt;
-  /** Every full-window body's: the Sun, the planets, Pluto and the Moon. */
+  /**
+   * Every full-window body's: the Sun, the planets, Pluto and the Moon, and the named
+   * small bodies -- so a craft at Bennu is held to a kilometre there, not to the
+   * hundreds its distance from Earth would allow.
+   */
   readonly references: readonly PositionAt[];
 }
 
@@ -525,9 +550,18 @@ async function main(): Promise<void> {
     fetchTycho2(),
   ]);
 
+  // The named small bodies next, before the craft: several craft fly to them, and a
+  // craft is held to a kilometre only near a body it is measured against.
+  const smallBodies = await mapWithConcurrency(
+    CATALOG.filter((body) => body.sampling !== undefined && !isSmallMoon(body)),
+    MAX_CONCURRENT_REQUESTS,
+    (body) => fetchAdaptiveBody(body, epoch),
+  );
+  const sunward = smallBodies.filter((result) => result !== null);
+
   // The spacecraft after the natural bodies, because their sampling is measured against
   // them: how fine a craft must be followed depends on how far it is from the nearest.
-  const frames = referenceFrames(natural);
+  const frames = referenceFrames([...natural, ...sunward]);
   const craft = await mapWithConcurrency(
     CATALOG.filter((body) => body.vectorWindow === 'mission'),
     MAX_CONCURRENT_REQUESTS,
@@ -541,11 +575,11 @@ async function main(): Promise<void> {
   // bad minute at JPL, and losing the planets' data to one of them would be the worse
   // trade. The major bodies and the craft still fail it.
   const smallMoons = await mapWithConcurrency(
-    CATALOG.filter((body) => body.sampling !== undefined),
+    CATALOG.filter(isSmallMoon),
     MAX_CONCURRENT_REQUESTS,
     async (body) => {
       try {
-        return await fetchSmallMoon(body, epoch);
+        return await fetchAdaptiveBody(body, epoch);
       } catch (error) {
         console.log(`[fetch-data] ${body.name}: failed (${String(error).slice(0, 160)}); left out`);
         return null;
@@ -554,6 +588,7 @@ async function main(): Promise<void> {
   );
   const results = [
     ...natural,
+    ...sunward,
     ...craft.filter((result) => result !== null),
     ...smallMoons.filter((result) => result !== null),
   ];
@@ -600,7 +635,7 @@ async function main(): Promise<void> {
     // is loaded before the first frame, and with forty craft that would be forty files
     // the visitor waits for to see the Sun. A chunk arrives a frame or two after the
     // craft is first wanted, which is all the delay there is.
-    if (result.body.vectorWindow === 'full') {
+    if (result.body.vectorWindow === 'full' && result.body.sampling === undefined) {
       await writeVectors(result.vectors);
       tables[result.body.id] = { ...spanOf(result.vectors), chunks: null };
     } else {
@@ -619,7 +654,7 @@ async function main(): Promise<void> {
       tables[result.body.id] = { startJd: first.startJd, stopJd: last.stopJd, chunks };
     }
     // The small moons' go into their planet's bundle, below.
-    if (result.elements !== null && result.body.sampling === undefined) {
+    if (result.elements !== null && !isSmallMoon(result.body)) {
       await writeElements(result.elements);
     }
   }
@@ -628,7 +663,7 @@ async function main(): Promise<void> {
   // of their own, with their definitions, elements and table index, and the manifest
   // only counts them. See Manifest.smallMoons.
   const smallMoonCounts: Record<BodyId, SmallMoonCount> = {};
-  const smallResults = results.filter((result) => result.body.sampling !== undefined);
+  const smallResults = results.filter((result) => isSmallMoon(result.body));
   for (const planet of new Set(smallResults.map((result) => result.body.parent!))) {
     const mine = smallResults.filter((result) => result.body.parent === planet);
     await writeSmallMoonBundle(planet, {
@@ -644,7 +679,7 @@ async function main(): Promise<void> {
       sized: mine.filter((result) => result.body.radiusPublished !== false).length,
     };
   }
-  const startupCatalog = catalog.filter((body) => body.sampling === undefined);
+  const startupCatalog = catalog.filter((body) => !isSmallMoon(body));
 
   const paths = await writePaths(results, frames);
 
@@ -664,7 +699,10 @@ async function main(): Promise<void> {
   // would shrink to their two years; their own spans are in `tables`.
   let startJd = -Infinity;
   let stopJd = Infinity;
-  for (const result of results.filter((candidate) => candidate.body.vectorWindow === 'full')) {
+  // So are the small bodies about the Sun, whose tables are chunked like a craft's.
+  for (const result of results.filter(
+    (candidate) => candidate.body.vectorWindow === 'full' && candidate.body.sampling === undefined,
+  )) {
     const span = spanOf(result.vectors);
     startJd = Math.max(startJd, span.startJd);
     stopJd = Math.min(stopJd, span.stopJd);
@@ -710,7 +748,7 @@ async function main(): Promise<void> {
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
 }
 
-// Run when invoked, not when imported -- a script trying one moon imports fetchSmallMoon.
+// Run when invoked, not when imported -- a script trying one body imports fetchAdaptiveBody.
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }

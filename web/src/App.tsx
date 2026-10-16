@@ -29,6 +29,7 @@ import { Toolbar } from './ui/Toolbar.tsx';
 const LAYER_KINDS: Record<string, readonly string[]> = {
   planets: ['planet', 'star'],
   dwarfPlanets: ['dwarf-planet'],
+  asteroids: ['asteroid'],
   moons: ['moon'],
   smallMoons: [SMALL_MOON_LAYER],
   spacecraft: ['spacecraft'],

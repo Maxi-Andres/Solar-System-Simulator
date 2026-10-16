@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody, SSB_CENTER, SUN_CENTER } from './catalog.ts';
+import { SMALL_BODIES } from './smallBodies.ts';
 import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { stepMinutes } from './horizons/queries.ts';
 
 const primaries = CATALOG.filter((body) => body.kind !== 'moon' && body.kind !== 'spacecraft');
+const smallBodyIds = new Set(SMALL_BODIES.map((body) => body.id));
 // The major moons; the small ones have their own tests in moons/smallMoons.test.ts.
 const moons = CATALOG.filter((body) => body.kind === 'moon' && body.sampling === undefined);
 const craft = CATALOG.filter((body) => body.kind === 'spacecraft');
 
 describe('CATALOG', () => {
-  it('covers the Sun, the eight planets and Pluto', () => {
-    expect(primaries.map((body) => body.id)).toEqual([
+  it('covers the Sun, the eight planets, Pluto and the named small bodies', () => {
+    expect(primaries.filter((body) => !smallBodyIds.has(body.id)).map((body) => body.id)).toEqual([
       'sun',
       'mercury',
       'venus',
@@ -56,8 +58,9 @@ describe('CATALOG', () => {
       // A rotating body bulges at the equator; it never bulges at the poles.
       expect(body.radiusPolarKm).toBeLessThanOrEqual(body.radiusEquatorialKm);
       // Flattening stays under 0.1 even for Saturn, the most oblate body pulled round.
-      // Phobos and Deimos are not round at all -- 0.30 and 0.35 -- and are exempt.
-      if (body.parent !== 'mars') {
+      // Phobos and Deimos are not round at all -- 0.30 and 0.35 -- and are exempt, and so
+      // are the small bodies: Haumea, spun into an ellipsoid, is 0.56.
+      if (body.parent !== 'mars' && !smallBodyIds.has(body.id)) {
         const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
         expect(flattening, body.id).toBeLessThan(0.1);
       }
@@ -78,7 +81,18 @@ describe('CATALOG', () => {
       expect(body.radiusEquatorialKm, body.id).toBe(a);
       expect(body.radiusPolarKm, body.id).toBe(c);
     }
-    expect(CATALOG.filter((body) => body.triaxialRadiiKm !== null).map((body) => body.id)).toEqual([
+    const triaxial = CATALOG.filter((body) => body.triaxialRadiiKm !== null);
+    expect(triaxial.filter((body) => smallBodyIds.has(body.id)).map((body) => body.id)).toEqual([
+      'haumea',
+      'bennu',
+      'vesta',
+      'donaldjohanson',
+      'pallas',
+      '16-psyche',
+      'eurybates',
+      'arrokoth',
+    ]);
+    expect(triaxial.filter((body) => !smallBodyIds.has(body.id)).map((body) => body.id)).toEqual([
       'phobos',
       'deimos',
       'io',
@@ -120,6 +134,13 @@ describe('CATALOG', () => {
       'venus',
       'uranus',
       'pluto',
+      // Spin poles more than 90 degrees from their orbits'; see smallBodies.ts.
+      'bennu',
+      'ryugu',
+      'didymos',
+      '16-psyche',
+      'eurybates',
+      'arrokoth',
       'miranda',
       'ariel',
       'umbriel',

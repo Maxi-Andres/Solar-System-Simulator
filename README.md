@@ -237,6 +237,31 @@ around 200 km every few days, and one sample a month cannot follow that — the 
 effect that limits Pluto, smaller. It moves the whole Jovian system together, so Io
 against Jupiter is still exact.
 
+### The named small bodies
+
+Fifteen bodies beyond the planets and Pluto, chosen for a reason the app can show: the
+other four dwarf planets the IAU names (Ceres, Haumea, Makemake, Eris), the largest
+asteroids (Vesta, Pallas, 16 Psyche), and the ones the spacecraft here have visited or are
+flying to — Bennu, Ryugu, Didymos, Dinkinesh, Donaldjohanson, Eurybates, Arrokoth — plus
+Apophis, which passes inside the geostationary ring in April 2029. Their positions are
+JPL's own integrations from Horizons, not propagated elements: two-body Kepler from
+osculating elements drifts by up to a degree over this window, and puts Apophis 267
+million km out after its 2029 encounter.
+
+They are sampled the spacecraft's way, adaptively, but to **a kilometre everywhere**:
+craft fly beside them — OSIRIS-REx a kilometre off Bennu, Hera reaching Didymos in
+December 2026 — and a body less exact than the craft would leave it hanging in space on
+screen. They also count as reference bodies for the craft's own sampling, so a craft is
+held to its kilometre at Bennu, not to the hundreds its distance from Earth would allow.
+
+Sizes, masses and spin come from JPL's Small-Body Database and the papers it cites, the
+rest from the literature, each cited in `tools/src/smallBodies.ts`. A shape is drawn only
+where it can be drawn honestly: Ceres and Vesta from their IAU rotation and radii, Eris
+and Makemake round as measured. The rest are irregular — Bennu a spinning top, Arrokoth
+two lobes stuck together, Apophis tumbling — with no orientation published in a form the
+app can use, so they are **markers** for now, with their measured dimensions in the info
+panel and "Shape: not drawn yet" said plainly.
+
 ### Spacecraft sampling
 
 A spacecraft is the case no single step can serve. Juice cruises for months on a curve
@@ -489,6 +514,7 @@ two, never drawn somewhere approximate and then moved.
 | [NASA/JPL Mars mission maps (MMGIS)](https://science.nasa.gov/mission/msl-curiosity/location-map/) | Where Curiosity and Perseverance ended each drive, and their heading — courtesy NASA/JPL-Caltech |
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
+| [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
@@ -505,8 +531,10 @@ two, never drawn somewhere approximate and then moved.
   Lagrange points, in orbit around Mars, the Moon and Jupiter — with their trails drawn
   from JPL's samples and NASA's models up close. Curiosity, Perseverance and InSight stand on Mars, where NASA's
   traverse maps put them.
-- **Phase B** — asteroids and comets from SBDB, rendered with instancing and Keplerian
-  propagation in the vertex shader.
+- **Phase B** — fifteen named small bodies are in, from JPL's own state vectors: four
+  dwarf planets, the largest asteroids and the ones spacecraft have visited. Next, their
+  shape models; then the belt of hundreds of thousands from SBDB, with instancing and
+  Keplerian propagation in the vertex shader.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
 - **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to

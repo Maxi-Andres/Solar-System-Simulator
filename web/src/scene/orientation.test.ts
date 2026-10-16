@@ -17,9 +17,11 @@ import {
 } from './orientation.ts';
 
 // The Sun, the planets and Pluto. The moons are checked in moonRotation.test.ts, against
-// the planet they face rather than the Sun; the spacecraft have no rotation to check.
+// the planet they face rather than the Sun; the spacecraft have no rotation to check, and
+// the named small bodies, most of them with none either, are checked in the generator's
+// smallBodies.test.ts.
 const CATALOG = FULL_CATALOG.filter(
-  (body) => body.parent === null && body.kind !== 'spacecraft',
+  (body) => body.parent === null && body.kind !== 'spacecraft' && body.sampling === undefined,
 );
 
 const earth = getBody('earth');

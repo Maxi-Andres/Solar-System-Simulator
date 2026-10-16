@@ -8,7 +8,7 @@
 /** Stable slug for a body, used in file names and as a map key everywhere. */
 export type BodyId = string;
 
-export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'moon' | 'spacecraft';
+export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'moon' | 'spacecraft';
 
 /**
  * Which surface-map set a body is being drawn with.
@@ -276,7 +276,8 @@ export interface BodyDefinition {
   readonly mission: Mission | null;
   /**
    * For a natural body sampled adaptively, as the spacecraft are, rather than at one
-   * step: the small moons. Absent for every other body. See SMALL_MOONS in the catalog.
+   * step: the small moons, and the named small bodies about the Sun. Absent for every
+   * other body. See SMALL_MOONS and SMALL_BODIES in the catalog.
    */
   readonly sampling?: AdaptiveSampling;
   /**
@@ -285,6 +286,14 @@ export interface BodyDefinition {
    * nominal kilometre that only frames the camera. Absent means published.
    */
   readonly radiusPublished?: boolean;
+  /**
+   * False for a body whose size is measured but whose shape cannot be drawn yet: an
+   * irregular asteroid with no published orientation to hang its dimensions on, or a
+   * contact binary no ellipsoid describes. Drawn as a marker only, as a body of unknown
+   * size is, while the info panel gives its measured dimensions. Absent means the radii
+   * and rotation above are the whole of its shape.
+   */
+  readonly shapeDrawn?: boolean;
 }
 
 /**
@@ -393,8 +402,11 @@ export interface SurfaceInfo {
 export interface AdaptiveSampling {
   /** How far the interpolated curve may stray from JPL's, km. */
   readonly toleranceKm: number;
-  /** Months either side of the build its table covers; outside it, it is propagated. */
-  readonly windowMonths: number;
+  /**
+   * Months either side of the build its table covers; outside it, it is propagated.
+   * Null for the planets' full window.
+   */
+  readonly windowMonths: number | null;
 }
 
 /** An axis in a craft's own frame: a unit vector along one of its model axes. */

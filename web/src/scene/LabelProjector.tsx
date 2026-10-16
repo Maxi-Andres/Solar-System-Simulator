@@ -145,14 +145,14 @@ export function declutterLabels(
 }
 
 /**
- * Label precedence: the Sun, planets and dwarf planets first, then moons, then
- * spacecraft. Depth only decides between bodies of the same rank.
+ * Label precedence: the Sun, planets and dwarf planets first, then moons and asteroids,
+ * then spacecraft. Depth only decides between bodies of the same rank.
  */
 export function labelRank(kind: string, parent: BodyId | null): number {
   if (kind === 'spacecraft') {
     return 2;
   }
-  return parent === null ? 0 : 1;
+  return parent === null && kind !== 'asteroid' ? 0 : 1;
 }
 
 export function LabelProjector({

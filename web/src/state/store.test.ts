@@ -53,7 +53,6 @@ describe('layer catalog', () => {
     // These are listed so the panel doubles as a roadmap; if one ships, its entry
     // must lose the badge or the UI lies about what it can do.
     expect(pending).toEqual([
-      'asteroids',
       'comets',
       'constellations',
     ]);
@@ -67,7 +66,7 @@ describe('layer catalog', () => {
   it('reports availability consistently with the catalog', () => {
     expect(isLayerAvailable('orbits')).toBe(true);
     expect(isLayerAvailable('labels')).toBe(true);
-    expect(isLayerAvailable('asteroids')).toBe(false);
+    expect(isLayerAvailable('comets')).toBe(false);
   });
 
   it('defaults to showing exactly what exists today', () => {

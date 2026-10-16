@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
-import { isShown, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
+import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
 /**
@@ -244,14 +244,22 @@ function BodyList({
   const [expanded, setExpanded] = useState<ReadonlySet<BodyId>>(() =>
     focusBody.kind === 'spacecraft'
       ? new Set([system, `craft:${craftGroup(store, focusBody)}`])
-      : focusBody.sampling !== undefined
+      : isSmallMoon(focusBody)
         ? new Set([system, `small:${system}`])
         : new Set([system]),
   );
 
   const primaries = store.bodies.filter(
-    (body) => body.parent === null && body.kind !== 'spacecraft' && visibleKinds.has(body.kind),
+    (body) =>
+      body.parent === null &&
+      body.kind !== 'spacecraft' &&
+      body.kind !== 'asteroid' &&
+      visibleKinds.has(body.kind),
   );
+  // Listed apart: between the planets they would push Neptune off the bottom.
+  const asteroids = visibleKinds.has('asteroid')
+    ? store.bodies.filter((body) => body.kind === 'asteroid')
+    : [];
   // Moons only: JWST hangs off Earth in the frame tree, and is listed with the craft.
   const moonsOf = (id: BodyId): BodyDefinition[] =>
     visibleKinds.has('moon')
@@ -350,7 +358,7 @@ function BodyList({
             />
             {open &&
               moons
-                .filter((moon) => moon.sampling === undefined)
+                .filter((moon) => !isSmallMoon(moon))
                 .map((moon) => (
                   <Row
                     key={moon.id}
@@ -365,7 +373,7 @@ function BodyList({
             {open && (
               <SmallMoons
                 planet={body}
-                moons={moons.filter((moon) => moon.sampling !== undefined)}
+                moons={moons.filter(isSmallMoon)}
                 count={smallCount}
                 loaded={store.hasSmallMoons(body.id)}
                 open={expanded.has(`small:${body.id}`)}
@@ -381,21 +389,24 @@ function BodyList({
           </div>
         );
       })}
+      {asteroids.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Asteroids</div>
+          {asteroids.map((body) => (
+            <Row
+              key={body.id}
+              body={body}
+              active={body.id === focus}
+              inSystem={false}
+              onChoose={onChoose}
+              trailing={null}
+            />
+          ))}
+        </>
+      )}
       {craft.length > 0 && (
         <>
-          <div
-            style={{
-              margin: '0.45rem 0.45rem 0.2rem',
-              paddingTop: '0.45rem',
-              borderTop: '1px solid #242424',
-              color: '#5a5a5a',
-              fontSize: '0.6rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Spacecraft
-          </div>
+          <div style={SECTION_HEADING}>Spacecraft</div>
           {CRAFT_GROUPS.map((group) => {
             const members = craft.filter((body) => craftGroup(store, body) === group.id);
             if (members.length === 0) {
@@ -464,6 +475,17 @@ function BodyList({
     </div>
   );
 }
+
+/** The rule and caption above a section of the list. */
+const SECTION_HEADING: React.CSSProperties = {
+  margin: '0.45rem 0.45rem 0.2rem',
+  paddingTop: '0.45rem',
+  borderTop: '1px solid #242424',
+  color: '#5a5a5a',
+  fontSize: '0.6rem',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+};
 
 /**
  * A planet's small moons, folded behind one row: Saturn has 284 of them, and listed

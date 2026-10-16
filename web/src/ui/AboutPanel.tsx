@@ -145,6 +145,7 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
               'Positions and velocities, interpolated from JPL state vectors. Error against JPL at finer resolution: 32 m for Earth, 9.7 km for Mercury.',
               'Twenty-one moons — every one massive enough to have pulled itself round, plus Phobos and Deimos — from JPL’s own satellite ephemerides, measured from their planet’s centre. Each is sampled finely enough to land within a hundredth of its own radius, which for Phobos, round Mars every 7 hours 39 minutes, means every fifteen minutes. Its worst error is 48 metres.',
               smallMoonSentence(store),
+              smallBodySentence(store),
               `${capitalised(spelled(craftCount(store)))} spacecraft — the ones travelling between the planets, the observatories at the Lagrange points, the craft orbiting Mars, the Moon and Jupiter, two rovers and a lander on Mars, and five that ended inside the window, Cassini among them — each from its own JPL trajectory, reconstructed from tracking where it has been and predicted where it is going. A spacecraft’s path is not an orbit, so no single step can follow it: Juice cruises for months on a curve one sample a day follows well inside a kilometre, then passes 8,640 km above Earth at 13 km/s. So the sampling refines itself, down to a minute, wherever the curve would stray from JPL’s by more than its tolerance: a kilometre near a body, and away from one an angle — ten microradians seen from the nearest, 15 km at the L1 point. That is about a fortieth of a pixel from Earth, and it is what stops the sampling chasing the few-kilometre steps where JPL’s trajectory files for those craft meet, about weekly. The orbiters of Mars and the Moon are the expensive ones — MRO goes round Mars every 112 minutes, all of it within the kilometre — so they are followed for ${spelled(CLOSE_ORBIT_MONTHS)} months either side of the build rather than ten years, and are absent outside that; Juno, whose orbit takes weeks, for the whole window.`,
               'Radii and polar flattening from the IAU 2015 report — Saturn really is 9.8% shorter pole to pole.',
               'Rotation at each body’s real sidereal rate, retrograde where it is retrograde: Venus, Uranus and Pluto.',
@@ -295,6 +296,17 @@ export function smallMoonSentence(store: EphemerisStore): string {
   const sized = counts.reduce((sum, entry) => sum + entry.sized, 0);
   const saturn = store.smallMoonCount('saturn')?.count ?? 0;
   return `And ${spelled(total)} small moons: every other satellite JPL publishes, Saturn’s 128 discoveries of 2025 among them. Most are a few kilometres of dark rock on a wide, tilted, often backward orbit, and for most an orbit is all that is known — JPL gives a size for ${spelled(sized)}, and the rest are drawn as markers rather than as spheres of a size nobody has measured. Their tables hold JPL’s positions to a hundredth of their radius but never finer than a kilometre — and far out, as for the spacecraft, to ten microradians seen from the planet — since JPL itself places the faintest of them only to hundreds of kilometres; they cover three months either side of the build for the inner moons, which go round in hours, and a year for the rest; outside that they are propagated and marked approximate. A small moon’s orbit is drawn only while it is the focus — Saturn’s all together would be a tangle of ${saturn} — and they are off until the Small Moons layer is switched on. And they cost nothing until you go there: each planet’s are fetched the first time its system is entered.`;
+}
+
+/** The named small bodies about the Sun, counted and their drawn shapes named from the data. */
+export function smallBodySentence(store: EphemerisStore): string {
+  const small = store.bodies.filter((body) => body.sampling !== undefined && body.parent === null);
+  const shaped = small.filter((body) => body.shapeDrawn !== false).map((body) => body.name);
+  const listed =
+    shaped.length < 2
+      ? shaped.join('')
+      : `${shaped.slice(0, -1).join(', ')} and ${shaped.at(-1)}`;
+  return `${capitalised(spelled(small.length))} named small bodies — the other dwarf planets, the largest asteroids, and the ones spacecraft here have visited or are flying to, Apophis for its 2029 pass inside the geostationary ring — from JPL’s own integrations rather than propagated elements, held to a kilometre everywhere because the craft fly beside them. Sizes, masses and spins from JPL’s Small-Body Database and the papers it cites. A shape is drawn only where one can be honestly: ${listed}. The irregular ones — a spinning top, two lobes stuck together, a tumbling peanut — are markers until their shape models are in.`;
 }
 
 /** The spacecraft in this data. Counted, because a craft with no data in the window is left out of it. */

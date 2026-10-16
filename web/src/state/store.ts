@@ -88,7 +88,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'moons', label: 'Moons', pending: null },
   // The 437 beyond the major moons. They need Moons on too: they are moons.
   { id: 'smallMoons', label: 'Small Moons', pending: null },
-  { id: 'asteroids', label: 'Asteroids', pending: 'Phase B' },
+  // The named ones for now: mission targets, the largest, and Apophis. Phase B's belt of
+  // hundreds of thousands comes later.
+  { id: 'asteroids', label: 'Asteroids', pending: null },
   { id: 'comets', label: 'Comets', pending: 'Phase B' },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
@@ -111,7 +113,7 @@ const DEFAULT_LAYERS: LayerState = {
   moons: true,
   // Off until asked for: four hundred markers round the giants are not a first view.
   smallMoons: false,
-  asteroids: false,
+  asteroids: true,
   comets: false,
   spacecraft: true,
   constellations: false,

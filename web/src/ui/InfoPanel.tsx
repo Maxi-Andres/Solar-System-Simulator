@@ -231,7 +231,9 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
         <Row label="Radius">Not published by JPL</Row>
       ) : body.triaxialRadiiKm === null ? (
         <>
-          <Row label="Equatorial radius">
+          {/* A body known only by its mean diameter -- Apophis -- has one radius, and
+              calling it equatorial would claim more than was measured. */}
+          <Row label={flattening > 0.0005 ? 'Equatorial radius' : 'Radius'}>
             {`${body.radiusEquatorialKm.toLocaleString('en-US')} km`}
           </Row>
           {flattening > 0.0005 && (
@@ -243,6 +245,11 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
         <Row label="Radii">
           {`${body.triaxialRadiiKm.map((radius) => radius.toLocaleString('en-US')).join(' × ')} km`}
         </Row>
+      )}
+      {body.shapeDrawn === false && (
+        // Measured, but irregular, with nothing published to orient it by: an ellipsoid
+        // of these radii would be a shape it does not have.
+        <Row label="Shape">Not drawn yet: marker only</Row>
       )}
       {/* A zero GM here means unmeasured, not massless: the small moons have none. */}
       <Row label="GM">

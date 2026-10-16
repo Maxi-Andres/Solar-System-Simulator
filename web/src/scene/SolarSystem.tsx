@@ -26,7 +26,7 @@ import {
   WATER_IOR,
   type EarthExtrasUniforms,
 } from './earthExtras.ts';
-import { bodiesToResolve, isShown } from './floatingOrigin.ts';
+import { bodiesToResolve, isShown, isSmallMoon } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
 import { bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
@@ -412,7 +412,7 @@ export function SolarSystem({
       const radiusUnits = kmToUnits(definition.radiusEquatorialKm);
       // The small moons share one coarse unit sphere, scaled below: four hundred spheres
       // of their own would be 30 MB of geometry for bodies a few kilometres across.
-      const smallMoon = definition.sampling !== undefined;
+      const smallMoon = isSmallMoon(definition);
       const geometry = smallMoon
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
@@ -858,8 +858,10 @@ export function SolarSystem({
         handle.texturesWantedAt = nowMs;
       }
       // A moon whose size JPL does not publish is a marker at any range, like a craft
-      // with no shape: a sphere would claim a size nobody has measured.
-      const sized = handle.definition.radiusPublished !== false;
+      // with no shape: a sphere would claim a size nobody has measured. So is an
+      // asteroid whose shape cannot be drawn yet: an ellipsoid would claim a shape.
+      const sized =
+        handle.definition.radiusPublished !== false && handle.definition.shapeDrawn !== false;
       const shaped = craft === null ? sized : handle.craftShape !== null;
       const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
       const sphereOpacity = craft === null && sized ? meshOpacity(pixelRadius) : 0;
@@ -1213,7 +1215,7 @@ export function SolarSystem({
       // A small moon's orbit is drawn only while it is the focus: Saturn's together are a
       // tangle of hundreds, and each, sized to its kilometre, thousands of segments. Made
       // when it is focused and let go when it is not.
-      if (handle.definition.sampling !== undefined) {
+      if (isSmallMoon(handle.definition)) {
         const focused = handle.definition.id === focus;
         if (handle.orbit !== null && !focused) {
           lateOrbits.remove(handle.orbit.line);

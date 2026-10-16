@@ -106,11 +106,19 @@ export function rebaseFrame(
  */
 export const SMALL_MOON_LAYER = 'small-moon';
 
+/**
+ * True for a small moon: one of a planet's hundreds, sampled adaptively and fetched with
+ * its planet's system. The named small bodies about the Sun are sampled the same way,
+ * and are not small moons.
+ */
+export function isSmallMoon(body: BodyDefinition): boolean {
+  return body.sampling !== undefined && body.parent !== null;
+}
+
 /** Whether a body's layers are on: its kind's, and for a small moon the Small Moons too. */
 export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>): boolean {
   return (
-    visibleKinds.has(body.kind) &&
-    (body.sampling === undefined || visibleKinds.has(SMALL_MOON_LAYER))
+    visibleKinds.has(body.kind) && (!isSmallMoon(body) || visibleKinds.has(SMALL_MOON_LAYER))
   );
 }
 
@@ -122,7 +130,7 @@ export function bodiesToResolve(
   const wanted = new Set<BodyId>(['sun', focus, ...store.tree.ancestorsOf(focus)]);
   const system = systemOf(store, focus);
   for (const body of store.bodies) {
-    if (body.sampling !== undefined && body.parent !== system && body.id !== focus) {
+    if (isSmallMoon(body) && body.parent !== system && body.id !== focus) {
       continue;
     }
     if (isShown(body, visibleKinds)) {
