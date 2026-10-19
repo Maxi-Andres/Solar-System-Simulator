@@ -5,6 +5,12 @@ import { BELT_CLASSES, BELT_RECORD_FLOATS, type BeltInfo } from '@sss/tools/type
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ALL_BELT_FAMILIES,
+  BELT_FAMILIES,
+  familyCounts,
+  familyShown,
+  toggledFamily,
+  writeClassVisibility,
   beltDensities,
   BeltSource,
   beltTiers,
@@ -621,5 +627,29 @@ describeWithData('the generated belt', () => {
         }
       }
     }
+  });
+});
+
+describe('the belt families', () => {
+  it('claims every class code there is, each exactly once', () => {
+    const claimed = BELT_FAMILIES.flatMap((family) => family.classes);
+    expect([...claimed].sort()).toEqual([...BELT_CLASSES].sort());
+    expect(ALL_BELT_FAMILIES).toBe(2 ** BELT_FAMILIES.length - 1);
+  });
+
+  it('hides exactly the classes of a family switched off, by their codes in the data', () => {
+    const out = new Float32Array(16);
+    const trojans = BELT_FAMILIES.findIndex((family) => family.id === 'trojans');
+    writeClassVisibility(BELT_CLASSES, toggledFamily(ALL_BELT_FAMILIES, trojans), out);
+    expect(out[BELT_CLASSES.indexOf('TJN')]).toBe(0);
+    expect(Array.from(out).filter((value) => value === 0)).toHaveLength(1);
+    // Codes past those the data names stay shown.
+    expect(out[15]).toBe(1);
+    expect(familyShown(toggledFamily(toggledFamily(ALL_BELT_FAMILIES, 2), 2), 2)).toBe(true);
+  });
+
+  it('counts each family from class counts', () => {
+    const counts = familyCounts({ MBA: 10, IMB: 2, APO: 3, AMO: 1, TJN: 5 });
+    expect(counts.slice(0, 4)).toEqual([12, 4, 0, 5]);
   });
 });

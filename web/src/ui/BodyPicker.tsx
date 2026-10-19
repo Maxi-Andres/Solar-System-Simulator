@@ -275,11 +275,16 @@ function BodyList({
       body.parent === null &&
       body.kind !== 'spacecraft' &&
       body.kind !== 'asteroid' &&
+      body.kind !== 'comet' &&
       visibleKinds.has(body.kind),
   );
   // Listed apart: between the planets they would push Neptune off the bottom.
   const asteroids = visibleKinds.has('asteroid')
     ? store.bodies.filter((body) => body.kind === 'asteroid')
+    : [];
+  // The comets likewise: one gone to from search is a body until the next (cometBodies.ts).
+  const cometBodies = visibleKinds.has('comet')
+    ? store.bodies.filter((body) => body.kind === 'comet')
     : [];
   // Moons only: JWST hangs off Earth in the frame tree, and is listed with the craft.
   const moonsOf = (id: BodyId): BodyDefinition[] =>
@@ -414,6 +419,21 @@ function BodyList({
         <>
           <div style={SECTION_HEADING}>Asteroids</div>
           {asteroids.map((body) => (
+            <Row
+              key={body.id}
+              body={body}
+              active={body.id === focus}
+              inSystem={false}
+              onChoose={onChoose}
+              trailing={null}
+            />
+          ))}
+        </>
+      )}
+      {cometBodies.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Comets</div>
+          {cometBodies.map((body) => (
             <Row
               key={body.id}
               body={body}

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { BeltClass, BeltInfo, StarCatalog } from '@sss/tools/types';
+import type { BeltClass, BeltInfo, CometInfo, StarCatalog } from '@sss/tools/types';
 
 import { beltTiers, type BeltSource, type LoadedTier } from '../core/belt.ts';
+import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
@@ -35,10 +36,12 @@ export function AboutPanel({
   store,
   stars,
   belt,
+  comets,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
   belt: BeltSource;
+  comets: CometSource;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -46,6 +49,8 @@ export function AboutPanel({
   // tiers in hand, so the numbers follow the density the viewer chose.
   const beltView = useSyncExternalStore(belt.subscribe, () => belt.view);
   const beltInfo = beltView.tiers.length > 0 ? beltView.info : null;
+  // The same for the comets: described once they are here.
+  const cometInfo = useSyncExternalStore(comets.subscribe, () => comets.comets)?.info ?? null;
   const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -194,6 +199,7 @@ export function AboutPanel({
               'The craft on Mars are placed, not interpolated. JPL has no ephemeris worth using for them — Horizons keeps Curiosity at its 2012 landing site, fourteen kilometres from where it has driven since — so each rover stands where NASA’s mission maps put the end of its latest drive, facing the heading they report, and turns with Mars by the same rotation the surface map is drawn with. The maps give the sol of each drive, not the hour, so the rover moves on at the end of that sol, and between drives it is drawn where the last one ended: the line behind it joins those places, and the drives themselves went their own way between them. InSight never moved; its heading is not published, and it is drawn facing north. Mars here is the smooth reference ellipsoid, with no terrain — Curiosity is really at the bottom of Gale crater, 4.5 km below it — and the planet is a sphere of flat faces that sag up to 4 km inside that ellipsoid between their corners, which at a rover’s scale is everything. So under each one the ellipsoid itself is drawn, two degrees across, with the same map on it.',
               'Which way a spacecraft in space faces is modelled, not measured. JPL’s attitude records exist for some of them, as gigabytes of binary, and for none of Pioneer, Parker or JWST. So each is drawn by the rule it flies by: Voyager, Pioneer and New Horizons keep their dish on Earth; Parker keeps its heat shield on the Sun, JWST its sunshield, and the solar-powered craft their arrays. The roll about that axis is not published at all and is a convention here.',
               ...(beltInfo === null ? [] : [beltAccuracySentence(beltInfo)]),
+              ...(cometInfo === null ? [] : [cometAccuracySentence(cometInfo)]),
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does. The moons have a narrower window than the planets — a year either side of the build, against ten — because Phobos alone needs 35,000 samples a year. Their data arrives in pieces as the clock reaches it, so a moon can be missing for a moment, never misplaced.',
               'The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager photographed them through clear filters, and the colour versions that exist are enhanced into the ultraviolet and infrared. The Moon is in natural colour, Titan is its surface at 938 nm seen through the haze, and Io and Triton carry uncalibrated mission colour.',
               'Several moons were half in darkness when they were photographed: the northern hemispheres of Uranus’s five and of Triton when Voyager 2 passed, Charon’s south for New Horizons. Like Pluto’s south, those areas are filled with the average of what was seen. Nothing there is an observation.',
@@ -243,6 +249,15 @@ export function AboutPanel({
             the faint ones — so{' '}
             {stars.sources.map((source) => `${source.stars.toLocaleString('en-US')} from ${source.table}`).join(' and ')}.
           </Prose>
+
+          {cometInfo !== null && (
+            <Prose>
+              Comet orbits from the <Strong>{cometInfo.source.name}</Strong>, queried{' '}
+              {cometInfo.source.queriedAt.slice(0, 10)}: perihelion distance and time with the
+              rest of each conic, and SBDB’s total-magnitude parameters where it has them, for{' '}
+              {cometInfo.count.toLocaleString('en-US')} comets.
+            </Prose>
+          )}
 
           {beltInfo !== null && (
             <Prose>
@@ -401,6 +416,17 @@ export function beltSentence(info: BeltInfo, tiers: readonly LoadedTier[]): stri
 }
 
 /** What the belt's positions are worth, and why its dots are the size they are. */
+/** How many comets of `info` are on each kind of conic, from their class counts. */
+function openCount(info: CometInfo): { readonly parabolic: number; readonly hyperbolic: number } {
+  return { parabolic: info.classCounts.PAR ?? 0, hyperbolic: info.classCounts.HYP ?? 0 };
+}
+
+/** The comets: what they are drawn from, what the dots say, and what is approximate. */
+export function cometAccuracySentence(info: CometInfo): string {
+  const { parabolic, hyperbolic } = openCount(info);
+  return `The ${info.count.toLocaleString('en-US')} comets SBDB lists, each on its own two-body conic about the Sun — ${parabolic.toLocaleString('en-US')} on parabolas and ${hyperbolic.toLocaleString('en-US')} on hyperbolas among them, interstellar 3I/ATLAS at e = 6.14 — worked out in double precision with universal variables, so an orbit at e = 0.999 and one at 1.001 are handled by the same equation rather than two that each break near the other. Propagated, not looked up, like the belt: a comet that has passed a planet, or one whose orbit SBDB fitted decades ago, is off its real path by more than any rounding here, and outgassing pushes every active comet off a pure conic too. Each dot is a convention: a pixel or two, brighter and larger as the comet’s own magnitude rises toward the Sun — SBDB’s M1 + K1·log₁₀ r, seen from one AU — and where SBDB gives no magnitude parameters, as for half of them, a typical comet’s at the same distance stands in, so none goes missing from the map. Comets are off until the Comets layer is switched on, and cost nothing before.`;
+}
+
 export function beltAccuracySentence(info: BeltInfo): string {
   const { minJd, maxJd } = info.elementEpochs;
   const epoch =

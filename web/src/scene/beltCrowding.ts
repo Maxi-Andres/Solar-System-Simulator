@@ -160,6 +160,8 @@ export function beltLight(
   tiers: readonly Float32Array[],
   binAlphas: Float32Array,
   classes: readonly BeltClass[],
+  /** One or zero per class code: a hidden family's dots are not on screen to crowd it. */
+  classVisible: Float32Array | null = null,
 ): PopulationLight {
   const populationOfClass = new Int8Array(CLASS_SLOTS).fill(-1);
   classes.forEach((name, code) => {
@@ -172,8 +174,9 @@ export function beltLight(
   const light = new Float64Array(BELT_POPULATIONS.length);
   for (const records of tiers) {
     for (let base = 0; base < records.length; base += RECORD_FLOATS) {
-      const population = populationOfClass[records[base + RECORD.class]!] ?? -1;
-      if (population < 0) {
+      const code = records[base + RECORD.class]!;
+      const population = populationOfClass[code] ?? -1;
+      if (population < 0 || classVisible?.[code] === 0) {
         continue;
       }
       const H = records[base + RECORD.H]!;

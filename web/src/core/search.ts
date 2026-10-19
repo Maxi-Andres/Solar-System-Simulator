@@ -48,6 +48,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       return 'Dwarf planet';
     case 'asteroid':
       return 'Asteroid';
+    case 'comet':
+      return 'Comet';
     case 'moon':
       return parentName === null ? 'Moon' : `Moon of ${parentName}`;
     case 'spacecraft': {
@@ -73,6 +75,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['dwarfPlanets'];
     case 'asteroid':
       return ['asteroids'];
+    case 'comet':
+      return ['comets'];
     case 'spacecraft':
       return ['spacecraft'];
     case 'moon':
@@ -90,6 +94,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,
+  comet: 3,
   spacecraft: 4,
 };
 

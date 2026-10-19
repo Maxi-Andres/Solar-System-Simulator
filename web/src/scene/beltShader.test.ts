@@ -536,9 +536,11 @@ describe('the shaders', () => {
     expect(BELT_VERTEX_SHADER).toContain(
       `max(alpha * uClassCrowding[population], min(alpha, ${CROWDED_BRIGHT_FLOOR.toFixed(3)}))`,
     );
-    expect(BELT_VERTEX_SHADER.indexOf('if (fade <= 0.0)')).toBeLessThan(
+    expect(BELT_VERTEX_SHADER.indexOf('if (fade <= 0.0')).toBeLessThan(
       BELT_VERTEX_SHADER.indexOf('float E ='),
     );
+    // And an asteroid that is a body of its own is clipped there too, by its record.
+    expect(BELT_VERTEX_SHADER).toContain('gl_VertexID == uHidden[0] || gl_VertexID == uHidden[1]');
   });
 
   it('cost a fixed, counted amount of arithmetic per asteroid', () => {

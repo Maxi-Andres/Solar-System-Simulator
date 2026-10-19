@@ -52,8 +52,8 @@ describe('layer catalog', () => {
 
     // These are listed so the panel doubles as a roadmap; if one ships, its entry
     // must lose the badge or the UI lies about what it can do.
+    // Comets shipped in step B2c.
     expect(pending).toEqual([
-      'comets',
       'constellations',
     ]);
     for (const layer of LAYERS) {
@@ -66,7 +66,8 @@ describe('layer catalog', () => {
   it('reports availability consistently with the catalog', () => {
     expect(isLayerAvailable('orbits')).toBe(true);
     expect(isLayerAvailable('labels')).toBe(true);
-    expect(isLayerAvailable('comets')).toBe(false);
+    expect(isLayerAvailable('comets')).toBe(true);
+    expect(isLayerAvailable('constellations')).toBe(false);
   });
 
   it('defaults to showing exactly what exists today', () => {

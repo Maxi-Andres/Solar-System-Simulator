@@ -39,13 +39,15 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   planets: ['planet', 'star'],
   dwarfPlanets: ['dwarf-planet'],
   asteroids: ['asteroid'],
+  // The comet dots (see CometField), and a comet made a body from search (cometBodies.ts).
+  comets: ['comet'],
   moons: ['moon'],
   smallMoons: [SMALL_MOON_LAYER],
   spacecraft: ['spacecraft'],
 };
 
 export function App() {
-  const { store, stars, belt, clock, error, readout } = useSimulation();
+  const { store, stars, belt, comets, names, clock, error, readout } = useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -55,6 +57,7 @@ export function App() {
   const openPanel = useViewStore((state) => state.openPanel);
   const setLayer = useViewStore((state) => state.setLayer);
   const beltTiers = useViewStore((state) => state.beltTiers);
+  const beltFamilies = useViewStore((state) => state.beltFamilies);
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
 
@@ -100,6 +103,13 @@ export function App() {
     const timer = setTimeout(() => belt.release(1), DETAIL_RELEASE_MS);
     return () => clearTimeout(timer);
   }, [store, belt, visibleKinds, beltTiers]);
+
+  // The comets likewise, once, 150 KB, the first time their layer is on.
+  useEffect(() => {
+    if (store !== null && visibleKinds.has('comet')) {
+      void comets.request();
+    }
+  }, [store, comets, visibleKinds]);
 
   // Switching a layer off while standing on one of its bodies would leave the camera
   // orbiting something that is no longer drawn. Step back to what it orbits.
@@ -172,6 +182,8 @@ export function App() {
         store={store}
         stars={stars}
         belt={belt}
+        beltFamilies={beltFamilies}
+        comets={comets}
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
@@ -234,7 +246,14 @@ export function App() {
             </OnReadout>
           </Presence>
           <Presence show={openPanel === 'search'}>
-            <SearchPanel store={store} clock={clock} focus={focus} />
+            <SearchPanel
+              store={store}
+              clock={clock}
+              focus={focus}
+              belt={belt}
+              names={names}
+              comets={comets}
+            />
           </Presence>
           <Presence show={openPanel === 'layers'}>
             <LayersPanel belt={belt} />
@@ -260,7 +279,7 @@ export function App() {
       )}
 
       <Presence show={openPanel === 'about'}>
-        <AboutPanel store={store} stars={stars} belt={belt} />
+        <AboutPanel store={store} stars={stars} belt={belt} comets={comets} />
       </Presence>
 
       {/* The only way back once the interface is switched off. */}

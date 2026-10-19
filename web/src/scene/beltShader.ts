@@ -313,6 +313,8 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
   uniform float uFaintAlpha[${FAINT_BINS}];
   uniform float uClassCrowding[${CLASS_SLOTS}];
   uniform float uClassFade[${CLASS_SLOTS}];
+  // This tier's records that are bodies of their own just now (see beltBodies.ts), or -1.
+  uniform int uHidden[2];
 
   varying float vRadiusPx;
   varying float vSpritePx;
@@ -333,11 +335,13 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
   }
 
   void main() {
-    // A population faded out with its region (see beltCrowding.ts) is put outside the
-    // clip volume before anything is worked out for it: no Kepler solve, no fragment.
+    // A population faded out with its region (see beltCrowding.ts), or hidden with its
+    // family, is put outside the clip volume before anything is worked out for it: no
+    // Kepler solve, no fragment. So is an asteroid that is a body of its own just now,
+    // which is drawn as that and must not be drawn twice.
     int population = int(clamp(aMotion.z, 0.0, ${(CLASS_SLOTS - 1).toFixed(1)}) + 0.5);
     float fade = uClassFade[population];
-    if (fade <= 0.0) {
+    if (fade <= 0.0 || gl_VertexID == uHidden[0] || gl_VertexID == uHidden[1]) {
       gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
       gl_PointSize = 1.0;
       vAlpha = 0.0;

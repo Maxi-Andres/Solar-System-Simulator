@@ -97,6 +97,11 @@ export interface BinaryFetchOptions {
   readonly expectedBytes?: number;
   /** Called with the bytes received so far, as they arrive. */
   readonly onProgress?: (receivedBytes: number) => void;
+  /**
+   * Only these bytes of the file: one asteroid's record out of a tier, for a search
+   * result whose tier is not loaded. The fetch resolves to exactly `length` bytes.
+   */
+  readonly range?: { readonly offset: number; readonly length: number };
 }
 
 /**
@@ -370,8 +375,17 @@ function isMissing(response: Response): boolean {
   );
 }
 
-async function httpGet(path: string, accept: string, signal?: AbortSignal): Promise<Response | null> {
-  const response = await fetch(path, { headers: { Accept: accept }, signal: signal ?? null });
+async function httpGet(
+  path: string,
+  accept: string,
+  signal?: AbortSignal,
+  range?: { readonly offset: number; readonly length: number },
+): Promise<Response | null> {
+  const headers: Record<string, string> = { Accept: accept };
+  if (range !== undefined) {
+    headers['Range'] = `bytes=${range.offset}-${range.offset + range.length - 1}`;
+  }
+  const response = await fetch(path, { headers, signal: signal ?? null });
   if (isMissing(response)) {
     return null;
   }
@@ -416,6 +430,43 @@ async function readInto(
 }
 
 /**
+ * The bytes a range request asked for. A server that honours Range answers 206 with just
+ * them -- GitHub Pages and the dev server both do. One that ignores it answers 200 with
+ * the whole file, and then the body is read only as far as the record and the rest of
+ * the download cancelled, so the worst case is the tier up to that asteroid rather than
+ * all of it.
+ */
+async function readRange(
+  response: Response,
+  range: { readonly offset: number; readonly length: number },
+): Promise<ArrayBuffer> {
+  if (response.status === 206) {
+    return response.arrayBuffer();
+  }
+  const reader = response.body?.getReader();
+  if (reader === undefined) {
+    return (await response.arrayBuffer()).slice(range.offset, range.offset + range.length);
+  }
+  const end = range.offset + range.length;
+  const out = new Uint8Array(range.length);
+  let position = 0;
+  while (position < end) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    const from = Math.max(range.offset - position, 0);
+    const to = Math.min(end - position, value.byteLength);
+    if (to > from) {
+      out.set(value.subarray(from, to), position + from - range.offset);
+    }
+    position += value.byteLength;
+  }
+  await reader.cancel();
+  return out.buffer;
+}
+
+/**
  * The browser's fetches. They do not ask for frames themselves, as the other fetchers in
  * the app do: BeltSource asks, once per change to what is drawn, and not once per file --
  * a tier's progress changes nothing on the canvas.
@@ -426,9 +477,12 @@ export const httpBeltFetchers: BeltFetchers = {
     return response === null ? null : ((await response.json()) as unknown);
   },
   binary: async (path, options = {}) => {
-    const response = await httpGet(path, 'application/octet-stream', options.signal);
+    const response = await httpGet(path, 'application/octet-stream', options.signal, options.range);
     if (response === null) {
       return null;
+    }
+    if (options.range !== undefined) {
+      return readRange(response, options.range);
     }
     return options.expectedBytes === undefined
       ? response.arrayBuffer()
@@ -711,4 +765,62 @@ export class BeltSource {
       }
     }
   }
+}
+
+/**
+ * The belt's families, as the Layers panel offers them: SBDB's own orbit classes, which
+ * every record carries, grouped the way a person names them. The class code is what the
+ * shader already reads per asteroid, so hiding a family is a per-class uniform and costs
+ * nothing per asteroid -- see AsteroidBelt.
+ *
+ * The order is the panel's and the bit order of the stored choice; a new family goes at
+ * the end, so a stored choice keeps meaning what it meant.
+ */
+export const BELT_FAMILIES: readonly {
+  readonly id: string;
+  readonly label: string;
+  readonly classes: readonly BeltClass[];
+}[] = [
+  { id: 'main', label: 'Main belt', classes: ['MBA', 'IMB', 'OMB'] },
+  { id: 'near-earth', label: 'Near-Earth', classes: ['APO', 'ATE', 'AMO', 'IEO'] },
+  { id: 'mars-crossers', label: 'Mars-crossers', classes: ['MCA'] },
+  { id: 'trojans', label: 'Jupiter Trojans', classes: ['TJN'] },
+  { id: 'centaurs', label: 'Centaurs', classes: ['CEN'] },
+  { id: 'trans-neptunian', label: 'Trans-Neptunian', classes: ['TNO'] },
+  // SBDB's catch-all, and the two classes that are never written (elliptic orbits only).
+  { id: 'other', label: 'Other', classes: ['AST', 'PAA', 'HYA'] },
+];
+
+/** Every family shown: the default, as a bit mask over BELT_FAMILIES. */
+export const ALL_BELT_FAMILIES = (1 << BELT_FAMILIES.length) - 1;
+
+/** True when family `index` is shown in `mask`. */
+export function familyShown(mask: number, index: number): boolean {
+  return (mask & (1 << index)) !== 0;
+}
+
+/** `mask` with family `index` switched. */
+export function toggledFamily(mask: number, index: number): number {
+  return mask ^ (1 << index);
+}
+
+/**
+ * One or zero for every class code, by whether its family is shown: written into `out`,
+ * the per-class slots the shader reads. A code no family claims is shown.
+ */
+export function writeClassVisibility(classes: readonly BeltClass[], mask: number, out: Float32Array): void {
+  out.fill(1);
+  classes.forEach((name, code) => {
+    const family = BELT_FAMILIES.findIndex((candidate) => candidate.classes.includes(name));
+    if (code < out.length && family >= 0 && !familyShown(mask, family)) {
+      out[code] = 0;
+    }
+  });
+}
+
+/** How many of `counts` each family holds, in BELT_FAMILIES order. */
+export function familyCounts(counts: Readonly<Partial<Record<BeltClass, number>>>): number[] {
+  return BELT_FAMILIES.map((family) =>
+    family.classes.reduce((sum, name) => sum + (counts[name] ?? 0), 0),
+  );
 }

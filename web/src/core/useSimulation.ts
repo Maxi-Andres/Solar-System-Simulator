@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { StarCatalog } from '@sss/tools/types';
 
 import { BeltSource, httpBeltFetchers } from './belt.ts';
+import { loadNameIndex, NameIndexSource } from './beltNames.ts';
+import { CometSource, loadComets } from './comets.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
@@ -31,6 +33,10 @@ export interface Simulation {
    * and the Asteroids layer is on, for as many tiers as the viewer chose. See belt.ts.
    */
   readonly belt: BeltSource;
+  /** The comets, fetched once the Comets layer is first on; see comets.ts. */
+  readonly comets: CometSource;
+  /** The belt's name index, fetched when search first opens; see beltNames.ts. */
+  readonly names: NameIndexSource;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -64,6 +70,10 @@ export function useSimulation(refreshHz = 10): Simulation {
   const beltRef = useRef<BeltSource>(null);
   // BASE_URL carries the GitHub Pages prefix, as below.
   beltRef.current ??= new BeltSource(httpBeltFetchers, import.meta.env.BASE_URL);
+  const cometsRef = useRef<CometSource>(null);
+  cometsRef.current ??= new CometSource(() => loadComets(httpBeltFetchers, import.meta.env.BASE_URL));
+  const namesRef = useRef<NameIndexSource>(null);
+  namesRef.current ??= new NameIndexSource(() => loadNameIndex(httpBeltFetchers, import.meta.env.BASE_URL));
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);
@@ -147,6 +157,8 @@ export function useSimulation(refreshHz = 10): Simulation {
     store,
     stars,
     belt: beltRef.current,
+    comets: cometsRef.current,
+    names: namesRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

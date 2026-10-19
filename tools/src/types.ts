@@ -8,7 +8,7 @@
 /** Stable slug for a body, used in file names and as a map key everywhere. */
 export type BodyId = string;
 
-export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'moon' | 'spacecraft';
+export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'comet' | 'moon' | 'spacecraft';
 
 /**
  * Which surface-map set a body is being drawn with.

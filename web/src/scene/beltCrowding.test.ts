@@ -179,6 +179,12 @@ describe('beltLight and writeCrowding', () => {
     expect(light.populationOfClass[13]).toBe(MAIN);
     // The faint one brings its magnitude's share on a one-pixel disc.
     expect(light.light[MAIN]).toBeGreaterThan((0.1 * Math.PI) / 4);
+    // A hidden class is not on screen to crowd anything.
+    const visible = new Float32Array(CLASS_SLOTS).fill(1);
+    visible[8] = 0;
+    const hidden = beltLight([records], binAlphas, classes, visible);
+    expect(hidden.count[BELT_POPULATIONS.findIndex((p) => p.name === 'Jupiter Trojans')]).toBe(0);
+    expect(hidden.count[MAIN]).toBe(2);
   });
 
   it('writes a scale and a fade for every class slot, one where no population claims it', () => {

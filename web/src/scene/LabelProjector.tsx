@@ -157,7 +157,7 @@ export function labelRank(kind: string, parent: BodyId | null): number {
   if (kind === 'spacecraft') {
     return 2;
   }
-  return parent === null && kind !== 'asteroid' ? 0 : 1;
+  return parent === null && kind !== 'asteroid' && kind !== 'comet' ? 0 : 1;
 }
 
 export function LabelProjector({

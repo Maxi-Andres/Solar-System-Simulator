@@ -23,16 +23,54 @@ import type { StateVector, Vec3 } from './vec3.ts';
 const DEG_TO_RAD = Math.PI / 180;
 
 /**
+ * Above this eccentricity Newton starts from the cubic root (see keplerStart): the
+ * shader's CUBIC_START_E, the same rule in float64.
+ */
+export const KEPLER_CUBIC_START_E = 0.5;
+
+/**
+ * Where Newton starts on Kepler's equation, for M in [-pi, pi].
+ *
+ * **The plain start, M + e*sin(M), diverges near perihelion above e = 0.99.** At
+ * e = 0.994 and M = -0.045 it overshoots to the far side of the orbit and never comes
+ * back -- 145 of 2 million grid points from e = 0.9 up failed that way, residuals in the
+ * thousands of radians. Nothing here had such an orbit until the belt's scattered and
+ * detached objects (to e = 0.9996) and the comets.
+ *
+ * So for an eccentric orbit the start is the real root of Kepler's equation with sin E
+ * cut at its cubic term, (e/6)*E^3 + (1 - e)*E = M -- exact in the limit that matters,
+ * a nearly parabolic orbit near perihelion -- by Cardano, clamped to [-pi, pi]. The cubic
+ * is monotonic, so the root is unique. The belt's shader uses the same start in float32
+ * (see beltShader.ts), where it reaches the format's floor in three iterations.
+ */
+export function keplerStart(M: number, e: number): number {
+  if (e <= KEPLER_CUBIC_START_E) {
+    return M + e * Math.sin(M);
+  }
+  const P = (6 * (1 - e)) / e;
+  const Q = (6 * M) / e;
+  const h = 0.5 * Q;
+  const p3 = P / 3;
+  const D = Math.sqrt(h * h + p3 * p3 * p3);
+  return Math.min(Math.PI, Math.max(-Math.PI, Math.cbrt(D + h) - Math.cbrt(D - h)));
+}
+
+/**
  * Solves Kepler's equation M = E - e*sin(E) for the eccentric anomaly E.
  *
- * Newton-Raphson converges in a handful of iterations for planetary eccentricities.
- * The starting guess matters only for very eccentric orbits, where E and M diverge
- * sharply near periapsis; `M + e*sin(M)` handles those without the oscillation a
- * naive `E = M` can produce. Comets in phase B will need this to stay honest at
- * e > 0.9, so the iteration count is generous rather than tuned for planets.
+ * Newton-Raphson from keplerStart. Measured over e in [0, 0.99999] at steps of 0.001 and
+ * M across [-pi, pi], with runs down to 1e-12 either side of perihelion and aphelion: at
+ * most five evaluations, residual at worst 4.4e-16 rad, E within 5.4e-14 rad of a
+ * bisection -- see kepler.test.ts.
+ *
+ * It stops at whichever comes first of a step under 1e-14 and a residual that has stopped
+ * falling. The second is not a nicety: a hair before perihelion at e near 1, 1 - e*cos(E)
+ * is 1e-5, so the rounding of the residual alone is a step of 1e-11 rad, and a loop waiting
+ * for the step to shrink went round all hundred times bouncing inside that noise. Once the
+ * residual is as small as float64 can make it, the best E so far is the answer.
  */
 export function solveKepler(meanAnomalyRad: number, eccentricity: number): number {
-  // Wrap into [-pi, pi]: convergence is fastest near the guess.
+  // Wrap into [-pi, pi]: perihelion at zero, where the start is best.
   let M = meanAnomalyRad % (2 * Math.PI);
   if (M > Math.PI) {
     M -= 2 * Math.PI;
@@ -40,10 +78,17 @@ export function solveKepler(meanAnomalyRad: number, eccentricity: number): numbe
     M += 2 * Math.PI;
   }
 
-  let E = M + eccentricity * Math.sin(M);
+  let E = keplerStart(M, eccentricity);
+  let bestResidual = Infinity;
+  let bestE = E;
 
   for (let i = 0; i < 100; i += 1) {
     const f = E - eccentricity * Math.sin(E) - M;
+    if (Math.abs(f) >= bestResidual) {
+      return bestE;
+    }
+    bestResidual = Math.abs(f);
+    bestE = E;
     const fPrime = 1 - eccentricity * Math.cos(E);
     const delta = f / fPrime;
     E -= delta;

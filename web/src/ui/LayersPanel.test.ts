@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { densityLabel, megabytes, progressText, spokenCount } from './LayersPanel.tsx';
+import { compactCount, densityLabel, megabytes, progressText, spokenCount } from './LayersPanel.tsx';
 
 /**
  * The belt's density choices, as words. Every number here comes from belt.json in the
@@ -47,5 +47,17 @@ describe('progressText', () => {
 
   it('says so when a tier failed', () => {
     expect(progressText({ ...base, failed: true })).toBe('Could not load the asteroids');
+  });
+});
+
+describe('compactCount', () => {
+  it('fits a family count on a chip', () => {
+    expect(compactCount(548)).toBe('548');
+    expect(compactCount(1_460)).toBe('1.5k');
+    expect(compactCount(64_004)).toBe('64k');
+    expect(compactCount(123_777)).toBe('124k');
+    expect(compactCount(1_460_000)).toBe('1.5M');
+    // Never "1000k".
+    expect(compactCount(999_700)).toBe('1M');
   });
 });

@@ -170,6 +170,11 @@ export class EphemerisStore {
   readonly #elements: Map<BodyId, OsculatingElements>;
   readonly #tables: Map<BodyId, TableInfo>;
   readonly #smallMoonsLoaded = new Set<BodyId>();
+  /**
+   * Bodies with no table, and their state about the Sun; see addPropagatedBody. Null for
+   * one with neither elements nor a state, which therefore has no position.
+   */
+  readonly #propagated = new Map<BodyId, ((jd: number) => StateVector) | null>();
   readonly #smallMoonsPending = new Map<BodyId, Promise<void>>();
   readonly #smallMoonsFailedAt = new Map<BodyId, number>();
   #version = 0;
@@ -314,6 +319,65 @@ export class EphemerisStore {
     }
   }
 
+  /**
+   * Adds a body that has no table at all: one placed only by propagating its elements --
+   * a belt asteroid chosen from search (see beltBodies.ts). It goes through the same
+   * fallback every body outside its window does (see localState), so it is flagged
+   * approximate wherever it is on screen, which is the truth about it: two-body motion
+   * from osculating elements, not an ephemeris.
+   *
+   * The smallest change that makes such a thing focusable: the frame tree, the labels and
+   * the scene take it from here as they take a small moon arriving.
+   */
+  addPropagatedBody(
+    body: BodyDefinition,
+    elements: OsculatingElements | null,
+    /**
+     * Its state about the Sun, km and km/s, where elements cannot say it: a comet on a
+     * parabola or hyperbola, which has no ellipse to propagate (see cometBodies.ts).
+     * Without it, the elements are propagated.
+     */
+    heliocentric: ((jd: number) => StateVector) | null = null,
+  ): void {
+    if (this.#tree.has(body.id)) {
+      return;
+    }
+    this.#bodies.push(body);
+    if (elements !== null) {
+      this.#elements.set(body.id, elements);
+    }
+    this.#propagated.set(body.id, heliocentric ?? (elements === null ? null : (jd) => propagate(elements, jd)));
+    this.#changed();
+  }
+
+  /** Takes away a body addPropagatedBody added; any other is left alone. */
+  removePropagatedBody(id: BodyId): void {
+    if (!this.#propagated.has(id)) {
+      return;
+    }
+    this.#propagated.delete(id);
+    const index = this.#bodies.findIndex((body) => body.id === id);
+    if (index >= 0) {
+      this.#bodies.splice(index, 1);
+    }
+    this.#elements.delete(id);
+    this.#changed();
+  }
+
+  /** True for a body added by addPropagatedBody. */
+  isPropagatedBody(id: BodyId): boolean {
+    return this.#propagated.has(id);
+  }
+
+  /** The tree rebuilt over the bodies as they now are, and everyone told. */
+  #changed(): void {
+    this.#tree = new FrameTree(this.#bodies);
+    this.#version += 1;
+    for (const listener of this.#listeners) {
+      listener();
+    }
+  }
+
   get tree(): FrameTree {
     return this.#tree;
   }
@@ -348,7 +412,7 @@ export class EphemerisStore {
     // its table it is simply not there: before launch, or past the end of its
     // trajectory, there is nowhere honest to put it.
     return ids.every(
-      (id) => this.isCoveredAt(id, jd) || !this.#elements.has(id),
+      (id) => !this.#propagated.has(id) && (this.isCoveredAt(id, jd) || !this.#elements.has(id)),
     );
   }
 
@@ -544,6 +608,31 @@ export class EphemerisStore {
    * `stateInRoot` or `stateRelativeTo` instead.
    */
   localState(id: BodyId, jd: number): BodyState | null {
+    // A body with no table at all (see addPropagatedBody): its state about the Sun, put
+    // in the root frame as every body without a parent is -- by adding the Sun's own
+    // place there, which is up to 1.5 million km off the barycentre with Jupiter's pull.
+    // Approximate always: two-body motion, not an ephemeris.
+    const propagated = this.#propagated.get(id);
+    if (propagated !== undefined) {
+      if (propagated === null) {
+        return null;
+      }
+      const about = propagated(jd);
+      const sun = id === 'sun' ? null : this.localState('sun', jd);
+      return {
+        position: {
+          x: about.position.x + (sun?.position.x ?? 0),
+          y: about.position.y + (sun?.position.y ?? 0),
+          z: about.position.z + (sun?.position.z ?? 0),
+        },
+        velocity: {
+          x: about.velocity.x + (sun?.velocity.x ?? 0),
+          y: about.velocity.y + (sun?.velocity.y ?? 0),
+          z: about.velocity.z + (sun?.velocity.z ?? 0),
+        },
+        approximate: true,
+      };
+    }
     if (this.surfaceInfo(id) !== null) {
       const state = this.#surfaceState(id, jd);
       return state === null ? null : { ...state, approximate: false };

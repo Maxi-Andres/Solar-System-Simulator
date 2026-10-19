@@ -2,6 +2,7 @@ import type { BodyId, StarCatalog } from '@sss/tools/types';
 import { Canvas } from '@react-three/fiber';
 
 import type { BeltSource } from '../core/belt.ts';
+import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
@@ -11,6 +12,7 @@ import { renderDemand } from '../core/renderDemand.ts';
 
 import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { CameraRig } from './CameraRig.tsx';
+import { CometField } from './Comets.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
 import type { SharedFrame } from './satellites.ts';
@@ -69,6 +71,9 @@ export interface SolarSystemCanvasProps {
   readonly store: EphemerisStore;
   readonly stars: StarCatalog;
   readonly belt: BeltSource;
+  /** Which of the belt's families are drawn; see the view store's `beltFamilies`. */
+  readonly beltFamilies: number;
+  readonly comets: CometSource;
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
@@ -84,6 +89,8 @@ export function SolarSystemCanvas({
   store,
   stars,
   belt,
+  beltFamilies,
+  comets,
   clock,
   focus,
   showOrbits,
@@ -158,6 +165,15 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         visible={visibleKinds.has('asteroid')}
+        families={beltFamilies}
+        sharedFrame={sharedFrame}
+      />
+      <CometField
+        source={comets}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={visibleKinds.has('comet')}
         sharedFrame={sharedFrame}
       />
       <LabelProjector

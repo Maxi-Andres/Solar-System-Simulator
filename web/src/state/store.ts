@@ -2,6 +2,7 @@ import type { BodyId } from '@sss/tools/types';
 import { create } from 'zustand';
 
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
+import { ALL_BELT_FAMILIES, toggledFamily } from '../core/belt.ts';
 import { readStoredInteger, writeStoredInteger } from './persisted.ts';
 
 /**
@@ -92,7 +93,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The named ones -- mission targets, the largest, and Apophis -- and the belt: every
   // asteroid SBDB knows down to its magnitude limit, drawn as dots (see AsteroidBelt).
   { id: 'asteroids', label: 'Asteroids', pending: null },
-  { id: 'comets', label: 'Comets', pending: 'Phase B' },
+  // SBDB's four thousand, each on its own conic -- a third of them open, on parabolas and
+  // hyperbolas. Off by default, as the belt is.
+  { id: 'comets', label: 'Comets', pending: null },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
@@ -149,12 +152,18 @@ export interface ViewState {
    * than the data has is simply all of it; see BeltSource.
    */
   readonly beltTiers: number;
+  /**
+   * Which of the belt's families are drawn, a bit per entry of BELT_FAMILIES: all by
+   * default, and kept for the viewer between visits like the density.
+   */
+  readonly beltFamilies: number;
 
   readonly setFocus: (id: BodyId) => void;
   readonly toggleLayer: (id: LayerId) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
   readonly setLighting: (mode: LightingMode) => void;
   readonly setBeltTiers: (tiers: number) => void;
+  readonly toggleBeltFamily: (index: number) => void;
   readonly togglePanel: (id: PanelId) => void;
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
@@ -164,6 +173,9 @@ export interface ViewState {
 /** Where the belt's density is kept between visits; see `beltTiers`. */
 export const BELT_TIERS_KEY = 'belt-tiers';
 
+/** Where the belt's families are kept between visits; see `beltFamilies`. */
+export const BELT_FAMILIES_KEY = 'belt-families';
+
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
   layers: DEFAULT_LAYERS,
@@ -171,6 +183,9 @@ export const useViewStore = create<ViewState>((set, get) => ({
   openPanel: null,
   zoomImpulse: 1,
   beltTiers: readStoredInteger(BELT_TIERS_KEY, 1, 1),
+  // Masked to the families there are: bits a later version might add are not set by an
+  // older stored value, and junk beyond them is dropped.
+  beltFamilies: readStoredInteger(BELT_FAMILIES_KEY, ALL_BELT_FAMILIES, 0) & ALL_BELT_FAMILIES,
 
   setFocus: (id) => {
     set({ focus: id });
@@ -187,6 +202,12 @@ export const useViewStore = create<ViewState>((set, get) => ({
   setBeltTiers: (tiers) => {
     writeStoredInteger(BELT_TIERS_KEY, tiers);
     set({ beltTiers: tiers });
+  },
+
+  toggleBeltFamily: (index) => {
+    const beltFamilies = toggledFamily(get().beltFamilies, index);
+    writeStoredInteger(BELT_FAMILIES_KEY, beltFamilies);
+    set({ beltFamilies });
   },
 
   setLighting: (mode) => {

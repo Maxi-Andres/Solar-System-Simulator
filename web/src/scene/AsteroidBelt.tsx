@@ -3,8 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import { memo, useEffect, useMemo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
-import { RECORD, RECORD_FLOATS, type BeltSource } from '../core/belt.ts';
+import { RECORD, RECORD_FLOATS, writeClassVisibility, type BeltSource } from '../core/belt.ts';
+import { parseBeltBodyId } from '../core/beltBodies.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
 import type { SimClock } from '../core/time.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import {
@@ -56,6 +58,8 @@ export interface AsteroidBeltProps {
   readonly focus: BodyId;
   /** The Asteroids layer. Off, nothing is drawn and the GPU's copies are let go. */
   readonly visible: boolean;
+  /** Which families are drawn, a bit per BELT_FAMILIES entry; see the view store. */
+  readonly families: number;
   readonly sharedFrame: SharedFrame;
 }
 
@@ -122,6 +126,7 @@ function buildBeltMaterial(info: BeltInfo): BeltMaterial {
       uFaintAlpha: { value: faintAlpha },
       uClassCrowding: { value: classCrowding },
       uClassFade: { value: classFade },
+      uHidden: { value: new Int32Array([-1, -1]) },
       uColor: { value: new THREE.Vector3(...BELT_COLOR) },
     },
     // Blended over what is behind, not added to it: see DOT_FAINT_ALPHA. Depth is tested,
@@ -154,16 +159,38 @@ function buildBeltMaterial(info: BeltInfo): BeltMaterial {
 const BeltTierPoints = memo(function BeltTierPoints({
   records,
   material,
+  hidden,
 }: {
   readonly records: Float32Array;
   readonly material: THREE.ShaderMaterial;
+  /** Records of this tier not to draw: those that are bodies of their own just now. */
+  readonly hidden: readonly number[];
 }) {
   const geometry = useMemo(() => buildBeltGeometry(records), [records]);
   useEffect(() => () => geometry.dispose(), [geometry]);
+  // The tiers share one material, so which records to skip is set per draw, just before
+  // it: uniformsNeedUpdate makes three upload the material's uniforms for this one.
+  const onBeforeRender = useMemo(
+    () => () => {
+      const slots = material.uniforms['uHidden']!.value as Int32Array;
+      slots[0] = hidden[0] ?? -1;
+      slots[1] = hidden[1] ?? -1;
+      material.uniformsNeedUpdate = true;
+    },
+    [material, hidden],
+  );
   return (
-    <points geometry={geometry} material={material} frustumCulled={false} raycast={noRaycast} />
+    <points
+      geometry={geometry}
+      material={material}
+      frustumCulled={false}
+      raycast={noRaycast}
+      onBeforeRender={onBeforeRender}
+    />
   );
 });
+
+const NONE: readonly number[] = [];
 
 export function AsteroidBelt({
   source,
@@ -171,10 +198,25 @@ export function AsteroidBelt({
   clock,
   focus,
   visible,
+  families,
   sharedFrame,
 }: AsteroidBeltProps) {
   const view = useSyncExternalStore(source.subscribe, () => source.view);
   const info = visible ? view.info : null;
+  // The belt asteroids that are bodies of their own (see beltBodies.ts), by tier: their
+  // dots are hidden while they are.
+  const version = useStoreVersion(store);
+  const hiddenByTier = useMemo(() => {
+    void version;
+    const byTier = new Map<number, number[]>();
+    for (const body of store.bodies) {
+      const at = store.isPropagatedBody(body.id) ? parseBeltBodyId(body.id) : null;
+      if (at !== null) {
+        byTier.set(at.tier, [...(byTier.get(at.tier) ?? []), at.index]);
+      }
+    }
+    return byTier;
+  }, [store, version]);
   const built = useMemo(() => (info === null ? null : buildBeltMaterial(info)), [info]);
   useEffect(() => () => built?.material.dispose(), [built]);
 
@@ -188,8 +230,19 @@ export function AsteroidBelt({
   useEffect(() => {
     built?.faintAlpha.set(faintAlpha);
   }, [built, faintAlpha]);
+  // One or zero per class code, by whether its family is switched on in the Layers panel.
+  // It multiplies into the fade, so a hidden family is clipped in the vertex shader before
+  // its orbit is solved -- no Kepler, no fragment -- exactly as a faded-out one is.
+  const classVisible = useMemo(() => {
+    const out = new Float32Array(CLASS_SLOTS).fill(1);
+    if (view.info !== null) {
+      writeClassVisibility(view.info.classes, families, out);
+    }
+    return out;
+  }, [view.info, families]);
   // How many dots each population has in hand and the light they bring: what the frame
-  // loop divides by the screen to see how crowded each one is. Once per tier, likewise.
+  // loop divides by the screen to see how crowded each one is. Once per tier, likewise,
+  // and once per family switched: hidden dots are not on screen to crowd the rest.
   const populations = useMemo<PopulationLight | null>(
     () =>
       view.info === null
@@ -198,8 +251,9 @@ export function AsteroidBelt({
             view.tiers.map((tier) => tier.records),
             faintAlpha,
             view.info.classes,
+            classVisible,
           ),
-    [view.info, view.tiers, faintAlpha],
+    [view.info, view.tiers, faintAlpha, classVisible],
   );
 
   useFrame(({ gl, camera, size }) => {
@@ -250,6 +304,9 @@ export function AsteroidBelt({
         (camera as THREE.PerspectiveCamera).fov,
         size.height,
       );
+      for (let code = 0; code < CLASS_SLOTS; code += 1) {
+        built.classFade[code] = built.classFade[code]! * classVisible[code]!;
+      }
     }
   });
 
@@ -259,7 +316,12 @@ export function AsteroidBelt({
   return (
     <>
       {view.tiers.map((tier) => (
-        <BeltTierPoints key={tier.index} records={tier.records} material={built.material} />
+        <BeltTierPoints
+          key={tier.index}
+          records={tier.records}
+          material={built.material}
+          hidden={hiddenByTier.get(tier.index) ?? NONE}
+        />
       ))}
     </>
   );

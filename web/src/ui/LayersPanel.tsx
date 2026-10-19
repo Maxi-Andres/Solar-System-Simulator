@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react';
 
 import {
+  BELT_FAMILIES,
   beltDensities,
+  familyCounts,
+  familyShown,
   type BeltDensity,
   type BeltProgress,
   type BeltSource,
@@ -16,8 +19,9 @@ import { Panel } from './Panel.tsx';
  * brings them. Hiding them would be tidier and less honest: this way the panel says
  * plainly what the simulator covers today and what is still to come.
  *
- * Under Asteroids, while it is on, sits the belt's density: how many of its magnitude
- * tiers to load. See BeltDensityPicker.
+ * Under Asteroids, while it is on, sits the belt's density -- how many of its magnitude
+ * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
+ * BeltFamilies.
  */
 export function LayersPanel({ belt }: { readonly belt: BeltSource }) {
   const layers = useViewStore((state) => state.layers);
@@ -37,6 +41,7 @@ export function LayersPanel({ belt }: { readonly belt: BeltSource }) {
             {layer.id === 'asteroids' && layers.asteroids && (
               <>
                 <BeltDensityPicker belt={belt} />
+                <BeltFamilies belt={belt} />
                 <BeltNote />
               </>
             )}
@@ -251,6 +256,81 @@ function BeltDensityPicker({ belt }: { readonly belt: BeltSource }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A count for a chip: "64k", "1.4M", "548" -- short enough that seven chips fit two lines.
+ */
+export function compactCount(count: number): string {
+  if (count < 1000) {
+    return String(count);
+  }
+  if (count < 999_500) {
+    return `${Number((count / 1000).toPrecision(count < 10_000 ? 2 : 3))}k`;
+  }
+  return `${Number((count / 1e6).toPrecision(2))}M`;
+}
+
+/**
+ * Which of the belt's families to draw: SBDB's orbit classes, grouped as BELT_FAMILIES
+ * names them, as chips that wrap onto a line or two rather than a row each -- the panel
+ * is not to grow into a scroll again.
+ *
+ * Each chip's count is what is drawn of that family now, from the tiers loaded; its title
+ * says how many the whole catalogue has, from belt.json. A family the catalogue does not
+ * have is not offered.
+ */
+function BeltFamilies({ belt }: { readonly belt: BeltSource }) {
+  const view = useSyncExternalStore(belt.subscribe, () => belt.view);
+  const shown = useViewStore((state) => state.beltFamilies);
+  const toggle = useViewStore((state) => state.toggleBeltFamily);
+  if (view.info === null || view.tiers.length === 0) {
+    return null;
+  }
+  const catalogue = familyCounts(view.info.classCounts);
+  const loaded = BELT_FAMILIES.map((_, index) =>
+    view.tiers.reduce((sum, tier) => sum + familyCounts(tier.classCounts)[index]!, 0),
+  );
+
+  return (
+    <div
+      role="group"
+      aria-label="Asteroid families"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', margin: '0 0 0.4rem 1.65rem' }}
+    >
+      {BELT_FAMILIES.map((family, index) => {
+        if (catalogue[index] === 0) {
+          return null;
+        }
+        const on = familyShown(shown, index);
+        return (
+          <button
+            key={family.id}
+            type="button"
+            className="ui-press"
+            aria-pressed={on}
+            onClick={() => toggle(index)}
+            title={`${family.label}: ${loaded[index]!.toLocaleString('en-US')} drawn of ${catalogue[index]!.toLocaleString('en-US')} in the catalogue (${family.classes.join(', ')})`}
+            style={{
+              background: on ? '#16203a' : 'transparent',
+              border: `1px solid ${on ? '#4a86ff' : '#2a2a2a'}`,
+              borderRadius: '0.6rem',
+              color: on ? '#d6d6d6' : '#5e5e5e',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '0.62rem',
+              lineHeight: 1.3,
+              padding: '0.05rem 0.4rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {family.label}
+            <span style={{ color: on ? '#7a8fb8' : '#454545' }}> {compactCount(loaded[index]!)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
+import { BeltBodyFacts } from './BeltBodyFacts.tsx';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -97,6 +98,8 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
         ) : (
           <NaturalFacts store={store} />
         )}
+        {/* A belt asteroid made a body from search: its class, H and what its place is worth. */}
+        <BeltBodyFacts id={focus} />
       </dl>
     </Panel>
   );

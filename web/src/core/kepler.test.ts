@@ -1,7 +1,7 @@
 import type { OsculatingElements } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { meanAnomalyAt, orbitPolyline, periodDays, propagate, solveKepler } from './kepler.ts';
+import { keplerStart, meanAnomalyAt, orbitPolyline, periodDays, propagate, solveKepler } from './kepler.ts';
 
 const DEG_TO_RAD = Math.PI / 180;
 
@@ -186,5 +186,68 @@ describe('orbitPolyline', () => {
     // 2048 segments around a 1 AU orbit leaves ~460,000 km between points, so the
     // body must land well inside one segment of the polyline.
     expect(nearest).toBeLessThan(200_000);
+  });
+});
+
+describe('solveKepler near the parabola', () => {
+  /** Kepler's equation by bisection: slow, and it cannot fail. */
+  function bisection(M: number, e: number): number {
+    let low = -Math.PI - 1;
+    let high = Math.PI + 1;
+    for (let k = 0; k < 200; k += 1) {
+      const mid = (low + high) / 2;
+      if (mid - e * Math.sin(mid) < M) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return (low + high) / 2;
+  }
+
+  const Ms: number[] = [];
+  for (let k = 0; k < 720; k += 1) {
+    Ms.push(-Math.PI + (2 * Math.PI * k) / 720);
+  }
+  for (let exponent = -12; exponent <= 0; exponent += 0.25) {
+    const small = 10 ** exponent;
+    Ms.push(small, -small, Math.PI - small, -Math.PI + small);
+  }
+  const es: number[] = [];
+  for (let k = 0; k <= 999; k += k < 900 ? 9 : 1) {
+    es.push(k / 1000);
+  }
+  es.push(0.9996, 0.9999, 0.99999);
+
+  it('no longer diverges where the plain start did: e = 0.994 just before perihelion', () => {
+    // The case that went to the far side of the orbit and stayed: a residual of 2,567 rad.
+    const M = -0.04461061568097513;
+    const E = solveKepler(M, 0.994);
+    expect(Math.abs(E - 0.994 * Math.sin(E) - M)).toBeLessThan(1e-15);
+  });
+
+  it('solves every (M, e) on the grid to float64, and lands on the bisection', () => {
+    let worstResidual = 0;
+    let worstError = 0;
+    for (const e of es) {
+      for (const M of Ms) {
+        const E = solveKepler(M, e);
+        worstResidual = Math.max(worstResidual, Math.abs(E - e * Math.sin(E) - M));
+        worstError = Math.max(worstError, Math.abs(E - bisection(M, e)));
+      }
+    }
+    // Measured: 4.4e-16 and 5.4e-14 on a finer grid (see solveKepler).
+    expect(worstResidual).toBeLessThan(1e-15);
+    expect(worstError).toBeLessThan(1e-13);
+  });
+
+  it('starts on the right side of perihelion and inside the orbit', () => {
+    for (const e of [0.6, 0.9, 0.99, 0.99999]) {
+      for (const M of [1e-9, 1e-3, 0.5, -0.5, 3.1, -3.1]) {
+        const start = keplerStart(M, e);
+        expect(Math.sign(start)).toBe(Math.sign(M));
+        expect(Math.abs(start)).toBeLessThanOrEqual(Math.PI);
+      }
+    }
   });
 });
