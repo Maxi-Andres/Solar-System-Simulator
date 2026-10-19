@@ -21,6 +21,30 @@ export function Toolbar() {
 
   const [fullscreen, setFullscreen] = useState(false);
 
+  // "/" or Ctrl+K from anywhere opens the search, as in most apps with one -- except while
+  // typing in a field, where "/" is a character.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target !== null &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const shortcut =
+        (event.key === '/' && !typing) ||
+        (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey));
+      if (shortcut) {
+        event.preventDefault();
+        if (useViewStore.getState().openPanel !== 'search') {
+          togglePanel('search');
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [togglePanel]);
+
   useEffect(() => {
     const onChange = (): void => {
       setFullscreen(document.fullscreenElement !== null);
@@ -53,6 +77,15 @@ export function Toolbar() {
         gap: '0.4rem',
       }}
     >
+      <ToolButton
+        title="Search (/ or Ctrl+K)"
+        active={openPanel === 'search'}
+        onClick={() => togglePanel('search')}
+      >
+        <circle cx="10.5" cy="10.5" r="6" />
+        <path d="M15 15l5 5" />
+      </ToolButton>
+
       <ToolButton
         title="About this simulator"
         active={openPanel === 'about'}
@@ -201,6 +234,7 @@ function ToolButton({ title, onClick, active = false, bare = false, children }: 
 
 /** Panel ids the toolbar can open, exported for the panel container to switch on. */
 export const TOOLBAR_PANELS: readonly PanelId[] = [
+  'search',
   'about',
   'body',
   'layers',

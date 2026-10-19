@@ -16,6 +16,7 @@ import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
 import { Presence } from './ui/Presence.tsx';
 import { ReadoutPanel } from './ui/ReadoutPanel.tsx';
+import { SearchPanel } from './ui/SearchPanel.tsx';
 import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
 
@@ -210,6 +211,9 @@ export function App() {
                 />
               )}
             </OnReadout>
+          </Presence>
+          <Presence show={openPanel === 'search'}>
+            <SearchPanel store={store} clock={clock} focus={focus} />
           </Presence>
           <Presence show={openPanel === 'layers'}>
             <LayersPanel />
