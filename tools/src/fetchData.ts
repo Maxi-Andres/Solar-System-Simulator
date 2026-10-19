@@ -36,7 +36,12 @@ import {
 } from './config.ts';
 import { callHorizons } from './horizons/client.ts';
 import { fetchCoverage, horizonsProbe, lastWithData } from './horizons/coverage.ts';
-import { fetchMissionVectors, fetchVectors, splitTable } from './horizons/fetchVectors.ts';
+import {
+  cutAtBrokenJumps,
+  fetchMissionVectors,
+  fetchVectors,
+  splitTable,
+} from './horizons/fetchVectors.ts';
 import { type Discontinuity, ESTIMATE_MARGIN } from './horizons/refine.ts';
 import { parseElements } from './horizons/parseElements.ts';
 import { elementsQuery, fromJulianDay, stepSize, toJulianDay } from './horizons/queries.ts';
@@ -203,7 +208,7 @@ async function fetchSpacecraft(
   const coverage = { start: stated.start, stop: dataEnd };
   const origin: PositionAt =
     body.parent === null ? () => [0, 0, 0] : frames.barycentric(body.parent);
-  const { table, sourceVersion, result } = await fetchMissionVectors(body, start, stop, coverage, {
+  const fetched = await fetchMissionVectors(body, start, stop, coverage, {
     toleranceKm: SPACECRAFT_TOLERANCE_KM,
     toleranceAt: nearestBodyTolerance(
       frames.references,
@@ -215,6 +220,21 @@ async function fetchSpacecraft(
     margin: ESTIMATE_MARGIN,
     samplesPerRequest: MAX_SAMPLES_PER_REQUEST,
   });
+  const { sourceVersion, result } = fetched;
+  // A jump no craft could make is a file that has stopped describing it, and the side
+  // away from its own body goes; see cutAtBrokenJumps. The table is centred on that body
+  // (or on the barycentre, for a craft about the Sun), so a sample's distance from it is
+  // its length.
+  const repaired = cutAtBrokenJumps(fetched.table, result.discontinuities, (cut, index) =>
+    Math.hypot(cut.x[index]!, cut.y[index]!, cut.z[index]!),
+  );
+  const table = repaired.table;
+  for (const cut of repaired.cuts) {
+    console.log(
+      `[fetch-data]   ${body.name}: JPL's path jumps ~${Math.round(cut.jumpKm).toLocaleString('en-US')} km ` +
+        `near ${logDate(cut.jd)}, more than any craft can; kept only the part ${cut.kept} it`,
+    );
+  }
   const parts = splitTable(table, SPACECRAFT_CHUNK_SAMPLES);
 
   console.log(
@@ -224,7 +244,7 @@ async function fetchSpacecraft(
       `${logDate(table.t[0]!)} .. ${logDate(table.t.at(-1)!)}`,
   );
   // Not ours to fix and not to be hidden: the path JPL publishes jumps here.
-  for (const seam of result.discontinuities) {
+  for (const seam of repaired.discontinuities) {
     console.log(
       `[fetch-data]   ${body.name}: JPL's path jumps ~${Math.round(seam.jumpKm).toLocaleString('en-US')} km ` +
         `near ${logDate(seam.jd)}`,
@@ -237,7 +257,7 @@ async function fetchSpacecraft(
     parts,
     elements: null,
     sourceVersion,
-    discontinuities: result.discontinuities,
+    discontinuities: repaired.discontinuities,
   };
 }
 

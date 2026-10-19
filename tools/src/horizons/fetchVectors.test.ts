@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { VectorTable } from '../types.ts';
 import { retryDelayMs } from './client.ts';
-import { concatTables, planChunks, tailStep, validRun } from './fetchVectors.ts';
+import {
+  concatTables,
+  cutAtBrokenJumps,
+  MAX_SEAM_JUMP_KM,
+  planChunks,
+  tailStep,
+  validRun,
+} from './fetchVectors.ts';
 
 /**
  * Regression tests for the CI failure where Horizons returned 503 four times for
@@ -255,5 +262,72 @@ describe('tailStep', () => {
     // 32 days less a minute, for a Voyager: 46,079 = 11 x 59 x 71. A minute would be
     // 31 requests; 59 minutes is the finest divisor that fits one.
     expect(tailStep(46_079, 1500)).toBe(59);
+  });
+});
+
+describe('cutAtBrokenJumps', () => {
+  /** A craft 100,000 km from its body, one sample a minute, jumping where told. */
+  function about(radii: readonly number[]): VectorTable {
+    const t = radii.map((_, index) => 2460887 + index / 1440);
+    return {
+      id: 'akatsuki',
+      horizonsId: '-5',
+      center: '500@299',
+      count: radii.length,
+      t,
+      x: [...radii],
+      y: radii.map(() => 0),
+      z: radii.map(() => 0),
+      vx: radii.map(() => 0),
+      vy: radii.map(() => 0),
+      vz: radii.map(() => 0),
+    };
+  }
+  const length = (table: VectorTable, index: number) =>
+    Math.hypot(table.x[index]!, table.y[index]!, table.z[index]!);
+
+  it("cuts Akatsuki's three-AU jump and keeps the side about Venus", () => {
+    const table = about([1e5, 1e5, 1e5, 1e5, 4.6e8, 4.6e8, 4.6e8]);
+    const seams = [
+      { jd: table.t[1]!, jumpKm: 27 },
+      { jd: table.t[3]!, jumpKm: 456_883_473 },
+    ];
+    const { table: kept, cuts, discontinuities } = cutAtBrokenJumps(table, seams, length);
+    expect(kept.count).toBe(4);
+    expect(kept.t).toEqual(table.t.slice(0, 4));
+    expect(cuts).toEqual([{ jd: table.t[3], jumpKm: 456_883_473, kept: 'before' }]);
+    // The genuine 27-km seam is still published, inside what is left.
+    expect(discontinuities).toEqual([seams[0]]);
+  });
+
+  it('keeps the later side when it is the earlier one that is wrong', () => {
+    const table = about([4.6e8, 4.6e8, 4.6e8, 1e5, 1e5, 1e5]);
+    const { table: kept, cuts } = cutAtBrokenJumps(
+      table,
+      [{ jd: table.t[2]!, jumpKm: 4.6e8 }],
+      length,
+    );
+    expect(kept.t).toEqual(table.t.slice(3));
+    expect(cuts[0]!.kept).toBe('after');
+  });
+
+  it('never keeps a side too short to interpolate', () => {
+    const table = about([4.6e8, 4.6e8, 4.6e8, 1e5]);
+    const { table: kept } = cutAtBrokenJumps(table, [{ jd: table.t[2]!, jumpKm: 4.6e8 }], length);
+    expect(kept.count).toBe(3);
+  });
+
+  it('leaves every genuine seam alone, however large', () => {
+    // Europa Clipper's 8,843 km and the largest ever logged, 41,392 km.
+    const table = about([1e5, 1e5, 1e5, 1e5]);
+    const seams = [
+      { jd: table.t[0]!, jumpKm: 8_843 },
+      { jd: table.t[2]!, jumpKm: 41_392 },
+    ];
+    const result = cutAtBrokenJumps(table, seams, length);
+    expect(result.table).toBe(table);
+    expect(result.cuts).toEqual([]);
+    expect(result.discontinuities).toEqual(seams);
+    expect(41_392).toBeLessThan(MAX_SEAM_JUMP_KM / 20);
   });
 });

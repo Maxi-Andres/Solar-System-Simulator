@@ -1,6 +1,7 @@
 import { MAX_SAMPLES_PER_REQUEST } from '../config.ts';
 import { locateSeams, thinTable } from '../paths.ts';
 import type { BodyDefinition, VectorTable } from '../types.ts';
+import type { Discontinuity } from './refine.ts';
 import { callHorizons } from './client.ts';
 import { parseVectors } from './parseVectors.ts';
 import {
@@ -208,6 +209,92 @@ export function splitTable(table: VectorTable, maxSamples: number): VectorTable[
     });
   }
   return pieces;
+}
+
+/**
+ * The largest jump a spacecraft's published path may make and still be a path, km.
+ *
+ * JPL's trajectories are stitched from files, and where two meet the craft can step by
+ * the difference between two determinations of the same orbit: measured in the full run
+ * of 2026-10-19, Akatsuki's are 9 to 28 km, LRO's 248, Europa Clipper's 8,843, and the
+ * largest ever logged here was 41,392 km. Akatsuki's of 2025-07-30 22:36 TDB is
+ * 456,883,473 km -- three AU, from Venus to beyond Mars in one minute, inside the part
+ * of its ISAS file that JPL marks as prediction for a craft out of contact since
+ * 2024-04-26. That is not a seam between two orbits but a file that has stopped
+ * describing the craft at all. A million kilometres is twenty-four times the largest
+ * genuine seam and three hundred times smaller than that one.
+ */
+export const MAX_SEAM_JUMP_KM = 1_000_000;
+
+/** A path cut short at a jump no craft could make; see cutAtBrokenJumps. */
+export interface BrokenJumpCut {
+  /** Julian day (TDB) of the jump. */
+  readonly jd: number;
+  readonly jumpKm: number;
+  /** Which side of it was kept. */
+  readonly kept: 'before' | 'after';
+}
+
+/** Samples `from` .. `to` inclusive of a table. */
+function sliceTable(table: VectorTable, from: number, to: number): VectorTable {
+  return {
+    ...table,
+    count: to - from + 1,
+    t: table.t.slice(from, to + 1),
+    x: table.x.slice(from, to + 1),
+    y: table.y.slice(from, to + 1),
+    z: table.z.slice(from, to + 1),
+    vx: table.vx.slice(from, to + 1),
+    vy: table.vy.slice(from, to + 1),
+    vz: table.vz.slice(from, to + 1),
+  };
+}
+
+/**
+ * The path with every jump larger than `maxJumpKm` cut away, and what was cut.
+ *
+ * Of the two sides of such a jump, the one kept is the one nearer the craft's own
+ * reference body at the jump -- `distanceFromReference` is how far a sample is from it --
+ * because a craft about Venus that appears three AU away is the side that is wrong,
+ * whichever side of the jump that falls on. A side of fewer than two samples is never
+ * kept: there is nothing to interpolate. Each cut is a line in the log, not a silent fix;
+ * the jumps that remain are left as they are, published as JPL publishes them.
+ */
+export function cutAtBrokenJumps(
+  table: VectorTable,
+  discontinuities: readonly Discontinuity[],
+  distanceFromReference: (table: VectorTable, index: number) => number,
+  maxJumpKm = MAX_SEAM_JUMP_KM,
+): { table: VectorTable; cuts: BrokenJumpCut[]; discontinuities: Discontinuity[] } {
+  let current = table;
+  const cuts: BrokenJumpCut[] = [];
+  const broken = discontinuities
+    .filter((seam) => seam.jumpKm > maxJumpKm)
+    .sort((a, b) => a.jd - b.jd);
+  for (const seam of broken) {
+    // The jump lies inside the interval starting at seam.jd.
+    const last = current.t.findLastIndex((t) => t <= seam.jd);
+    if (last < 0 || last >= current.count - 1) {
+      continue;
+    }
+    const before = last + 1;
+    const after = current.count - before;
+    const keepBefore =
+      after < 2 ||
+      (before >= 2 &&
+        distanceFromReference(current, last) <= distanceFromReference(current, last + 1));
+    current = keepBefore ? sliceTable(current, 0, last) : sliceTable(current, last + 1, current.count - 1);
+    cuts.push({ jd: seam.jd, jumpKm: seam.jumpKm, kept: keepBefore ? 'before' : 'after' });
+  }
+  const start = current.t[0]!;
+  const stop = current.t.at(-1)!;
+  return {
+    table: current,
+    cuts,
+    discontinuities: discontinuities.filter(
+      (seam) => seam.jumpKm <= maxJumpKm && seam.jd >= start && seam.jd < stop,
+    ),
+  };
 }
 
 /**
