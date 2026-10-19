@@ -266,13 +266,13 @@ describe('tailStep', () => {
 });
 
 describe('cutAtBrokenJumps', () => {
-  /** A craft 100,000 km from its body, one sample a minute, jumping where told. */
-  function about(radii: readonly number[]): VectorTable {
-    const t = radii.map((_, index) => 2460887 + index / 1440);
+  /** One sample a day from a starting day, at the given distances along x. */
+  function path(radii: readonly number[], from = 2460887): VectorTable {
+    const t = radii.map((_, index) => from + index);
     return {
-      id: 'akatsuki',
-      horizonsId: '-5',
-      center: '500@299',
+      id: 'craft',
+      horizonsId: '-1',
+      center: '500@0',
       count: radii.length,
       t,
       x: [...radii],
@@ -283,51 +283,47 @@ describe('cutAtBrokenJumps', () => {
       vz: radii.map(() => 0),
     };
   }
-  const length = (table: VectorTable, index: number) =>
-    Math.hypot(table.x[index]!, table.y[index]!, table.z[index]!);
 
-  it("cuts Akatsuki's three-AU jump and keeps the side about Venus", () => {
-    const table = about([1e5, 1e5, 1e5, 1e5, 4.6e8, 4.6e8, 4.6e8]);
+  it("cuts Akatsuki's three-AU jump and keeps the years before it", () => {
+    const table = path([1e8, 1e8, 1e8, 1e8, 5.2e8, 5.2e8]);
     const seams = [
       { jd: table.t[1]!, jumpKm: 27 },
       { jd: table.t[3]!, jumpKm: 456_883_473 },
     ];
-    const { table: kept, cuts, discontinuities } = cutAtBrokenJumps(table, seams, length);
-    expect(kept.count).toBe(4);
+    const { table: kept, cuts, discontinuities } = cutAtBrokenJumps(table, seams);
     expect(kept.t).toEqual(table.t.slice(0, 4));
     expect(cuts).toEqual([{ jd: table.t[3], jumpKm: 456_883_473, kept: 'before' }]);
     // The genuine 27-km seam is still published, inside what is left.
     expect(discontinuities).toEqual([seams[0]]);
   });
 
-  it('keeps the later side when it is the earlier one that is wrong', () => {
-    const table = about([4.6e8, 4.6e8, 4.6e8, 1e5, 1e5, 1e5]);
-    const { table: kept, cuts } = cutAtBrokenJumps(
-      table,
-      [{ jd: table.t[2]!, jumpKm: 4.6e8 }],
-      length,
-    );
-    expect(kept.t).toEqual(table.t.slice(3));
-    expect(cuts[0]!.kept).toBe('after');
-  });
-
-  it('never keeps a side too short to interpolate', () => {
-    const table = about([4.6e8, 4.6e8, 4.6e8, 1e5]);
-    const { table: kept } = cutAtBrokenJumps(table, [{ jd: table.t[2]!, jumpKm: 4.6e8 }], length);
-    expect(kept.count).toBe(3);
-  });
-
-  it('leaves every genuine seam alone, however large', () => {
-    // Europa Clipper's 8,843 km and the largest ever logged, 41,392 km.
-    const table = about([1e5, 1e5, 1e5, 1e5]);
-    const seams = [
-      { jd: table.t[0]!, jumpKm: 8_843 },
-      { jd: table.t[2]!, jumpKm: 41_392 },
-    ];
-    const result = cutAtBrokenJumps(table, seams, length);
+  it("keeps Psyche's 1.6-million-km seam, two estimates of one craft, as a seam", () => {
+    // Today's prediction handing over to the older reference plan, 2027-02-01.
+    const table = path([3.2e8, 3.2e8, 3.2e8, 3.2e8]);
+    const seams = [{ jd: table.t[1]!, jumpKm: 1_623_462 }];
+    const result = cutAtBrokenJumps(table, seams);
     expect(result.table).toBe(table);
     expect(result.cuts).toEqual([]);
     expect(result.discontinuities).toEqual(seams);
-    expect(41_392).toBeLessThan(MAX_SEAM_JUMP_KM / 20);
+  });
+
+  it('keeps the side that covers more time, wherever the jump falls', () => {
+    // A short bad stretch at the start: the long side after it is the craft.
+    const table = path([9e8, 9e8, 1e8, 1e8, 1e8, 1e8]);
+    const { table: kept, cuts } = cutAtBrokenJumps(table, [{ jd: table.t[1]!, jumpKm: 8e8 }]);
+    expect(kept.t).toEqual(table.t.slice(2));
+    expect(cuts[0]!.kept).toBe('after');
+  });
+
+  it('keeps the earlier side on a tie, and never one too short to interpolate', () => {
+    const tie = path([1e8, 1e8, 9e8, 9e8]);
+    expect(cutAtBrokenJumps(tie, [{ jd: tie.t[1]!, jumpKm: 8e8 }]).cuts[0]!.kept).toBe('before');
+    const short = path([9e8, 9e8, 9e8, 1e8]);
+    expect(cutAtBrokenJumps(short, [{ jd: short.t[2]!, jumpKm: 8e8 }]).table.count).toBe(3);
+  });
+
+  it('sits between the largest genuine seam and the broken file, with room on both sides', () => {
+    expect(MAX_SEAM_JUMP_KM).toBeGreaterThan(5 * 1_623_462);
+    expect(MAX_SEAM_JUMP_KM).toBeLessThan(456_883_473 / 40);
   });
 });

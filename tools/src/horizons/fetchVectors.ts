@@ -215,16 +215,18 @@ export function splitTable(table: VectorTable, maxSamples: number): VectorTable[
  * The largest jump a spacecraft's published path may make and still be a path, km.
  *
  * JPL's trajectories are stitched from files, and where two meet the craft can step by
- * the difference between two determinations of the same orbit: measured in the full run
- * of 2026-10-19, Akatsuki's are 9 to 28 km, LRO's 248, Europa Clipper's 8,843, and the
- * largest ever logged here was 41,392 km. Akatsuki's of 2025-07-30 22:36 TDB is
- * 456,883,473 km -- three AU, from Venus to beyond Mars in one minute, inside the part
- * of its ISAS file that JPL marks as prediction for a craft out of contact since
- * 2024-04-26. That is not a seam between two orbits but a file that has stopped
- * describing the craft at all. A million kilometres is twenty-four times the largest
- * genuine seam and three hundred times smaller than that one.
+ * the difference between two determinations of it. Measured in the runs of 2026-10-19:
+ * Akatsuki's ordinary seams are 9 to 28 km, LRO's 248, Europa Clipper's 8,843, and the
+ * largest is Psyche's at 2027-02-01 12:01 TDB, 1,623,462 km, where today's prediction
+ * hands over to the mission's older reference plan -- two estimates of one craft that
+ * disagree, published as such, and kept here as a seam like any other. Akatsuki's of
+ * 2025-07-30 22:36 TDB is 456,883,473 km: three AU, from Venus to beyond Mars in one
+ * minute, in the part of its ISAS file JPL marks as prediction for a craft out of contact
+ * since 2024-04-26. That is not two estimates of an orbit but a file that has stopped
+ * describing the craft. Ten million kilometres is six times Psyche's and a forty-sixth of
+ * Akatsuki's.
  */
-export const MAX_SEAM_JUMP_KM = 1_000_000;
+export const MAX_SEAM_JUMP_KM = 10_000_000;
 
 /** A path cut short at a jump no craft could make; see cutAtBrokenJumps. */
 export interface BrokenJumpCut {
@@ -253,17 +255,18 @@ function sliceTable(table: VectorTable, from: number, to: number): VectorTable {
 /**
  * The path with every jump larger than `maxJumpKm` cut away, and what was cut.
  *
- * Of the two sides of such a jump, the one kept is the one nearer the craft's own
- * reference body at the jump -- `distanceFromReference` is how far a sample is from it --
- * because a craft about Venus that appears three AU away is the side that is wrong,
- * whichever side of the jump that falls on. A side of fewer than two samples is never
- * kept: there is nothing to interpolate. Each cut is a line in the log, not a silent fix;
- * the jumps that remain are left as they are, published as JPL publishes them.
+ * Of the two sides of such a jump the one kept is the one that covers more time, the
+ * earlier on a tie. Where JPL's files go wrong it is at the end -- a prediction past the
+ * last tracking, a plan past the prediction -- and the flown, reconstructed years are the
+ * long side. An earlier version kept the side nearer the craft's own body, which for a
+ * craft about the Sun meant nearer the barycentre: it threw away Psyche's three flown
+ * years for its two planned ones. A side of fewer than two samples is never kept: there
+ * is nothing to interpolate. Each cut is a line in the log, not a silent fix; the jumps
+ * that remain are left as they are, published as JPL publishes them.
  */
 export function cutAtBrokenJumps(
   table: VectorTable,
   discontinuities: readonly Discontinuity[],
-  distanceFromReference: (table: VectorTable, index: number) => number,
   maxJumpKm = MAX_SEAM_JUMP_KM,
 ): { table: VectorTable; cuts: BrokenJumpCut[]; discontinuities: Discontinuity[] } {
   let current = table;
@@ -279,10 +282,9 @@ export function cutAtBrokenJumps(
     }
     const before = last + 1;
     const after = current.count - before;
-    const keepBefore =
-      after < 2 ||
-      (before >= 2 &&
-        distanceFromReference(current, last) <= distanceFromReference(current, last + 1));
+    const spanBefore = current.t[last]! - current.t[0]!;
+    const spanAfter = current.t.at(-1)! - current.t[last + 1]!;
+    const keepBefore = after < 2 || (before >= 2 && spanBefore >= spanAfter);
     current = keepBefore ? sliceTable(current, 0, last) : sliceTable(current, last + 1, current.count - 1);
     cuts.push({ jd: seam.jd, jumpKm: seam.jumpKm, kept: keepBefore ? 'before' : 'after' });
   }

@@ -236,13 +236,9 @@ async function fetchSpacecraft(
     samplesPerRequest: MAX_SAMPLES_PER_REQUEST,
   });
   const { sourceVersion, result } = fetched;
-  // A jump no craft could make is a file that has stopped describing it, and the side
-  // away from its own body goes; see cutAtBrokenJumps. The table is centred on that body
-  // (or on the barycentre, for a craft about the Sun), so a sample's distance from it is
-  // its length.
-  const repaired = cutAtBrokenJumps(fetched.table, result.discontinuities, (cut, index) =>
-    Math.hypot(cut.x[index]!, cut.y[index]!, cut.z[index]!),
-  );
+  // A jump no craft could make is a file that has stopped describing it, and the shorter
+  // side of it goes; see cutAtBrokenJumps.
+  const repaired = cutAtBrokenJumps(fetched.table, result.discontinuities);
   const table = repaired.table;
   for (const cut of repaired.cuts) {
     console.log(
