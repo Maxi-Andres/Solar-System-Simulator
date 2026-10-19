@@ -44,7 +44,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
 };
 
 export function App() {
-  const { store, stars, clock, error, readout } = useSimulation();
+  const { store, stars, belt, clock, error, readout } = useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -80,6 +80,14 @@ export function App() {
       void store.loadSmallMoons(systemOf(store, focus));
     }
   }, [store, focus, visibleKinds]);
+
+  // The belt likewise: 3 MB, asked for once the ephemerides are in -- never in the way of
+  // the first view -- and only if the Asteroids layer is on. Once here it is kept.
+  useEffect(() => {
+    if (store !== null && visibleKinds.has('asteroid')) {
+      void belt.request();
+    }
+  }, [store, belt, visibleKinds]);
 
   // Switching a layer off while standing on one of its bodies would leave the camera
   // orbiting something that is no longer drawn. Step back to what it orbits.
@@ -151,6 +159,7 @@ export function App() {
       <SolarSystemCanvas
         store={store}
         stars={stars}
+        belt={belt}
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
@@ -239,7 +248,7 @@ export function App() {
       )}
 
       <Presence show={openPanel === 'about'}>
-        <AboutPanel store={store} stars={stars} />
+        <AboutPanel store={store} stars={stars} belt={belt} />
       </Presence>
 
       {/* The only way back once the interface is switched off. */}

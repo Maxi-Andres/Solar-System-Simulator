@@ -1,6 +1,7 @@
 import type { BodyId, StarCatalog } from '@sss/tools/types';
 import { Canvas } from '@react-three/fiber';
 
+import type { BeltSource } from '../core/belt.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
@@ -8,6 +9,7 @@ import { useEffect, useMemo, type RefObject } from 'react';
 
 import { renderDemand } from '../core/renderDemand.ts';
 
+import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
@@ -66,6 +68,7 @@ export { FOV_DEG };
 export interface SolarSystemCanvasProps {
   readonly store: EphemerisStore;
   readonly stars: StarCatalog;
+  readonly belt: BeltSource;
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly showOrbits: boolean;
@@ -80,6 +83,7 @@ export interface SolarSystemCanvasProps {
 export function SolarSystemCanvas({
   store,
   stars,
+  belt,
   clock,
   focus,
   showOrbits,
@@ -142,6 +146,18 @@ export function SolarSystemCanvas({
         lighting={lighting}
         visibleKinds={visibleKinds}
         hiddenMarkers={hiddenMarkers}
+        sharedFrame={sharedFrame}
+      />
+      {/*
+        Between the two on purpose: it reads the scene's snapshot before the labels take
+        it, and frame callbacks run in mount order. See AsteroidBelt.
+      */}
+      <AsteroidBelt
+        source={belt}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={visibleKinds.has('asteroid')}
         sharedFrame={sharedFrame}
       />
       <LabelProjector

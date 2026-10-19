@@ -7,6 +7,7 @@ import {
   TIME_DECIMALS,
   VELOCITY_DECIMALS,
 } from './config.ts';
+import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
 import type {
   BodyDefinition,
   ChunkInfo,
@@ -170,6 +171,25 @@ export async function writeSmallMoonBundle(planet: string, bundle: SmallMoonBund
  */
 export async function writeStars(stars: StarCatalog): Promise<void> {
   await writeCompactJson(join(OUTPUT_DIR, 'stars.json'), stars);
+}
+
+/**
+ * The asteroid belt, as belt/belt.json and its binary file of elements beside it. See
+ * BeltInfo.
+ *
+ * Takes the directory, unlike the writers above, because the belt can be regenerated on
+ * its own (`pnpm fetch:belt`) into a data directory a full run already filled. So it
+ * replaces belt/ and nothing else: the other files there are a different run's, and
+ * still valid. The binary is written before the JSON that describes it, so an
+ * interrupted write leaves no belt.json at all -- which the app reads as no belt --
+ * never a description of a file that is not there, or not all there.
+ */
+export async function writeBelt(build: BeltBuild, outputDir = OUTPUT_DIR): Promise<void> {
+  const directory = join(outputDir, 'belt');
+  await rm(directory, { recursive: true, force: true });
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, build.info.file), beltBytes(build.records));
+  await writeJson(join(directory, 'belt.json'), build.info);
 }
 
 export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<void> {

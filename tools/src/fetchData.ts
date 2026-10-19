@@ -4,19 +4,25 @@
  * Runs locally (`pnpm fetch:data`) and in CI before the build. Output goes to
  * `web/public/data/` and is never committed: it is regenerated on every deploy.
  *
- * Two sources, both official and both queried at build time:
+ * Three sources, all official and all queried at build time:
  *
  *   JPL Horizons API -- https://ssd.jpl.nasa.gov/api/horizons.api
  *     Positions and velocities for every body. Courtesy of NASA/JPL-Caltech.
  *
  *   ESA Hipparcos and Tycho-2, via VizieR TAP at CDS Strasbourg
  *     Position, proper motion, magnitude and colour index for every star drawn.
+ *
+ *   JPL Small-Body Database Query API -- https://ssd-api.jpl.nasa.gov/sbdb_query.api
+ *     Osculating elements for the asteroid belt. See belt/buildBelt.ts.
  */
 
 import { pathToFileURL } from 'node:url';
 
+import { buildBelt, catalogDesignations, describeBelt } from './belt/buildBelt.ts';
+import { fetchBeltRows } from './belt/sbdb.ts';
 import { CATALOG, SSB_CENTER } from './catalog.ts';
 import {
+  BELT_MAGNITUDE_LIMIT,
   HORIZONS_API_URL,
   MAX_CONCURRENT_REQUESTS,
   MAX_SAMPLES_PER_REQUEST,
@@ -71,6 +77,7 @@ import type {
 } from './types.ts';
 import {
   prepareOutputDir,
+  writeBelt,
   writeCatalog,
   writeElements,
   writeSmallMoonBundle,
@@ -93,6 +100,9 @@ interface BodyResult {
   /** Where a spacecraft's refinement hit its floor with the tolerance still missed. */
   readonly discontinuities: readonly Discontinuity[];
 }
+
+/** How many small moons between two progress lines in the log. */
+const SMALL_MOON_PROGRESS_EVERY = 25;
 
 /** Runs `task` over `items` with at most `limit` in flight at once. */
 async function mapWithConcurrency<T, R>(
@@ -136,8 +146,13 @@ function addMonths(date: Date, months: number): Date {
   return shifted;
 }
 
-/** Midnight UTC today: the reference instant the whole run is built around. */
-function todayUtcMidnight(): Date {
+/**
+ * Midnight UTC today: the reference instant the whole run is built around.
+ *
+ * Exported for `fetch:belt`, which regenerates the belt alone and must put its mean
+ * anomalies at the same instant a full run would.
+ */
+export function todayUtcMidnight(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
@@ -554,9 +569,16 @@ async function main(): Promise<void> {
   );
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
-  // Two independent services, so they run together. The sky is two requests against
-  // VizieR and comes back long before Horizons has finished with the planets.
-  const [natural, hipparcosRows, tycho2Rows] = await Promise.all([
+  // Three independent services, so they run together. The sky is two requests against
+  // VizieR and the belt one against SBDB, and both come back long before Horizons has
+  // finished with the planets.
+  //
+  // A failure of either fails the run, as the stars always have. The deploy publishes a
+  // fresh data directory or nothing (deploy.yml: a half-published site is worse than a
+  // late one), and a release that silently lost its belt would look like a release with
+  // fewer asteroids, not like an outage; the previous deploy stays up instead. SBDB has
+  // its own retries first, so this is a fault that outlasted a minute of backoff.
+  const [natural, hipparcosRows, tycho2Rows, beltRows] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -568,6 +590,7 @@ async function main(): Promise<void> {
     ),
     fetchHipparcos(),
     fetchTycho2(),
+    fetchBeltRows(BELT_MAGNITUDE_LIMIT),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -594,16 +617,36 @@ async function main(): Promise<void> {
   // log rather than failing the run: four hundred moons are four hundred chances of a
   // bad minute at JPL, and losing the planets' data to one of them would be the worse
   // trade. The major bodies and the craft still fail it.
+  //
+  // A moon prints nothing when it succeeds, and the phase takes 30 to 60 minutes, so a
+  // line every SMALL_MOON_PROGRESS_EVERY moons says the run is alive. Counted as they
+  // finish, which with two in flight is near enough the order they were asked in.
+  const smallMoonBodies = CATALOG.filter(isSmallMoon);
+  let smallMoonsDone = 0;
+  let smallMoonsLeftOut = 0;
   const smallMoons = await mapWithConcurrency(
-    CATALOG.filter(isSmallMoon),
+    smallMoonBodies,
     MAX_CONCURRENT_REQUESTS,
     async (body) => {
+      let result: BodyResult | null;
       try {
-        return await fetchAdaptiveBody(body, epoch);
+        result = await fetchAdaptiveBody(body, epoch);
       } catch (error) {
         console.log(`[fetch-data] ${body.name}: failed (${String(error).slice(0, 160)}); left out`);
-        return null;
+        result = null;
       }
+      smallMoonsDone += 1;
+      smallMoonsLeftOut += result === null ? 1 : 0;
+      if (
+        smallMoonsDone % SMALL_MOON_PROGRESS_EVERY === 0 ||
+        smallMoonsDone === smallMoonBodies.length
+      ) {
+        console.log(
+          `[fetch-data] small moons ${smallMoonsDone}/${smallMoonBodies.length} ` +
+            `(${smallMoonsLeftOut} left out)`,
+        );
+      }
+      return result;
     },
   );
   const results = [
@@ -644,6 +687,25 @@ async function main(): Promise<void> {
           `${stars.dropped.noPosition} for no position)`
         : ''),
   );
+
+  // The belt's mean anomalies are moved to the run's own instant: `toJulianDay(epoch)`,
+  // the same number every elements query above sends Horizons as its TLIST, which
+  // Horizons reads as TDB. So referenceJd is 00:00 TDB of the run's day -- 69 s before
+  // UTC midnight, which matters to nothing because the file states it as a TDB Julian
+  // day and every anomaly is computed for exactly that number.
+  //
+  // Left out of it: the asteroids this run publishes as bodies of their own. A small
+  // body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
+  const belt = buildBelt({
+    rows: beltRows.rows,
+    queriedAt: beltRows.queriedAt,
+    referenceJd: toJulianDay(epoch),
+    magnitudeLimit: BELT_MAGNITUDE_LIMIT,
+    excluded: catalogDesignations(catalog),
+  });
+  for (const line of describeBelt(belt)) {
+    console.log(line.replace('[belt]', '[fetch-data] belt'));
+  }
 
   // Nothing is written until every body has come back clean, so a mid-run failure
   // cannot leave a half-populated data directory that looks publishable.
@@ -711,6 +773,7 @@ async function main(): Promise<void> {
 
   await writeCatalog(startupCatalog);
   await writeStars(stars);
+  await writeBelt(belt);
 
   // The window every full-window body can answer for: the intersection of their
   // tables, not the range we asked for. Publishing the request instead would claim
@@ -762,10 +825,11 @@ async function main(): Promise<void> {
   const samples = results.reduce((total, result) => total + result.vectors.count, 0);
   console.log(
     `[fetch-data] Wrote ${results.length} bodies (${samples} samples) and ` +
-      `${stars.count} stars to ${OUTPUT_DIR}`,
+      `${stars.count} stars and ${belt.info.count} asteroids to ${OUTPUT_DIR}`,
   );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
+  console.log("[fetch-data] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
 }
 
 // Run when invoked, not when imported -- a script trying one body imports fetchAdaptiveBody.

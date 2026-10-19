@@ -88,6 +88,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
+pnpm fetch:belt      # regenerate only the asteroid belt, from JPL's SBDB (seconds)
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
@@ -137,6 +138,8 @@ web/public/data/
 ├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
 ├─ surface/<id>.json      # a craft on Mars: where each drive ended, and from when
 ├─ small-moons/<planet>.json  # a planet's small moons, fetched when its system is entered
+├─ belt/belt.json         # the asteroid belt: source, count, reference instant, classes
+├─ belt/elements.bin      # its orbital elements, little-endian float32, nine per asteroid
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -261,6 +264,56 @@ and Makemake round as measured. The rest are irregular — Bennu a spinning top,
 two lobes stuck together, Apophis tumbling — with no orientation published in a form the
 app can use, so they are **markers** for now, with their measured dimensions in the info
 panel and "Shape: not drawn yet" said plainly.
+
+### The asteroid belt
+
+Every asteroid in JPL's Small-Body Database brighter than absolute magnitude 15 — 83,841
+on 2026-10-19, of 1,575,460 in all — fetched from the **SBDB Query API** as **orbital
+elements, not vectors**: one request of about 16 MB, where Horizons would want one per
+body. `pnpm fetch:data` fetches it alongside the stars; `pnpm fetch:belt` regenerates it
+alone in about twenty seconds, into an existing data directory without touching the rest
+(`--out <dir>` to write it elsewhere).
+
+83,828 are written. Ten are left out because the catalog already draws them from JPL's
+vectors — Ceres, Pallas, Vesta, 16 Psyche, Eurybates, Arrokoth, Haumea, Makemake, Eris,
+and Pluto, which SBDB lists as minor planet 134340 — and three because they cannot be
+propagated: two hyperbolic orbits, and a TNO with no mean anomaly. Each is nine float32
+numbers — semi-major axis, eccentricity, inclination, node, perihelion, mean anomaly,
+mean motion, H and SBDB's orbit class — brightest first: 3.0 MB, 2.27 MB gzipped. Every
+orbit comes at its own epoch, so each mean anomaly is moved in float64 to the run's
+instant before it is stored; what the app does with it is add n·Δt.
+
+**How accurate it is.** It is two-body propagation from osculating elements, and that is
+the limit, not the data. Measured against Horizons' heliocentric vectors:
+
+| Asteroid | Class | At the run (132 d after its epoch) | A year before | A year after |
+|---|---|---|---|---|
+| 7 Iris | main belt | 10,000 km | 36,000 km | 150,000 km |
+| 433 Eros | Amor (NEO) | 5,800 km | 3,800 km | 114,000 km |
+| 1866 Sisyphus | Apollo (NEO) | 7,500 km | 27,000 km | 44,000 km |
+| 624 Hektor | Jupiter Trojan | 11,000 km | 37,000 km | 154,000 km |
+| 2060 Chiron | Centaur | 11,000 km | 44,000 km | 166,000 km |
+| 50000 Quaoar | TNO | 10,000 km | 42,000 km | 165,000 km |
+| 90377 Sedna | TNO | 10,000 km | 42,000 km | 168,000 km |
+
+At their own epoch the same elements, in float64, land within a kilometre of Horizons for
+all seven, so the frame and the units are right and what grows is the propagation. The
+named bodies were measured further out before this step: 40,000 to 190,000 km a year
+from the epoch for Ceres, Vesta and Eros, up to 6.5 million km — about a degree — ten
+years out, and Apophis 267 million km off five years on, because its 2029 Earth
+encounter is exactly what two-body cannot see. Close-approach asteroids drift most.
+
+Storing the elements as float32 costs at most 300 km in the main belt, 470 km for a
+Trojan, 1,400 km for a centaur and about 1,000 km for Quaoar and Sedna. The mean anomaly
+is stored in [−π, π), centred on perihelion, because that is where an eccentric orbit
+needs float32's digits: stored from 0 to 2π instead, an orbit just short of perihelion
+sat at float32's coarsest step, and Sedna cost 61,000 km and 2020 MQ53 — an Oort-cloud
+orbit with a semi-major axis of 13,940 AU — 4.1 million. The worst left is 96,000 km,
+for 2020 M4 (a = 14,513 AU, e = 0.9996), from the rounding of its semi-major axis.
+
+1,217 orbits have epochs more than ten years from the run — 1,051 of them TNOs — and for
+those the drift above is a lower bound. The oldest is 1927 LA, whose elements SBDB gives
+at a 1927 epoch: its drawn place is a century of two-body extrapolation.
 
 ### Spacecraft sampling
 
@@ -515,7 +568,7 @@ two, never drawn somewhere approximate and then moved.
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
-| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of asteroids and comets *(planned)* |
+| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of the asteroid belt, every asteroid brighter than H 15; comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
@@ -532,9 +585,11 @@ two, never drawn somewhere approximate and then moved.
   from JPL's samples and NASA's models up close. Curiosity, Perseverance and InSight stand on Mars, where NASA's
   traverse maps put them.
 - **Phase B** — fifteen named small bodies are in, from JPL's own state vectors: four
-  dwarf planets, the largest asteroids and the ones spacecraft have visited. Next, their
-  shape models; then the belt of hundreds of thousands from SBDB, with instancing and
-  Keplerian propagation in the vertex shader.
+  dwarf planets, the largest asteroids and the ones spacecraft have visited. The belt's
+  data is generated: 83,828 asteroids to H 15 from SBDB, as orbital elements, for
+  instancing and Keplerian propagation in the vertex shader (B2a); next the whole
+  catalogue of 1.5 million with progressive loading (B2b), and the named bodies' shape
+  models.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
 - **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to
@@ -560,6 +615,10 @@ Stated plainly, since the point of the project is that everything else is not:
   turns to its planet within 0.007°.
 - **The fast moons are exact for two years, not twenty.** A year either side of the
   build, by budget: see *Sample spacing*.
+- **The asteroid belt is two-body**, propagated from each orbit's osculating elements:
+  tens of thousands of km off within months of the elements' epoch, a degree a decade
+  out, and far worse for an asteroid that passes close to a planet. The named small
+  bodies are not part of it and stay exact. See *The asteroid belt*.
 
 - **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
   Which stars are there is a measurement: 46,071 real stars at their own positions,
@@ -732,6 +791,8 @@ Stated plainly, since the point of the project is that everything else is not:
 ## Credits
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
+- Asteroid orbits: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Small-Body
+  Database.
 - Star positions, proper motions, magnitudes and colours: the **ESA Hipparcos
   catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),
   accessed through the **VizieR** service at CDS, Strasbourg (Ochsenbein, Bauer &

@@ -13,6 +13,7 @@
     "build": "pnpm --filter @sss/web build",
     "preview": "pnpm --filter @sss/web preview",
     "fetch:data": "pnpm --filter @sss/tools fetch:data",
+    "fetch:belt": "pnpm --filter @sss/tools fetch:belt",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }

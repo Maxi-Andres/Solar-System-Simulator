@@ -88,8 +88,8 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'moons', label: 'Moons', pending: null },
   // The 437 beyond the major moons. They need Moons on too: they are moons.
   { id: 'smallMoons', label: 'Small Moons', pending: null },
-  // The named ones for now: mission targets, the largest, and Apophis. Phase B's belt of
-  // hundreds of thousands comes later.
+  // The named ones -- mission targets, the largest, and Apophis -- and the belt: every
+  // asteroid SBDB knows down to its magnitude limit, drawn as dots (see AsteroidBelt).
   { id: 'asteroids', label: 'Asteroids', pending: null },
   { id: 'comets', label: 'Comets', pending: 'Phase B' },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },

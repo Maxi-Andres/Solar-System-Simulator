@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { StarCatalog } from '@sss/tools/types';
 
+import { BeltSource, httpBeltFetchers, loadBelt } from './belt.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
@@ -25,6 +26,11 @@ export interface Simulation {
    * fifth of their weight and a sky that appears a second late reads as a bug.
    */
   readonly stars: StarCatalog | null;
+  /**
+   * The asteroid belt, fetched only when asked for: App asks once the ephemerides are in
+   * and the Asteroids layer is on. See belt.ts.
+   */
+  readonly belt: BeltSource;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -55,6 +61,9 @@ export function useSimulation(refreshHz = 10): Simulation {
   clockRef.current ??= new SimClock();
   const readoutRef = useRef<Signal>(null);
   readoutRef.current ??= new Signal();
+  const beltRef = useRef<BeltSource>(null);
+  // BASE_URL carries the GitHub Pages prefix, as below.
+  beltRef.current ??= new BeltSource(() => loadBelt(httpBeltFetchers, import.meta.env.BASE_URL));
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);
@@ -134,5 +143,12 @@ export function useSimulation(refreshHz = 10): Simulation {
     };
   }, [refreshHz]);
 
-  return { store, stars, clock: clockRef.current, error, readout: readoutRef.current };
+  return {
+    store,
+    stars,
+    belt: beltRef.current,
+    clock: clockRef.current,
+    error,
+    readout: readoutRef.current,
+  };
 }

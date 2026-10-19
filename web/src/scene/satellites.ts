@@ -63,7 +63,9 @@ export function satelliteVisibility(
  * scene, whose frame runs first, leaves its snapshot here and the labels take it.
  *
  * Taken, not read: the labels clear it, so a frame in which the scene did not run finds
- * nothing rather than last frame's positions, and works them out itself as before.
+ * nothing rather than last frame's positions, and works them out itself as before. The
+ * asteroid belt, whose frame runs between the two, reads the Sun's position from it and
+ * leaves it where it is (see AsteroidBelt).
  */
 export interface SharedFrame {
   snapshot: FrameSnapshot | null;

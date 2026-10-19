@@ -754,3 +754,87 @@ export interface StarCatalog {
   /** Proper motion in declination, mas/yr. */
   readonly pmDec: readonly number[];
 }
+
+/**
+ * Orbit classes of the asteroid belt file, in the order their codes are written.
+ *
+ * SBDB's own `class` codes, so a filter can be checked against JPL's definitions
+ * (https://ssd.jpl.nasa.gov/sb/orbit_classes.html). The index in this list is the code
+ * stored per asteroid; a new class goes at the end, never in between.
+ */
+export const BELT_CLASSES = [
+  'MBA', // Main-belt asteroid
+  'IMB', // Inner main-belt
+  'OMB', // Outer main-belt
+  'MCA', // Mars-crosser
+  'APO', // Apollo (NEO)
+  'ATE', // Aten (NEO)
+  'AMO', // Amor (NEO)
+  'IEO', // Atira (NEO, interior to Earth)
+  'TJN', // Jupiter Trojan
+  'CEN', // Centaur
+  'TNO', // Trans-Neptunian object
+  'PAA', // Parabolic "asteroid"; never written, elliptic orbits only
+  'HYA', // Hyperbolic "asteroid"; never written, elliptic orbits only
+  'AST', // Asteroid, other
+] as const;
+
+export type BeltClass = (typeof BELT_CLASSES)[number];
+
+/**
+ * Floats per asteroid in the belt's binary file, in this order:
+ *
+ *   0  a      semi-major axis, km
+ *   1  e      eccentricity, < 1
+ *   2  i      inclination, radians
+ *   3  node   longitude of the ascending node, radians
+ *   4  peri   argument of perihelion, radians
+ *   5  M      mean anomaly at BeltInfo.referenceJd, radians in [−π, π), 0 at perihelion
+ *   6  n      mean motion, radians per day
+ *   7  H      absolute magnitude
+ *   8  class  index into BELT_CLASSES
+ *
+ * Heliocentric osculating elements, ecliptic and mean equinox of J2000 -- the same
+ * plane as every Horizons table here -- so a position is the Sun's plus the two-body
+ * ellipse. The mean anomaly is moved from each orbit's own SBDB epoch to the common
+ * `referenceJd` in float64 by the generator, so the GPU only ever adds n·Δt to it.
+ */
+export const BELT_RECORD_FLOATS = 9;
+
+/**
+ * The asteroid belt: every asteroid down to an absolute magnitude, as orbital elements
+ * rather than vectors. Written to `belt/belt.json`, with the elements in `belt/<file>`
+ * as little-endian float32, BELT_RECORD_FLOATS per asteroid, ordered by H (brightest,
+ * which is largest, first). Optional: a data directory without it simply has no belt.
+ */
+export interface BeltInfo {
+  readonly source: {
+    readonly name: string;
+    readonly url: string;
+    readonly queriedAt: string;
+  };
+  /** The binary file of elements, relative to `belt/`. */
+  readonly file: string;
+  readonly count: number;
+  readonly recordFloats: typeof BELT_RECORD_FLOATS;
+  /** Brightest-first ordering's faintest H included. */
+  readonly magnitudeLimit: number;
+  /** TDB Julian day every record's mean anomaly is given at. */
+  readonly referenceJd: number;
+  /** The span of the orbits' own SBDB epochs, TDB Julian days: how old the elements are. */
+  readonly elementEpochs: { readonly minJd: number; readonly maxJd: number };
+  /** The classes, in code order; see BELT_CLASSES. */
+  readonly classes: readonly BeltClass[];
+  /** How many of each class were written, keyed by class. */
+  readonly classCounts: Readonly<Partial<Record<BeltClass, number>>>;
+  /**
+   * Asteroids drawn as bodies of their own (see smallBodies.ts), left out here so they
+   * are not drawn twice: their SBDB designations.
+   */
+  readonly excluded: readonly string[];
+  /** Rows SBDB returned that were not written, and why. */
+  readonly dropped: {
+    readonly notElliptic: number;
+    readonly missingElements: number;
+  };
+}
