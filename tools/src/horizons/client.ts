@@ -107,8 +107,19 @@ async function callOnce(params: Readonly<Record<string, string>>): Promise<Horiz
     throw new Error(`Horizons rejected the query (HTTP ${response.status}). ${detail}`.trim());
   }
 
+  // A 200 with no result has been seen once, on 2026-10-19, on the 5,375th one-minute
+  // request for Dawn, ninety minutes into a full run -- and the run died of it, because
+  // this was a plain error and never retried. An answer cut short or a busy server's
+  // stand-in page reads exactly like that, so it is retried like a 503. What it said is
+  // kept, so a query Horizons really rejects with an `error` and a 200 says why.
   if (!isRecord(body) || typeof body['result'] !== 'string') {
-    throw new Error('Horizons response had no `result` field.');
+    const said =
+      isRecord(body) && typeof body['error'] === 'string'
+        ? `: ${body['error'].slice(0, 300)}`
+        : body === null
+          ? ' (not JSON)'
+          : ` (fields: ${isRecord(body) ? Object.keys(body).join(', ') : typeof body})`;
+    throw new RetryableError(`Horizons response had no \`result\` field${said}`);
   }
 
   const signature = body['signature'];
@@ -132,8 +143,10 @@ export async function callHorizons(
   label: string,
 ): Promise<HorizonsResponse> {
   let lastError: unknown;
+  let attempts = 0;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    attempts = attempt;
     try {
       return await callOnce(params);
     } catch (error) {
@@ -150,7 +163,9 @@ export async function callHorizons(
     }
   }
 
+  // The attempts actually made: a query refused outright is one, not MAX_RETRIES.
   throw new Error(
-    `Horizons request for ${label} failed after ${MAX_RETRIES} attempts: ${String(lastError)}`,
+    `Horizons request for ${label} failed after ${attempts} attempt${attempts === 1 ? '' : 's'}: ` +
+      String(lastError),
   );
 }
