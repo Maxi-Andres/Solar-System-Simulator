@@ -114,7 +114,10 @@ const DEFAULT_LAYERS: LayerState = {
   moons: true,
   // Off until asked for: four hundred markers round the giants are not a first view.
   smallMoons: false,
-  asteroids: true,
+  // Off until asked for too: the belt is a map of positions, not a view (see the note in
+  // the Layers panel), and switched on it downloads 3 MB or more. The named asteroids
+  // are in this layer with it; a search for one turns it on.
+  asteroids: false,
   comets: false,
   spacecraft: true,
   constellations: false,

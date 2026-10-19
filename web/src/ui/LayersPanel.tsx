@@ -34,7 +34,12 @@ export function LayersPanel({ belt }: { readonly belt: BeltSource }) {
             checked={layers[layer.id]}
             onToggle={() => toggleLayer(layer.id)}
           >
-            {layer.id === 'asteroids' && layers.asteroids && <BeltDensityPicker belt={belt} />}
+            {layer.id === 'asteroids' && layers.asteroids && (
+              <>
+                <BeltDensityPicker belt={belt} />
+                <BeltNote />
+              </>
+            )}
           </LayerRow>
         ))}
       </div>
@@ -247,6 +252,28 @@ function BeltDensityPicker({ belt }: { readonly belt: BeltSource }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What the belt's dots are, said where they are switched on: the cloud of a million
+ * asteroids is a map of their positions, not a picture. At their real size and light
+ * almost none would show from anywhere this view goes, so nobody should take the dots
+ * for what the eye would see. The About panel has the long version.
+ */
+function BeltNote() {
+  return (
+    <p
+      style={{
+        margin: '0 0 0.4rem 1.65rem',
+        fontSize: '0.64rem',
+        lineHeight: 1.45,
+        color: '#6a6a6a',
+      }}
+    >
+      Not to scale: each dot marks where an asteroid is. Seen for real, almost none would be
+      visible.
+    </p>
   );
 }
 
