@@ -55,6 +55,21 @@ export function satelliteVisibility(
 }
 
 /**
+ * This frame's snapshot, handed from the scene to the labels.
+ *
+ * Both used to call `rebaseVisibleFrame` themselves, with the same arguments in the same
+ * frame -- the same instant, the same camera, which CameraRig has already moved by then,
+ * and the same set of wanted bodies -- and so worked out every position twice. Now the
+ * scene, whose frame runs first, leaves its snapshot here and the labels take it.
+ *
+ * Taken, not read: the labels clear it, so a frame in which the scene did not run finds
+ * nothing rather than last frame's positions, and works them out itself as before.
+ */
+export interface SharedFrame {
+  snapshot: FrameSnapshot | null;
+}
+
+/**
  * One frame's rebased positions, resolving a moon only once it can be seen.
  *
  * Two passes. Everything that is not a moon is resolved first; that is enough to say,

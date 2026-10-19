@@ -50,7 +50,7 @@ import {
   SUN_COLOR_INDEX,
   SUN_OVEREXPOSURE,
 } from './solarGlare.ts';
-import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
+import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
@@ -58,13 +58,17 @@ import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { labelRank } from './LabelProjector.tsx';
 import {
+  countTriangles,
   craftBox,
+  craftModelTriangles,
   craftOrientation,
   disposeObject,
   loadCraftModel,
   MODEL_REQUEST_PX,
   releaseCraftModel,
   SHAPE_SHOWN_PX,
+  shapeShownPx,
+  shapeVisible,
 } from './craftModels.ts';
 import {
   orbitalPeriodDays,
@@ -165,6 +169,8 @@ export interface SolarSystemProps {
    * read it, so a name goes with its marker. See markerDeclutter.ts.
    */
   readonly hiddenMarkers: Set<BodyId>;
+  /** Written every frame: this frame's snapshot, for the labels. See SharedFrame. */
+  readonly sharedFrame: SharedFrame;
 }
 
 /**
@@ -255,6 +261,11 @@ interface BodyHandles {
   craftShape: THREE.Object3D | null;
   craftShapeRequested: boolean;
   /**
+   * The on-screen radius above which the shape is drawn, from its triangles, worked out
+   * once as it arrives. See shapeShownPx.
+   */
+  craftShapeShownPx: number;
+  /**
    * When the craft's shape and the body's maps were last big enough on screen to keep,
    * from performance.now(); see detailRelease.ts. -Infinity until they first are.
    */
@@ -288,20 +299,24 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
   }
   handle.craftShapeRequested = true;
 
-  const attach = (object: THREE.Object3D): void => {
+  // The size it is drawn from is settled here, once: the frame loop compares a number.
+  const attach = (object: THREE.Object3D, triangles: number): void => {
     object.visible = false;
     handle.group.add(object);
     handle.craftShape = object;
+    handle.craftShapeShownPx = shapeShownPx(triangles);
   };
 
   if (shape.model === null) {
     if (shape.boxM !== null) {
-      attach(craftBox(shape.boxM));
+      const box = craftBox(shape.boxM);
+      attach(box, countTriangles(box));
     }
     return;
   }
-  loadCraftModel(shape.model, shape.metresPerUnit, shape.pivot)
-    .then(attach)
+  const model = shape.model;
+  loadCraftModel(model, shape.metresPerUnit, shape.pivot)
+    .then((object) => attach(object, craftModelTriangles(model)))
     .catch((error: unknown) => {
       handle.craftShapeRequested = false;
       console.error(`Could not load the model of ${handle.definition.id}`, error);
@@ -390,6 +405,7 @@ export function SolarSystem({
   lighting,
   visibleKinds,
   hiddenMarkers,
+  sharedFrame,
 }: SolarSystemProps) {
   const rootRef = useRef<THREE.Group>(null);
   const sunLightRef = useRef<THREE.PointLight>(null);
@@ -676,6 +692,7 @@ export function SolarSystem({
         ringRequested: false,
         craftShape: null,
         craftShapeRequested: false,
+        craftShapeShownPx: SHAPE_SHOWN_PX,
         craftShapeWantedAt: -Infinity,
         texturesWantedAt: -Infinity,
         surfaceGround: null,
@@ -726,6 +743,7 @@ export function SolarSystem({
       size.height,
       fov,
     );
+    sharedFrame.snapshot = snapshot;
     const focusRadiusKm = store.body(focus).radiusEquatorialKm;
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
@@ -866,7 +884,15 @@ export function SolarSystem({
       const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
       const sphereOpacity = craft === null && sized ? meshOpacity(pixelRadius) : 0;
       if (handle.craftShape !== null && craftShape !== null) {
-        handle.craftShape.visible = pixelRadius > SHAPE_SHOWN_PX;
+        // A heavy model waits until it covers pixels enough to be worth its triangles --
+        // but only while the marker is there to stand in for it. With the markers off it
+        // is drawn from the floor, a speck, rather than leave nothing. See shapeShownPx.
+        const markerStandsIn = showIcons && ringOpacity > 0.005;
+        handle.craftShape.visible = shapeVisible(
+          pixelRadius,
+          markerStandsIn ? handle.craftShapeShownPx : SHAPE_SHOWN_PX,
+          handle.craftShape.visible,
+        );
         if (handle.craftShape.visible) {
           // Its pointing rule, toward the Earth or the Sun as seen from the craft -- or,
           // for Wind, the south ecliptic pole, a direction rather than a body. A craft on

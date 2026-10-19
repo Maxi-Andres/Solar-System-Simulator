@@ -1,7 +1,13 @@
 import type { TableInfo, VectorTable } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { ChunkedTable, RETRY_AFTER_MS, samplesBetween } from './chunkedTable.ts';
+import {
+  BYTES_PER_SAMPLE,
+  ChunkBudget,
+  ChunkedTable,
+  RETRY_AFTER_MS,
+  samplesBetween,
+} from './chunkedTable.ts';
 
 /**
  * A straight-line body sampled once a day, split into chunks of `size` samples that
@@ -179,5 +185,128 @@ describe('samples over a stretch of time', () => {
     // Reaching back into chunk 0, which is not here.
     expect(table.samplesIfLoaded(1008, 1012)).toBeNull();
     expect(requested).toEqual([1]);
+  });
+});
+
+describe('a budget for the chunks', () => {
+  /** One fixture chunk, in bytes: eleven samples. */
+  const CHUNK = 11 * BYTES_PER_SAMPLE;
+
+  /** A loader that answers at once, from `tables`, and records what it was asked for. */
+  function instantLoader(tables: readonly VectorTable[]) {
+    const requested: number[] = [];
+    const load = (_id: string, index: number): Promise<VectorTable> => {
+      requested.push(index);
+      return Promise.resolve(tables[index]!);
+    };
+    return { load, requested };
+  }
+
+  /** Lets every load already started land. */
+  const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  /** One frame: the body placed at `jd`, then whatever that asked for allowed to land. */
+  async function frame(table: ChunkedTable, jd: number) {
+    let state = table.stateAt(jd);
+    if (state === null) {
+      await table.whenLoadedAt(jd);
+      state = table.stateAt(jd);
+    }
+    await settled();
+    return state;
+  }
+
+  it('stays within it as the clock runs through, never letting go the chunk in use', async () => {
+    const { info, tables } = fixture(6);
+    const budget = new ChunkBudget(2 * CHUNK);
+    const { load, requested } = instantLoader(tables);
+    const table = new ChunkedTable('probe', info, load, undefined, budget);
+
+    const answers = new Map<number, unknown>();
+    for (let jd = 1000; jd <= 1060; jd += 0.5) {
+      answers.set(jd, await frame(table, jd));
+      expect(answers.get(jd)).not.toBeNull();
+      expect(table.isLoaded(table.indexAt(jd))).toBe(true);
+      expect(budget.bytes).toBeLessThanOrEqual(budget.limitBytes);
+    }
+    // Each chunk once, the next one ahead of the clock, and never one twice.
+    expect(requested).toEqual([0, 1, 2, 3, 4, 5]);
+    // Two of six kept: the one in use and the one before it.
+    expect([0, 1, 2, 3, 4, 5].filter((index) => table.isLoaded(index))).toEqual([4, 5]);
+
+    // Back the other way: what was let go is fetched again, and answers the same.
+    for (let jd = 1060; jd >= 1000; jd -= 0.5) {
+      expect(await frame(table, jd)).toEqual(answers.get(jd));
+      expect(budget.bytes).toBeLessThanOrEqual(budget.limitBytes);
+    }
+    expect(requested).toEqual([0, 1, 2, 3, 4, 5, 3, 2, 1, 0]);
+  });
+
+  it('goes over it rather than drop the chunk a body is placed with', async () => {
+    const { info, tables } = fixture(3);
+    const budget = new ChunkBudget(1);
+    const table = new ChunkedTable('probe', info, instantLoader(tables).load, undefined, budget);
+
+    expect(await frame(table, 1005)).not.toBeNull();
+    // Into the last quarter: the next chunk lands, and nothing may make room for it.
+    await frame(table, 1008);
+    expect([table.isLoaded(0), table.isLoaded(1)]).toEqual([true, true]);
+    expect(budget.bytes).toBe(2 * CHUNK);
+
+    // On into chunk 1 and towards chunk 2: now chunk 0 is no longer in use, and goes.
+    await frame(table, 1015);
+    await frame(table, 1018);
+    expect([table.isLoaded(0), table.isLoaded(1), table.isLoaded(2)]).toEqual([false, true, true]);
+    expect(table.stateAt(1015)).not.toBeNull();
+  });
+
+  it('counts a chunk read for a trail as in use', async () => {
+    const { info, tables } = fixture(4);
+    const budget = new ChunkBudget(3 * CHUNK);
+    const table = new ChunkedTable('probe', info, instantLoader(tables).load, undefined, budget);
+    for (const index of [0, 1, 2]) {
+      await table.request(index);
+    }
+
+    // Chunk 0 arrived first, but has just been read; chunk 1 has not been since it came.
+    expect(table.samplesIfLoaded(1001, 1002)).not.toBeNull();
+    await table.request(3);
+    expect([0, 1, 2, 3].filter((index) => table.isLoaded(index))).toEqual([0, 2, 3]);
+
+    // And the same for a single instant, as the stretch at a craft samples it.
+    expect(table.stateIfLoaded(1025)).not.toBeNull();
+    await table.request(1);
+    expect([0, 1, 2, 3].filter((index) => table.isLoaded(index))).toEqual([1, 2, 3]);
+    expect(budget.bytes).toBe(3 * CHUNK);
+  });
+
+  it('is one budget for every table, the least recently read going first', async () => {
+    const { info, tables } = fixture(2);
+    const budget = new ChunkBudget(3 * CHUNK);
+    const a = new ChunkedTable('a', info, instantLoader(tables).load, undefined, budget);
+    const b = new ChunkedTable('b', info, instantLoader(tables).load, undefined, budget);
+
+    // Both bodies start in chunk 0 and move on to chunk 1; a's first chunk was read last
+    // before b's.
+    await frame(a, 1005);
+    await frame(b, 1005);
+    await frame(a, 1015);
+    await frame(b, 1015);
+    expect([a.isLoaded(0), a.isLoaded(1), b.isLoaded(0), b.isLoaded(1)]).toEqual([
+      false,
+      true,
+      true,
+      true,
+    ]);
+    expect(budget.bytes).toBe(3 * CHUNK);
+  });
+
+  it('keeps everything without one', async () => {
+    const { info, tables } = fixture(4);
+    const table = new ChunkedTable('probe', info, instantLoader(tables).load);
+    for (let jd = 1000; jd <= 1040; jd += 1) {
+      await frame(table, jd);
+    }
+    expect([0, 1, 2, 3].every((index) => table.isLoaded(index))).toBe(true);
   });
 });

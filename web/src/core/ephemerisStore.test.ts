@@ -3,8 +3,10 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { BYTES_PER_SAMPLE } from './chunkedTable.ts';
 import {
   EphemerisStore,
+  loadEphemerisData,
   loadEphemerisStore,
   SPEED_OF_LIGHT_KM_S,
   type Fetcher,
@@ -218,6 +220,47 @@ describeWithData('EphemerisStore against the generated data', () => {
           loadPath: null,
         }),
     ).toThrow(/no vector table/);
+  });
+});
+
+describeWithData('the chunks it keeps', () => {
+  it('lets the oldest go within its budget, and fetches them again, the same', async () => {
+    const data = await loadEphemerisData(diskFetcher, '/');
+    const asked: string[] = [];
+    // Room for three full chunks: Phobos's are 1500 samples, 15.6 days each.
+    const budget = 3 * 1500 * BYTES_PER_SAMPLE;
+    const small = new EphemerisStore(
+      {
+        ...data,
+        loadChunk: (id, index) => {
+          asked.push(`${id}/${index}`);
+          return data.loadChunk!(id, index);
+        },
+      },
+      budget,
+    );
+    const start = small.coverage('phobos')!.startJd;
+    const placed = async (jd: number) => {
+      if (small.localState('phobos', jd) === null) {
+        await small.whenLoadedAt(jd, ['phobos']);
+      }
+      return small.localState('phobos', jd);
+    };
+
+    // Ten chunks into its two years, a day into each.
+    const first = await placed(start + 1);
+    expect(first).not.toBeNull();
+    for (let chunk = 1; chunk < 10; chunk += 1) {
+      expect(await placed(start + 1 + chunk * 15.6)).not.toBeNull();
+      expect(small.chunkBytes).toBeLessThanOrEqual(budget);
+    }
+    expect(asked.filter((key) => key === 'phobos/0')).toHaveLength(1);
+
+    // Back to the start: the first chunk was let go, and is fetched again, to exactly the
+    // state it gave before.
+    expect(small.localState('phobos', start + 1)).toBeNull();
+    expect(await placed(start + 1)).toEqual(first);
+    expect(asked.filter((key) => key === 'phobos/0')).toHaveLength(2);
   });
 });
 

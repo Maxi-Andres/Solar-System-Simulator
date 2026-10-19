@@ -7,8 +7,11 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
-import { rebaseVisibleFrame, satelliteVisibility } from './satellites.ts';
+import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
+
+/** Scratch for the frame loop, which must not allocate. */
+const scratch = new THREE.Vector3();
 
 /**
  * Projects each body to screen coordinates and positions its HTML label.
@@ -59,6 +62,8 @@ export interface LabelProjectorProps {
   readonly visibleKinds: ReadonlySet<string>;
   /** Bodies whose marker another covered this frame: their names go too. */
   readonly hiddenMarkers: ReadonlySet<BodyId>;
+  /** The scene's snapshot of this frame, taken rather than worked out again. */
+  readonly sharedFrame: SharedFrame;
   /** Label elements, keyed by body id, owned by the overlay outside the canvas. */
   readonly elements: RefObject<Map<BodyId, HTMLElement | null>>;
 }
@@ -162,14 +167,16 @@ export function LabelProjector({
   visible,
   visibleKinds,
   hiddenMarkers,
+  sharedFrame,
   elements,
 }: LabelProjectorProps) {
   const { camera, size } = useThree();
-  const scratch = new THREE.Vector3();
   // Each label's measured width, kept once it has been on screen. Text does not change.
   const widths = useMemo(() => new Map<BodyId, number>(), []);
   // The labels shown last frame, which keep their places. See `declutterLabels`.
   const held = useMemo(() => new Set<BodyId>(), []);
+  // This frame's, kept between frames only to be cleared and refilled.
+  const shown = useMemo(() => new Set<BodyId>(), []);
   // Re-derived when a planet's small moons arrive, as the scene's is.
   const version = useStoreVersion(store);
   const wanted = useMemo(
@@ -183,11 +190,13 @@ export function LabelProjector({
       return;
     }
 
+    // Taken whether or not it is used, so it is never left over for a later frame.
+    const shared = sharedFrame.snapshot;
+    sharedFrame.snapshot = null;
+
     if (!visible) {
       for (const element of map.values()) {
-        if (element !== null) {
-          element.style.display = 'none';
-        }
+        hide(element);
       }
       held.clear();
       return;
@@ -211,15 +220,12 @@ export function LabelProjector({
 
     const jd = clock.tdbJulianDay;
     const fov = (camera as THREE.PerspectiveCamera).fov;
-    const snapshot = rebaseVisibleFrame(
-      store,
-      focus,
-      jd,
-      wanted,
-      camera.position,
-      size.height,
-      fov,
-    );
+    // The scene's, when it ran this frame for this focus and instant; see SharedFrame.
+    // Otherwise worked out here, exactly as the scene would have.
+    const snapshot =
+      shared !== null && shared.focus === focus && shared.jd === jd
+        ? shared
+        : rebaseVisibleFrame(store, focus, jd, wanted, camera.position, size.height, fov);
 
     const projected: LabelCandidate[] = [];
 
@@ -290,7 +296,7 @@ export function LabelProjector({
     // take the name of the planet it is there to be seen around. And a spacecraft never
     // takes one from either: Juice passing Earth is there to be seen passing Earth.
     // The focused body outranks them all. See `declutterLabels`.
-    const shown = new Set<BodyId>();
+    shown.clear();
 
     for (const candidate of declutterLabels(projected, focus, held)) {
       shown.add(candidate.id);
@@ -299,15 +305,17 @@ export function LabelProjector({
       if (element == null) {
         continue;
       }
-      element.style.display = 'block';
+      if (element.style.display !== 'block') {
+        element.style.display = 'block';
+      }
       element.style.transform = `translate(${candidate.x + candidate.offset}px, ${
         candidate.y
       }px) translateY(-50%)`;
     }
 
     for (const [id, element] of map) {
-      if (element !== null && !shown.has(id)) {
-        element.style.display = 'none';
+      if (!shown.has(id)) {
+        hide(element);
       }
     }
 
@@ -318,4 +326,17 @@ export function LabelProjector({
   });
 
   return null;
+}
+
+/**
+ * Hides a label that is not already hidden.
+ *
+ * Most of the five hundred are hidden on any given frame, and were each told so again
+ * every frame. Reading an inline style back is a property lookup; writing one, even the
+ * same value, is a trip through the style system that no browser promises to skip.
+ */
+function hide(element: HTMLElement | null): void {
+  if (element !== null && element.style.display !== 'none') {
+    element.style.display = 'none';
+  }
 }

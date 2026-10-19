@@ -2,6 +2,9 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import type { Signal } from '../core/signal.ts';
+import type { SimClock } from '../core/time.ts';
+import { useSignal } from '../core/useSignal.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
 import { Presence, useClosing } from './Presence.tsx';
@@ -33,11 +36,23 @@ export interface BodyPickerProps {
   readonly onFocus: (id: BodyId) => void;
   /** Body kinds switched on in the layers panel; the list shows only those. */
   readonly visibleKinds: ReadonlySet<string>;
-  /** The clock's instant, TDB: a spacecraft can only be chosen while it exists. */
-  readonly jd: number;
+  /** The clock: a spacecraft can only be chosen while it exists. */
+  readonly clock: SimClock;
+  /**
+   * The readout beat. Only the open list listens, to keep the craft it greys out in step
+   * with the clock; the breadcrumb has nothing on it that moves with time.
+   */
+  readonly readout: Signal;
 }
 
-export function BodyPicker({ store, focus, onFocus, visibleKinds, jd }: BodyPickerProps) {
+export function BodyPicker({
+  store,
+  focus,
+  onFocus,
+  visibleKinds,
+  clock,
+  readout,
+}: BodyPickerProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -116,7 +131,8 @@ export function BodyPicker({ store, focus, onFocus, visibleKinds, jd }: BodyPick
           store={store}
           focus={focus}
           visibleKinds={visibleKinds}
-          jd={jd}
+          clock={clock}
+          readout={readout}
           onChoose={choose}
         />
       </Presence>
@@ -223,18 +239,23 @@ function BodyList({
   store,
   focus,
   visibleKinds,
-  jd,
+  clock,
+  readout,
   onChoose,
 }: {
   store: EphemerisStore;
   focus: BodyId;
   visibleKinds: ReadonlySet<string>;
-  jd: number;
+  clock: SimClock;
+  readout: Signal;
   onChoose: (id: BodyId) => void;
 }) {
   const closing = useClosing();
   // Redrawn when a planet's small moons arrive.
   useStoreVersion(store);
+  // And on the readout beat while open, for the craft that cannot be chosen right now.
+  useSignal(readout);
+  const jd = clock.tdbJulianDay;
   const focusBody = store.body(focus);
   const system = focusBody.parent ?? focusBody.id;
 
@@ -293,11 +314,11 @@ function BodyList({
         width: '13.5rem',
         maxHeight: '70vh',
         overflowY: 'auto',
-        background: 'rgba(14,14,17,0.94)',
+        // Opaque enough to need no blur behind it. See Panel.tsx.
+        background: 'rgba(14,14,17,0.97)',
         border: '1px solid #262626',
         borderRadius: '0.4rem',
         padding: '0.35rem',
-        backdropFilter: 'blur(6px)',
       }}
     >
       {primaries.map((body) => {

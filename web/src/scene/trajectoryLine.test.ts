@@ -1,4 +1,4 @@
-import type { PathTable } from '@sss/tools/types';
+import type { PathTable, VectorTable } from '@sss/tools/types';
 import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
@@ -407,6 +407,173 @@ describe('a trail drawn from the table', () => {
     expect(asked).toHaveLength(3);
     expect(trail.object.visible).toBe(true);
     expect(trail.object.children).toHaveLength(1);
+  });
+
+  /** LRO's turn, days: 113 minutes. */
+  const ORBITER_PERIOD_DAYS = 113 / 1440;
+
+  /**
+   * An LRO-like orbiter: a 113-minute circle 1,800 km out, sampled every six minutes as
+   * the generator samples the close orbiters, for `days`.
+   */
+  function orbiterTable(days: number): VectorTable {
+    const period = ORBITER_PERIOD_DAYS;
+    const radius = 1800;
+    const motion = (2 * Math.PI) / (period * SECONDS_PER_DAY);
+    const t: number[] = [];
+    for (let k = 0; k * 6 <= days * 1440; k += 1) {
+      t.push(START + (k * 6) / 1440);
+    }
+    const angle = (time: number) => motion * (time - START) * SECONDS_PER_DAY;
+    return {
+      id: 'orbiter',
+      horizonsId: '-85',
+      center: '500@301',
+      count: t.length,
+      t,
+      x: t.map((time) => radius * Math.cos(angle(time))),
+      y: t.map((time) => radius * Math.sin(angle(time))),
+      z: t.map(() => 0),
+      vx: t.map((time) => -radius * motion * Math.sin(angle(time))),
+      vy: t.map((time) => radius * motion * Math.cos(angle(time))),
+      vz: t.map(() => 0),
+    };
+  }
+
+  /** Its samples from `startJd` to `stopJd`, as the store's loadedSamples gives them. */
+  function stretchOf(table: VectorTable, startJd: number, stopJd: number): PathTable {
+    const step = table.t[1]! - table.t[0]!;
+    const first = Math.max(Math.floor((startJd - table.t[0]!) / step), 0);
+    const last = Math.min(Math.ceil((stopJd - table.t[0]!) / step), table.count - 1);
+    const pick = <T>(column: readonly T[]) => column.slice(first, last + 1);
+    return tablePath(
+      {
+        ...table,
+        t: pick(table.t),
+        x: pick(table.x),
+        y: pick(table.y),
+        z: pick(table.z),
+        vx: pick(table.vx),
+        vy: pick(table.vy),
+        vz: pick(table.vz),
+        count: last - first + 1,
+      },
+      [],
+      1,
+    );
+  }
+
+  type Lines = [THREE.LineSegments, THREE.Line];
+  const linesOf = (trail: TableTrail) => trail.object.children[0]!.children as unknown as Lines;
+
+  it('is rebuilt into the same line, however fast the clock runs', () => {
+    // A week a second at 60 fps for five seconds: 2.8 hours a frame, more than a whole
+    // turn, so every frame needs a stretch of the table it has not drawn before.
+    const table = orbiterTable(40);
+    let rebuilds = 0;
+    const trail = new TableTrail((startJd, stopJd) => {
+      rebuilds += 1;
+      return stretchOf(table, startJd, stopJd);
+    }, '#ffffff');
+    trail.setFade(0.5);
+    const origin = { x: 0, y: 0, z: 0 };
+    const lines = new Set<unknown>();
+    const geometries = new Set<unknown>();
+    const frames = 300;
+    for (let frame = 0; frame < frames; frame += 1) {
+      trail.update(START + 1 + (frame * 7) / 60, origin, () => null, ORBITER_PERIOD_DAYS);
+      lines.add(trail.object.children[0]);
+      geometries.add(linesOf(trail)[0].geometry);
+    }
+    // Every frame a new stretch, as before...
+    expect(rebuilds).toBe(frames);
+    // ...but one line, where there were three hundred, each a geometry, five buffers and
+    // two materials: its buffers sized on the first builds and reused from there.
+    expect(lines.size).toBe(1);
+    expect(geometries.size).toBeLessThanOrEqual(2);
+    expect(trail.object.children).toHaveLength(1);
+    // And still at the strength it was given before any of it.
+    const material = linesOf(trail)[0].material as THREE.ShaderMaterial;
+    expect(material.uniforms.uOpacity!.value).toBeCloseTo(TRAIL_OPACITY / 2, 12);
+  });
+
+  it('draws, rebuilt in place, exactly what a new line would', () => {
+    const table = orbiterTable(10);
+    let last: PathTable | null = null;
+    const trail = new TableTrail((startJd, stopJd) => {
+      last = stretchOf(table, startJd, stopJd);
+      return last;
+    }, '#ffffff');
+    const origin = { x: 1e5, y: -2e4, z: 3 };
+    const sample = (jd: number) => interpolateState(table, jd)?.position ?? null;
+
+    // A rate that rebuilds every frame, a week a second, and then a minute a frame, which
+    // rebuilds every half hour of it.
+    for (const [from, step] of [
+      [START + 2, 7 / 60],
+      [START + 6, 1 / 1440],
+    ] as const) {
+      for (let frame = 0; frame < 40; frame += 1) {
+        const jd = from + frame * step;
+        trail.update(jd, origin, sample, ORBITER_PERIOD_DAYS);
+        const fresh = new TrajectoryLine(last!, '#ffffff');
+        fresh.update(jd, origin, sample, ORBITER_PERIOD_DAYS);
+
+        const [chords, near] = linesOf(trail);
+        const [freshChords, freshNear] = fresh.object.children as unknown as Lines;
+        // The same chords drawn, from the same vertices, at the same age...
+        const range = chords.geometry.drawRange;
+        expect(range).toEqual(freshChords.geometry.drawRange);
+        expect(range.count).toBeGreaterThan(0);
+        for (const name of ['position', 'positionLow', 'aDays']) {
+          const size = freshChords.geometry.getAttribute(name).itemSize;
+          const drawn = (geometry: THREE.BufferGeometry) =>
+            Array.from(
+              (geometry.getAttribute(name).array as Float32Array).subarray(
+                range.start * size,
+                (range.start + range.count) * size,
+              ),
+            );
+          expect(drawn(chords.geometry)).toEqual(drawn(freshChords.geometry));
+        }
+        // ...the same stretch at the craft...
+        const nearCount = near.geometry.drawRange.count;
+        expect(near.geometry.drawRange).toEqual(freshNear.geometry.drawRange);
+        const nearOf = (line: THREE.Line) =>
+          Array.from(
+            (line.geometry.getAttribute('position').array as Float32Array).subarray(
+              0,
+              nearCount * 3,
+            ),
+          );
+        expect(nearOf(near)).toEqual(nearOf(freshNear));
+        // ...and the same fade.
+        const uniforms = (chords.material as THREE.ShaderMaterial).uniforms;
+        expect(uniforms.uNowDays!.value).toBe(fresh.material.uniforms.uNowDays!.value);
+        expect(uniforms.uSpanDays!.value).toBe(fresh.material.uniforms.uSpanDays!.value);
+        fresh.dispose();
+      }
+    }
+  });
+
+  it('uploads only the chords a rebuild wrote', () => {
+    const table = orbiterTable(10);
+    const trail = new TableTrail((startJd, stopJd) => stretchOf(table, startJd, stopJd), '#ffffff');
+    const origin = { x: 0, y: 0, z: 0 };
+    // Two turns' worth of buffer, then a stretch for one turn written into it.
+    trail.update(START + 2, origin, () => null, 2 * ORBITER_PERIOD_DAYS);
+    const [chords] = linesOf(trail);
+    const position = chords.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const version = position.version;
+    trail.update(START + 4, origin, () => null, ORBITER_PERIOD_DAYS);
+    expect(linesOf(trail)[0].geometry.getAttribute('position')).toBe(position);
+    expect(position.version).toBeGreaterThan(version);
+    const { start, count } = chords.geometry.drawRange;
+    expect(position.updateRanges).toHaveLength(1);
+    expect(position.updateRanges[0]!.start).toBe(0);
+    // Every chord drawn, and not the room left after them.
+    expect(position.updateRanges[0]!.count).toBeGreaterThanOrEqual((start + count) * 3);
+    expect(position.updateRanges[0]!.count).toBeLessThan(position.array.length);
   });
 
   it('shows nothing while the data for it is not here', () => {

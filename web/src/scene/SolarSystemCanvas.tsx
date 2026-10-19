@@ -4,10 +4,14 @@ import { Canvas } from '@react-three/fiber';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
-import { useMemo, type RefObject } from 'react';
+import { useEffect, useMemo, type RefObject } from 'react';
+
+import { renderDemand } from '../core/renderDemand.ts';
 
 import { CameraRig } from './CameraRig.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
+import { RenderOnDemand } from './RenderOnDemand.tsx';
+import type { SharedFrame } from './satellites.ts';
 // Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
@@ -30,7 +34,32 @@ import { Starfield } from './Starfield.tsx';
  *
  * The camera always orbits the origin, because the floating origin has already put
  * the focused body there.
+ *
+ * And two settings decide how much of the machine it takes:
+ *
+ *  - `frameloop="demand"`: a frame is drawn when something may have changed, not sixty
+ *    times a second regardless. With the clock running that is every frame anyway; paused
+ *    and untouched, it is none. See renderDemand.ts and RenderOnDemand.tsx.
+ *  - `dpr`, capped at `MAX_PIXEL_RATIO`.
  */
+
+/**
+ * The most device pixels the canvas draws per CSS pixel.
+ *
+ * Fragment cost goes with the square of it: a 3x phone or a 4K laptop screen drawn at its
+ * full ratio shades 2.25 times what it would at 2, through the same atmosphere ray march
+ * and ring shader. Past 2 the extra detail is below what an eye resolves at arm's length
+ * -- and the text, the one thing on screen where it would show, is DOM, laid over the
+ * canvas and drawn by the browser at whatever the screen has. Below the cap nothing
+ * changes: the reference laptop is 1.25, and draws at 1.25 as before.
+ *
+ * It is also react-three-fiber's own default, `[1, 2]`, so writing it down changes no
+ * pixel; it is here so the choice is made in this file rather than inherited. Going
+ * lower is not free: at 1 the reference laptop would shade 36 % fewer pixels, and the
+ * browser would stretch the picture by 1.25 to fit -- every star, orbit line and limb
+ * softened, which is a cost in exactly what this project exists to show.
+ */
+const MAX_PIXEL_RATIO = 2;
 
 export { FOV_DEG };
 
@@ -66,9 +95,32 @@ export function SolarSystemCanvas({
   // The scene writes it, the labels read it: which markers lost their spot this frame.
   // SolarSystem's frame runs before LabelProjector's, being declared first.
   const hiddenMarkers = useMemo(() => new Set<BodyId>(), []);
+  // The same way, this frame's rebased positions: worked out once, by the scene, and
+  // read by the labels instead of being worked out again. See SharedFrame.
+  const sharedFrame = useMemo<SharedFrame>(() => ({ snapshot: null }), []);
+
+  // Anything the scene is told changes what it draws, and almost none of it reaches a
+  // react-three-fiber prop, which would ask for a frame by itself: the scene reads these
+  // inside its frame loop. So a change asks here.
+  useEffect(() => {
+    renderDemand.request();
+  }, [
+    store,
+    stars,
+    clock,
+    focus,
+    showOrbits,
+    showTrails,
+    showIcons,
+    showLabels,
+    lighting,
+    visibleKinds,
+  ]);
 
   return (
     <Canvas
+      frameloop="demand"
+      dpr={[1, MAX_PIXEL_RATIO]}
       gl={{
         logarithmicDepthBuffer: true,
         antialias: true,
@@ -90,6 +142,7 @@ export function SolarSystemCanvas({
         lighting={lighting}
         visibleKinds={visibleKinds}
         hiddenMarkers={hiddenMarkers}
+        sharedFrame={sharedFrame}
       />
       <LabelProjector
         store={store}
@@ -98,6 +151,7 @@ export function SolarSystemCanvas({
         visible={showLabels}
         visibleKinds={visibleKinds}
         hiddenMarkers={hiddenMarkers}
+        sharedFrame={sharedFrame}
         elements={labelElements}
       />
       <CameraRig
@@ -112,6 +166,8 @@ export function SolarSystemCanvas({
         minDistance={radiusUnits * 1.05}
         maxDistance={kmToUnits(MAX_VIEW_DISTANCE_KM)}
       />
+      {/* Decides whether another frame follows this one. See renderDemand.ts. */}
+      <RenderOnDemand store={store} />
     </Canvas>
   );
 }

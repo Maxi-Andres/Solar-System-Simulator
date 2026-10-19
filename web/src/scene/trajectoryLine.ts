@@ -333,18 +333,38 @@ function trailMaterial(vertexShader: string, uniforms: Record<string, THREE.IUni
   });
 }
 
+/**
+ * The path spans the Solar System; its bounding sphere says nothing about whether any of
+ * it is on screen, and recomputing it on every rebuild would be waste.
+ */
+function unbounded(geometry: THREE.BufferGeometry): void {
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
+}
+
 /** Room for the stretch at the craft, in vertices. */
 const CLOSE_IN_CAPACITY = MAX_CHORDS_PER_INTERVAL + CLOSE_IN_STEPS + 2;
+
+/**
+ * Room a line given a new path makes beyond what that path needs, as a fraction of it.
+ *
+ * Only a table trail is given new paths (see TrajectoryLine.setPath), and each is about
+ * the same length -- one turn and a margin -- give or take how the turn falls across the
+ * samples. Half as much again means its buffers are sized on the first couple of
+ * builds and then reused, rather than reallocated whenever a turn needs one more chord.
+ */
+export const PATH_HEADROOM = 0.5;
 
 export class TrajectoryLine {
   /** Everything this line draws; add it to the scene once. */
   readonly object = new THREE.Group();
 
-  readonly #path: PathTable;
+  #path!: PathTable;
   /** The tessellation's index, kept; its float64 points are not, once split. */
-  readonly #firstChord: Int32Array;
-  readonly #chordStopJd: Float64Array;
-  readonly #gaps: ReadonlySet<number>;
+  #firstChord!: Int32Array;
+  #chordStopJd!: Float64Array;
+  #gaps!: ReadonlySet<number>;
+  /** Chords the trail's buffers have room for; the path may use fewer. */
+  #capacity = -1;
   /** The trail's chords, drawn up to the interval the craft is in. */
   readonly #trail: THREE.LineSegments;
   /** That interval, from its start to the craft, redrawn every frame. */
@@ -358,12 +378,6 @@ export class TrajectoryLine {
   #nearOriginKm: Vec3 = { x: Number.NaN, y: Number.NaN, z: Number.NaN };
 
   constructor(path: PathTable, color: string) {
-    this.#path = path;
-    this.#gaps = new Set(path.gaps);
-    const { pointsKm, chordStartJd, chordStopJd, firstChord } = tessellatePath(path);
-    this.#firstChord = firstChord;
-    this.#chordStopJd = chordStopJd;
-
     const uniforms = fadeUniforms(color);
     this.#material = trailMaterial(TRAIL_VERTEX_SHADER, {
       ...uniforms,
@@ -373,28 +387,9 @@ export class TrajectoryLine {
     });
     this.#nearMaterial = trailMaterial(NEAR_VERTEX_SHADER, uniforms);
 
-    // splitDouble, inlined: a close orbiter's trail is rebuilt every frame at high rates,
-    // and a tuple per coordinate there is garbage by the hundred thousand.
-    const high = new Float32Array(pointsKm.length);
-    const low = new Float32Array(pointsKm.length);
-    for (let k = 0; k < pointsKm.length; k += 1) {
-      const value = pointsKm[k]!;
-      const rounded = Math.fround(value);
-      high[k] = rounded;
-      low[k] = value - rounded;
-    }
-
-    // Each chord's two ends, as days since the path began: what the fade is read from.
-    const days = new Float32Array(chordStartJd.length * 2);
-    for (let chord = 0; chord < chordStartJd.length; chord += 1) {
-      days[chord * 2] = chordStartJd[chord]! - path.t[0]!;
-      days[chord * 2 + 1] = chordStopJd[chord]! - path.t[0]!;
-    }
-    const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', new THREE.BufferAttribute(high, 3));
-    trailGeometry.setAttribute('positionLow', new THREE.BufferAttribute(low, 3));
-    trailGeometry.setAttribute('aDays', new THREE.BufferAttribute(days, 1));
-    this.#trail = this.#prepare(new THREE.LineSegments(trailGeometry, this.#material));
+    this.#trail = this.#prepare(new THREE.LineSegments(new THREE.BufferGeometry(), this.#material));
+    // A path file's line is built once, so its buffers are exactly its size.
+    this.#fill(path, 0);
 
     const nearGeometry = new THREE.BufferGeometry();
     nearGeometry.setAttribute(
@@ -410,12 +405,90 @@ export class TrajectoryLine {
   }
 
   #prepare<T extends THREE.Line>(line: T): T {
-    // The path spans the Solar System; its bounding sphere says nothing about whether
-    // any of it is on screen, and recomputing it on every rebuild would be waste.
-    line.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
+    unbounded(line.geometry);
     line.frustumCulled = false;
     this.object.add(line);
     return line;
+  }
+
+  /**
+   * Draws `path` from now on instead, in the same line: the same materials, and the same
+   * buffers while they have room, rewritten rather than replaced.
+   *
+   * For a table trail, which needs a new stretch of its table whenever the clock leaves
+   * the last one -- at a week a second, every frame. A new line each time was a new
+   * geometry, five buffers and two materials created and the old ones disposed, sixty
+   * times a second per orbiter, on a GPU that shares the laptop's memory. Rewriting is the
+   * same chords from the same samples, so the same line on screen; only what it costs
+   * changes.
+   */
+  setPath(path: PathTable): void {
+    this.#fill(path, PATH_HEADROOM);
+  }
+
+  /** Tessellates `path` into the trail's buffers, growing them by `headroom` if needed. */
+  #fill(path: PathTable, headroom: number): void {
+    this.#path = path;
+    this.#gaps = new Set(path.gaps);
+    const { pointsKm, chordStartJd, chordStopJd, firstChord } = tessellatePath(path);
+    this.#firstChord = firstChord;
+    this.#chordStopJd = chordStopJd;
+    // The stretch at the craft was drawn from the old path's intervals.
+    this.#nearInterval = -1;
+    this.#nearJd = Number.NaN;
+
+    const chords = chordStartJd.length;
+    let geometry = this.#trail.geometry;
+    const fresh = chords > this.#capacity;
+    if (fresh) {
+      // A GPU buffer cannot grow in place: a bigger one is a new geometry.
+      geometry.dispose();
+      this.#capacity = Math.ceil(chords * (1 + headroom));
+      geometry = new THREE.BufferGeometry();
+      // Two ends a chord: three coordinates each, and one instant each.
+      const room = (perEnd: number) =>
+        new THREE.BufferAttribute(new Float32Array(this.#capacity * 2 * perEnd), perEnd);
+      geometry.setAttribute('position', room(3));
+      geometry.setAttribute('positionLow', room(3));
+      geometry.setAttribute('aDays', room(1));
+      unbounded(geometry);
+      this.#trail.geometry = geometry;
+    }
+    const highAttribute = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const lowAttribute = geometry.getAttribute('positionLow') as THREE.BufferAttribute;
+    const daysAttribute = geometry.getAttribute('aDays') as THREE.BufferAttribute;
+
+    // splitDouble, inlined: a close orbiter's trail is rebuilt every frame at high rates,
+    // and a tuple per coordinate there is garbage by the hundred thousand.
+    const high = highAttribute.array as Float32Array;
+    const low = lowAttribute.array as Float32Array;
+    for (let k = 0; k < pointsKm.length; k += 1) {
+      const value = pointsKm[k]!;
+      const rounded = Math.fround(value);
+      high[k] = rounded;
+      low[k] = value - rounded;
+    }
+
+    // Each chord's two ends, as days since the path began: what the fade is read from.
+    const days = daysAttribute.array as Float32Array;
+    for (let chord = 0; chord < chords; chord += 1) {
+      days[chord * 2] = chordStartJd[chord]! - path.t[0]!;
+      days[chord * 2 + 1] = chordStopJd[chord]! - path.t[0]!;
+    }
+
+    // A new buffer goes up whole on its first draw. A reused one sends only the chords
+    // this path has; what is past them is never in the draw range (see update).
+    if (!fresh) {
+      for (const [attribute, perChord] of [
+        [highAttribute, 6],
+        [lowAttribute, 6],
+        [daysAttribute, 2],
+      ] as const) {
+        attribute.clearUpdateRanges();
+        attribute.addUpdateRange(0, chords * perChord);
+        attribute.needsUpdate = true;
+      }
+    }
   }
 
   /** Chords in the static line, for tests and for the curious. */
@@ -588,6 +661,16 @@ export const TABLE_TRAIL_FALLBACK_DAYS = 1;
  * The same line as TrajectoryLine, built only over the stretch the trail covers -- one
  * turn, plus a margin -- and rebuilt as the clock moves on. See PathInfo.count in tools
  * for why: two hours of MRO's trail do not need six months of its orbits.
+ *
+ * Rebuilt into the same line (see TrajectoryLine.setPath), because at high rates it is
+ * rebuilt every frame: at a week a second the clock moves 2.8 hours a frame at 60 fps,
+ * one and a half of LRO's 113-minute turns, so each frame's trail is a turn that was not
+ * on screen the frame before. Building further ahead instead, to rebuild less often,
+ * would not save work: it has to tessellate every turn the clock sweeps through -- a week
+ * of samples a second, plus each build's overlap -- where rebuilding each frame
+ * tessellates only the turn and a half drawn: 7.1 days of LRO's samples a second at any
+ * rate this fast, and fewer than building ahead at any faster one. What a rebuild must
+ * not cost is new GPU objects, and with setPath it does not.
  */
 export class TableTrail {
   readonly object = new THREE.Group();
@@ -625,13 +708,13 @@ export class TableTrail {
         this.object.visible = false;
         return;
       }
-      this.#line?.dispose();
-      if (this.#line !== null) {
-        this.object.remove(this.#line.object);
+      if (this.#line === null) {
+        this.#line = new TrajectoryLine(path, this.#color);
+        this.#line.setFade(this.#fade);
+        this.object.add(this.#line.object);
+      } else {
+        this.#line.setPath(path);
       }
-      this.#line = new TrajectoryLine(path, this.#color);
-      this.#line.setFade(this.#fade);
-      this.object.add(this.#line.object);
       this.#builtStart = startJd;
       this.#builtStop = stopJd;
     }

@@ -29,11 +29,18 @@ export function Panel({
         width,
         maxHeight: '80vh',
         overflowY: 'auto',
-        background: 'rgba(14,14,17,0.94)',
+        // No backdrop blur, and that is a performance decision. Blurring what lies behind
+        // a panel means blurring it again every time that changes, and behind every panel
+        // is a WebGL canvas that redraws whenever the scene moves -- so the compositor
+        // re-blurred this rectangle up to sixty times a second, on a laptop whose GPU
+        // shares the CPU's memory. At 94 % opacity the blur only ever touched the 6 % that
+        // showed through;
+        // 97 % halves that, and what is left of a star behind the panel is too faint to
+        // tell sharp from soft.
+        background: 'rgba(14,14,17,0.97)',
         border: '1px solid #262626',
         borderRadius: '0.4rem',
         padding: '1rem 1.1rem',
-        backdropFilter: 'blur(6px)',
       }}
     >
       <div

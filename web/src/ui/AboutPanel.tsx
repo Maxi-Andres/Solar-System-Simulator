@@ -75,8 +75,8 @@ export function AboutPanel({ store, stars }: { store: EphemerisStore; stars: Sta
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'rgba(4,4,6,0.93)',
-        backdropFilter: 'blur(3px)',
+        // No backdrop blur over a canvas that redraws every frame; see Panel.tsx.
+        background: 'rgba(4,4,6,0.96)',
       }}
     >
       <div

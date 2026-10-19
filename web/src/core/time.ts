@@ -187,6 +187,16 @@ export class SimClock {
     return this.#mode === 'live';
   }
 
+  /**
+   * Current simulated instant, as milliseconds since the Unix epoch (UTC).
+   *
+   * The same instant as `date` without allocating one: the frame loop compares it every
+   * animation frame to learn whether the picture has anything new to show.
+   */
+  get epochMs(): number {
+    return this.#epochMs;
+  }
+
   /** Current simulated instant, as a UTC Date. */
   get date(): Date {
     return new Date(this.#epochMs);

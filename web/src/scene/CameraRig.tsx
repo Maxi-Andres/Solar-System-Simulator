@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
+import { renderDemand } from '../core/renderDemand.ts';
 import { useViewStore } from '../state/store.ts';
 
 /**
@@ -37,6 +38,18 @@ const ROTATE_SPEED = 0.005;
 const ZOOM_PER_WHEEL_NOTCH = 0.0012;
 /** Fraction of the remaining delta applied per frame; higher is snappier. */
 const DAMPING = 0.18;
+
+/**
+ * How close to its target distance the camera must be, as a fraction of it, before it
+ * stops asking for frames.
+ *
+ * The easing above is geometric and never arrives, so "settled" has to be chosen. A
+ * hundred-thousandth of the distance changes the size of anything on screen by a
+ * hundred-thousandth: a hundredth of a pixel across a planet that fills the window. A
+ * wheel notch is about 13 %, which closes to this in under fifty frames. See
+ * renderDemand.ts.
+ */
+const SETTLED_FRACTION = 1e-5;
 
 export function CameraRig({
   fovDeg,
@@ -90,6 +103,7 @@ export function CameraRig({
     }
     targetDistance.current = THREE.MathUtils.clamp(framingDistance, minDistance, maxDistance);
     offset.current.normalize().multiplyScalar(targetDistance.current);
+    renderDemand.request();
   }, [focusKey, framingDistance, minDistance, maxDistance]);
 
   useEffect(() => {
@@ -129,6 +143,7 @@ export function CameraRig({
       // Rotating up alongside the offset is the whole trick: the frame tumbles with
       // the camera instead of fighting a fixed vertical.
       up.current.applyQuaternion(rotation).normalize();
+      renderDemand.request();
     };
 
     const endDrag = (event: PointerEvent): void => {
@@ -160,6 +175,7 @@ export function CameraRig({
         minDistance,
         maxDistance,
       );
+      renderDemand.request();
     };
 
     element.addEventListener('pointerdown', onPointerDown);
@@ -194,6 +210,11 @@ export function CameraRig({
     const current = offset.current.length();
     const eased = current + (targetDistance.current - current) * DAMPING;
     offset.current.setLength(eased);
+    // Still on its way: the next frame is part of the motion, whatever else is idle. The
+    // toolbar's impulse needs nothing here -- it changed the view store, which asked.
+    if (Math.abs(targetDistance.current - eased) > targetDistance.current * SETTLED_FRACTION) {
+      renderDemand.request();
+    }
 
     camera.position.copy(offset.current);
     camera.up.copy(up.current);

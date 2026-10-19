@@ -181,6 +181,21 @@ describe('SimClock', () => {
     expect(clock.tdbJulianDay).toBeGreaterThan(utcJd);
     expect(clock.tdbJulianDay).toBe(utcToTdb(utcJd));
   });
+
+  it('exposes its instant as a number that changes exactly when the instant does', () => {
+    // The frame loop redraws on a change of this, so it must hold still while paused and
+    // move on a date typed in, which happens between ticks.
+    const clock = new SimClock(new Date('2026-08-24T10:00:00Z'));
+    expect(clock.epochMs).toBe(clock.date.getTime());
+
+    clock.pause();
+    const paused = clock.epochMs;
+    clock.tick(1, new Date('2026-08-24T11:00:00Z'));
+    expect(clock.epochMs).toBe(paused);
+
+    clock.setDate(new Date('2030-01-01T00:00:00Z'));
+    expect(clock.epochMs).toBe(Date.UTC(2030, 0, 1));
+  });
 });
 
 describe('LEAP_SECONDS table', () => {

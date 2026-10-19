@@ -5,9 +5,54 @@ import { CATALOG } from '@sss/tools/catalog';
 import type { CraftShape } from '@sss/tools/types';
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { craftOrientation, ESA_MODEL_CREDIT } from './craftModels.ts';
+import {
+  countTriangles,
+  craftModelTriangles,
+  craftOrientation,
+  ESA_MODEL_CREDIT,
+  loadCraftModel,
+  PLANET_SPHERE_TRIANGLES,
+  releaseCraftModel,
+  SHAPE_KEEP_FRACTION,
+  SHAPE_SHOWN_PX,
+  shapeShownPx,
+  shapeVisible,
+} from './craftModels.ts';
+import { MARKER_FULL_PX, MESH_FADE_START_PX } from './scale.ts';
+
+/**
+ * The loader, for the one test that loads through `loadCraftModel`: a scene of a box, a
+ * box instanced three times and a cloud of points, which records every walk over it.
+ * The tests that measure the real files read them directly and never get here.
+ */
+const loadedScenes: { walks: number }[] = [];
+function modelScene(): THREE.Object3D {
+  const scene = new THREE.Group();
+  const record = { walks: 0 };
+  loadedScenes.push(record);
+  const traverse = scene.traverse.bind(scene);
+  scene.traverse = (callback) => {
+    record.walks += 1;
+    traverse(callback);
+  };
+  const material = new THREE.MeshStandardMaterial();
+  scene.add(new THREE.Mesh(new THREE.BoxGeometry(), material));
+  scene.add(new THREE.InstancedMesh(new THREE.BoxGeometry(), material, 3));
+  scene.add(new THREE.Points(new THREE.BoxGeometry(), new THREE.PointsMaterial()));
+  return scene;
+}
+vi.mock('three/examples/jsm/loaders/GLTFLoader.js', () => ({
+  GLTFLoader: class {
+    setMeshoptDecoder() {
+      return this;
+    }
+    loadAsync() {
+      return Promise.resolve({ scene: modelScene() });
+    }
+  },
+}));
 
 const MODELS = join(import.meta.dirname, '../../public/models');
 
@@ -134,10 +179,15 @@ interface Gltf {
     readonly translation?: readonly number[];
     readonly rotation?: readonly number[];
     readonly scale?: readonly number[];
+    readonly extensions?: {
+      readonly EXT_mesh_gpu_instancing?: { readonly attributes: Record<string, number> };
+    };
   }[];
   readonly meshes: readonly {
     readonly primitives: readonly {
       readonly attributes: { readonly POSITION: number };
+      readonly indices?: number;
+      readonly mode?: number;
     }[];
   }[];
   readonly accessors: readonly {
@@ -419,6 +469,136 @@ describe('craftOrientation', () => {
     const q = craftOrientation(parker, toSun);
     const expected = new THREE.Vector3(toSun.x, toSun.y, toSun.z).normalize();
     expect(turned(parker.pointingAxis, q).distanceTo(expected)).toBeLessThan(1e-9);
+  });
+});
+
+/**
+ * Triangles a model file draws, from its JSON alone: every primitive of every node in
+ * the scene, times the node's instances. The same count `countTriangles` makes of the
+ * loaded scene, since the loader turns each primitive into one mesh and each instanced
+ * node into one InstancedMesh. Every primitive in these files is a triangle list.
+ */
+async function trianglesOf(file: string): Promise<number> {
+  const { gltf } = await readGlb(file);
+  let triangles = 0;
+  const visit = (index: number): void => {
+    const node = gltf.nodes[index]!;
+    if (node.mesh !== undefined) {
+      const instancing = node.extensions?.EXT_mesh_gpu_instancing;
+      const copies =
+        instancing === undefined
+          ? 1
+          : gltf.accessors[Object.values(instancing.attributes)[0]!]!.count;
+      for (const primitive of gltf.meshes[node.mesh]!.primitives) {
+        expect(primitive.mode ?? 4, file).toBe(4);
+        const corners = gltf.accessors[primitive.indices ?? primitive.attributes.POSITION]!.count;
+        triangles += (corners / 3) * copies;
+      }
+    }
+    for (const child of node.children ?? []) {
+      visit(child);
+    }
+  };
+  for (const root of gltf.scenes[gltf.scene ?? 0]!.nodes) {
+    visit(root);
+  }
+  return triangles;
+}
+
+/**
+ * The heaviest models and a few light ones, as measured on the files; the numbers
+ * craftModels.ts reasons with. A re-export that changed them should be looked at.
+ */
+const TRIANGLES: Record<string, number> = {
+  'juice.glb': 959_923,
+  'hera.glb': 479_908,
+  'dart.glb': 446_397,
+  'europa-clipper.glb': 203_662,
+  'perseverance.glb': 199_471,
+  'osiris-rex.glb': 184_407,
+  'insight.glb': 178_079,
+  'euclid.glb': 136_061,
+  'orion.glb': 112_517,
+  'bepicolombo.glb': 111_536,
+  'imap.glb': 66_405,
+  'voyager.glb': 20_390,
+  'juno.glb': 17_124,
+  'solar-orbiter.glb': 9_596,
+  'capstone.glb': 5_025,
+};
+
+describe('when a shape is worth its triangles', () => {
+  it('measures the yardstick on a planet’s own sphere, 64 segments by 32', () => {
+    const sphere = new THREE.SphereGeometry(1, 64, 32);
+    expect(sphere.index!.count / 3).toBe(PLANET_SPHERE_TRIANGLES);
+    // Drawn whole down to the same radius as the lightest shape.
+    expect(SHAPE_SHOWN_PX).toBe(MESH_FADE_START_PX);
+  });
+
+  it.each(Object.keys(TRIANGLES))('%s draws the triangles the reasoning uses', async (file) => {
+    expect(await trianglesOf(file)).toBe(TRIANGLES[file]);
+  });
+
+  it('draws a sphere’s worth of triangles from where the sphere is drawn', () => {
+    expect(shapeShownPx(PLANET_SPHERE_TRIANGLES)).toBeCloseTo(MESH_FADE_START_PX, 12);
+    // Four times the triangles, twice the radius: the same triangles per pixel.
+    expect(shapeShownPx(4 * PLANET_SPHERE_TRIANGLES)).toBeCloseTo(2 * MESH_FADE_START_PX, 12);
+  });
+
+  it('draws a light model early and a heavy one only from where the marker fades', () => {
+    expect(shapeShownPx(TRIANGLES['capstone.glb']!)).toBeCloseTo(1.69, 2);
+    expect(shapeShownPx(TRIANGLES['solar-orbiter.glb']!)).toBeCloseTo(2.33, 2);
+    expect(shapeShownPx(TRIANGLES['voyager.glb']!)).toBeCloseTo(3.4, 2);
+    for (const file of ['juice.glb', 'orion.glb', 'europa-clipper.glb', 'perseverance.glb']) {
+      expect(shapeShownPx(TRIANGLES[file]!), file).toBe(MARKER_FULL_PX);
+    }
+  });
+
+  it('never waits past the marker’s fade, nor draws below the floor', () => {
+    expect(shapeShownPx(1e9)).toBe(MARKER_FULL_PX);
+    // A box of a craft with no model: 12 triangles.
+    expect(shapeShownPx(12)).toBe(SHAPE_SHOWN_PX);
+    expect(shapeShownPx(0)).toBe(SHAPE_SHOWN_PX);
+  });
+
+  it('holds a shape it is drawing a little below where it started drawing it', () => {
+    const shownPx = MARKER_FULL_PX;
+    const keptPx = shownPx * SHAPE_KEEP_FRACTION;
+    // Growing: drawn only past the threshold.
+    expect(shapeVisible(shownPx - 0.01, shownPx, false)).toBe(false);
+    expect(shapeVisible(shownPx + 0.01, shownPx, false)).toBe(true);
+    // Shrinking: kept through the band, so it does not blink at the edge.
+    expect(shapeVisible(shownPx - 0.01, shownPx, true)).toBe(true);
+    expect(shapeVisible(keptPx + 0.01, shownPx, true)).toBe(true);
+    expect(shapeVisible(keptPx - 0.01, shownPx, true)).toBe(false);
+    // Both edges where the marker is fully drawn over it.
+    expect(keptPx).toBeLessThan(MARKER_FULL_PX);
+  });
+
+  it('counts triangles in every mesh and every instance, and nothing else', () => {
+    const material = new THREE.MeshBasicMaterial();
+    const root = new THREE.Group();
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(), material));
+    root.add(new THREE.InstancedMesh(new THREE.BoxGeometry(), material, 3));
+    // Unindexed: three corners a triangle all the same.
+    root.add(new THREE.Mesh(new THREE.BoxGeometry().toNonIndexed(), material));
+    root.add(new THREE.Points(new THREE.BoxGeometry(), new THREE.PointsMaterial()));
+    root.add(new THREE.LineSegments(new THREE.BoxGeometry(), new THREE.LineBasicMaterial()));
+    expect(countTriangles(root)).toBe(12 + 36 + 12);
+  });
+
+  it('counts a file once as it loads, for every copy, and forgets it with the file', async () => {
+    loadedScenes.length = 0;
+    const file = 'counted.glb';
+    expect(craftModelTriangles(file)).toBe(0);
+    await Promise.all([loadCraftModel(file), loadCraftModel(file)]);
+    expect(loadedScenes).toHaveLength(1);
+    // Ready the moment a copy is in hand; one walk of the scene, for both copies.
+    expect(craftModelTriangles(file)).toBe(12 + 36);
+    expect(loadedScenes[0]!.walks).toBe(1);
+    releaseCraftModel(file);
+    releaseCraftModel(file);
+    expect(craftModelTriangles(file)).toBe(0);
   });
 });
 

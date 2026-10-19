@@ -12,7 +12,14 @@ import type {
   VectorTable,
 } from '@sss/tools/types';
 
-import { ChunkedTable, type ChunkLoader, RETRY_AFTER_MS, samplesBetween } from './chunkedTable.ts';
+import {
+  ChunkBudget,
+  CHUNK_BUDGET_BYTES,
+  ChunkedTable,
+  type ChunkLoader,
+  RETRY_AFTER_MS,
+  samplesBetween,
+} from './chunkedTable.ts';
 import { FrameTree } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
@@ -168,6 +175,13 @@ export class EphemerisStore {
   #version = 0;
   readonly #listeners = new Set<() => void>();
   readonly #chunked = new Map<BodyId, ChunkedTable>();
+  /** What every chunked table's fetched chunks share; see ChunkBudget. */
+  readonly #chunkBudget: ChunkBudget;
+  /**
+   * Kept once fetched, and never let go like a chunk: one per spacecraft, so the map is
+   * bounded by the catalog -- 40 path files, 5.8 MB of JSON and about 5 MB parsed if every
+   * craft's trail were shown -- and each is what its whole line is drawn from.
+   */
   readonly #paths = new Map<BodyId, PathTable>();
   readonly #pathsPending = new Map<BodyId, Promise<void>>();
   readonly #pathsFailedAt = new Map<BodyId, number>();
@@ -175,8 +189,10 @@ export class EphemerisStore {
   readonly #surfacesPending = new Map<BodyId, Promise<void>>();
   readonly #surfacesFailedAt = new Map<BodyId, number>();
 
-  constructor(data: EphemerisData) {
+  /** `chunkBudgetBytes`: see CHUNK_BUDGET_BYTES; smaller only in tests. */
+  constructor(data: EphemerisData, chunkBudgetBytes = CHUNK_BUDGET_BYTES) {
     this.#data = data;
+    this.#chunkBudget = new ChunkBudget(chunkBudgetBytes);
     this.#tree = new FrameTree(data.bodies);
     this.#bodies = [...data.bodies];
     this.#elements = new Map(data.elements);
@@ -192,11 +208,20 @@ export class EphemerisStore {
         throw new Error(`Manifest lists "${id}" but has no table entry for it.`);
       }
       if (info.chunks !== null) {
-        this.#chunked.set(id, new ChunkedTable(id, info, data.loadChunk));
+        this.#chunked.set(id, this.#chunkedTable(id, info));
       } else if (!data.vectors.has(id)) {
         throw new Error(`Manifest lists "${id}" but no vector table was loaded.`);
       }
     }
+  }
+
+  #chunkedTable(id: BodyId, info: TableInfo): ChunkedTable {
+    return new ChunkedTable(id, info, this.#data.loadChunk, undefined, this.#chunkBudget);
+  }
+
+  /** Bytes of chunk data held right now: what the budget keeps within bounds. */
+  get chunkBytes(): number {
+    return this.#chunkBudget.bytes;
   }
 
   get manifest(): Manifest {
@@ -277,7 +302,7 @@ export class EphemerisStore {
       }
       this.#bodies.push(body);
       this.#tables.set(body.id, table);
-      this.#chunked.set(body.id, new ChunkedTable(body.id, table, this.#data.loadChunk));
+      this.#chunked.set(body.id, this.#chunkedTable(body.id, table));
       if (elements !== undefined) {
         this.#elements.set(body.id, elements);
       }

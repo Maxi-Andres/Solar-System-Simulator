@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import type { Vec3 } from '../core/vec3.ts';
-import { kmToUnits } from './scale.ts';
+import { kmToUnits, MARKER_FULL_PX, MESH_FADE_START_PX } from './scale.ts';
 
 /**
  * What a spacecraft is drawn as up close, and which way it faces.
@@ -23,17 +23,96 @@ export const UNITS_PER_METRE = kmToUnits(0.001);
  * The same rule as a planet's surface map: ask while it is still a growing dot, so the
  * file has arrived by the time there is a shape to see. Below that it is a marker, and
  * a few hundred kilobytes would buy nothing.
+ *
+ * Above every `shapeShownPx`, which stops at 4 px, so a model is never fetched before
+ * it may be drawn: it is drawn the moment it lands. Going the other way it is kept
+ * while it stays above 3 px, and for half a minute after (detailRelease.ts), so turning
+ * back costs nothing; a heavy one is out of sight by then, hidden below 3.2 px.
  */
 export const MODEL_REQUEST_PX = 6;
 
 /**
- * On-screen radius, in pixels, above which the shape replaces the marker's dot.
+ * On-screen radius, in pixels, above which the lightest shape replaces the marker's dot:
+ * the floor of `shapeShownPx`, and where a planet's sphere stops being drawn whole.
  *
  * Not faded in like a planet's sphere. A model is dozens of materials, and fading it
  * means drawing all of them transparent, which sorts badly against itself; at a pixel
- * and a half it is a speck either way, and the marker is still fading out over it.
+ * and a half it is a speck either way, and the marker is fully drawn around it.
  */
-export const SHAPE_SHOWN_PX = 1.5;
+export const SHAPE_SHOWN_PX = MESH_FADE_START_PX;
+
+/**
+ * Triangles in a planet's sphere: 64 segments by 32 (SPHERE_SEGMENTS in SolarSystem.tsx),
+ * less the slivers at the poles.
+ *
+ * The yardstick for what a speck may cost. The scene already draws this many for a
+ * planet of a pixel and a half radius, 561 triangles to each pixel it covers, so a craft
+ * spending no more per pixel than that is paying what everything else pays.
+ */
+export const PLANET_SPHERE_TRIANGLES = 3968;
+
+/** Below this share of its `shapeShownPx`, a shape that is drawn stops being drawn. */
+export const SHAPE_KEEP_FRACTION = 0.8;
+
+/**
+ * On-screen radius, in pixels, above which a shape of `triangles` replaces the marker's
+ * dot.
+ *
+ * A model's cost at a speck is its triangles -- every vertex is transformed however few
+ * pixels come out -- and what it buys is the pixels it covers. So a shape is drawn from
+ * the size at which it spends no more triangles per pixel than a planet's sphere does
+ * where that is last drawn whole: π r² pixels for r = 1.5 · √(triangles / 3,968).
+ * Measured on the files (see craftModels.test.ts): CAPSTONE's 5,025 come out at 1.7 px,
+ * Voyager's 20,390 at 3.4 px, and anything above 28,217 at the ceiling below.
+ *
+ * Never above MARKER_FULL_PX: up to there the marker is fully drawn and stands in for
+ * the craft, but above it the marker fades, and a craft whose shape still waited would
+ * fade to nothing. So Juice's 959,923 triangles, Orion's 112,517 and Europa Clipper's
+ * 203,662 are all drawn from 4 px -- where Juice is still 19,000 triangles a pixel,
+ * against 136,000 at the old 1.5 px. Fewer would take a coarser copy of the model, and
+ * ESA's permission asks for its geometry as it is.
+ *
+ * A box is 12 triangles, drawn from the floor like before.
+ */
+export function shapeShownPx(triangles: number): number {
+  const budgetPx = MESH_FADE_START_PX * Math.sqrt(triangles / PLANET_SPHERE_TRIANGLES);
+  return Math.min(Math.max(budgetPx, SHAPE_SHOWN_PX), MARKER_FULL_PX);
+}
+
+/**
+ * Whether a shape whose threshold is `shownPx` is drawn at `pixelRadius`, given whether
+ * it was last frame.
+ *
+ * Hysteresis, so a craft hovering at its threshold -- a camera easing to rest, a craft
+ * drifting along its orbit -- does not blink a model on and off frame after frame. Both
+ * edges stay at or below MARKER_FULL_PX, where the marker is fully drawn over it.
+ */
+export function shapeVisible(pixelRadius: number, shownPx: number, wasVisible: boolean): boolean {
+  return pixelRadius > (wasVisible ? shownPx * SHAPE_KEEP_FRACTION : shownPx);
+}
+
+/**
+ * Triangles drawn for everything under `root`, each instance of an instanced mesh
+ * counted: IMAP's file repeats parts with EXT_mesh_gpu_instancing.
+ *
+ * Walks every mesh, so it is counted once, when a file is loaded, and never per frame.
+ */
+export function countTriangles(root: THREE.Object3D): number {
+  let triangles = 0;
+  root.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (mesh.isMesh !== true) {
+      return;
+    }
+    // The glTF loader turns strips and fans into lists, so three corners a triangle.
+    const geometry = mesh.geometry;
+    const corners = geometry.index?.count ?? geometry.getAttribute('position')?.count ?? 0;
+    const instanced = mesh as THREE.InstancedMesh;
+    const copies = instanced.isInstancedMesh === true ? instanced.count : 1;
+    triangles += Math.floor(corners / 3) * copies;
+  });
+  return triangles;
+}
 
 /** URL for a model file, respecting the GitHub Pages base path. See `textureUrl`. */
 export function modelUrl(file: string): string {
@@ -59,6 +138,8 @@ interface CachedModel {
   readonly scene: Promise<THREE.Object3D>;
   /** Copies handed out and not yet handed back. */
   users: number;
+  /** What the file draws, counted once as it loads; 0 until then. See shapeShownPx. */
+  triangles: number;
 }
 
 const cache = new Map<string, CachedModel>();
@@ -79,8 +160,13 @@ export async function loadCraftModel(
   if (entry === undefined) {
     const scene = gltfLoader()
       .then((gltf) => gltf.loadAsync(modelUrl(file)))
-      .then((gltf) => gltf.scene);
-    const created: CachedModel = { scene, users: 0 };
+      .then((gltf) => {
+        // Before any copy is handed out, so every caller can read it at once; copies
+        // share the geometry, so one count serves them all.
+        created.triangles = countTriangles(gltf.scene);
+        return gltf.scene;
+      });
+    const created: CachedModel = { scene, users: 0, triangles: 0 };
     // A failed load must not be cached, or the craft could never be retried.
     scene.catch(() => {
       if (cache.get(file) === created) {
@@ -126,6 +212,14 @@ export function releaseCraftModel(file: string): void {
 /** Copies of `file` handed out and not handed back, for tests. */
 export function craftModelUsers(file: string): number {
   return cache.get(file)?.users ?? 0;
+}
+
+/**
+ * Triangles in `file`'s model, counted when it loaded: known by the time a copy from
+ * `loadCraftModel` is in hand, and 0 for a file not held.
+ */
+export function craftModelTriangles(file: string): number {
+  return cache.get(file)?.triangles ?? 0;
 }
 
 /**
