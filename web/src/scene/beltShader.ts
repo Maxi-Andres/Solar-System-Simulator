@@ -187,6 +187,16 @@ export const FAINT_BINS = 16;
  */
 export const FAINT_LIGHT_PER_MAGNITUDE = 0.5;
 
+/**
+ * The least opacity a bright dot -- H under 15 -- is drawn at however crowded it gets:
+ * 0.08, 13 code values of 255 on one pixel. Visible on black as a point, too faint to
+ * pile into a blob until dozens share a pixel.
+ */
+export const CROWDED_BRIGHT_FLOOR = 0.08;
+
+/** Slots in the per-class uniform: room for every class code, and spare. */
+export const CLASS_SLOTS = 16;
+
 /** The magnitude bin a faint H falls in, 0 to FAINT_BINS - 1; the shader's `bin`. */
 export function faintBin(H: number): number {
   return Math.min(FAINT_BINS - 1, Math.max(0, Math.floor(H - DOT_REFERENCE_H)));
@@ -263,7 +273,8 @@ export function spriteFragments(H: number, pixelRatio: number): number {
  * The record arrives as three attributes over one interleaved buffer (see
  * AsteroidBelt.tsx), straight from the file: `aShape` is a (km), e, i; `aAngles` the
  * node, the argument of perihelion and M at the reference instant, in [-π, π); `aMotion`
- * n (rad/day) and H. All radians.
+ * n (rad/day), H and the class code, which picks the population's crowding and fade
+ * (see beltCrowding.ts). All radians.
  *
  * The Sun's offset from the focus comes split into a high and a low float32, as a
  * trajectory's origin does (see splitDouble in trajectoryLine.ts), and is added high
@@ -292,7 +303,7 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
 
   attribute vec3 aShape;
   attribute vec3 aAngles;
-  attribute vec2 aMotion;
+  attribute vec3 aMotion;
 
   uniform float uDtDays;
   uniform vec3 uSunHigh;
@@ -300,6 +311,8 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
   uniform float uUnitsPerKm;
   uniform float uPixelRatio;
   uniform float uFaintAlpha[${FAINT_BINS}];
+  uniform float uClassCrowding[${CLASS_SLOTS}];
+  uniform float uClassFade[${CLASS_SLOTS}];
 
   varying float vRadiusPx;
   varying float vSpritePx;
@@ -320,6 +333,19 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
   }
 
   void main() {
+    // A population faded out with its region (see beltCrowding.ts) is put outside the
+    // clip volume before anything is worked out for it: no Kepler solve, no fragment.
+    int population = int(clamp(aMotion.z, 0.0, ${(CLASS_SLOTS - 1).toFixed(1)}) + 0.5);
+    float fade = uClassFade[population];
+    if (fade <= 0.0) {
+      gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+      gl_PointSize = 1.0;
+      vAlpha = 0.0;
+      vRadiusPx = 0.0;
+      vSpritePx = 1.0;
+      return;
+    }
+
     // beltPosition(), below in beltShader.ts, is these lines in TypeScript.
     float a = aShape.x;
     float e = aShape.y;
@@ -357,7 +383,7 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
       // haze, and do not show it.
       int bin = int(clamp(floor(aMotion.y - ${DOT_REFERENCE_H.toFixed(1)}), 0.0, ${(FAINT_BINS - 1).toFixed(1)}));
       float r = 0.5 * uPixelRatio;
-      vAlpha = min(1.0, uFaintAlpha[bin] * PI * (r * r + 1.0 / 12.0));
+      vAlpha = min(1.0, uFaintAlpha[bin] * PI * (r * r + 1.0 / 12.0)) * uClassCrowding[population];
       // Radius one half, sprite one: the fragment shader's coverage is then exactly 1.
       vRadiusPx = 0.5;
       vSpritePx = 1.0;
@@ -369,8 +395,11 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
       vRadiusPx = 0.5 * diameterPx;
       // A whole number of pixels holding the disc and its half-pixel soft edge all round.
       vSpritePx = ceil(diameterPx + 1.0);
-      vAlpha = mix(${DOT_FAINT_ALPHA.toFixed(3)}, ${DOT_BRIGHT_ALPHA.toFixed(3)}, bright);
+      float alpha = mix(${DOT_FAINT_ALPHA.toFixed(3)}, ${DOT_BRIGHT_ALPHA.toFixed(3)}, bright);
+      // crowdedAlpha(), in beltCrowding.ts: never under the floor however crowded.
+      vAlpha = max(alpha * uClassCrowding[population], min(alpha, ${CROWDED_BRIGHT_FLOOR.toFixed(3)}));
     }
+    vAlpha *= fade;
     gl_PointSize = vSpritePx;
   }
 `;

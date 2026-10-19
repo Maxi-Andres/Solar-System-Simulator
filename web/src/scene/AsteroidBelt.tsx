@@ -14,6 +14,7 @@ import {
   FAINT_BINS,
   faintBinAlphas,
 } from './beltShader.ts';
+import { beltLight, CLASS_SLOTS, writeCrowding, type PopulationLight } from './beltCrowding.ts';
 import type { SharedFrame } from './satellites.ts';
 import { KM_PER_UNIT } from './scale.ts';
 
@@ -68,6 +69,11 @@ interface BeltMaterial {
   readonly pixelRatio: THREE.IUniform<number>;
   /** Each faint magnitude's opacity; see faintBinAlphas. Rewritten as tiers arrive. */
   readonly faintAlpha: Float32Array;
+  /** Each class's crowding scale and region fade, this frame; see beltCrowding.ts. */
+  readonly classCrowding: Float32Array;
+  readonly classFade: Float32Array;
+  /** Where the camera is from the Sun, km: rewritten each frame, never reallocated. */
+  readonly cameraFromSunKm: { x: number; y: number; z: number };
 }
 
 /** Nothing here can be clicked: a raycast would walk every asteroid for no answer. */
@@ -77,8 +83,8 @@ function noRaycast(): void {}
  * A tier's records as one interleaved buffer, read through three attributes.
  *
  * The file's own order is what makes this work: a, e and i are floats 0 to 2, the three
- * angles 3 to 5, n and H 6 and 7. The class code, float 8, rides along unread -- it is
- * in the stride either way, and a filter by class will want it on the GPU.
+ * angles 3 to 5, and n, H and the class code 6 to 8 -- the class for the crowding and the
+ * fade, which are per population (see beltCrowding.ts).
  */
 export function buildBeltGeometry(records: Float32Array): THREE.BufferGeometry {
   const interleaved = new THREE.InterleavedBuffer(records, RECORD_FLOATS);
@@ -88,7 +94,7 @@ export function buildBeltGeometry(records: Float32Array): THREE.BufferGeometry {
     'aAngles',
     new THREE.InterleavedBufferAttribute(interleaved, 3, RECORD.node),
   );
-  geometry.setAttribute('aMotion', new THREE.InterleavedBufferAttribute(interleaved, 2, RECORD.n));
+  geometry.setAttribute('aMotion', new THREE.InterleavedBufferAttribute(interleaved, 3, RECORD.n));
   // There is no `position` for three to count vertices by, so the range says how many.
   geometry.setDrawRange(0, records.length / RECORD_FLOATS);
   // The belt spans the Solar System; its bounds say nothing about whether it is on screen.
@@ -102,6 +108,8 @@ function buildBeltMaterial(info: BeltInfo): BeltMaterial {
   const sunHigh = new THREE.Vector3();
   const sunLow = new THREE.Vector3();
   const faintAlpha = new Float32Array(FAINT_BINS);
+  const classCrowding = new Float32Array(CLASS_SLOTS).fill(1);
+  const classFade = new Float32Array(CLASS_SLOTS).fill(1);
   const material = new THREE.ShaderMaterial({
     vertexShader: BELT_VERTEX_SHADER,
     fragmentShader: BELT_FRAGMENT_SHADER,
@@ -112,6 +120,8 @@ function buildBeltMaterial(info: BeltInfo): BeltMaterial {
       uUnitsPerKm: { value: 1 / KM_PER_UNIT },
       uPixelRatio: pixelRatio,
       uFaintAlpha: { value: faintAlpha },
+      uClassCrowding: { value: classCrowding },
+      uClassFade: { value: classFade },
       uColor: { value: new THREE.Vector3(...BELT_COLOR) },
     },
     // Blended over what is behind, not added to it: see DOT_FAINT_ALPHA. Depth is tested,
@@ -123,7 +133,18 @@ function buildBeltMaterial(info: BeltInfo): BeltMaterial {
     // The colour is already a display value; see BELT_COLOR.
     toneMapped: false,
   });
-  return { material, referenceJd: info.referenceJd, dtDays, sunHigh, sunLow, pixelRatio, faintAlpha };
+  return {
+    material,
+    referenceJd: info.referenceJd,
+    dtDays,
+    sunHigh,
+    sunLow,
+    pixelRatio,
+    faintAlpha,
+    classCrowding,
+    classFade,
+    cameraFromSunKm: { x: 0, y: 0, z: 0 },
+  };
 }
 
 /**
@@ -167,8 +188,21 @@ export function AsteroidBelt({
   useEffect(() => {
     built?.faintAlpha.set(faintAlpha);
   }, [built, faintAlpha]);
+  // How many dots each population has in hand and the light they bring: what the frame
+  // loop divides by the screen to see how crowded each one is. Once per tier, likewise.
+  const populations = useMemo<PopulationLight | null>(
+    () =>
+      view.info === null
+        ? null
+        : beltLight(
+            view.tiers.map((tier) => tier.records),
+            faintAlpha,
+            view.info.classes,
+          ),
+    [view.info, view.tiers, faintAlpha],
+  );
 
-  useFrame(({ gl }) => {
+  useFrame(({ gl, camera, size }) => {
     if (built === null) {
       return;
     }
@@ -199,6 +233,24 @@ export function AsteroidBelt({
     built.sunLow.set(Math.fround(sun.x - xHigh), Math.fround(sun.y - yHigh), Math.fround(sun.z - zHigh));
     // A dot is sized in CSS pixels, and the window can move to a screen of another density.
     built.pixelRatio.value = gl.getPixelRatio();
+
+    // How crowded each population is from here, and how small its region: a few dozen
+    // multiplications a frame, none of them per asteroid. They change only when the camera
+    // or the Sun moves, and both already ask for the frames they need.
+    if (populations !== null) {
+      const fromSun = built.cameraFromSunKm;
+      fromSun.x = camera.position.x * KM_PER_UNIT - sun.x;
+      fromSun.y = camera.position.y * KM_PER_UNIT - sun.y;
+      fromSun.z = camera.position.z * KM_PER_UNIT - sun.z;
+      writeCrowding(
+        built.classCrowding,
+        built.classFade,
+        populations,
+        fromSun,
+        (camera as THREE.PerspectiveCamera).fov,
+        size.height,
+      );
+    }
   });
 
   if (built === null) {

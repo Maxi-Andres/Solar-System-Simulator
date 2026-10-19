@@ -17,6 +17,7 @@ import {
   DOT_BRIGHT_PX,
   DOT_FAINT_ALPHA,
   DOT_FAINT_PX,
+  CROWDED_BRIGHT_FLOOR,
   DOT_REFERENCE_H,
   FAINT_BINS,
   FAINT_LIGHT_PER_MAGNITUDE,
@@ -529,6 +530,15 @@ describe('the shaders', () => {
     expect(BELT_VERTEX_SHADER).toContain(`uniform float uFaintAlpha[${FAINT_BINS}];`);
     expect(BELT_VERTEX_SHADER).toContain('uFaintAlpha[bin] * PI * (r * r + 1.0 / 12.0)');
     expect(BELT_VERTEX_SHADER).toContain('vSpritePx = 1.0;');
+    // Crowding per population, with the bright dots' floor; and the fade, which clips a
+    // faded population before its orbit is solved.
+    expect(BELT_VERTEX_SHADER).toContain('uniform float uClassCrowding[16];');
+    expect(BELT_VERTEX_SHADER).toContain(
+      `max(alpha * uClassCrowding[population], min(alpha, ${CROWDED_BRIGHT_FLOOR.toFixed(3)}))`,
+    );
+    expect(BELT_VERTEX_SHADER.indexOf('if (fade <= 0.0)')).toBeLessThan(
+      BELT_VERTEX_SHADER.indexOf('float E ='),
+    );
   });
 
   it('cost a fixed, counted amount of arithmetic per asteroid', () => {
@@ -588,6 +598,7 @@ describe('buildBeltGeometry', () => {
       expect(read('aAngles', 2, index)).toBe(at(index, 'M'));
       expect(read('aMotion', 0, index)).toBe(at(index, 'n'));
       expect(read('aMotion', 1, index)).toBe(at(index, 'H'));
+      expect(read('aMotion', 2, index)).toBe(at(index, 'class'));
     }
   });
 
