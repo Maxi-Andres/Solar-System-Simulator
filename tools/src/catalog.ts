@@ -1717,14 +1717,23 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
     operator: 'NASA',
     color: '#e0c060',
   }),
+  // In orbit about Ceres since 2015, and still: the mission ended on 2018-10-31 with the
+  // hydrazine, and the orbit was chosen to last decades, so JPL's dawn_final file carries
+  // it on as prediction. Hung off Ceres and given the close orbiters' window rather than
+  // the full twenty years, because since step B1a Ceres is a reference body and a craft
+  // beside it is held to a kilometre: Dawn's low orbits, a few hours a turn, then cost
+  // over five thousand one-minute requests and ran the full fetch of 2026-10-19 into the
+  // ground. The price is its active years, 2016-2018, which fall outside the window.
   spacecraft({
     id: 'dawn',
     shape: MORE_SHAPES.dawn,
     name: 'Dawn',
     horizonsId: '-203',
-    parent: null,
-    parentHorizonsId: null,
+    parent: 'ceres',
+    // Ceres by its SPK id: Horizons takes no '1;' for a centre.
+    parentHorizonsId: '2000001',
     stepDays: 1,
+    windowMonths: CLOSE_ORBIT_WINDOW_MONTHS,
     spanM: 20,
     launchUtc: '2007-09-27T11:34:00Z',
     operator: 'NASA',

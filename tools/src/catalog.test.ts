@@ -295,13 +295,14 @@ describe('the spacecraft', () => {
     const close = craft.filter((body) => body.mission!.windowMonths !== null);
     expect(close.map((body) => body.id).sort()).toEqual(
       [
-        'artemis-p1', 'artemis-p2', 'chandrayaan-2', 'danuri', 'exomars-tgo', 'hope', 'lro',
-        'mars-express', 'mars-odyssey', 'maven', 'mro',
+        'artemis-p1', 'artemis-p2', 'chandrayaan-2', 'danuri', 'dawn', 'exomars-tgo', 'hope',
+        'lro', 'mars-express', 'mars-odyssey', 'maven', 'mro',
       ].sort(),
     );
     for (const body of close) {
       expect(body.mission!.windowMonths, body.id).toBe(CLOSE_ORBIT_WINDOW_MONTHS);
-      expect(['mars', 'moon'], body.id).toContain(body.parent);
+      // Dawn about Ceres: see its entry for why it joined them.
+      expect(['mars', 'moon', 'ceres'], body.id).toContain(body.parent);
     }
   });
 
@@ -339,7 +340,12 @@ describe('the spacecraft', () => {
         expect(body.center, body.id).toBe(SSB_CENTER);
       } else {
         const parent = CATALOG.find((candidate) => candidate.id === body.parent)!;
-        expect(body.center, body.id).toBe(`500@${parent.horizonsId}`);
+        // A numbered asteroid is asked for as 'N;' but can only be a centre by its SPK id,
+        // 2,000,000 + N: Ceres is 2000001.
+        const id = parent.horizonsId.endsWith(';')
+          ? String(2_000_000 + Number(parent.horizonsId.slice(0, -1)))
+          : parent.horizonsId;
+        expect(body.center, body.id).toBe(`500@${id}`);
         // Only bodies with full-window tables, so the frame is there whenever the craft is.
         expect(parent.vectorWindow, body.id).toBe('full');
       }

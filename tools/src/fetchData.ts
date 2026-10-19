@@ -605,10 +605,23 @@ async function main(): Promise<void> {
   // The spacecraft after the natural bodies, because their sampling is measured against
   // them: how fine a craft must be followed depends on how far it is from the nearest.
   const frames = referenceFrames([...natural, ...sunward]);
+  //
+  // A craft Horizons keeps failing on is left out and the run carries on, but the run
+  // then ends in failure (see the end of main): everything else is written, so a local
+  // run of an hour and a half is not lost to one bad request -- as the run of 2026-10-19
+  // was, to Dawn's 5,375th -- while a deploy, which needs every craft, still stops.
+  const failedCraft: string[] = [];
   const craft = await mapWithConcurrency(
     CATALOG.filter((body) => body.vectorWindow === 'mission'),
     MAX_CONCURRENT_REQUESTS,
-    (body) => fetchSpacecraft(body, epoch, frames),
+    (body) =>
+      fetchSpacecraft(body, epoch, frames).catch((error: unknown) => {
+        console.error(
+          `[fetch-data] ${body.name}: FAILED, left out of this run (${String(error).slice(0, 300)})`,
+        );
+        failedCraft.push(body.name);
+        return null;
+      }),
   );
   // The small moons last: they need nothing of the others, and the requests are spread
   // out rather than doubled up against Horizons.
@@ -830,6 +843,15 @@ async function main(): Promise<void> {
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
   console.log("[fetch-data] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
+
+  if (failedCraft.length > 0) {
+    console.error(
+      `[fetch-data] INCOMPLETE: ${failedCraft.length} spacecraft left out after failing ` +
+        `(${failedCraft.join(', ')}). The rest is written and usable locally; this run ` +
+        'exits with an error so a deploy does not publish it.',
+    );
+    process.exitCode = 1;
+  }
 }
 
 // Run when invoked, not when imported -- a script trying one body imports fetchAdaptiveBody.
