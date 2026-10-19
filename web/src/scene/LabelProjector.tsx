@@ -269,13 +269,15 @@ export function LabelProjector({
         continue;
       }
 
-      // Offset the label past the body's own disc so it never overlaps the sphere.
-      const pixelRadius = angularRadiusPixels(
-        body.radiusEquatorialKm,
-        distanceUnits * 1000,
-        size.height,
-        fov,
-      );
+      // Offset the label past the body's own disc so it never overlaps the sphere -- the
+      // disc that is drawn. A body drawn as a marker only (`shapeDrawn: false`: a comet,
+      // a belt asteroid, Apophis) has none, and offsetting by the size it would have put
+      // its name hundreds of pixels from its marker once the camera framed it: framing
+      // stands eight radii off, where a radius is an eighth of the view.
+      const pixelRadius =
+        body.shapeDrawn === false
+          ? 0
+          : angularRadiusPixels(body.radiusEquatorialKm, distanceUnits * 1000, size.height, fov);
 
       projected.push({
         id: body.id,
