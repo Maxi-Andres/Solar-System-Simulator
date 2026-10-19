@@ -1,12 +1,18 @@
 import type { OsculatingElements } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
+import * as THREE from 'three';
+
 import {
+  ORBIT_CLOSE_IN_HALVINGS,
   ORBIT_SAGITTA_RADII,
+  orbitAnomalies,
   orbitPointsKm,
   orbitSegmentsFor,
   propagate,
+  stateToOsculatingElements,
 } from '../core/kepler.ts';
+import { OrbitLine, orbitLinePointsKm, refinementAnomaly } from './orbitGeometry.ts';
 
 /**
  * Regression tests for the "the orbit does not pass through the planet" bug.
@@ -209,5 +215,102 @@ describe('float32 anchoring', () => {
     const errorKm = Math.abs(Math.fround(rebasedUnits) - rebasedUnits) * 1000;
 
     expect(errorKm).toBeLessThan(0.001);
+  });
+});
+
+describe('the refinement at a body no uniform line can hold', () => {
+  const GM_SUN = 1.32712440041e11;
+  const a = 1.3794e8;
+  /** An Apophis-like orbit, 170 m of asteroid on it: elements as the app derives them. */
+  const seed: OsculatingElements = {
+    ...PLUTO,
+    id: 'apophis',
+    eccentricity: 0.1914,
+    inclinationDeg: 3.34,
+    ascendingNodeDeg: 203.9,
+    argPeriapsisDeg: 126.6,
+    semiMajorAxisKm: a,
+    periapsisKm: a * (1 - 0.1914),
+    apoapsisKm: a * (1 + 0.1914),
+    meanMotionDegPerSec: (Math.sqrt(GM_SUN / a ** 3) * 180) / Math.PI,
+    meanAnomalyDeg: 100,
+  };
+  const RADIUS_KM = 0.17;
+  const at = (days: number) => {
+    const jd = seed.epochJd + days;
+    const state = propagate(seed, jd);
+    return { state, elements: stateToOsculatingElements(state, GM_SUN, jd, 'apophis', '500@10')! };
+  };
+  const missInRadii = (points: Float64Array, p: { x: number; y: number; z: number }): number => {
+    let nearest = Infinity;
+    for (let i = 0; i < points.length; i += 3) {
+      const j = (i + 3) % points.length;
+      nearest = Math.min(
+        nearest,
+        distanceToSegment(
+          [p.x, p.y, p.z],
+          [points[i]!, points[i + 1]!, points[i + 2]!],
+          [points[j]!, points[j + 1]!, points[j + 2]!],
+        ),
+      );
+    }
+    return nearest / RADIUS_KM;
+  };
+
+  it('is needed: the capped uniform line misses by more than a radius', () => {
+    const { state, elements } = at(0);
+    expect(orbitSegmentsFor(elements.apoapsisKm, RADIUS_KM)).toBe(16384);
+    const uniform = orbitPointsKm(elements, 16384);
+    expect(missInRadii(uniform, state.position)).toBeGreaterThan(1);
+  });
+
+  it('puts a vertex on the body, closing in on it from both sides in order', () => {
+    const anomalies = orbitAnomalies(16384, 1.234);
+    expect(anomalies.length).toBe(16384 + 2 * ORBIT_CLOSE_IN_HALVINGS + 1);
+    expect(anomalies).toContain(1.234);
+    for (let i = 1; i < anomalies.length; i += 1) {
+      expect(anomalies[i]!).toBeGreaterThan(anomalies[i - 1]!);
+    }
+    expect(anomalies[0]).toBe(0);
+    expect(orbitAnomalies(512)).toHaveLength(512);
+  });
+
+  it('holds the body on its line, where the uniform grid could not', () => {
+    for (const days of [0, 17.3, 101.9, 250]) {
+      const { state, elements } = at(days);
+      const refined = orbitLinePointsKm(elements, RADIUS_KM);
+      expect(missInRadii(refined, state.position)).toBeLessThan(1e-3);
+    }
+  });
+
+  it('leaves every planet and Pluto on its uniform grid', () => {
+    expect(refinementAnomaly(PLUTO, PLUTO_RADIUS_KM)).toBeNull();
+    expect(orbitLinePointsKm(PLUTO, PLUTO_RADIUS_KM)).toEqual(
+      orbitPointsKm(PLUTO, orbitSegmentsFor(PLUTO.apoapsisKm, PLUTO_RADIUS_KM)),
+    );
+  });
+
+  it('is re-centred once the body has moved far enough along to sag off it, and not before', () => {
+    const line = new OrbitLine(at(0).elements, RADIUS_KM, '#ffffff');
+    const sun = { x: 0, y: 0, z: 0 };
+    const version = (): number =>
+      (line.line.geometry.getAttribute('position') as THREE.BufferAttribute).version;
+    line.setElements(at(0).elements);
+    line.update(sun, 1);
+    const built = version();
+
+    // Ten seconds along: two micro-radians of eccentric anomaly, well inside the
+    // 4.9e-5 the refinement is good for. The same line.
+    line.setElements(at(10 / 86_400).elements);
+    line.update(sun, 1);
+    expect(version()).toBe(built);
+
+    // Ten minutes along, 1.4e-4 rad and nearly three times the limit: rebuilt round
+    // where the body now is.
+    const later = at(600 / 86_400);
+    line.setElements(later.elements);
+    line.update(sun, 1);
+    expect(version()).toBeGreaterThan(built);
+    line.dispose();
   });
 });

@@ -7,6 +7,7 @@ import { describeWithData as withData } from './describeWithData.ts';
 import {
   bodiesToResolve,
   isShown,
+  isSmallMoon,
   rebaseFrame,
   SMALL_MOON_LAYER,
 } from '../scene/floatingOrigin.ts';
@@ -115,6 +116,29 @@ describeWithData('the moons against JPL Horizons', () => {
   });
 });
 
+/**
+ * The ids of the moons among `ids`. The named dwarf planets -- Ceres, Eris, Haumea and
+ * Makemake, step B1a -- are chunked and fetched on demand as a craft is, so with the
+ * Dwarf Planets layer on their chunks are asked for too; what these tests count is what
+ * the moons cost, so that is what they look at.
+ */
+function moonsAmong(store: EphemerisStore, ids: readonly string[]): string[] {
+  return ids.filter((id) => store.body(id).kind === 'moon');
+}
+
+/** The chunked bodies about the Sun of one kind: the named small bodies (step B1a). */
+function chunkedPrimaries(store: EphemerisStore, kind: string): string[] {
+  return store.bodies
+    .filter(
+      (body) =>
+        body.parent === null &&
+        body.kind === kind &&
+        (store.manifest.tables[body.id]?.chunks ?? null) !== null,
+    )
+    .map((body) => body.id)
+    .sort();
+}
+
 describeWithData('a moon whose data has not arrived', () => {
   it('is absent rather than approximate while its chunk is on the way', () => {
     // A loader that never answers: the state of the first frame after startup.
@@ -147,11 +171,11 @@ describeWithData('a moon whose data has not arrived', () => {
   });
 
   it('costs nothing at all while the moons are switched off', () => {
-    let calls = 0;
+    const requested: string[] = [];
     const counting = new EphemerisStore({
       ...data!,
-      loadChunk: () => {
-        calls += 1;
+      loadChunk: (id) => {
+        requested.push(id);
         return new Promise(() => {});
       },
     });
@@ -159,12 +183,14 @@ describeWithData('a moon whose data has not arrived', () => {
 
     const withoutMoons = bodiesToResolve(counting, new Set(['star', 'planet', 'dwarf-planet']), 'sun');
     rebaseFrame(counting, 'sun', jd, withoutMoons);
-    expect(calls).toBe(0);
+    expect(moonsAmong(counting, requested)).toEqual([]);
+    // What is asked for is the dwarf planets' own chunks, one each, and nothing else.
+    expect([...requested].sort()).toEqual(chunkedPrimaries(counting, 'dwarf-planet'));
 
     const withMoons = bodiesToResolve(counting, new Set(['star', 'planet', 'dwarf-planet', 'moon']), 'sun');
     rebaseFrame(counting, 'sun', jd, withMoons);
     // One per short-window moon: the Moon ships whole and needs no fetch.
-    expect(calls).toBe(20);
+    expect(moonsAmong(counting, requested)).toHaveLength(20);
   });
 
   it('fetches a moon only once its system has opened up on screen', () => {
@@ -183,7 +209,7 @@ describeWithData('a moon whose data has not arrived', () => {
     // from there, and none is fetched.
     const sunView = { x: 0, y: 0, z: 8 * 695.7 };
     rebaseVisibleFrame(counting, 'sun', jd, bodiesToResolve(counting, kinds, 'sun'), sunView, 1080, 27);
-    expect(requested).toEqual([]);
+    expect(moonsAmong(counting, requested)).toEqual([]);
 
     // Jupiter in focus from eight of its radii: its four moons, and nothing else -- its
     // small moons are not even in the store until their file is fetched (below).
@@ -197,7 +223,7 @@ describeWithData('a moon whose data has not arrived', () => {
       1080,
       27,
     );
-    expect(requested.sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
+    expect(moonsAmong(counting, requested).sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
   });
 
   it('adds a planet’s small moons only when asked, and fetches them only in its system', async () => {
@@ -211,7 +237,9 @@ describeWithData('a moon whose data has not arrived', () => {
     });
     const kinds = new Set(['star', 'planet', 'dwarf-planet', 'moon', SMALL_MOON_LAYER]);
     const startup = counting.bodies.length;
-    expect(counting.bodies.some((body) => body.sampling !== undefined)).toBe(false);
+    // No small moon before the first is asked for. The named small bodies about the Sun
+    // are sampled the same way and are in from the start, and are not small moons.
+    expect(counting.bodies.some(isSmallMoon)).toBe(false);
     const expected = counting.smallMoonCount('jupiter')!.count;
     expect(expected).toBeGreaterThan(100);
 
@@ -230,11 +258,12 @@ describeWithData('a moon whose data has not arrived', () => {
     // From the Sun, none of them is wanted, loaded or not.
     const jd = counting.coverage('io')!.startJd + 100;
     rebaseVisibleFrame(counting, 'sun', jd, bodiesToResolve(counting, kinds, 'sun'), { x: 0, y: 0, z: 8 * 695.7 }, 1080, 27);
-    expect(requested).toEqual([]);
+    expect(moonsAmong(counting, requested)).toEqual([]);
     // At Jupiter they are, and only Jupiter's moons are fetched.
     rebaseVisibleFrame(counting, 'jupiter', jd, bodiesToResolve(counting, kinds, 'jupiter'), { x: 0, y: 0, z: 8 * 71.492 }, 1080, 27);
-    expect(requested.length).toBeGreaterThan(4);
-    expect(requested.every((id) => counting.body(id).parent === 'jupiter')).toBe(true);
+    const moons = moonsAmong(counting, requested);
+    expect(moons.length).toBeGreaterThan(4);
+    expect(moons.every((id) => counting.body(id).parent === 'jupiter')).toBe(true);
   });
 });
 
@@ -275,16 +304,16 @@ describeWithData('the Small Moons layer', () => {
       },
     });
     await counting.loadSmallMoons('jupiter');
-    const small = counting.bodies.find((body) => body.sampling !== undefined)!;
+    const small = counting.bodies.find(isSmallMoon)!;
     const withoutSmall = new Set(['star', 'planet', 'dwarf-planet', 'moon']);
     const withSmall = new Set([...withoutSmall, SMALL_MOON_LAYER]);
     expect(isShown(small, withoutSmall)).toBe(false);
     expect(isShown(small, withSmall)).toBe(true);
     expect(isShown(counting.body('io'), withoutSmall)).toBe(true);
-    expect([...bodiesToResolve(counting, withoutSmall, 'jupiter')].some((id) => counting.body(id).sampling !== undefined)).toBe(false);
+    expect([...bodiesToResolve(counting, withoutSmall, 'jupiter')].some((id) => isSmallMoon(counting.body(id)))).toBe(false);
 
     const jd = counting.coverage('io')!.startJd + 100;
     rebaseVisibleFrame(counting, 'jupiter', jd, bodiesToResolve(counting, withoutSmall, 'jupiter'), { x: 0, y: 0, z: 8 * 71.492 }, 1080, 27);
-    expect(requested.sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
+    expect(moonsAmong(counting, requested).sort()).toEqual(['callisto', 'europa', 'ganymede', 'io']);
   });
 });

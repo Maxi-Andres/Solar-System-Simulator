@@ -198,12 +198,22 @@ describeWithData('axial tilt, from two independent sources', () => {
     const loaded = store!;
     const jd = dateToTdb(new Date('2026-01-01T00:00:00Z'));
 
+    let compared = 0;
     for (const body of loaded.bodies) {
       // A moon's tilt is to its orbit about its planet, not the Sun's; the Moon's is
-      // checked that way in moonRotation.test.ts. A spacecraft has no pole at all.
-      if (body.id === 'sun' || body.parent !== null || body.kind === 'spacecraft') {
+      // checked that way in moonRotation.test.ts. A spacecraft has no pole at all. And a
+      // named small body (step B1a) has no published tilt to reproduce -- Ceres and
+      // Vesta have IAU poles, the catalog no fact-sheet obliquity -- so there is nothing
+      // here to hold it to.
+      if (
+        body.id === 'sun' ||
+        body.parent !== null ||
+        body.kind === 'spacecraft' ||
+        body.axialTiltDeg === null
+      ) {
         continue;
       }
+      compared += 1;
       const heliocentric = loaded.stateRelativeTo(body.id, 'sun', jd);
       expect(heliocentric, body.id).not.toBeNull();
 
@@ -218,6 +228,9 @@ describeWithData('axial tilt, from two independent sources', () => {
       // between an instantaneous orbit normal and a mean one.
       expect(Math.abs(measured - body.axialTiltDeg!), body.id).toBeLessThan(0.35);
     }
+    // The eight planets and Pluto, at least: a filter that let everything through to
+    // nothing would pass as well.
+    expect(compared).toBeGreaterThanOrEqual(9);
   });
 
   it('keeps Uranus lying on its side and Venus upside down', () => {

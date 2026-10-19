@@ -202,21 +202,93 @@ export function orbitSegmentsFor(
 }
 
 /**
+ * How many times the stretch of an orbit next to its body is halved toward it, on each
+ * side, when the polyline is refined there (see orbitAnomalies).
+ *
+ * Twenty halvings take the chord next to the body from a segment of the uniform grid --
+ * about 60,000 km on Apophis's orbit at the 16,384-segment cap -- to 6 cm, so the line
+ * runs into the body along its own tangent, at any zoom.
+ */
+export const ORBIT_CLOSE_IN_HALVINGS = 20;
+
+/**
+ * The eccentric anomalies an orbit polyline is drawn at, in order round the ellipse.
+ *
+ * `segments` of them evenly spaced from 0. With `around` -- the body's own eccentric
+ * anomaly -- the segment it is in gets ORBIT_CLOSE_IN_HALVINGS more on each side,
+ * closing in geometrically, and one at `around` itself: the vertex the body sits on. A
+ * uniform grid is held to a quarter of the body's radius by solving its count (see
+ * orbitSegmentsFor), and that stops working where the count reaches its cap: Apophis,
+ * 170 m across on an orbit of 1.1 AU, would need 138,000 segments, and at the cap's
+ * 16,384 a chord sags 3 km -- eighteen of its radii -- inside the ellipse. Refined, the
+ * line meets the body exactly where it is, for the price of 41 vertices.
+ *
+ * Always `segments + 2 * ORBIT_CLOSE_IN_HALVINGS + 1` long when refined, so a buffer
+ * sized once can be refilled in place.
+ */
+export function orbitAnomalies(segments: number, around: number | null = null): Float64Array {
+  const step = (2 * Math.PI) / segments;
+  if (around === null) {
+    const uniform = new Float64Array(segments);
+    for (let i = 0; i < segments; i += 1) {
+      uniform[i] = i * step;
+    }
+    return uniform;
+  }
+  const centre = ((around % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const j = Math.min(segments - 1, Math.floor(centre / step));
+  const before = centre - j * step;
+  const after = (j + 1) * step - centre;
+  const anomalies = new Float64Array(segments + 2 * ORBIT_CLOSE_IN_HALVINGS + 1);
+  let k = 0;
+  for (let i = 0; i <= j; i += 1) {
+    anomalies[k++] = i * step;
+  }
+  for (let h = 1; h <= ORBIT_CLOSE_IN_HALVINGS; h += 1) {
+    anomalies[k++] = centre - before * 2 ** -h;
+  }
+  anomalies[k++] = centre;
+  for (let h = ORBIT_CLOSE_IN_HALVINGS; h >= 1; h -= 1) {
+    anomalies[k++] = centre + after * 2 ** -h;
+  }
+  for (let i = j + 1; i < segments; i += 1) {
+    anomalies[k++] = i * step;
+  }
+  return anomalies;
+}
+
+/** Eccentric anomaly from true anomaly, both radians, for an ellipse of eccentricity e. */
+export function eccentricFromTrueAnomaly(trueAnomalyRad: number, e: number): number {
+  return 2 * Math.atan2(
+    Math.sqrt(1 - e) * Math.sin(trueAnomalyRad / 2),
+    Math.sqrt(1 + e) * Math.cos(trueAnomalyRad / 2),
+  );
+}
+
+/**
  * Orbit points as a flat Float64Array of x,y,z triples, in km.
  *
  * Float64 on purpose: the caller rebases these against the focused body before
  * handing them to the GPU. Storing them as float32 up front would bake in ~700 km of
  * quantisation at Pluto's distance, which is glaring once the camera is close enough
  * for that to matter.
+ *
+ * `around`, when given, refines the polyline at that eccentric anomaly; see
+ * orbitAnomalies.
  */
-export function orbitPointsKm(elements: OsculatingElements, segments: number): Float64Array {
-  const points = new Float64Array(segments * 3);
+export function orbitPointsKm(
+  elements: OsculatingElements,
+  segments: number,
+  around: number | null = null,
+): Float64Array {
+  const anomalies = orbitAnomalies(segments, around);
+  const points = new Float64Array(anomalies.length * 3);
   const e = elements.eccentricity;
   const a = elements.semiMajorAxisKm;
   const sqrtOneMinusESquared = Math.sqrt(1 - e * e);
 
-  for (let i = 0; i < segments; i += 1) {
-    const E = (i / segments) * 2 * Math.PI;
+  for (let i = 0; i < anomalies.length; i += 1) {
+    const E = anomalies[i]!;
     const point = perifocalToReference(
       a * (Math.cos(E) - e),
       a * sqrtOneMinusESquared * Math.sin(E),

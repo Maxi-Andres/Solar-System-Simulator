@@ -1,7 +1,12 @@
 import type { OsculatingElements } from '@sss/tools/types';
 import * as THREE from 'three';
 
-import { orbitPointsKm, orbitSegmentsFor } from '../core/kepler.ts';
+import {
+  eccentricFromTrueAnomaly,
+  ORBIT_SAGITTA_RADII,
+  orbitPointsKm,
+  orbitSegmentsFor,
+} from '../core/kepler.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { KM_PER_UNIT } from './scale.ts';
 
@@ -32,6 +37,15 @@ import { KM_PER_UNIT } from './scale.ts';
  * include perturbations. Scrub eight years from that epoch and Neptune sat 135 body
  * radii off its own orbit, Pluto 4400. The ellipse is now recomputed from the body's
  * current state, which by definition passes through it — see `setElements`.
+ *
+ * And a fourth, with the named small bodies (step B1a): bodies too small for any uniform
+ * polyline. The segment count is solved from the body's radius but capped at 16,384, and
+ * Apophis, 170 m across on an orbit of 1.1 AU, would need 138,000; at the cap its line
+ * sagged up to 3 km inside the ellipse, eighteen of its radii -- 350 pixels of an
+ * 864-pixel screen with it focused, at the zoom where its own orbit is still drawn in
+ * full. So where
+ * the cap binds, the polyline is refined at the body itself (see orbitAnomalies) and
+ * re-centred as the body moves along it -- see `#recentreE`.
  */
 /**
  * How solid an orbit line is drawn, before any fade.
@@ -40,6 +54,28 @@ import { KM_PER_UNIT } from './scale.ts';
  * enough that the body overflows the frame; see `focusOrbitOpacity`.
  */
 export const ORBIT_OPACITY = 0.55;
+
+/**
+ * Where an orbit line is refined: the body's eccentric anomaly, for a body the uniform
+ * grid cannot hold within its sagitta because the segment count is capped -- or null
+ * for every body it can, which is every planet and moon.
+ */
+export function refinementAnomaly(elements: OsculatingElements, bodyRadiusKm: number): number | null {
+  const segments = orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm);
+  const needed = orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm, ORBIT_SAGITTA_RADII, 256, Infinity);
+  return needed > segments
+    ? eccentricFromTrueAnomaly((elements.trueAnomalyDeg * Math.PI) / 180, elements.eccentricity)
+    : null;
+}
+
+/** The points an OrbitLine draws for these elements: the one rule, for it and the tests. */
+export function orbitLinePointsKm(elements: OsculatingElements, bodyRadiusKm: number): Float64Array {
+  return orbitPointsKm(
+    elements,
+    orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm),
+    refinementAnomaly(elements, bodyRadiusKm),
+  );
+}
 
 export class OrbitLine {
   readonly line: THREE.LineLoop;
@@ -53,14 +89,31 @@ export class OrbitLine {
   #anchored = false;
   /** How far the anchor may drift before the buffer is rebuilt, in km. */
   #toleranceKm = 1;
+  /**
+   * The eccentric anomaly the polyline is refined at -- where the body was when it was
+   * built -- or null for a body the uniform grid already holds.
+   */
+  #builtE: number | null = null;
+  /**
+   * How far, in eccentric anomaly, the body may move from #builtE before the refinement
+   * is re-centred on it.
+   *
+   * The body moves off its vertex onto the run of chords closing in on it, and the chord
+   * it is then on is no longer than the way it has come: a·ΔE at most, since |dr/dE| is
+   * at most a. That chord sags inside the ellipse by its length squared over eight times
+   * the radius of curvature, which is never less than a(1 - e²). Held to the sagitta the
+   * uniform grids are held to, ΔE = sqrt(8·s·r·(1 - e²) / a): 4.9e-5 rad for Apophis,
+   * a hundred seconds of its motion -- so at real time the line is rebuilt every hundred
+   * seconds, and under warp every frame: 16,425 points, a fraction of a millisecond.
+   */
+  #recentreE = Infinity;
 
   readonly #bodyRadiusKm: number;
 
   constructor(elements: OsculatingElements, bodyRadiusKm: number, color: string) {
     this.#bodyRadiusKm = bodyRadiusKm;
-    const segments = orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm);
-    this.#pointsKm = orbitPointsKm(elements, segments);
-    this.#positions = new Float32Array(segments * 3);
+    this.#pointsKm = this.#pointsFor(elements);
+    this.#positions = new Float32Array(this.#pointsKm.length);
     this.#builtFrom = elements;
 
     const geometry = new THREE.BufferGeometry();
@@ -85,6 +138,33 @@ export class OrbitLine {
     return this.#pointsKm.length / 3;
   }
 
+  /** The authoritative points for these elements, refined at the body where it needs it. */
+  #pointsFor(elements: OsculatingElements): Float64Array {
+    const r = this.#bodyRadiusKm;
+    this.#builtE = refinementAnomaly(elements, r);
+    this.#recentreE =
+      this.#builtE === null
+        ? Infinity
+        : Math.sqrt(
+            (8 * ORBIT_SAGITTA_RADII * r * (1 - elements.eccentricity ** 2)) /
+              elements.semiMajorAxisKm,
+          );
+    return orbitLinePointsKm(elements, r);
+  }
+
+  /** How far the body is from where the refinement is, in eccentric anomaly. */
+  #movedE(elements: OsculatingElements): number {
+    if (this.#builtE === null) {
+      return 0;
+    }
+    const now = eccentricFromTrueAnomaly(
+      (elements.trueAnomalyDeg * Math.PI) / 180,
+      elements.eccentricity,
+    );
+    const raw = Math.abs(now - this.#builtE) % (2 * Math.PI);
+    return Math.min(raw, 2 * Math.PI - raw);
+  }
+
   /**
    * Rebuilds the ellipse from fresh elements, if doing so would visibly move it.
    *
@@ -100,16 +180,19 @@ export class OrbitLine {
    * shift crosses what the eye could resolve.
    */
   setElements(elements: OsculatingElements): void {
-    if (this.#builtFrom !== null && this.#shiftKm(elements) < this.#bodyRadiusKm * 0.4) {
+    if (
+      this.#builtFrom !== null &&
+      this.#shiftKm(elements) < this.#bodyRadiusKm * 0.4 &&
+      this.#movedE(elements) < this.#recentreE
+    ) {
       return;
     }
 
-    const segments = orbitSegmentsFor(elements.apoapsisKm, this.#bodyRadiusKm);
-    this.#pointsKm = orbitPointsKm(elements, segments);
+    this.#pointsKm = this.#pointsFor(elements);
     this.#builtFrom = elements;
 
-    if (this.#positions.length !== segments * 3) {
-      this.#positions = new Float32Array(segments * 3);
+    if (this.#positions.length !== this.#pointsKm.length) {
+      this.#positions = new Float32Array(this.#pointsKm.length);
       this.line.geometry.setAttribute(
         'position',
         new THREE.BufferAttribute(this.#positions, 3),

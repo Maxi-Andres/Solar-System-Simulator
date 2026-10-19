@@ -14,6 +14,8 @@ import {
   orbitSegmentsFor,
   stateToOsculatingElements,
 } from '../core/kepler.ts';
+import { isSmallMoon } from './floatingOrigin.ts';
+import { orbitLinePointsKm } from './orbitGeometry.ts';
 
 /**
  * Regression test for "the planets are far from their orbits".
@@ -132,7 +134,8 @@ function distanceToPolyline(points: Float64Array, target: readonly number[]): nu
  * How far the body sits from the orbit drawn for that same instant, in body radii.
  *
  * Around whatever it orbits, exactly as SolarSystem.tsx draws it: the Sun for a planet,
- * the planet alone for a moon.
+ * the planet alone for a moon -- and with the very points OrbitLine draws, refined at the
+ * body where the uniform grid cannot hold it (see orbitLinePointsKm).
  */
 function driftInRadii(s: EphemerisStore, id: string, jd: number): number | null {
   const body = s.body(id);
@@ -153,10 +156,7 @@ function driftInRadii(s: EphemerisStore, id: string, jd: number): number | null 
     return null;
   }
 
-  const points = orbitPointsKm(
-    elements,
-    orbitSegmentsFor(elements.apoapsisKm, body.radiusEquatorialKm),
-  );
+  const points = orbitLinePointsKm(elements, body.radiusEquatorialKm);
 
   return (
     distanceToPolyline(points, [state.position.x, state.position.y, state.position.z]) /
@@ -192,7 +192,9 @@ describeWithData('orbit drawn from the live state', () => {
     for (const planet of Object.keys(s.manifest.smallMoons ?? {})) {
       await s.loadSmallMoons(planet);
     }
-    const small = s.bodies.filter((candidate) => candidate.sampling !== undefined);
+    // The planets' small moons: the named small bodies about the Sun are sampled the
+    // same way, and have a test of their own below.
+    const small = s.bodies.filter(isSmallMoon);
     expect(small.length).toBeGreaterThan(400);
     for (const body of small) {
       const span = s.coverage(body.id)!;
@@ -206,9 +208,63 @@ describeWithData('orbit drawn from the live state', () => {
     }
   }, 300_000);
 
+  it('keeps every named small body on its own orbit, Apophis at 170 m included', async () => {
+    // Fetched in chunks, as a craft is, across their own span -- which is not quite the
+    // advertised window; see 'reported orbit defects'. The ones a uniform polyline cannot
+    // hold -- Apophis would need 138,000 segments against a cap of 16,384, and sagged
+    // eighteen of its radii off its line -- are held by the refinement at the body.
+    const named = s.bodies.filter(
+      (candidate) => candidate.parent === null && candidate.sampling !== undefined,
+    );
+    expect(named.length).toBeGreaterThan(10);
+    for (const body of named) {
+      const span = s.coverage(body.id)!;
+      for (const fraction of [0.003, 0.29, 0.61, 0.997]) {
+        const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
+        await s.whenLoadedAt(jd, [body.id]);
+        const drift = driftInRadii(s, body.id, jd);
+        expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
+        expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
+      }
+    }
+  }, 300_000);
+
+  it('would leave Apophis off a uniform line, which is what the refinement is for', async () => {
+    const span = s.coverage('apophis')!;
+    let worst = 0;
+    for (const fraction of [0.003, 0.29, 0.61, 0.997]) {
+      const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
+      await s.whenLoadedAt(jd, ['apophis']);
+      const state = s.stateRelativeTo('apophis', 'sun', jd)!;
+      const body = s.body('apophis');
+      const elements = stateToOsculatingElements(
+        state,
+        s.body('sun').gmBodyOnlyKm3S2 + body.gmKm3S2,
+        jd,
+        'apophis',
+        '500@10',
+      )!;
+      const uniform = orbitPointsKm(
+        elements,
+        orbitSegmentsFor(elements.apoapsisKm, body.radiusEquatorialKm),
+      );
+      worst = Math.max(
+        worst,
+        distanceToPolyline(uniform, [state.position.x, state.position.y, state.position.z]) /
+          body.radiusEquatorialKm,
+      );
+    }
+    expect(worst).toBeGreaterThan(1);
+  });
+
   it('keeps every planet on its own orbit across the whole 20-year window', () => {
+    // The bodies the window describes: those shipped as one table. The named small
+    // bodies are chunked and cover their own span; they are checked above.
     for (const body of s.bodies.filter(
-      (candidate) => candidate.drawOrbit && candidate.parent === null,
+      (candidate) =>
+        candidate.drawOrbit &&
+        candidate.parent === null &&
+        (s.manifest.tables[candidate.id]?.chunks ?? null) === null,
     )) {
       // Ten instants spread over the full window, including both edges.
       for (let i = 0; i <= 10; i += 1) {
@@ -378,9 +434,12 @@ describeWithData('stateToOsculatingElements', () => {
  */
 describeWithData('reported orbit defects', () => {
   const s = store!;
-  // The advertised window is the full-window bodies' promise. The fast moons make a
-  // narrower one of their own, checked separately.
-  const fullWindow = s.manifest.bodies.filter((id) => s.body(id).vectorWindow === 'full');
+  // The advertised window is the full-window bodies' promise -- those shipped as one
+  // table, as the generator computes it. The fast moons make a narrower one of their own,
+  // checked separately, and the named small bodies, chunked like a craft, another.
+  const fullWindow = s.manifest.bodies.filter(
+    (id) => s.body(id).vectorWindow === 'full' && s.body(id).sampling === undefined,
+  );
 
   it('covers the advertised window for every body, including the giants', () => {
     // The end-of-data jump: with a 32-day step and no slack, Jupiter through Neptune

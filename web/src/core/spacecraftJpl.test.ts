@@ -102,7 +102,11 @@ describeWithData('spacecraft positions against JPL', () => {
         console.warn(`[spacecraftJpl.test] ${capture.id} capture is outside the data; skipped.`);
         return;
       }
-      await s.whenLoadedAt(capture.jd, [capture.id, 'earth']);
+      // The bodies the generator held the craft to: every full-window table, the named
+      // small bodies among them -- which are chunked and fetched on demand like a craft,
+      // so their chunk at this instant has to be here before anything asks where they are.
+      const references = s.bodies.filter((candidate) => candidate.vectorWindow === 'full');
+      await s.whenLoadedAt(capture.jd, [capture.id, 'earth', ...references.map((body) => body.id)]);
       const state =
         capture.from === 'earth'
           ? s.stateRelativeTo(capture.id, 'earth', capture.jd)
@@ -115,7 +119,7 @@ describeWithData('spacecraft positions against JPL', () => {
       // full-window body, whichever is larger (SPACECRAFT_ANGULAR_TOLERANCE in tools).
       const craft = s.stateInRoot(capture.id, capture.jd)!.position;
       let nearest = Infinity;
-      for (const body of s.bodies.filter((candidate) => candidate.vectorWindow === 'full')) {
+      for (const body of references) {
         const at = s.stateInRoot(body.id, capture.jd)!.position;
         nearest = Math.min(nearest, Math.hypot(craft.x - at.x, craft.y - at.y, craft.z - at.z));
       }

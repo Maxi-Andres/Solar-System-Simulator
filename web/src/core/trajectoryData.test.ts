@@ -7,6 +7,7 @@ import { describeWithData as withData } from './describeWithData.ts';
 
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { interpolateState } from './hermite.ts';
+import type { Vec3 } from './vec3.ts';
 
 /**
  * Every spacecraft's path file, against the full table it was cut from.
@@ -76,10 +77,51 @@ describeWithData('spacecraft paths, as written', () => {
       expect(full.t[k + 1]).toBe(seam.stopJd);
     }
   });
-  // What the tolerance is measured from: every body with a full-window table.
+  // What the tolerance is measured from: every body with a full-window table, as the
+  // generator measured it -- the named small bodies among them (step B1a), so a craft at
+  // Bennu is held to a kilometre there.
   const references = s.bodies
     .filter((body) => body.vectorWindow === 'full')
     .map((body) => body.id);
+
+  /**
+   * A body's position in the root frame at a craft's sample, from the full data.
+   *
+   * A table shipped whole is the store's own answer. A chunked one -- a named small body,
+   * fetched in pieces as a craft is -- is joined from its chunks once and interpolated
+   * here, as the generator had it whole: through the store each of a craft's years of
+   * samples would ask for a chunk, and the store's budget would let them go again.
+   */
+  const joined = new Map<string, Promise<VectorTable>>();
+  const chunked = (id: string): boolean => (s.manifest.tables[id]?.chunks ?? null) !== null;
+  async function loadJoined(): Promise<ReadonlyMap<string, VectorTable>> {
+    const ids = [...references, ...s.bodies.map((body) => body.parent ?? 'sun')].filter(chunked);
+    for (const id of ids) {
+      if (!joined.has(id)) {
+        joined.set(id, fullTable(s, id));
+      }
+    }
+    return new Map(
+      await Promise.all(ids.map(async (id) => [id, await joined.get(id)!] as const)),
+    );
+  }
+  function rootPosition(tables: ReadonlyMap<string, VectorTable>, id: string, jd: number): Vec3 {
+    const table = tables.get(id);
+    if (table === undefined) {
+      return s.stateInRoot(id, jd)!.position;
+    }
+    const local = interpolateState(table, jd);
+    if (local === null) {
+      throw new Error(`${id} has no state at JD ${jd} in its full table.`);
+    }
+    const parent = s.body(id).parent;
+    const origin: Vec3 = parent === null ? { x: 0, y: 0, z: 0 } : rootPosition(tables, parent, jd);
+    return {
+      x: local.position.x + origin.x,
+      y: local.position.y + origin.y,
+      z: local.position.z + origin.z,
+    };
+  }
 
   it.each(crafts)('%s: every sample is JPL’s, unchanged', async (id) => {
     const full = await fullTable(s, id);
@@ -117,6 +159,7 @@ describeWithData('spacecraft paths, as written', () => {
       const path = (await read(`data/paths/${id}.json`)) as PathTable;
       const body = s.body(id);
       const gapStarts = new Set(path.gaps.map((i) => path.t[i]));
+      const tables = await loadJoined();
 
       let worst = 0;
       let gapIndex = 0;
@@ -132,13 +175,13 @@ describeWithData('spacecraft paths, as written', () => {
         const drawn = interpolateState(path, jd)!.position;
         const miss = Math.hypot(drawn.x - full.x[k]!, drawn.y - full.y[k]!, drawn.z - full.z[k]!);
 
-        const origin = body.parent === null ? null : s.stateInRoot(body.parent, jd)!.position;
+        const origin = body.parent === null ? null : rootPosition(tables, body.parent, jd);
         const px = full.x[k]! + (origin?.x ?? 0);
         const py = full.y[k]! + (origin?.y ?? 0);
         const pz = full.z[k]! + (origin?.z ?? 0);
         let nearest = Infinity;
         for (const reference of references) {
-          const at = s.stateInRoot(reference, jd)!.position;
+          const at = rootPosition(tables, reference, jd);
           nearest = Math.min(nearest, Math.hypot(px - at.x, py - at.y, pz - at.z));
         }
         const tolerance = Math.max(info.floorKm, info.angularTolerance * nearest);
