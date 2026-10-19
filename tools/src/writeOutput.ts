@@ -174,13 +174,13 @@ export async function writeStars(stars: StarCatalog): Promise<void> {
 }
 
 /**
- * The asteroid belt, as belt/belt.json and its binary file of elements beside it. See
- * BeltInfo.
+ * The asteroid belt, as belt/belt.json and its tiers' binary files of elements beside
+ * it. See BeltInfo.
  *
  * Takes the directory, unlike the writers above, because the belt can be regenerated on
  * its own (`pnpm fetch:belt`) into a data directory a full run already filled. So it
  * replaces belt/ and nothing else: the other files there are a different run's, and
- * still valid. The binary is written before the JSON that describes it, so an
+ * still valid. The binaries are written before the JSON that describes them, so an
  * interrupted write leaves no belt.json at all -- which the app reads as no belt --
  * never a description of a file that is not there, or not all there.
  */
@@ -188,7 +188,10 @@ export async function writeBelt(build: BeltBuild, outputDir = OUTPUT_DIR): Promi
   const directory = join(outputDir, 'belt');
   await rm(directory, { recursive: true, force: true });
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, build.info.file), beltBytes(build.records));
+  // One tier at a time, so only one tier's bytes are ever copied out at once.
+  for (const { tier, records } of build.tiers) {
+    await writeFile(join(directory, tier.file), beltBytes(records));
+  }
   await writeJson(join(directory, 'belt.json'), build.info);
 }
 

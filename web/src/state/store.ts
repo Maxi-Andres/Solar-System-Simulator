@@ -2,6 +2,7 @@ import type { BodyId } from '@sss/tools/types';
 import { create } from 'zustand';
 
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
+import { readStoredInteger, writeStoredInteger } from './persisted.ts';
 
 /**
  * View state.
@@ -138,16 +139,27 @@ export interface ViewState {
    * state change, which keeps zoom smooth and out of React's render path.
    */
   readonly zoomImpulse: number;
+  /**
+   * How many of the belt's magnitude tiers to load, brightest first: the Asteroids
+   * layer's density. One by default -- 84,000 asteroids, 3 MB -- and kept for the viewer
+   * between visits, since a choice of fifty-seven megabytes is one to make once. More
+   * than the data has is simply all of it; see BeltSource.
+   */
+  readonly beltTiers: number;
 
   readonly setFocus: (id: BodyId) => void;
   readonly toggleLayer: (id: LayerId) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
   readonly setLighting: (mode: LightingMode) => void;
+  readonly setBeltTiers: (tiers: number) => void;
   readonly togglePanel: (id: PanelId) => void;
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
   readonly consumeZoomImpulse: () => number;
 }
+
+/** Where the belt's density is kept between visits; see `beltTiers`. */
+export const BELT_TIERS_KEY = 'belt-tiers';
 
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
@@ -155,6 +167,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   lighting: PHYSICAL_LIGHTING,
   openPanel: null,
   zoomImpulse: 1,
+  beltTiers: readStoredInteger(BELT_TIERS_KEY, 1, 1),
 
   setFocus: (id) => {
     set({ focus: id });
@@ -166,6 +179,11 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setLayer: (id, on) => {
     set((state) => ({ layers: { ...state.layers, [id]: on } }));
+  },
+
+  setBeltTiers: (tiers) => {
+    writeStoredInteger(BELT_TIERS_KEY, tiers);
+    set({ beltTiers: tiers });
   },
 
   setLighting: (mode) => {

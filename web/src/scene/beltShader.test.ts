@@ -1,6 +1,6 @@
-import type { BeltInfo, OsculatingElements } from '@sss/tools/types';
+import type { OsculatingElements } from '@sss/tools/types';
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RECORD, RECORD_FLOATS } from '../core/belt.ts';
 import { propagate } from '../core/kepler.ts';
@@ -17,6 +17,14 @@ import {
   DOT_BRIGHT_PX,
   DOT_FAINT_ALPHA,
   DOT_FAINT_PX,
+  DOT_REFERENCE_H,
+  FAINT_BINS,
+  FAINT_LIGHT_PER_MAGNITUDE,
+  faintBin,
+  faintBinAlphas,
+  faintDotAlpha,
+  faintDotArea,
+  spriteFragments,
   KEPLER_ITERATIONS,
   meanAnomalyF32,
   solveKeplerF32,
@@ -339,19 +347,159 @@ describe("the Sun's offset, split in two", () => {
 });
 
 describe('the dots', () => {
-  it('run from the faintest to the brightest size and opacity across eight magnitudes', () => {
-    expect(dotDiameterPx(15, 15)).toBe(DOT_FAINT_PX);
-    expect(dotDiameterPx(7, 15)).toBe(DOT_BRIGHT_PX);
-    expect(dotDiameterPx(3, 15)).toBe(DOT_BRIGHT_PX);
-    expect(dotAlpha(15, 15)).toBe(DOT_FAINT_ALPHA);
-    expect(dotAlpha(4, 15)).toBe(DOT_BRIGHT_ALPHA);
-    expect(dotDiameterPx(11, 15)).toBeCloseTo((DOT_FAINT_PX + DOT_BRIGHT_PX) / 2, 10);
+  it('run from the reference to the brightest size and opacity across eight magnitudes', () => {
+    expect(dotDiameterPx(DOT_REFERENCE_H)).toBe(DOT_FAINT_PX);
+    expect(dotDiameterPx(7)).toBe(DOT_BRIGHT_PX);
+    expect(dotDiameterPx(3)).toBe(DOT_BRIGHT_PX);
+    expect(dotAlpha(DOT_REFERENCE_H)).toBe(DOT_FAINT_ALPHA);
+    expect(dotAlpha(4)).toBe(DOT_BRIGHT_ALPHA);
+    expect(dotDiameterPx(11)).toBeCloseTo((DOT_FAINT_PX + DOT_BRIGHT_PX) / 2, 10);
   });
 
-  it('stay about a pixel: a convention, never something that claims a size', () => {
-    expect(DOT_FAINT_PX).toBeGreaterThanOrEqual(1);
-    expect(DOT_BRIGHT_PX).toBeLessThanOrEqual(1.5);
-    expect(DOT_BRIGHT_ALPHA).toBeLessThan(1);
+  it('look as they did in B2a for everything B2a had', () => {
+    // B2a's rule, with its limit of 15: the bright end of the catalogue is unchanged.
+    for (const H of [1.5, 5, 7, 10, 12.5, 14, 14.99]) {
+      const bright = Math.min(1, Math.max(0, (15 - H) / 8));
+      expect(dotAlpha(H)).toBeCloseTo(0.55 + 0.35 * bright, 12);
+      expect(dotDiameterPx(H)).toBeCloseTo(1 + 0.5 * bright, 12);
+    }
+  });
+
+  it('cap a faint dot at the flux law: 2.512 times less a magnitude', () => {
+    for (const H of [15, 15.5, 16, 17.3, 18, 21]) {
+      expect(dotAlpha(H + 1) / dotAlpha(H)).toBeCloseTo(10 ** -0.4, 12);
+    }
+    expect(dotAlpha(20)).toBeCloseTo(DOT_FAINT_ALPHA / 100, 12);
+  });
+});
+
+/**
+ * A belt shaped like the generator's catalogue, a fiftieth of its size: B2a's last
+ * magnitude, then the tier counts the generator writes, each spread evenly over its
+ * magnitudes. The rule works on shares, so the scale does not change any answer but
+ * the per-dot opacities, which go up fifty times.
+ */
+const SCALE = 50;
+const PLANNED_TIERS: readonly (readonly [number, number, number])[] = [
+  [14, 15, 51_530],
+  [15, 16, 123_777],
+  [16, 17, 279_920],
+  [17, 18, 454_725],
+  [18, 20, 632_666],
+];
+
+function syntheticTier(brightest: number, faintest: number, count: number): Float32Array {
+  const n = Math.round(count / SCALE);
+  const records = new Float32Array(n * RECORD_FLOATS);
+  for (let k = 0; k < n; k += 1) {
+    records[k * RECORD_FLOATS + RECORD.H] = brightest + ((faintest - brightest) * (k + 0.5)) / n;
+  }
+  return records;
+}
+
+/** Each faint magnitude's light, from its dots and its opacity: count times alpha. */
+function binLight(tiers: readonly Float32Array[], alphas: Float32Array): number[] {
+  const light = new Array<number>(FAINT_BINS).fill(0);
+  for (const records of tiers) {
+    for (let base = 0; base < records.length; base += RECORD_FLOATS) {
+      const H = records[base + RECORD.H]!;
+      if (H >= DOT_REFERENCE_H) {
+        const bin = faintBin(H);
+        light[bin] = light[bin]! + alphas[bin]!;
+      }
+    }
+  }
+  return light;
+}
+
+describe('the faint catalogue, as an exposure', () => {
+  const tiers = PLANNED_TIERS.map(([brightest, faintest, count]) =>
+    syntheticTier(brightest, faintest, count),
+  );
+  const referenceLight = Array.from({ length: tiers[0]!.length / RECORD_FLOATS }, (_, k) => {
+    const H = tiers[0]![k * RECORD_FLOATS + RECORD.H]!;
+    return dotAlpha(H) * dotDiameterPx(H) ** 2;
+  }).reduce((sum, light) => sum + light, 0);
+
+  it('gives each magnitude half the light of the one before, starting from B2a’s last', () => {
+    const light = binLight(tiers, faintBinAlphas(tiers));
+    expect(light[0]! / referenceLight).toBeCloseTo(FAINT_LIGHT_PER_MAGNITUDE, 6);
+    for (let bin = 1; bin < 5; bin += 1) {
+      expect(light[bin]! / light[bin - 1]!).toBeCloseTo(FAINT_LIGHT_PER_MAGNITUDE, 6);
+    }
+  });
+
+  it('adds, all of it together, less light than that one magnitude of the bright', () => {
+    // The probe's sheet: by the flux law the four fainter tiers carried 2.4 times B2a's
+    // light. Here, with every tier in, under one magnitude's worth of it.
+    const alphas = faintBinAlphas(tiers);
+    const faint = binLight(tiers, alphas).reduce((sum, light) => sum + light, 0);
+    expect(faint).toBeLessThan(referenceLight);
+    expect(faint).toBeGreaterThan(0.9 * referenceLight);
+    // And never more per dot than the flux law.
+    for (let bin = 0; bin < FAINT_BINS; bin += 1) {
+      expect(alphas[bin]!).toBeLessThanOrEqual(dotAlpha(DOT_REFERENCE_H + bin) + 1e-7);
+    }
+  });
+
+  it('keeps what is loaded the same as more arrives: each magnitude has its own share', () => {
+    const two = faintBinAlphas(tiers.slice(0, 2));
+    const all = faintBinAlphas(tiers);
+    expect(two[0]).toBe(all[0]);
+    expect(two[1]).toBe(0);
+  });
+
+  it('changes nothing for B2a’s belt, which has no faint magnitude at all', () => {
+    expect(Array.from(faintBinAlphas(tiers.slice(0, 1)))).toEqual(new Array(FAINT_BINS).fill(0));
+  });
+
+  it('draws a faint dot as one pixel carrying the light of the disc it replaces', () => {
+    // The soft disc's coverage, integrated on a fine grid, against pi (r^2 + 1/12).
+    for (const ratio of [1, 1.25, 2]) {
+      const r = 0.5 * ratio;
+      let covered = 0;
+      const step = 0.01;
+      for (let x = -3; x < 3; x += step) {
+        for (let y = -3; y < 3; y += step) {
+          covered += Math.min(1, Math.max(0, r + 0.5 - Math.hypot(x, y))) * step * step;
+        }
+      }
+      expect(faintDotArea(ratio)).toBeCloseTo(covered, 2);
+    }
+    const alphas = new Float32Array(FAINT_BINS).fill(0.1);
+    expect(faintDotAlpha(16.2, alphas, 1.25)).toBeCloseTo(0.1 * faintDotArea(1.25), 6);
+    expect(spriteFragments(16.2, 1.25)).toBe(1);
+  });
+
+  it('costs a ninth of the fragments it did, tier by tier', () => {
+    // Every dot on screen, at the probe's ratio of 1.25. Before: every dot a 3-by-3
+    // sprite round a disc. After: the faint ones a single pixel.
+    //   tier 0     83,841 dots     754,569 ->   754,569 fragments
+    //   tier 1    123,777        1,113,993 ->   123,777
+    //   tier 2    279,920        2,519,280 ->   279,920
+    //   tier 3    454,725        4,092,525 ->   454,725
+    //   tier 4    632,666        5,693,994 ->   632,666
+    //   all     1,574,929       14,174,361 -> 2,245,657   (6.3 times fewer)
+    const ratio = 1.25;
+    const before = (H: number) => Math.ceil(dotDiameterPx(Math.min(H, 14.99)) * ratio + 1) ** 2;
+    const tierCounts: readonly (readonly [number, number])[] = [
+      [14.5, 83_841],
+      [15.5, 123_777],
+      [16.5, 279_920],
+      [17.5, 454_725],
+      [18.5, 632_666],
+    ];
+    const totals = tierCounts.map(([H, count]) => [count * before(H), count * spriteFragments(H, ratio)]);
+    expect(totals).toEqual([
+      [754_569, 754_569],
+      [1_113_993, 123_777],
+      [2_519_280, 279_920],
+      [4_092_525, 454_725],
+      [5_693_994, 632_666],
+    ]);
+    // The brightest are larger, and 3 by 3 still at this ratio.
+    expect(spriteFragments(3, ratio)).toBe(9);
+    expect(spriteFragments(3, 2)).toBe(16);
   });
 });
 
@@ -375,14 +523,48 @@ describe('the shaders', () => {
 
   it('size the dots by the same rule as the mirror', () => {
     expect(BELT_VERTEX_SHADER).toContain(`mix(${DOT_FAINT_PX.toFixed(3)}, ${DOT_BRIGHT_PX.toFixed(3)}, bright)`);
-    expect(BELT_VERTEX_SHADER).toContain(`mix(${DOT_FAINT_ALPHA.toFixed(3)}, ${DOT_BRIGHT_ALPHA.toFixed(3)}, bright)`);
+    expect(BELT_VERTEX_SHADER).toContain(`mix(${DOT_FAINT_ALPHA.toFixed(3)}, ${DOT_BRIGHT_ALPHA.toFixed(3)}, bright);`);
+    // The faint branch: one pixel, its magnitude's share, scaled by the disc's area.
+    expect(BELT_VERTEX_SHADER).toContain(`if (aMotion.y >= ${DOT_REFERENCE_H.toFixed(1)})`);
+    expect(BELT_VERTEX_SHADER).toContain(`uniform float uFaintAlpha[${FAINT_BINS}];`);
+    expect(BELT_VERTEX_SHADER).toContain('uFaintAlpha[bin] * PI * (r * r + 1.0 / 12.0)');
+    expect(BELT_VERTEX_SHADER).toContain('vSpritePx = 1.0;');
+  });
+
+  it('cost a fixed, counted amount of arithmetic per asteroid', () => {
+    // What the GPU does per asteroid per frame, counted off the mirror: every sin, cos,
+    // sqrt and pow beltPosition calls is one the shader makes, plus the dot's one pow.
+    // Measured: 17 trigonometric calls and one square root on an orbit below e = 0.5,
+    // 16, two square roots and two pows above it; the dot itself adds none since the
+    // faint ones lost their pow. For the whole catalogue, 1,575,460 asteroids, that is
+    // about 30 million transcendental evaluations a frame -- nothing on the CPU, which
+    // does none of it, and a figure for the GPU to be held to.
+    const counted = ['sin', 'cos', 'sqrt', 'pow'] as const;
+    const records = recordsOf(ORBITS);
+    const calls = (index: number): Record<(typeof counted)[number], number> => {
+      const tally = { sin: 0, cos: 0, sqrt: 0, pow: 0 };
+      const spies = counted.map((name) => {
+        const original = Math[name] as (...values: number[]) => number;
+        return vi.spyOn(Math, name).mockImplementation((...args: number[]) => {
+          tally[name] += 1;
+          return original(...args);
+        });
+      });
+      beltPosition(records, index, 100);
+      for (const spy of spies) {
+        spy.mockRestore();
+      }
+      return tally;
+    };
+    // ORBITS[1] is at e = 0.1, ORBITS[3] at 0.9.
+    expect(calls(1)).toEqual({ sin: 9, cos: 8, sqrt: 1, pow: 0 });
+    expect(calls(3)).toEqual({ sin: 8, cos: 8, sqrt: 2, pow: 2 });
   });
 });
 
 describe('buildBeltGeometry', () => {
-  const info = { count: 2, referenceJd: REFERENCE_JD, magnitudeLimit: 15 } as unknown as BeltInfo;
   const records = recordsOf(ORBITS.slice(0, 2));
-  const geometry = buildBeltGeometry({ info, records });
+  const geometry = buildBeltGeometry(records);
 
   it('reads the file buffer itself, with no copy', () => {
     const shape = geometry.getAttribute('aShape') as THREE.InterleavedBufferAttribute;

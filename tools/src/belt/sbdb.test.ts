@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SBDB_QUERY_API_URL } from '../config.ts';
-import { beltQuery, fetchBeltRows, parseSbdbResponse, SBDB_FIELDS } from './sbdb.ts';
+import { beltQuery, fetchBelt, parseSbdbResponse, SBDB_FIELDS, type SbdbRow } from './sbdb.ts';
 import sbdbBelt from './__fixtures__/sbdb-belt.json' with { type: 'json' };
 
 /**
@@ -124,7 +124,10 @@ describe('paging', () => {
   });
 
   /** A fake SBDB that pages the fixture's rows, optionally lying about its count. */
-  function fakeSbdb(countFor: (from: number) => number = () => sbdbBelt.data.length) {
+  function fakeSbdb(
+    countFor: (from: number, call: number) => number = () => sbdbBelt.data.length,
+    data: readonly (readonly unknown[])[] = sbdbBelt.data,
+  ) {
     const calls: URL[] = [];
     vi.stubGlobal('fetch', async (input: URL) => {
       const url = new URL(input);
@@ -134,8 +137,8 @@ describe('paging', () => {
       return new Response(
         JSON.stringify({
           ...sbdbBelt,
-          count: countFor(from),
-          data: sbdbBelt.data.slice(from, from + limit),
+          count: countFor(from, calls.length),
+          data: data.slice(from, from + limit),
         }),
         { status: 200 },
       );
@@ -143,24 +146,54 @@ describe('paging', () => {
     return calls;
   }
 
-  it('walks the pages until the count is reached', async () => {
+  /** A sink that keeps what it is handed, page by page. */
+  function collector() {
+    const pages: SbdbRow[][] = [];
+    return { pages, add: (rows: readonly SbdbRow[]) => void pages.push([...rows]) };
+  }
+
+  it('walks the pages until the count is reached, handing each one over', async () => {
     const calls = fakeSbdb();
-    const belt = await fetchBeltRows(15, 10);
-    expect(belt.rows.map((row) => row.spkid)).toEqual(sbdbBelt.data.map((row) => row[0]));
+    const read = await fetchBelt(collector, 15, 10);
+    expect(read.sink.pages.map((page) => page.length)).toEqual([10, 10, 2]);
+    expect(read.sink.pages.flat().map((row) => row.spkid)).toEqual(
+      sbdbBelt.data.map((row) => row[0]),
+    );
+    expect(read.count).toBe(22);
     expect(calls.map((url) => url.searchParams.get('limit-from'))).toEqual(['0', '10', '20']);
     expect(calls.every((url) => url.href.startsWith(SBDB_QUERY_API_URL))).toBe(true);
-    expect(Date.parse(belt.queriedAt)).not.toBeNaN();
+    expect(Date.parse(read.queriedAt)).not.toBeNaN();
   });
 
-  it('refuses a belt whose count changed while it was being paged', async () => {
+  it('asks for the whole catalogue, with no magnitude filter, when the limit is null', async () => {
+    const calls = fakeSbdb();
+    await fetchBelt(collector, null, 100);
+    expect(calls[0]!.searchParams.has('sb-cdata')).toBe(false);
+    expect(beltQuery(null, 0, 10)['sb-kind']).toBe('a');
+  });
+
+  it('reads again, into a fresh sink, when the count changed under the paging', async () => {
+    // The second request -- the first read's second page -- sees one more asteroid.
+    fakeSbdb((_, call) => (call === 2 ? 23 : 22));
+    const read = await fetchBelt(collector, 15, 10);
+    expect(read.sink.pages.flat()).toHaveLength(22);
+  });
+
+  it('gives up on a catalogue that will not settle', async () => {
     fakeSbdb((from) => (from === 0 ? 22 : 23));
-    await expect(fetchBeltRows(15, 10)).rejects.toThrow(/count changed/);
+    await expect(fetchBelt(collector, 15, 10)).rejects.toThrow(/settled belt.*count changed/);
+  });
+
+  it('refuses the same asteroid twice across pages', async () => {
+    const doubled = [...sbdbBelt.data.slice(0, 21), sbdbBelt.data[0]!];
+    fakeSbdb(undefined, doubled);
+    await expect(fetchBelt(collector, 15, 10)).rejects.toThrow(/SPK-ID 20000001 twice/);
   });
 
   it('refuses a rejected query in one request, without retrying a mistake of ours', async () => {
     const fetch = vi.fn(async () => new Response('{"message":"bad field"}', { status: 400 }));
     vi.stubGlobal('fetch', fetch);
-    await expect(fetchBeltRows(15, 10)).rejects.toThrow(/rejected.*HTTP 400.*bad field/);
+    await expect(fetchBelt(collector, 15, 10)).rejects.toThrow(/rejected.*HTTP 400.*bad field/);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

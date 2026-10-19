@@ -1,25 +1,39 @@
-import type { BodyId } from '@sss/tools/types';
+import type { BeltInfo, BodyId } from '@sss/tools/types';
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { memo, useEffect, useMemo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
-import { RECORD, RECORD_FLOATS, type Belt, type BeltSource } from '../core/belt.ts';
+import { RECORD, RECORD_FLOATS, type BeltSource } from '../core/belt.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { Vec3 } from '../core/vec3.ts';
-import { BELT_COLOR, BELT_FRAGMENT_SHADER, BELT_VERTEX_SHADER } from './beltShader.ts';
+import {
+  BELT_COLOR,
+  BELT_FRAGMENT_SHADER,
+  BELT_VERTEX_SHADER,
+  FAINT_BINS,
+  faintBinAlphas,
+} from './beltShader.ts';
 import type { SharedFrame } from './satellites.ts';
 import { KM_PER_UNIT } from './scale.ts';
 
 /**
- * The asteroid belt: every asteroid in SBDB down to the file's magnitude limit, at its
- * real position, as one draw call.
+ * The asteroid belt: every asteroid in the tiers loaded so far, at its real position.
  *
- * One `THREE.Points` over the file's own bytes: the downloaded buffer goes to the GPU as
- * it is, nine floats an asteroid, and the vertex shader solves each orbit for the instant
- * on the clock (see beltShader.ts). Per frame this component sets four uniforms and
- * allocates nothing -- nothing here scales with the number of asteroids, which is the
- * point: B2b's hundreds of thousands cost the CPU exactly what B2a's 84,000 do.
+ * Each tier is one `THREE.Points` over that tier's own downloaded bytes: the buffer goes
+ * to the GPU as it is, nine floats an asteroid, and the vertex shader solves each orbit
+ * for the instant on the clock (see beltShader.ts). All of them share one material, so
+ * per frame this component sets four uniforms and allocates nothing -- nothing here
+ * scales with the number of asteroids, which is the point: the whole catalogue's 1.6
+ * million cost the CPU exactly what B2a's 84,000 did.
+ *
+ * **One Points per tier, not one buffer grown.** A GPU buffer cannot grow in place, so
+ * growing one would mean a new buffer and the whole belt uploaded again at every tier --
+ * 57 MB to add the last 23 -- and, on the CPU, the old and new copies both alive while
+ * the new one is filled: 80 MB at the peak, for a step whose download is the slow part
+ * anyway. Separately, each tier is uploaded once, straight from the bytes it arrived in,
+ * and dropping one is disposing one buffer. The price is a draw call per tier, five at
+ * most, with no state change between them.
  *
  * The dots are a legibility convention, as the planets' markers are: constant on screen,
  * a pixel or so, because no asteroid here is anywhere near a pixel at its real size.
@@ -39,33 +53,35 @@ export interface AsteroidBeltProps {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
   readonly focus: BodyId;
-  /** The Asteroids layer. Off, nothing is drawn and the GPU's copy is let go. */
+  /** The Asteroids layer. Off, nothing is drawn and the GPU's copies are let go. */
   readonly visible: boolean;
   readonly sharedFrame: SharedFrame;
 }
 
-/** The belt's GPU objects, and the uniforms the frame loop writes. */
-interface BeltPoints {
-  readonly points: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+/** The belt's one material, and the uniforms the frame loop writes. */
+interface BeltMaterial {
+  readonly material: THREE.ShaderMaterial;
   readonly referenceJd: number;
   readonly dtDays: THREE.IUniform<number>;
   readonly sunHigh: THREE.Vector3;
   readonly sunLow: THREE.Vector3;
   readonly pixelRatio: THREE.IUniform<number>;
+  /** Each faint magnitude's opacity; see faintBinAlphas. Rewritten as tiers arrive. */
+  readonly faintAlpha: Float32Array;
 }
 
-/** Nothing here can be clicked: a raycast would walk 84,000 points for no answer. */
+/** Nothing here can be clicked: a raycast would walk every asteroid for no answer. */
 function noRaycast(): void {}
 
 /**
- * The records as one interleaved buffer, read through three attributes.
+ * A tier's records as one interleaved buffer, read through three attributes.
  *
  * The file's own order is what makes this work: a, e and i are floats 0 to 2, the three
  * angles 3 to 5, n and H 6 and 7. The class code, float 8, rides along unread -- it is
  * in the stride either way, and a filter by class will want it on the GPU.
  */
-export function buildBeltGeometry(belt: Belt): THREE.BufferGeometry {
-  const interleaved = new THREE.InterleavedBuffer(belt.records, RECORD_FLOATS);
+export function buildBeltGeometry(records: Float32Array): THREE.BufferGeometry {
+  const interleaved = new THREE.InterleavedBuffer(records, RECORD_FLOATS);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('aShape', new THREE.InterleavedBufferAttribute(interleaved, 3, RECORD.a));
   geometry.setAttribute(
@@ -74,17 +90,18 @@ export function buildBeltGeometry(belt: Belt): THREE.BufferGeometry {
   );
   geometry.setAttribute('aMotion', new THREE.InterleavedBufferAttribute(interleaved, 2, RECORD.n));
   // There is no `position` for three to count vertices by, so the range says how many.
-  geometry.setDrawRange(0, belt.info.count);
+  geometry.setDrawRange(0, records.length / RECORD_FLOATS);
   // The belt spans the Solar System; its bounds say nothing about whether it is on screen.
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
   return geometry;
 }
 
-function buildBeltPoints(belt: Belt): BeltPoints {
+function buildBeltMaterial(info: BeltInfo): BeltMaterial {
   const dtDays: THREE.IUniform<number> = { value: 0 };
   const pixelRatio: THREE.IUniform<number> = { value: 1 };
   const sunHigh = new THREE.Vector3();
   const sunLow = new THREE.Vector3();
+  const faintAlpha = new Float32Array(FAINT_BINS);
   const material = new THREE.ShaderMaterial({
     vertexShader: BELT_VERTEX_SHADER,
     fragmentShader: BELT_FRAGMENT_SHADER,
@@ -94,7 +111,7 @@ function buildBeltPoints(belt: Belt): BeltPoints {
       uSunLow: { value: sunLow },
       uUnitsPerKm: { value: 1 / KM_PER_UNIT },
       uPixelRatio: pixelRatio,
-      uFaintH: { value: belt.info.magnitudeLimit },
+      uFaintAlpha: { value: faintAlpha },
       uColor: { value: new THREE.Vector3(...BELT_COLOR) },
     },
     // Blended over what is behind, not added to it: see DOT_FAINT_ALPHA. Depth is tested,
@@ -106,11 +123,26 @@ function buildBeltPoints(belt: Belt): BeltPoints {
     // The colour is already a display value; see BELT_COLOR.
     toneMapped: false,
   });
-  const points = new THREE.Points(buildBeltGeometry(belt), material);
-  points.frustumCulled = false;
-  points.raycast = noRaycast;
-  return { points, referenceJd: belt.info.referenceJd, dtDays, sunHigh, sunLow, pixelRatio };
+  return { material, referenceJd: info.referenceJd, dtDays, sunHigh, sunLow, pixelRatio, faintAlpha };
 }
+
+/**
+ * One tier on the GPU, for as long as it is mounted: its buffer is uploaded on its first
+ * frame and disposed when the tier is let go, the layer goes off, or the canvas goes.
+ */
+const BeltTierPoints = memo(function BeltTierPoints({
+  records,
+  material,
+}: {
+  readonly records: Float32Array;
+  readonly material: THREE.ShaderMaterial;
+}) {
+  const geometry = useMemo(() => buildBeltGeometry(records), [records]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <points geometry={geometry} material={material} frustumCulled={false} raycast={noRaycast} />
+  );
+});
 
 export function AsteroidBelt({
   source,
@@ -120,19 +152,21 @@ export function AsteroidBelt({
   visible,
   sharedFrame,
 }: AsteroidBeltProps) {
-  const belt = useSyncExternalStore(source.subscribe, () => source.belt);
-  const shown = visible ? belt : null;
-  const built = useMemo(() => (shown === null ? null : buildBeltPoints(shown)), [shown]);
+  const view = useSyncExternalStore(source.subscribe, () => source.view);
+  const info = visible ? view.info : null;
+  const built = useMemo(() => (info === null ? null : buildBeltMaterial(info)), [info]);
+  useEffect(() => () => built?.material.dispose(), [built]);
 
-  // The GPU's copy goes with the layer, or with the canvas. 3 MB for B2a; the decoded
-  // records stay in BeltSource, so switching the layer back on is an upload, not a fetch.
-  useEffect(
-    () => () => {
-      built?.points.geometry.dispose();
-      built?.points.material.dispose();
-    },
-    [built],
+  // The faint magnitudes share their light among the dots in hand, so it is worked out
+  // again whenever a tier arrives or goes: one pass over the records, ten milliseconds or
+  // so for all of them, once per tier rather than per frame.
+  const faintAlpha = useMemo(
+    () => faintBinAlphas(view.tiers.map((tier) => tier.records)),
+    [view.tiers],
   );
+  useEffect(() => {
+    built?.faintAlpha.set(faintAlpha);
+  }, [built, faintAlpha]);
 
   useFrame(({ gl }) => {
     if (built === null) {
@@ -147,11 +181,12 @@ export function AsteroidBelt({
         ? shared.bodies.get('sun')?.positionKm
         : undefined;
     sun ??= store.stateRelativeTo('sun', focus, jd)?.position;
+    // With no Sun to hang it on, the belt is not drawn: the shader would put every
+    // asteroid round the focus instead.
+    built.material.visible = sun !== undefined;
     if (sun === undefined) {
-      built.points.visible = false;
       return;
     }
-    built.points.visible = true;
 
     // Float64 here, narrowed once by the upload: to 21 seconds at ten years out, which the
     // shader then multiplies by n in float32. beltShader.test.ts measures what that costs.
@@ -166,5 +201,14 @@ export function AsteroidBelt({
     built.pixelRatio.value = gl.getPixelRatio();
   });
 
-  return built === null ? null : <primitive object={built.points} />;
+  if (built === null) {
+    return null;
+  }
+  return (
+    <>
+      {view.tiers.map((tier) => (
+        <BeltTierPoints key={tier.index} records={tier.records} material={built.material} />
+      ))}
+    </>
+  );
 }

@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody } from '../catalog.ts';
-import { AU_KM, BELT_FILE, SBDB_QUERY_API_URL } from '../config.ts';
+import { AU_KM, BELT_TIER_LIMITS, beltTierFile, SBDB_QUERY_API_URL } from '../config.ts';
 import { BELT_CLASSES, BELT_RECORD_FLOATS, type BeltInfo } from '../types.ts';
 import { writeBelt } from '../writeOutput.ts';
 import {
+  BeltAccumulator,
   beltBytes,
   buildBelt,
   catalogDesignations,
@@ -20,11 +21,17 @@ import {
 } from './buildBelt.ts';
 import { parseSbdbResponse, type SbdbRow } from './sbdb.ts';
 import sbdbBelt from './__fixtures__/sbdb-belt.json' with { type: 'json' };
+import sbdbFaint from './__fixtures__/sbdb-faint.json' with { type: 'json' };
 
 /**
  * From SBDB's rows to the belt's file. The fixture is the real response described in
  * sbdb.test.ts: 22 rows, three of them bodies the catalog draws, two hyperbolic and one
  * with no mean anomaly -- so sixteen asteroids are written.
+ *
+ * The tiers are tested with a second fixture of real rows, `sbdb-faint.json`: twelve
+ * fetched from SBDB the same day with queries at each tier limit -- H 14.99, 15.00 twice,
+ * 15.59, 16.00, 17.00, 17.95, 18.00, 30.1, an Atira -- and two of the 509 with no H. Not one
+ * response, so its `count` is just its own twelve.
  */
 
 const DEG = Math.PI / 180;
@@ -43,8 +50,8 @@ function build(rows: readonly SbdbRow[] = ROWS) {
     rows,
     queriedAt: '2026-10-19T15:24:52.471Z',
     referenceJd: REFERENCE_JD,
-    magnitudeLimit: 15,
     excluded: EXCLUDED,
+    tierLimits: BELT_TIER_LIMITS,
   });
 }
 
@@ -123,7 +130,7 @@ describe('what the belt leaves out because the catalog draws it', () => {
 
 describe('what the belt drops', () => {
   it('counts the open orbits and the incomplete row, and writes the rest', () => {
-    expect(BELT.info.dropped).toEqual({ notElliptic: 2, missingElements: 1 });
+    expect(BELT.info.dropped).toEqual({ notElliptic: 2, missingElements: 1, noMagnitude: 0 });
     expect(BELT.info.count).toBe(22 - 3 - 2 - 1);
   });
 
@@ -339,9 +346,10 @@ describe('the file', () => {
         url: SBDB_QUERY_API_URL,
         queriedAt: '2026-10-19T15:24:52.471Z',
       },
-      file: BELT_FILE,
+      file: 'elements-0.bin',
       recordFloats: BELT_RECORD_FLOATS,
-      magnitudeLimit: 15,
+      // The faintest written: 66146, an Aten at H 14.36.
+      magnitudeLimit: 14.36,
       referenceJd: REFERENCE_JD,
       // 1927 LA's epoch to the 2026-06-09 most orbits share. Pluto's 2016 one is not
       // here: Pluto is not written.
@@ -349,6 +357,129 @@ describe('the file', () => {
       classes: [...BELT_CLASSES],
     };
     expect(BELT.info).toMatchObject(expected);
+  });
+});
+
+describe('the tiers', () => {
+  // The faint fixture: real rows at and around every tier limit, and two with no H.
+  const faint = parseSbdbResponse(sbdbFaint).rows;
+  const all = [...ROWS, ...faint];
+  const belt = build(all);
+  const tierOf = (designation: string): number => {
+    const a = Math.fround(all.find((r) => r.designation === designation)!.aAu! * AU_KM);
+    return belt.tiers.findIndex(({ records }) =>
+      Array.from({ length: records.length / BELT_RECORD_FLOATS }, (_, k) => records[k * 9]).includes(a),
+    );
+  };
+
+  it('are the limits in BELT_TIER_LIMITS, open at both ends', () => {
+    expect(BELT_TIER_LIMITS).toEqual([15, 16, 17, 18]);
+    expect(belt.info.tiers!.map((tier) => [tier.brightestH, tier.faintestH])).toEqual([
+      [null, 15],
+      [15, 16],
+      [16, 17],
+      [17, 18],
+      [18, null],
+    ]);
+    expect(belt.info.tiers!.map((tier) => tier.file)).toEqual([0, 1, 2, 3, 4].map(beltTierFile));
+    expect(beltTierFile(0)).toBe('elements-0.bin');
+  });
+
+  it('put a limit in the fainter tier: brighter side inclusive, fainter exclusive', () => {
+    expect(tierOf('3199')).toBe(0); // H 14.99
+    expect(tierOf('9320')).toBe(1); // H 15.00
+    expect(tierOf('719')).toBe(1); // H 15.59
+    expect(tierOf('9498')).toBe(2); // H 16.00
+    expect(tierOf('10145')).toBe(3); // H 17.00
+    expect(tierOf('3988')).toBe(3); // H 17.95
+    expect(tierOf('159928')).toBe(4); // H 18.00
+    expect(tierOf('2003 SQ222')).toBe(4); // H 30.1, in the open tier
+    expect(belt.info.tiers!.map((tier) => tier.count)).toEqual([17, 3, 2, 2, 2]);
+  });
+
+  it('count their bytes exactly, and add up to the belt', () => {
+    for (const { tier, records } of belt.tiers) {
+      expect(tier.bytes).toBe(tier.count * BELT_RECORD_FLOATS * 4);
+      expect(records.byteLength).toBe(tier.bytes);
+    }
+    expect(belt.tiers.reduce((sum, { tier }) => sum + tier.count, 0)).toBe(belt.info.count);
+    const joined = new Float32Array(belt.records.length);
+    let at = 0;
+    for (const { records } of belt.tiers) {
+      joined.set(records, at);
+      at += records.length;
+    }
+    expect(joined).toEqual(belt.records);
+  });
+
+  it('keep what data before tiers had: the first tier as `file`, every tier in `count`', () => {
+    expect(belt.info.file).toBe(belt.info.tiers![0]!.file);
+    expect(belt.info.count).toBe(26);
+  });
+
+  it('are each ordered by H, and equal H by SPK-ID', () => {
+    for (const { records } of belt.tiers) {
+      const h = Array.from({ length: records.length / BELT_RECORD_FLOATS }, (_, k) => records[k * 9 + 7]!);
+      expect(h).toEqual([...h].sort((p, q) => p - q));
+    }
+    // Two of H 15.00, 9320 and 9603: the first two of tier 1, in SPK-ID order.
+    const [first, second] = [...belt.tiers[1]!.records.filter((_, k) => k % 9 === 0)];
+    expect(first).toBe(Math.fround(all.find((r) => r.designation === '9320')!.aAu! * AU_KM));
+    expect(second).toBe(Math.fround(all.find((r) => r.designation === '9603')!.aAu! * AU_KM));
+  });
+
+  it('leave out an asteroid with no H, and count it, rather than give it one', () => {
+    expect(faint.filter((r) => r.h === null).map((r) => r.designation)).toEqual([
+      '1999 CB130',
+      '1999 CE130',
+    ]);
+    // Counted apart from 2002 PD153, the one orbit with an element missing.
+    expect(belt.info.dropped.noMagnitude).toBe(2);
+    expect(belt.info.dropped.missingElements).toBe(1);
+  });
+
+  it('give the faintest H written as the magnitude limit', () => {
+    expect(belt.info.magnitudeLimit).toBe(30.1);
+    expect(belt.info.classCounts.IEO).toBe(1);
+  });
+
+  it('come out the same however the rows were paged', () => {
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED });
+    const reversed = [...all].reverse();
+    accumulator.add(reversed.slice(0, 7));
+    accumulator.add(reversed.slice(7, 20));
+    accumulator.add(reversed.slice(20));
+    const paged = accumulator.finish({
+      queriedAt: belt.info.source.queriedAt,
+      excluded: EXCLUDED,
+      tierLimits: BELT_TIER_LIMITS,
+    });
+    expect(paged.records).toEqual(belt.records);
+    expect(paged.info).toEqual(belt.info);
+  });
+});
+
+describe('a small body the run did not publish', () => {
+  it('goes back into the belt, rather than vanish from the sky', () => {
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED });
+    accumulator.add(ROWS);
+    const withVesta = accumulator.finish({
+      queriedAt: '2026-10-19T15:24:52.471Z',
+      excluded: EXCLUDED.filter((designation) => designation !== '4'),
+      tierLimits: BELT_TIER_LIMITS,
+    });
+    expect(withVesta.excludedFound).toEqual(['1', '134340']);
+    expect(withVesta.info.count).toBe(BELT.info.count + 1);
+    // Vesta, H 3.25, after Sedna (1.50) and Quaoar (2.41), in its place by magnitude.
+    expect(withVesta.records[2 * BELT_RECORD_FLOATS]).toBe(Math.fround(row('4').aAu! * AU_KM));
+  });
+
+  it('can only be one the pages set aside', () => {
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: ['1'] });
+    accumulator.add(ROWS);
+    expect(() =>
+      accumulator.finish({ queriedAt: '', excluded: ['1', '4'], tierLimits: BELT_TIER_LIMITS }),
+    ).toThrow(/4 is excluded from the belt but was never set aside/);
   });
 });
 
@@ -360,13 +491,21 @@ describe('writing it', () => {
       await writeBelt(BELT, directory);
       await writeBelt(BELT, directory);
       expect((await readdir(directory)).sort()).toEqual(['belt', 'manifest.json']);
-      expect((await readdir(join(directory, 'belt'))).sort()).toEqual(['belt.json', BELT_FILE]);
+      expect((await readdir(join(directory, 'belt'))).sort()).toEqual([
+        'belt.json',
+        ...[0, 1, 2, 3, 4].map(beltTierFile),
+      ]);
       const info = JSON.parse(await readFile(join(directory, 'belt', 'belt.json'), 'utf8'));
       expect(info).toEqual(BELT.info);
-      const bytes = await readFile(join(directory, 'belt', BELT_FILE));
-      expect(new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)).toEqual(
-        BELT.records,
-      );
+      for (const { tier, records } of BELT.tiers) {
+        const bytes = await readFile(join(directory, 'belt', tier.file));
+        expect(bytes.byteLength).toBe(tier.bytes);
+        expect(new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)).toEqual(
+          records,
+        );
+      }
+      // This fixture is all brighter than 15: the fainter tiers are there, and empty.
+      expect(BELT.info.tiers!.map((tier) => tier.count)).toEqual([16, 0, 0, 0, 0]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

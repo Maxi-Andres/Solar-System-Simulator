@@ -1,6 +1,7 @@
 import {
   BELT_MAGNITUDE_LIMIT,
   BELT_PAGE_ROWS,
+  BELT_READ_ATTEMPTS,
   MAX_RETRIES,
   SBDB_QUERY_API_URL,
   SBDB_REQUEST_TIMEOUT_MS,
@@ -12,8 +13,8 @@ import { retryDelayMs } from '../horizons/client.ts';
  *
  * The SBDB Query API (https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) takes a list of
  * fields and a filter and answers with one JSON row per object. Elements, not vectors:
- * an asteroid's whole orbit is nine numbers, so 83,841 of them are one request where
- * Horizons would need one per body.
+ * an asteroid's whole orbit is nine numbers, so the whole catalogue -- 1,575,460 of them
+ * on 2026-10-19 -- is sixteen requests where Horizons would need one per body.
  *
  * What a row means, from the API's own field table:
  *
@@ -81,14 +82,10 @@ export interface SbdbPage {
   readonly rows: SbdbRow[];
 }
 
-/** Everything SBDB returned for the belt, and when it was asked. */
-export interface SbdbBelt {
-  readonly rows: readonly SbdbRow[];
-  readonly queriedAt: string;
-}
-
 /**
- * The query for one page of the belt: every asteroid brighter than `magnitudeLimit`.
+ * The query for one page of the belt: every asteroid brighter than `magnitudeLimit`, or
+ * every asteroid at all when it is null -- including the few hundred SBDB has no H for,
+ * which a magnitude filter would silently leave out rather than count.
  *
  * Sorted by SPK-ID, which is unique, so `limit-from` pages through a fixed order; sorting
  * by H alone would leave the order of equal magnitudes to the database, and a page
@@ -96,14 +93,16 @@ export interface SbdbBelt {
  * put in H order here, after it has all arrived.
  */
 export function beltQuery(
-  magnitudeLimit: number,
+  magnitudeLimit: number | null,
   from: number,
   pageRows: number,
 ): Record<string, string> {
   return {
     fields: SBDB_FIELDS.join(','),
     'sb-kind': 'a',
-    'sb-cdata': JSON.stringify({ AND: [`H|LT|${magnitudeLimit}`] }),
+    ...(magnitudeLimit === null
+      ? {}
+      : { 'sb-cdata': JSON.stringify({ AND: [`H|LT|${magnitudeLimit}`] }) }),
     sort: 'spkid',
     limit: String(pageRows),
     'limit-from': String(from),
@@ -287,49 +286,118 @@ export async function querySbdb(
   throw new Error(`Could not read ${label} from SBDB: ${String(lastError)}`);
 }
 
+/** Where the pages go as they arrive: the belt is packed page by page, never held as rows. */
+export interface BeltSink {
+  add(rows: readonly SbdbRow[]): void;
+}
+
+/** A whole read of the belt: the sink that took every page, and when it was asked. */
+export interface BeltRead<T extends BeltSink> {
+  readonly sink: T;
+  readonly count: number;
+  readonly queriedAt: string;
+}
+
+/** A query's limit, for a log line. */
+function describeLimit(magnitudeLimit: number | null): string {
+  return magnitudeLimit === null ? 'whole catalogue' : `H < ${magnitudeLimit}`;
+}
+
 /**
- * Every asteroid brighter than `magnitudeLimit`, paged `pageRows` at a time.
+ * Every asteroid in SBDB, or every one brighter than `magnitudeLimit`, paged `pageRows`
+ * at a time and handed to a sink page by page.
+ *
+ * Page by page because the whole catalogue is 1.58 million rows: as parsed objects that
+ * is the better part of a gigabyte, where packed it is 57 MB. Each page is parsed,
+ * handed over and let go.
  *
  * Each page says how many objects the whole query matches, and every page must say the
- * same: SBDB is updated continuously, and a count that changes between pages means rows
- * moved underneath the paging, so the set read would be neither the old belt nor the
- * new one. That fails the read rather than publishing it; the next run starts over.
+ * same: SBDB is updated continuously -- the MPC's daily batches of new designations among
+ * it -- and a count that changes between pages means rows moved underneath the paging, so
+ * the set read would be neither the old catalogue nor the new one. The read then starts
+ * over with a fresh sink from `start`, up to BELT_READ_ATTEMPTS times; sixteen pages take
+ * about five minutes, so a change landing inside one read is possible but two in a row
+ * would be a database that is not settling, and the run fails rather than publish it.
+ *
  * The total read must equal the count, and no SPK-ID may appear twice -- the two ways a
  * silently short or doubled belt would otherwise look like a rendering bug.
  */
-export async function fetchBeltRows(
-  magnitudeLimit = BELT_MAGNITUDE_LIMIT,
+export async function fetchBelt<T extends BeltSink>(
+  start: () => T,
+  magnitudeLimit: number | null = BELT_MAGNITUDE_LIMIT,
   pageRows = BELT_PAGE_ROWS,
-): Promise<SbdbBelt> {
+): Promise<BeltRead<T>> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= BELT_READ_ATTEMPTS; attempt += 1) {
+    try {
+      return await readOnce(start(), magnitudeLimit, pageRows);
+    } catch (error) {
+      if (!(error instanceof CountChangedError)) {
+        throw error;
+      }
+      lastError = error;
+      console.warn(`[belt] ${error.message} Reading it again (${attempt}/${BELT_READ_ATTEMPTS}).`);
+    }
+  }
+  throw new Error(`Could not read a settled belt from SBDB: ${String(lastError)}`);
+}
+
+/** SBDB changed between two pages of one read: worth starting the read over. */
+class CountChangedError extends Error {}
+
+async function readOnce<T extends BeltSink>(
+  sink: T,
+  magnitudeLimit: number | null,
+  pageRows: number,
+): Promise<BeltRead<T>> {
   const queriedAt = new Date().toISOString();
-  const rows: SbdbRow[] = [];
+  let read = 0;
   let expected: number | null = null;
+  // Every SPK-ID read, to look for one twice at the end: 13 MB for the whole catalogue,
+  // where a Set of the same numbers is several times that.
+  let spkids = new Float64Array(0);
 
   do {
     const page = await querySbdb(
-      beltQuery(magnitudeLimit, rows.length, pageRows),
-      `belt H < ${magnitudeLimit}, from row ${rows.length}`,
+      beltQuery(magnitudeLimit, read, pageRows),
+      `belt (${describeLimit(magnitudeLimit)}), from row ${read}`,
     );
     if (expected !== null && page.count !== expected) {
-      throw new Error(
+      throw new CountChangedError(
         `SBDB's count changed while the belt was being paged (${expected} then ${page.count}).`,
       );
     }
-    expected = page.count;
-    if (page.rows.length === 0 && rows.length < expected) {
-      throw new Error(`SBDB returned an empty page at row ${rows.length} of ${expected}.`);
+    if (expected === null) {
+      expected = page.count;
+      spkids = new Float64Array(expected);
     }
-    rows.push(...page.rows);
-  } while (rows.length < expected);
+    if (page.rows.length === 0 && read < expected) {
+      throw new Error(`SBDB returned an empty page at row ${read} of ${expected}.`);
+    }
+    if (read + page.rows.length > expected) {
+      throw new Error(`SBDB returned more belt rows than the ${expected} it counted.`);
+    }
+    for (const row of page.rows) {
+      spkids[read] = row.spkid;
+      read += 1;
+    }
+    sink.add(page.rows);
+    if (expected > pageRows) {
+      console.log(`[belt] ${read}/${expected} rows from SBDB`);
+    }
+  } while (read < expected);
 
-  if (rows.length !== expected) {
-    throw new Error(`SBDB returned ${rows.length} belt rows where it counted ${expected}.`);
-  }
-  if (new Set(rows.map((row) => row.spkid)).size !== rows.length) {
-    throw new Error('SBDB returned the same asteroid twice across pages.');
-  }
   if (expected === 0) {
-    throw new Error(`SBDB matched no asteroids brighter than H = ${magnitudeLimit}.`);
+    throw new Error(`SBDB matched no asteroids (${describeLimit(magnitudeLimit)}).`);
   }
-  return { rows, queriedAt };
+  if (read !== expected) {
+    throw new Error(`SBDB returned ${read} belt rows where it counted ${expected}.`);
+  }
+  spkids.sort();
+  for (let index = 1; index < spkids.length; index += 1) {
+    if (spkids[index] === spkids[index - 1]) {
+      throw new Error(`SBDB returned SPK-ID ${spkids[index]} twice across pages.`);
+    }
+  }
+  return { sink, count: expected, queriedAt };
 }

@@ -807,15 +807,37 @@ export const BELT_RECORD_FLOATS = 9;
  * as little-endian float32, BELT_RECORD_FLOATS per asteroid, ordered by H (brightest,
  * which is largest, first). Optional: a data directory without it simply has no belt.
  */
+/** One magnitude tier of the belt; see BeltInfo.tiers. */
+export interface BeltTier {
+  /** The binary file of elements, relative to `belt/`. */
+  readonly file: string;
+  readonly count: number;
+  readonly bytes: number;
+  /** H range of the tier: brighter limit inclusive, fainter exclusive; null = open. */
+  readonly brightestH: number | null;
+  readonly faintestH: number | null;
+}
+
 export interface BeltInfo {
   readonly source: {
     readonly name: string;
     readonly url: string;
     readonly queriedAt: string;
   };
-  /** The binary file of elements, relative to `belt/`. */
+  /**
+   * The binary file of the first tier's elements, relative to `belt/`: `tiers[0].file`,
+   * kept so data written before tiers existed still reads.
+   */
   readonly file: string;
+  /** Asteroids in every tier together. */
   readonly count: number;
+  /**
+   * The belt split by absolute magnitude, brightest first, each its own file of records
+   * in the same layout (step B2b). The app loads a prefix of them -- the first alone by
+   * default, more when asked -- so the whole catalogue never has to be downloaded to see
+   * the largest. Absent in B2a data, which is one tier: `file` and `count`.
+   */
+  readonly tiers?: readonly BeltTier[];
   readonly recordFloats: typeof BELT_RECORD_FLOATS;
   /** Brightest-first ordering's faintest H included. */
   readonly magnitudeLimit: number;
@@ -836,5 +858,11 @@ export interface BeltInfo {
   readonly dropped: {
     readonly notElliptic: number;
     readonly missingElements: number;
+    /**
+     * Rows with no absolute magnitude. H orders the belt, picks the tier and sizes the
+     * dot, so one without it has nothing to be drawn from; giving it one would be
+     * inventing it. Absent in data written before B2b, where they counted as missing.
+     */
+    readonly noMagnitude?: number;
   };
 }

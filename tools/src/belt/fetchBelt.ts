@@ -22,13 +22,13 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { CATALOG } from '../catalog.ts';
-import { BELT_MAGNITUDE_LIMIT, OUTPUT_DIR } from '../config.ts';
+import { BELT_MAGNITUDE_LIMIT, BELT_TIER_LIMITS, OUTPUT_DIR } from '../config.ts';
 import { todayUtcMidnight } from '../fetchData.ts';
 import { toJulianDay } from '../horizons/queries.ts';
 import type { BodyDefinition } from '../types.ts';
 import { writeBelt } from '../writeOutput.ts';
-import { buildBelt, catalogDesignations, describeBelt } from './buildBelt.ts';
-import { fetchBeltRows } from './sbdb.ts';
+import { BeltAccumulator, catalogDesignations, describeBelt } from './buildBelt.ts';
+import { fetchBelt } from './sbdb.ts';
 
 /** The bodies the data directory already draws, or null when it has no catalog yet. */
 async function publishedBodies(outputDir: string): Promise<BodyDefinition[] | null> {
@@ -52,25 +52,30 @@ async function main(): Promise<void> {
     console.log(`[belt] no bodies.json in ${outputDir}; leaving out the whole catalog's small bodies`);
   }
 
-  const epoch = todayUtcMidnight();
-  const rows = await fetchBeltRows(BELT_MAGNITUDE_LIMIT);
-  console.log(
-    `[belt] ${rows.rows.length} rows from SBDB in ${((performance.now() - started) / 1000).toFixed(1)} s`,
+  const excluded = catalogDesignations(published ?? CATALOG);
+  const referenceJd = toJulianDay(todayUtcMidnight());
+  const read = await fetchBelt(
+    () => new BeltAccumulator({ referenceJd, candidates: excluded }),
+    BELT_MAGNITUDE_LIMIT,
   );
-  const belt = buildBelt({
-    rows: rows.rows,
-    queriedAt: rows.queriedAt,
-    referenceJd: toJulianDay(epoch),
-    magnitudeLimit: BELT_MAGNITUDE_LIMIT,
-    excluded: catalogDesignations(published ?? CATALOG),
+  console.log(
+    `[belt] ${read.count} rows from SBDB in ${((performance.now() - started) / 1000).toFixed(1)} s`,
+  );
+  const belt = read.sink.finish({
+    queriedAt: read.queriedAt,
+    excluded,
+    tierLimits: BELT_TIER_LIMITS,
   });
   for (const line of describeBelt(belt)) {
     console.log(line);
   }
 
   await writeBelt(belt, outputDir);
+  // maxRSS is in kilobytes. Logged because the whole catalogue is the one thing in the
+  // tools that could outgrow a CI runner's memory, and the place to see it first is here.
   console.log(
-    `[belt] wrote ${join(outputDir, 'belt')} in ${((performance.now() - started) / 1000).toFixed(1)} s`,
+    `[belt] wrote ${join(outputDir, 'belt')} in ${((performance.now() - started) / 1000).toFixed(1)} s, ` +
+      `peak memory ${Math.round(process.resourceUsage().maxRSS / 1024)} MB`,
   );
   console.log("[belt] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
 }

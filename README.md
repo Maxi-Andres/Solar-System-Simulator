@@ -88,7 +88,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm fetch:belt      # regenerate only the asteroid belt, from JPL's SBDB (seconds)
+pnpm fetch:belt      # regenerate only the asteroid belt, from JPL's SBDB (~5 minutes)
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
@@ -125,8 +125,9 @@ time, never from a visitor's browser.
 
 `pnpm fetch:data` writes about 20 MB of JSON: 20 years of the planets and the Moon —
 ten back and ten forward from the day it runs — two years of the other twenty moons,
-and the sky. Only about 3 MB of it is loaded up front; the moons arrive in pieces as
-they are needed.
+and the sky — plus 57 MB of binary orbital elements for the asteroid belt, in five
+magnitude tiers. Only about 3 MB of the JSON is loaded up front; the moons arrive in
+pieces as they are needed.
 
 ```
 web/public/data/
@@ -138,8 +139,8 @@ web/public/data/
 ├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
 ├─ surface/<id>.json      # a craft on Mars: where each drive ended, and from when
 ├─ small-moons/<planet>.json  # a planet's small moons, fetched when its system is entered
-├─ belt/belt.json         # the asteroid belt: source, count, reference instant, classes
-├─ belt/elements.bin      # its orbital elements, little-endian float32, nine per asteroid
+├─ belt/belt.json         # the asteroid belt: source, tiers, reference instant, classes
+├─ belt/elements-<n>.bin  # one magnitude tier's orbital elements, little-endian float32
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -267,21 +268,41 @@ panel and "Shape: not drawn yet" said plainly.
 
 ### The asteroid belt
 
-Every asteroid in JPL's Small-Body Database brighter than absolute magnitude 15 — 83,841
-on 2026-10-19, of 1,575,460 in all — fetched from the **SBDB Query API** as **orbital
-elements, not vectors**: one request of about 16 MB, where Horizons would want one per
-body. `pnpm fetch:data` fetches it alongside the stars; `pnpm fetch:belt` regenerates it
-alone in about twenty seconds, into an existing data directory without touching the rest
-(`--out <dir>` to write it elsewhere).
+**Every asteroid in JPL's Small-Body Database** — 1,575,460 on 2026-10-19 — fetched from
+the **SBDB Query API** as **orbital elements, not vectors**: sixteen pages of 100,000
+rows, about five minutes, where Horizons would want one request per body.
+`pnpm fetch:data` fetches it alongside the stars; `pnpm fetch:belt` regenerates it alone
+into an existing data directory without touching the rest (`--out <dir>` to write it
+elsewhere). Its peak memory is 371 MB: each page is packed as it arrives rather than
+held.
 
-83,828 are written. Ten are left out because the catalog already draws them from JPL's
-vectors — Ceres, Pallas, Vesta, 16 Psyche, Eurybates, Arrokoth, Haumea, Makemake, Eris,
-and Pluto, which SBDB lists as minor planet 134340 — and three because they cannot be
-propagated: two hyperbolic orbits, and a TNO with no mean anomaly. Each is nine float32
-numbers — semi-major axis, eccentricity, inclination, node, perihelion, mean anomaly,
-mean motion, H and SBDB's orbit class — brightest first: 3.0 MB, 2.27 MB gzipped. Every
-orbit comes at its own epoch, so each mean anomaly is moved in float64 to the run's
-instant before it is stored; what the app does with it is add n·Δt.
+1,574,929 are written. Sixteen are left out because the catalog already draws them from
+JPL's vectors — the fifteen named small bodies, and Pluto, which SBDB lists as minor
+planet 134340. Five are on open orbits, parabolic or hyperbolic, with no mean motion to
+propagate. One TNO has no mean anomaly. And **509 asteroids have an orbit and no absolute
+magnitude**: they are left out and counted on their own (`dropped.noMagnitude`), because H
+is what orders the belt and sizes each point on screen, and a brightness nobody has
+measured is not one to make up.
+
+Each asteroid is nine float32 numbers — semi-major axis, eccentricity, inclination, node,
+perihelion, mean anomaly, mean motion, H and SBDB's orbit class. Every orbit comes at its
+own epoch, so each mean anomaly is moved in float64 to the run's instant before it is
+stored; what the app does with it is add n·Δt. They are sorted brightest first and split
+into **five files by magnitude**, so the app can load the belt a tier at a time and the
+whole catalogue never has to be downloaded to see the largest:
+
+| File | H | Asteroids | Size | Gzipped |
+|---|---|---|---|---|
+| `elements-0.bin` | below 15 | 83,828 | 3.0 MB | 2.3 MB |
+| `elements-1.bin` | 15 to 16 | 123,775 | 4.5 MB | 3.3 MB |
+| `elements-2.bin` | 16 to 17 | 279,920 | 10.1 MB | 7.5 MB |
+| `elements-3.bin` | 17 to 18 | 454,724 | 16.4 MB | 12.2 MB |
+| `elements-4.bin` | 18 and fainter | 632,682 | 22.8 MB | 17.0 MB |
+
+56.7 MB in all, 42.3 MB gzipped: float32 orbital elements barely compress. Each limit
+belongs to the fainter tier — an asteroid of H 15.00 is in the second file. H 15 is about
+3 to 6 km across depending on albedo, H 18 about 0.9 to 1.5 km; the faintest written is H
+34.06, under a metre.
 
 **How accurate it is.** It is two-body propagation from osculating elements, and that is
 the limit, not the data. Measured against Horizons' heliocentric vectors:
@@ -311,8 +332,9 @@ sat at float32's coarsest step, and Sedna cost 61,000 km and 2020 MQ53 — an Oo
 orbit with a semi-major axis of 13,940 AU — 4.1 million. The worst left is 96,000 km,
 for 2020 M4 (a = 14,513 AU, e = 0.9996), from the rounding of its semi-major axis.
 
-1,217 orbits have epochs more than ten years from the run — 1,051 of them TNOs — and for
-those the drift above is a lower bound. The oldest is 1927 LA, whose elements SBDB gives
+36,821 orbits in the catalogue have epochs more than ten years from the run — 1,217 of
+those brighter than H 15, 1,051 of them TNOs — and for those the drift above is a lower
+bound. The oldest is 1927 LA, whose elements SBDB gives
 at a 1927 epoch: its drawn place is a century of two-body extrapolation.
 
 ### Spacecraft sampling
@@ -568,7 +590,7 @@ two, never drawn somewhere approximate and then moved.
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
-| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of the asteroid belt, every asteroid brighter than H 15; comets *(planned)* |
+| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of the asteroid belt, every asteroid in the catalogue; comets *(planned)* |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
@@ -587,9 +609,9 @@ two, never drawn somewhere approximate and then moved.
 - **Phase B** — fifteen named small bodies are in, from JPL's own state vectors: four
   dwarf planets, the largest asteroids and the ones spacecraft have visited. The belt's
   data is generated: 83,828 asteroids to H 15 from SBDB, as orbital elements, for
-  instancing and Keplerian propagation in the vertex shader (B2a); next the whole
-  catalogue of 1.5 million with progressive loading (B2b), and the named bodies' shape
-  models.
+  instancing and Keplerian propagation in the vertex shader (B2a), and the whole
+  catalogue of 1.57 million is generated in five magnitude tiers for progressive loading
+  (B2b); next, the named bodies' shape models.
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
 - **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to

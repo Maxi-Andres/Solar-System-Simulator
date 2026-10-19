@@ -18,11 +18,12 @@
 
 import { pathToFileURL } from 'node:url';
 
-import { buildBelt, catalogDesignations, describeBelt } from './belt/buildBelt.ts';
-import { fetchBeltRows } from './belt/sbdb.ts';
+import { BeltAccumulator, catalogDesignations, describeBelt } from './belt/buildBelt.ts';
+import { fetchBelt } from './belt/sbdb.ts';
 import { CATALOG, SSB_CENTER } from './catalog.ts';
 import {
   BELT_MAGNITUDE_LIMIT,
+  BELT_TIER_LIMITS,
   HORIZONS_API_URL,
   MAX_CONCURRENT_REQUESTS,
   MAX_SAMPLES_PER_REQUEST,
@@ -566,15 +567,22 @@ async function main(): Promise<void> {
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
   // Three independent services, so they run together. The sky is two requests against
-  // VizieR and the belt one against SBDB, and both come back long before Horizons has
-  // finished with the planets.
+  // VizieR and the belt sixteen against SBDB, about five minutes, and both come back long
+  // before Horizons has finished with the planets.
+  //
+  // The belt is packed page by page as it arrives (see BeltAccumulator), with its mean
+  // anomalies moved to the run's own instant: `toJulianDay(epoch)`, the same number every
+  // elements query below sends Horizons as its TLIST, which Horizons reads as TDB. So
+  // referenceJd is 00:00 TDB of the run's day -- 69 s before UTC midnight, which matters
+  // to nothing because the file states it as a TDB Julian day and every anomaly is
+  // computed for exactly that number.
   //
   // A failure of either fails the run, as the stars always have. The deploy publishes a
   // fresh data directory or nothing (deploy.yml: a half-published site is worse than a
   // late one), and a release that silently lost its belt would look like a release with
   // fewer asteroids, not like an outage; the previous deploy stays up instead. SBDB has
   // its own retries first, so this is a fault that outlasted a minute of backoff.
-  const [natural, hipparcosRows, tycho2Rows, beltRows] = await Promise.all([
+  const [natural, hipparcosRows, tycho2Rows, beltRead] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -586,7 +594,14 @@ async function main(): Promise<void> {
     ),
     fetchHipparcos(),
     fetchTycho2(),
-    fetchBeltRows(BELT_MAGNITUDE_LIMIT),
+    fetchBelt(
+      () =>
+        new BeltAccumulator({
+          referenceJd: toJulianDay(epoch),
+          candidates: catalogDesignations(CATALOG),
+        }),
+      BELT_MAGNITUDE_LIMIT,
+    ),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -697,20 +712,12 @@ async function main(): Promise<void> {
         : ''),
   );
 
-  // The belt's mean anomalies are moved to the run's own instant: `toJulianDay(epoch)`,
-  // the same number every elements query above sends Horizons as its TLIST, which
-  // Horizons reads as TDB. So referenceJd is 00:00 TDB of the run's day -- 69 s before
-  // UTC midnight, which matters to nothing because the file states it as a TDB Julian
-  // day and every anomaly is computed for exactly that number.
-  //
-  // Left out of it: the asteroids this run publishes as bodies of their own. A small
-  // body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
-  const belt = buildBelt({
-    rows: beltRows.rows,
-    queriedAt: beltRows.queriedAt,
-    referenceJd: toJulianDay(epoch),
-    magnitudeLimit: BELT_MAGNITUDE_LIMIT,
+  // Left out of the belt: the asteroids this run publishes as bodies of their own. A
+  // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
+  const belt = beltRead.sink.finish({
+    queriedAt: beltRead.queriedAt,
     excluded: catalogDesignations(catalog),
+    tierLimits: BELT_TIER_LIMITS,
   });
   for (const line of describeBelt(belt)) {
     console.log(line.replace('[belt]', '[fetch-data] belt'));

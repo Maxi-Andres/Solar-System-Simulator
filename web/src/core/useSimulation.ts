@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { StarCatalog } from '@sss/tools/types';
 
-import { BeltSource, httpBeltFetchers, loadBelt } from './belt.ts';
+import { BeltSource, httpBeltFetchers } from './belt.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
@@ -28,7 +28,7 @@ export interface Simulation {
   readonly stars: StarCatalog | null;
   /**
    * The asteroid belt, fetched only when asked for: App asks once the ephemerides are in
-   * and the Asteroids layer is on. See belt.ts.
+   * and the Asteroids layer is on, for as many tiers as the viewer chose. See belt.ts.
    */
   readonly belt: BeltSource;
   readonly clock: SimClock;
@@ -63,7 +63,7 @@ export function useSimulation(refreshHz = 10): Simulation {
   readoutRef.current ??= new Signal();
   const beltRef = useRef<BeltSource>(null);
   // BASE_URL carries the GitHub Pages prefix, as below.
-  beltRef.current ??= new BeltSource(() => loadBelt(httpBeltFetchers, import.meta.env.BASE_URL));
+  beltRef.current ??= new BeltSource(httpBeltFetchers, import.meta.env.BASE_URL);
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);

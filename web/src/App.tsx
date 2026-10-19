@@ -6,6 +6,7 @@ import type { Signal } from './core/signal.ts';
 import { useSignal } from './core/useSignal.ts';
 import { useSimulation } from './core/useSimulation.ts';
 import { useStoreVersion } from './core/useStoreVersion.ts';
+import { DETAIL_RELEASE_MS } from './scene/detailRelease.ts';
 import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
@@ -53,6 +54,7 @@ export function App() {
   const lighting = useViewStore((state) => state.lighting);
   const openPanel = useViewStore((state) => state.openPanel);
   const setLayer = useViewStore((state) => state.setLayer);
+  const beltTiers = useViewStore((state) => state.beltTiers);
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
 
@@ -81,13 +83,23 @@ export function App() {
     }
   }, [store, focus, visibleKinds]);
 
-  // The belt likewise: 3 MB, asked for once the ephemerides are in -- never in the way of
-  // the first view -- and only if the Asteroids layer is on. Once here it is kept.
+  // The belt likewise: asked for once the ephemerides are in -- never in the way of the
+  // first view -- and only if the Asteroids layer is on, as many tiers as the viewer chose.
+  // Switched off, its GPU copies go at once (see AsteroidBelt) and every tier past the
+  // first half a minute later, as a body's maps do once it has been small that long: up to
+  // 54 MB is not worth holding for a layer nobody is looking at, and a quick look without
+  // it should not cost the download again. The first tier, 3 MB, is kept.
   useEffect(() => {
-    if (store !== null && visibleKinds.has('asteroid')) {
-      void belt.request();
+    if (store === null) {
+      return;
     }
-  }, [store, belt, visibleKinds]);
+    if (visibleKinds.has('asteroid')) {
+      void belt.request(beltTiers);
+      return;
+    }
+    const timer = setTimeout(() => belt.release(1), DETAIL_RELEASE_MS);
+    return () => clearTimeout(timer);
+  }, [store, belt, visibleKinds, beltTiers]);
 
   // Switching a layer off while standing on one of its bodies would leave the camera
   // orbiting something that is no longer drawn. Step back to what it orbits.
@@ -225,7 +237,7 @@ export function App() {
             <SearchPanel store={store} clock={clock} focus={focus} />
           </Presence>
           <Presence show={openPanel === 'layers'}>
-            <LayersPanel />
+            <LayersPanel belt={belt} />
           </Presence>
           <Presence show={openPanel === 'lighting'}>
             <LightingPanel />

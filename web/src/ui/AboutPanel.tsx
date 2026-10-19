@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import type { BeltClass, BeltInfo, StarCatalog } from '@sss/tools/types';
 
-import type { BeltSource } from '../core/belt.ts';
+import { beltTiers, type BeltSource, type LoadedTier } from '../core/belt.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
@@ -41,9 +41,11 @@ export function AboutPanel({
   belt: BeltSource;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
-  // Described from its own file, so only once it has arrived: with the Asteroids layer
-  // never switched on there is no belt here to describe.
-  const beltInfo = useSyncExternalStore(belt.subscribe, () => belt.belt)?.info ?? null;
+  // Described from its own files, so only once they have arrived -- with the Asteroids
+  // layer never switched on there is no belt here to describe -- and counted from the
+  // tiers in hand, so the numbers follow the density the viewer chose.
+  const beltView = useSyncExternalStore(belt.subscribe, () => belt.view);
+  const beltInfo = beltView.tiers.length > 0 ? beltView.info : null;
   const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -158,7 +160,7 @@ export function AboutPanel({
               'Twenty-one moons — every one massive enough to have pulled itself round, plus Phobos and Deimos — from JPL’s own satellite ephemerides, measured from their planet’s centre. Each is sampled finely enough to land within a hundredth of its own radius, which for Phobos, round Mars every 7 hours 39 minutes, means every fifteen minutes. Its worst error is 48 metres.',
               smallMoonSentence(store),
               smallBodySentence(store),
-              ...(beltInfo === null ? [] : [beltSentence(beltInfo)]),
+              ...(beltInfo === null ? [] : [beltSentence(beltInfo, beltView.tiers)]),
               `${capitalised(spelled(craftCount(store)))} spacecraft — the ones travelling between the planets, the observatories at the Lagrange points, the craft orbiting Mars, the Moon and Jupiter, two rovers and a lander on Mars, and five that ended inside the window, Cassini among them — each from its own JPL trajectory, reconstructed from tracking where it has been and predicted where it is going. A spacecraft’s path is not an orbit, so no single step can follow it: Juice cruises for months on a curve one sample a day follows well inside a kilometre, then passes 8,640 km above Earth at 13 km/s. So the sampling refines itself, down to a minute, wherever the curve would stray from JPL’s by more than its tolerance: a kilometre near a body, and away from one an angle — ten microradians seen from the nearest, 15 km at the L1 point. That is about a fortieth of a pixel from Earth, and it is what stops the sampling chasing the few-kilometre steps where JPL’s trajectory files for those craft meet, about weekly. The orbiters of Mars and the Moon are the expensive ones — MRO goes round Mars every 112 minutes, all of it within the kilometre — so they are followed for ${spelled(CLOSE_ORBIT_MONTHS)} months either side of the build rather than ten years, and are absent outside that; Juno, whose orbit takes weeks, for the whole window.`,
               'Radii and polar flattening from the IAU 2015 report — Saturn really is 9.8% shorter pole to pole.',
               'Rotation at each body’s real sidereal rate, retrograde where it is retrograde: Venus, Uranus and Pluto.',
@@ -338,27 +340,64 @@ function jdToDate(jd: number): string {
   return new Date((jd - 2440587.5) * 86_400_000).toISOString().slice(0, 10);
 }
 
-/** How many of the belt's asteroids are in any of `classes`. */
-function classTotal(info: BeltInfo, classes: readonly BeltClass[]): number {
-  return classes.reduce((sum, name) => sum + (info.classCounts[name] ?? 0), 0);
+/** How many of the loaded asteroids are in any of `classes`. */
+function classTotal(tiers: readonly LoadedTier[], classes: readonly BeltClass[]): number {
+  let total = 0;
+  for (const tier of tiers) {
+    for (const name of classes) {
+      total += tier.classCounts[name] ?? 0;
+    }
+  }
+  return total;
 }
 
-/** The belt, as a paragraph: counted from its own file, as the moons are from theirs. */
-export function beltSentence(info: BeltInfo): string {
+/**
+ * Geometric albedo the prose turns an absolute magnitude into a size at. A middling
+ * value: the dark C-types are at 0.05 and the stony S-types at 0.25, so any one size
+ * for an H is a factor of 1.5 either way, and is said as "about".
+ */
+const PROSE_ALBEDO = 0.1;
+
+/** Diameter in km for an absolute magnitude: D = 1329 km / sqrt(albedo) · 10^(-H/5). */
+export function diameterKm(H: number, albedo = PROSE_ALBEDO): number {
+  return (1329 / Math.sqrt(albedo)) * 10 ** (-H / 5);
+}
+
+/** "about 4 km", "about 1.7 km": whole kilometres from two up. */
+function aboutKm(H: number): string {
+  const km = diameterKm(H);
+  return `about ${km >= 2 ? Math.round(km) : km.toFixed(1)} km`;
+}
+
+/**
+ * The belt, as a paragraph: counted from the tiers in hand, as the moons are from their
+ * files -- so with the first tier alone it is 84,000 asteroids and says what the rest are.
+ */
+export function beltSentence(info: BeltInfo, tiers: readonly LoadedTier[]): string {
   const groups = [
-    [classTotal(info, ['MBA', 'IMB', 'OMB']), 'in the main belt'],
-    [classTotal(info, ['TJN']), 'Jupiter Trojans, sharing its orbit 60° ahead and behind'],
-    [classTotal(info, ['MCA']), 'Mars-crossers'],
-    [classTotal(info, ['APO', 'ATE', 'AMO', 'IEO']), 'near-Earth asteroids'],
-    [classTotal(info, ['CEN']), 'centaurs among the giant planets'],
-    [classTotal(info, ['TNO']), 'beyond Neptune'],
+    [classTotal(tiers, ['MBA', 'IMB', 'OMB']), 'in the main belt'],
+    [classTotal(tiers, ['TJN']), 'Jupiter Trojans, sharing its orbit 60° ahead and behind'],
+    [classTotal(tiers, ['MCA']), 'Mars-crossers'],
+    [classTotal(tiers, ['APO', 'ATE', 'AMO', 'IEO']), 'near-Earth asteroids'],
+    [classTotal(tiers, ['CEN']), 'centaurs among the giant planets'],
+    [classTotal(tiers, ['TNO']), 'beyond Neptune'],
   ] as const;
   const parts = groups
     .filter(([count]) => count > 0)
     .map(([count, what]) => `${count.toLocaleString('en-US')} ${what}`);
   const listed =
     parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
-  return `The asteroid belt: every one of the ${info.count.toLocaleString('en-US')} asteroids JPL’s Small-Body Database knows brighter than absolute magnitude ${info.magnitudeLimit} — down to a few kilometres across — each on its own orbit, at its own place on it${listed === '' ? '' : `: ${listed}`}. The graphics card places them, solving Kepler’s equation for every one of them on every frame, so the whole belt turns with the clock at any speed: the inner edge goes round in a little over three years, the outer in six. The ${spelled(info.excluded.length)} drawn as bodies of their own are left out of it, so none is drawn twice.`;
+  const loaded = tiers.reduce((sum, tier) => sum + tier.tier.count, 0);
+  const all = tiers.length >= beltTiers(info).length;
+  const faintestH = tiers.at(-1)?.tier.faintestH ?? null;
+  const reach = faintestH === null ? '' : ` brighter than absolute magnitude ${faintestH} — down to ${aboutKm(faintestH)} across at an albedo of ${PROSE_ALBEDO}`;
+  const which = all
+    ? `every one of the ${loaded.toLocaleString('en-US')} asteroids JPL’s Small-Body Database knows${reach}${reach === '' ? ',' : ' —'}`
+    : `the ${loaded.toLocaleString('en-US')} brightest of the ${info.count.toLocaleString('en-US')} asteroids JPL’s Small-Body Database knows, every one${reach} —`;
+  const rest = all
+    ? ''
+    : ' The rest are a setting under Asteroids in the Layers panel, a magnitude at a time, because the whole catalogue is a download of its own.';
+  return `The asteroid belt: ${which} each on its own orbit, at its own place on it${listed === '' ? '' : `: ${listed}`}.${rest} The graphics card places them, solving Kepler’s equation for every one of them on every frame, so the whole belt turns with the clock at any speed: the inner edge goes round in a little over three years, the outer in six. The ${spelled(info.excluded.length)} drawn as bodies of their own are left out of it, so none is drawn twice.`;
 }
 
 /** What the belt's positions are worth, and why its dots are the size they are. */
@@ -368,7 +407,7 @@ export function beltAccuracySentence(info: BeltInfo): string {
     jdToDate(minJd) === jdToDate(maxJd)
       ? `their epoch, ${jdToDate(minJd)}`
       : `their epochs, ${jdToDate(minJd)} to ${jdToDate(maxJd)}`;
-  return `The belt’s asteroids are propagated, not looked up: each moves on the two-body ellipse of its osculating elements, with nothing to pull it off — no Jupiter, no Mars. Measured against JPL’s own integrations for Ceres, Vesta and Eros, that drifts 40,000 to 190,000 km a year either side of ${epoch}, and up to about a degree of its orbit ten years out; an asteroid that passes close to a planet drifts most, as Apophis would, which is one reason it and the other named bodies are drawn from JPL’s integrations instead. And the dots are a convention, as the planets’ markers are: a pixel or so whatever the distance, a little larger and stronger for the brighter ones, because a few-kilometre asteroid is under a hundredth of a pixel even from a million kilometres away. Its place is real; its size on screen is not.`;
+  return `The belt’s asteroids are propagated, not looked up: each moves on the two-body ellipse of its osculating elements, with nothing to pull it off — no Jupiter, no Mars. Measured against JPL’s own integrations for Ceres, Vesta and Eros, that drifts 40,000 to 190,000 km a year either side of ${epoch}, and up to about a degree of its orbit ten years out; an asteroid that passes close to a planet drifts most, as Apophis would, which is one reason it and the other named bodies are drawn from JPL’s integrations instead. And the dots are a convention, as the planets’ markers are: a pixel or so whatever the distance, a little larger and stronger for the brighter ones, and past the 15th magnitude a single pixel each, every magnitude given half the light of the one before however many asteroids are in it — an exposure, not their real light, which barely falls magnitude to magnitude because their numbers grow almost as fast as each gets fainter, and drawn that way a million and a half of them are a sheet — because a few-kilometre asteroid is under a hundredth of a pixel even from a million kilometres away. Its place is real; its size on screen is not.`;
 }
 
 /** The spacecraft in this data. Counted, because a craft with no data in the window is left out of it. */

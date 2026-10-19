@@ -339,30 +339,46 @@ export const STAR_PROPER_MOTION_DECIMALS = 0;
 export const SBDB_QUERY_API_URL = 'https://ssd-api.jpl.nasa.gov/sbdb_query.api';
 
 /**
- * Faintest asteroid in the belt, absolute magnitude H: everything brighter than 15.
+ * Faintest asteroid the belt asks SBDB for, absolute magnitude H; null for none, which is
+ * the whole catalogue (step B2b). B2a took H < 15.
  *
- * Counted against SBDB on 2026-10-19: 1,575,460 asteroids in all, 83,841 with H < 15,
- * 10,310 with H < 12. Step B2a draws the 83,841; B2b extends to the whole catalogue with
- * progressive loading, which is why this is a parameter and not a property of the code.
- *
+ * Counted against SBDB on 2026-10-19: 1,575,460 asteroids in all, 509 of them with no H.
  * H is brightness at 1 AU from both the Sun and the observer, so for one albedo it is
  * size: D = 1329 km / sqrt(p) * 10^(-H/5) (Fowler & Chillemi 1992), and H = 15 is 3.4 km
- * across at a geometric albedo of 0.15, 5.9 km for a dark one at 0.05. It is a cut on the
- * catalogue, not on what a telescope sees tonight; nothing here claims the belt ends at it.
+ * across at a geometric albedo of 0.15, 5.9 km for a dark one at 0.05; H = 18 is 0.9 and
+ * 1.5 km. Whatever the limit, it is a cut on the catalogue, not on the sky.
  */
-export const BELT_MAGNITUDE_LIMIT = 15;
+export const BELT_MAGNITUDE_LIMIT: number | null = null;
 
 /**
- * Rows asked for in one SBDB request, so a larger belt is paged rather than one giant
- * response. Measured 2026-10-19: the 83,841 rows of H < 15, thirteen fields at full
- * precision, are 16.1 MB of JSON and come back in 12 s -- one page. The whole catalogue
- * would be sixteen of them.
+ * Where the belt is split into files, H: tiers below 15, 15 to 16, 16 to 17, 17 to 18,
+ * and 18 and fainter, each limit inclusive on its faint side's tier. The app loads a
+ * prefix of them, so the visitor who never asks for the faint ones never fetches them.
+ *
+ * Measured against SBDB on 2026-10-19, asteroids brighter than each limit: 83,841 below
+ * 15, 207,618 below 16, 487,538 below 17, 942,263 below 18, and 1,575,460 in all. One
+ * magnitude per tier, because each fainter magnitude roughly doubles the count -- so each
+ * file is about the size of all those before it, and asking for one more tier is asking
+ * for about twice the belt. The first is B2a's belt, unchanged.
+ */
+export const BELT_TIER_LIMITS: readonly number[] = [15, 16, 17, 18];
+
+/**
+ * Rows asked for in one SBDB request, so the catalogue is paged rather than one giant
+ * response. Measured 2026-10-19: 83,841 rows, thirteen fields at full precision, are
+ * 16.1 MB of JSON and come back in 12 s. The whole catalogue is sixteen pages.
  */
 export const BELT_PAGE_ROWS = 100_000;
 
 /**
- * Timeout for one SBDB request. Longer than Horizons' because one answer is the whole
- * belt: 12 s measured for a full page, with the database's own query time in front of
+ * Times the whole belt may be read again because SBDB's count changed between two of its
+ * pages; see fetchBelt in belt/sbdb.ts.
+ */
+export const BELT_READ_ATTEMPTS = 3;
+
+/**
+ * Timeout for one SBDB request. Longer than Horizons' because one answer is a page of a
+ * hundred thousand asteroids: 12 s measured for 84,000 of them, with the database's own query time in front of
  * it, which a busy afternoon at JPL can multiply.
  */
 export const SBDB_REQUEST_TIMEOUT_MS = 300_000;
@@ -373,5 +389,7 @@ export const SBDB_REQUEST_TIMEOUT_MS = 300_000;
  */
 export const AU_KM = 149_597_870.7;
 
-/** The belt's binary file, inside `belt/`; see BeltInfo. */
-export const BELT_FILE = 'elements.bin';
+/** The belt's binary file for tier `index`, inside `belt/`; see BeltInfo.tiers. */
+export function beltTierFile(index: number): string {
+  return `elements-${index}.bin`;
+}

@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { CLOSE_ORBIT_WINDOW_MONTHS } from '@sss/tools/config';
 
 import {
+  beltSentence,
   CLOSE_ORBIT_MONTHS,
+  diameterKm,
   indicatorOpacity,
   INDICATOR_FADE_START,
   scrollState,
@@ -210,5 +212,74 @@ describe('the About text’s numbers', () => {
 
   it('states the close orbiters’ window the generator uses', () => {
     expect(CLOSE_ORBIT_MONTHS).toBe(CLOSE_ORBIT_WINDOW_MONTHS);
+  });
+});
+
+describe('the belt, in the About text', () => {
+  const classes = ['MBA', 'IMB', 'OMB', 'MCA', 'APO', 'ATE', 'AMO', 'IEO', 'TJN', 'CEN', 'TNO', 'PAA', 'HYA', 'AST'] as const;
+  const tier = (index: number, count: number, brightestH: number | null, faintestH: number | null) => ({
+    file: `elements-${index}.bin`,
+    count,
+    bytes: count * 36,
+    brightestH,
+    faintestH,
+  });
+  const tiers = [tier(0, 83_841, null, 15), tier(1, 123_777, 15, 16), tier(2, 1_367_842, 16, null)];
+  const info = {
+    source: { name: 'JPL Small-Body Database (SBDB) Query API', url: '', queriedAt: '2026-10-19' },
+    file: 'elements-0.bin',
+    count: 1_575_460,
+    recordFloats: 9,
+    magnitudeLimit: 22,
+    referenceJd: 2461332.5,
+    elementEpochs: { minJd: 2461200.5, maxJd: 2461200.5 },
+    classes: [...classes],
+    classCounts: {},
+    excluded: ['1', '2', '4'],
+    dropped: { notElliptic: 0, missingElements: 0 },
+    tiers,
+  } as const;
+  const loaded = (index: number, mainBelt: number, trojans: number) => ({
+    index,
+    tier: tiers[index]!,
+    records: new Float32Array(0),
+    classCounts: { MBA: mainBelt, TJN: trojans },
+  });
+
+  it('counts what is loaded, and says where the rest is', () => {
+    const text = beltSentence(info, [loaded(0, 70_000, 13_841)]);
+    expect(text).toContain('the 83,841 brightest of the 1,575,460 asteroids');
+    expect(text).toContain('brighter than absolute magnitude 15 — down to about 4 km across');
+    expect(text).toContain('70,000 in the main belt');
+    expect(text).toContain('Layers panel');
+  });
+
+  it('adds the tiers up as they arrive', () => {
+    const text = beltSentence(info, [loaded(0, 70_000, 13_841), loaded(1, 120_000, 3_777)]);
+    expect(text).toContain('the 207,618 brightest');
+    expect(text).toContain('190,000 in the main belt');
+    expect(text).toContain('about 3 km across');
+  });
+
+  it('says every one, and no limit, once the open last tier is in', () => {
+    const text = beltSentence(info, [loaded(0, 1, 0), loaded(1, 1, 0), loaded(2, 1, 0)]);
+    expect(text).toContain('every one of the 1,575,460 asteroids JPL’s Small-Body Database knows, each');
+    expect(text).not.toContain('Layers panel');
+    expect(text).not.toContain('absolute magnitude');
+  });
+
+  it('reads B2a data, one tier and no list, as all of it', () => {
+    // As B2a wrote it: no tier list at all.
+    const { tiers: unused, ...untiered } = info;
+    void unused;
+    const old = { ...untiered, count: 83_841, magnitudeLimit: 15 };
+    const text = beltSentence(old, [{ ...loaded(0, 1, 0), tier: { ...tiers[0]!, faintestH: 15 } }]);
+    expect(text).toContain('every one of the 83,841 asteroids');
+    expect(text).toContain('brighter than absolute magnitude 15');
+  });
+
+  it('turns H into size the standard way', () => {
+    // Ceres: H 3.34, albedo 0.09, 939 km across.
+    expect(diameterKm(3.34, 0.09)).toBeCloseTo(950, -1);
   });
 });
