@@ -803,8 +803,14 @@ const SHAPES = {
  * Eyes was asked on 2026-10-08 and had not answered when they were added, under NASA's
  * media guidelines, on 2026-10-14. It answered by email on 2026-10-19 (Jason Craig, JPL):
  * "Yes, you may use those models, as long as you continue to give credit to NASA" -- these
- * six only; see web/public/models/CREDITS.md. Every one is in metres -- Eyes itself loads
- * them at 0.001, to kilometres:
+ * six only; see web/public/models/CREDITS.md.
+ *
+ * Two more, Hayabusa2 and Danuri, are NASA's models of JAXA's and KARI's craft. They
+ * were added on 2026-10-19 on the basis the six were first added on -- NASA's media
+ * guidelines, credited to NASA -- and lie outside that permission, which is to be asked
+ * for them separately.
+ *
+ * Every one is in metres -- Eyes itself loads them at 0.001, to kilometres:
  *
  *   model       measured                       published
  *   Lucy        15.60 m across the arrays      15.8 m (NASA)
@@ -815,14 +821,21 @@ const SHAPES = {
  *                                              span is NASA's model's, not published
  *   Orion       19.34 m tip to tip, the X      18.9 m (Orion by the numbers)
  *               of its four wings
+ *   Hayabusa2   6.00 x 4.24 m, the paddles     6 x 4.23 m paddles deployed (JAXA)
+ *   Danuri      6.30 m across the arrays       6.3 m (NASA/KARI launch press kit)
  *
  * **Axes**, from the geometry and which side the cell texture is on: Lucy's arrays and
  * high-gain antenna both face +z; Psyche's cells +y; IMAP spins about +y, its sunward
  * deck; ESCAPADE's cells face (0, 0.643, 0.766), +z tilted 40 degrees; CAPSTONE's -z;
- * Orion's -y, aft, the crew module's apex at +y. One model serves both ESCAPADE probes,
- * and one both Orions (Artemis I and II), as in Eyes.
+ * Orion's -y, aft, the crew module's apex at +y. Hayabusa2's cells face +y, the dark
+ * side of its paddles (the other is tan), with the high-gain antenna, while the sampler
+ * horn hangs on -y: JAXA's frame kernel (hyb2_v17.tf) puts the antenna boresight on +Z
+ * and the sampler below. Danuri's cells face +z, its arrays spanning x. One model serves
+ * both ESCAPADE probes, and one both Orions (Artemis I and II), as in Eyes.
  *
- * **Rules**, as for the boxes they replace: arrays to the Sun; IMAP's spin axis.
+ * **Rules**, as for the boxes they replace: arrays to the Sun; IMAP's spin axis. Danuri,
+ * like the other lunar orbiters, really points its instruments at the Moon and turns its
+ * arrays; this draws the arrays on the Sun, as LRO's are.
  */
 const EYES_SHAPES = {
   lucy: {
@@ -885,6 +898,27 @@ const EYES_SHAPES = {
     pointingPart: 'solar-arrays',
     pointingAxis: [0, -1, 0],
     rollAxis: [1, 0, 0],
+  },
+  hayabusa2: {
+    model: 'hayabusa2.glb',
+    pivot: [-0.3136, -0.31245, -0.02559],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 1, 0],
+    // The paddles' 4.24 m width, as the box it replaces held its width to the north.
+    rollAxis: [1, 0, 0],
+  },
+  danuri: {
+    model: 'danuri.glb',
+    pivot: [0.0286, 0.27301, 0.45477],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'sun',
+    pointingPart: 'solar-arrays',
+    pointingAxis: [0, 0, 1],
+    rollAxis: [0, 1, 0],
   },
 } as const satisfies Record<string, CraftShape>;
 
@@ -1239,7 +1273,6 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *
  * **Boxes**, every figure published (L x W x D, metres; the broad face to the Sun):
  *
- *   Hayabusa2      6 x 4.23 x 1.25   paddles deployed (JAXA)
  *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
  *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
  *                                    (JAXA ISAS)
@@ -1254,7 +1287,8 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  * brochure and booklet, the Horizons summary and the instrument papers give no other.
  * Euclid, Gaia, Solar Orbiter,
  * BepiColombo and Hera, boxes here once, are ESA's own models now: see ESA_SHAPES; IMAP,
- * Artemis I and II, CAPSTONE and ESCAPADE are NASA's, from Eyes: see EYES_SHAPES.
+ * Artemis I and II, CAPSTONE and ESCAPADE are NASA's, from Eyes, and so are Hayabusa2's
+ * and Danuri's: see EYES_SHAPES.
  */
 const BOX = { model: null, metresPerUnit: 1, ...SUN_FACING_BOX } as const;
 const MORE_SHAPES = {
@@ -1339,7 +1373,6 @@ const MORE_SHAPES = {
     pointingAxis: [0, -1, 0],
     rollAxis: [0, 0, 1],
   },
-  hayabusa2: { ...BOX, boxM: [6, 4.23, 1.25] },
   dart: {
     model: 'dart.glb',
     pivot: [-0.06403, 1.5789, -0.38501],
@@ -1648,7 +1681,7 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'hayabusa2',
-    shape: MORE_SHAPES.hayabusa2,
+    shape: EYES_SHAPES.hayabusa2,
     name: 'Hayabusa2',
     horizonsId: '-37',
     parent: null,
@@ -1847,7 +1880,6 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
  * **Boxes**, every figure published (L x W x D, metres):
  *
  *   Hope           7.9 x 3.0 x 2.9   7.9 m across; bus 2.37 x 2.90 (Horizons)
- *   Danuri         6.3 x 3.18 x 2.67 (NASA/KARI launch press kit)
  *   Chandrayaan-2  5.8 x 3.2 x 2.1   (ISRO GSLV Mk III-M1 brochure)
  */
 const CLOSE_SHAPES = {
@@ -1934,7 +1966,6 @@ const CLOSE_SHAPES = {
     rollAxis: [0, 0, 1],
   },
   hope: { ...BOX, boxM: [7.9, 3.0, 2.9] },
-  danuri: { ...BOX, boxM: [6.3, 3.18, 2.67] },
   chandrayaan2: { ...BOX, boxM: [5.8, 3.2, 2.1] },
 } as const satisfies Record<string, CraftShape>;
 
@@ -2071,7 +2102,7 @@ const CLOSE_ORBITERS: readonly BodyDefinition[] = [
   }),
   spacecraft({
     id: 'danuri',
-    shape: CLOSE_SHAPES.danuri,
+    shape: EYES_SHAPES.danuri,
     name: 'Danuri',
     horizonsId: '-155',
     parent: 'moon',

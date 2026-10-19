@@ -17,7 +17,7 @@ United States", and may be used for "computer graphical simulations and Internet
 pages". **NASA should be acknowledged as the source**, which is what this file and the
 About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 
-### NASA's Eyes on the Solar System — by written permission
+### NASA's Eyes on the Solar System — six by written permission, two not yet
 
 Six models come from NASA's Eyes on the Solar System, as its app loads them from
 eyes.nasa.gov/assets/static/models/: Lucy, Psyche, IMAP, ESCAPADE (both probes), CAPSTONE
@@ -39,6 +39,15 @@ About panel says these six are NASA's, from Eyes -- and by this file. The reques
 terms are kept too: the files are compressed and otherwise unchanged (see below). Orion's
 textures carry the NASA and ESA logos as the real spacecraft does; they are part of the
 model and are not used as branding here.
+
+Two more Eyes models were added on 2026-10-19, **outside that permission**: Hayabusa2
+(JAXA's craft) and Danuri (KARI's), both NASA's models, from the same asset path. They
+are used on the basis the six were first used on -- NASA's media guidelines, for a
+non-commercial educational site, with NASA credited -- by the project owner's decision,
+and credited the same way, **NASA/JPL-Caltech (NASA's Eyes)**. Written permission for
+them is to be asked of the same team, in the thread of its first answer; this file will
+record the answer either way, and the two come out if it is no. Neither JAXA nor KARI has published a model of
+its craft, and neither was asked first.
 
 ### ESA — by written permission
 
@@ -112,6 +121,8 @@ citations; the other ESA models come from Sci-Fleet, not SPICE.
 | `escapade.glb` | ESCAPADE Blue, ESCAPADE Gold | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_escapade/escapade.gltf — one model for both probes, as in Eyes; Draco decoded, KTX2 transcoded |
 | `capstone.glb` | CAPSTONE | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_capstone/capstone.gltf — packed as GLB |
 | `orion.glb` | Artemis I, Artemis II | **NASA/JPL-Caltech, from Eyes on the Solar System** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_artemis/artemis_ii.gltf — Orion with its service module and four wings; Eyes' one model for both flights; Draco decoded, KTX2 transcoded |
+| `hayabusa2.glb` | Hayabusa2 | **NASA/JPL-Caltech, from Eyes on the Solar System; not yet covered by the written permission** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_hayabusa_2/hayabusa_2.gltf — NASA's model of JAXA's craft; Draco decoded, KTX2 transcoded |
+| `danuri.glb` | Danuri | **NASA/JPL-Caltech, from Eyes on the Solar System; not yet covered by the written permission** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_danuri/danuri.gltf — NASA's model of KARI's craft; Draco decoded, KTX2 transcoded |
 | `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
@@ -141,7 +152,9 @@ TGO 27,288, Solar Orbiter 9,596.
 The six from NASA's Eyes came as glTF, three with Draco geometry and KTX2 (Basis)
 textures; those were decoded with three.js's own Basis transcoder to JPEG or PNG, then
 compressed as above. All six keep every triangle: Lucy 60,829, Psyche 23,354, IMAP
-66,405, ESCAPADE 30,818, CAPSTONE 5,025, Orion 112,517. An earlier count here said IMAP
+66,405, ESCAPADE 30,818, CAPSTONE 5,025, Orion 112,517. Hayabusa2 and Danuri (downloaded
+2026-10-19, both Draco and KTX2) went the same way and keep every triangle too, 207,891
+and 66,949, every one within 0.07 mm of its source. An earlier count here said IMAP
 had lost 104 to the vertex weld. It had not: `optimize`'s instancing pass draws a part
 IMAP repeats as one GPU-instanced mesh (EXT_mesh_gpu_instancing), and that count took the
 instances as one. Rechecked on 2026-10-19 against the decoded source, instances counted:
@@ -156,24 +169,26 @@ lifts for these six.
 
 ## Not here
 
-Seven craft have no model here, because none may be used yet. Six are plain NO MODEL
-boxes of their published dimensions; Aditya-L1 is its marker alone. Searched 2026-10-19
-for an official model from each operator, or any with a licence that allows hosting it
-on a public website (fan-made models are not used, whatever their licence):
+Five craft have no model here, because none may be used yet. Four are plain NO MODEL
+boxes of their published dimensions; Aditya-L1 is its marker alone. Searched 2026-10-19,
+first for an official model from each operator, then for any model whose licence
+explicitly allows redistribution for non-commercial use -- CC BY, CC BY-SA, CC BY-NC(-SA)
+or an explicit "free for non-commercial use" -- community models included, provided
+their size matches the published one. A model with no licence stated, "all rights
+reserved", or Sketchfab's Standard (store) licence is not used: that a site is
+non-commercial grants nothing by itself. Searched: the operators' sites and archives,
+NASA 3D Resources, NASA's Eyes, Sketchfab and Wikimedia Commons.
 
 | Craft | Operator | What exists |
 |---|---|---|
-| Hayabusa2 | JAXA | None from JAXA: its 3D page (hayabusa2.jaxa.jp/en/galleries/3D) and DARTS archive, SPICE bundle included, carry Ryugu's shape only. NASA's Eyes has a model (sc_hayabusa_2), outside the six its permission covers. |
-| Akatsuki | JAXA | None: JAXA publishes a papercraft and an origami model (akatsuki.isas.jaxa.jp/en/gallery/papercraft/), no 3D file. |
-| LICIACube | ASI | None from ASI or Argotec, its builder; none in NASA 3D Resources or Eyes. |
-| Hope | UAE Space Agency / MBRSC | None published; the mission site now redirects to space.gov.ae. |
-| Danuri | KARI | None from KARI, whose site's copyright policy reserves its content. NASA's Eyes has a model (sc_danuri), outside the six its permission covers. |
-| Chandrayaan-2 | ISRO | None from ISRO. |
-| Aditya-L1 | ISRO | None from ISRO -- nor three dimensions for a box: see `MORE_SHAPES` in `tools/src/catalog.ts`. |
+| Akatsuki | JAXA | None: JAXA publishes a papercraft and an origami model (akatsuki.isas.jaxa.jp/en/gallery/papercraft/), no 3D file; nothing on Sketchfab or Commons. |
+| LICIACube | ASI | None from ASI or Argotec, its builder; none in NASA 3D Resources, Eyes, Sketchfab or Commons. |
+| Hope | UAE Space Agency / MBRSC | None published (the mission site now redirects to space.gov.ae); none on Sketchfab or Commons. |
+| Chandrayaan-2 | ISRO | None from ISRO. One community model under **CC BY 4.0**: "Chandrayaan-2 in flight configuration" by tashtego, https://sketchfab.com/3d-models/chandrayaan-2-in-flight-configuration-4d0017f2c5fb49bb9817601858106ddb (57,997 triangles, published 2019-08-29). Not yet used: Sketchfab gives the file only to a signed-in account, so it has not been downloaded or measured against ISRO's 3.2 x 5.8 x 2.1 m; and "in flight configuration", before 2019-09-02, probably carries the Vikram lander, which has to come off for the orbiter that is drawn -- a change CC BY allows, if stated. |
+| Aditya-L1 | ISRO | None from ISRO; Sketchfab's four are Standard-licensed or state none. Nor are three dimensions published for a box: see `MORE_SHAPES` in `tools/src/catalog.ts`. |
 
-Each operator is to be asked for permission, and NASA's Eyes for its Hayabusa2 and
-Danuri; a model is added only once an answer allows it, and recorded here with that
-answer.
+Each operator is to be asked for permission; a model is added only once an answer or a
+licence allows it, and recorded here with it.
 
 ## Processing
 

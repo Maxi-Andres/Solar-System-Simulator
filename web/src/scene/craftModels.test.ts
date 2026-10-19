@@ -112,6 +112,8 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'escapade.glb': [4.888, 2.732, 1.126],
   'capstone.glb': [1.426, 0.529, 0.33],
   'orion.glb': [17.63, 7.256, 11.283],
+  'hayabusa2.glb': [4.241, 2.746, 5.999],
+  'danuri.glb': [6.301, 2.793, 2.809],
 };
 
 /**
@@ -154,6 +156,8 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'lucy.glb': { axis: 0, metres: 15.82, within: 0.02 },
   'psyche.glb': { axis: 0, metres: 24.76, within: 0.01 },
   'escapade.glb': { axis: 0, metres: 4.88, within: 0.01 },
+  'hayabusa2.glb': { axis: 2, metres: 6, within: 0.01 },
+  'danuri.glb': { axis: 0, metres: 6.3, within: 0.01 },
   // IMAP's box is its boom; CAPSTONE's arrays are unpublished; Orion's span is the
   // diagonal of its X of wings, 19.34 m, along no one axis of the file.
   // Wind is scaled by its drum, which is not an extent of the file: its booms are.
@@ -513,6 +517,7 @@ const TRIANGLES: Record<string, number> = {
   'juice.glb': 959_923,
   'hera.glb': 479_908,
   'dart.glb': 446_397,
+  'hayabusa2.glb': 207_891,
   'europa-clipper.glb': 203_662,
   'perseverance.glb': 199_471,
   'osiris-rex.glb': 184_407,
@@ -520,6 +525,7 @@ const TRIANGLES: Record<string, number> = {
   'euclid.glb': 136_061,
   'orion.glb': 112_517,
   'bepicolombo.glb': 111_536,
+  'danuri.glb': 66_949,
   'imap.glb': 66_405,
   'voyager.glb': 20_390,
   'juno.glb': 17_124,
