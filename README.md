@@ -89,6 +89,7 @@ Other commands:
 
 ```bash
 pnpm fetch:belt      # regenerate only the belt and the comets, from JPL's SBDB (~5 minutes)
+pnpm write:catalog   # publish catalog-only changes (a new map, a radius) into bodies.json, no fetch
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
@@ -674,6 +675,9 @@ Stated plainly, since the point of the project is that everything else is not:
   Uranus's five and Triton in the north, Charon in the south. Not observation.
 - **Deimos has no map.** Its one global map cannot be placed in longitude, so it stays
   flat rather than possibly half a turn out.
+- **Ceres and Vesta are Dawn's greyscale mosaics, with their poles filled**: Vesta's north
+  was in winter darkness, Ceres's far south unlit. Not observation. Every other small body
+  is drawn without a map, and its info panel says whether that is because none exists.
 - The moons' shapes and rotation *are* measured: the IAU's triaxial radii, and the IAU
   model with every periodic term, read by script out of NAIF's `pck00011.tpc` rather
   than typed. Against JPL, all twenty-one poles land within 0.002° and the face each moon
