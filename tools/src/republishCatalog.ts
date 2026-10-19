@@ -47,6 +47,20 @@ export const FETCH_FIELDS = [
   'mission',
 ] as const satisfies readonly (keyof BodyDefinition)[];
 
+/**
+ * What of a field the fetch actually depends on. All of it, except in `mission`: its
+ * window, its end and its surface site decide what is fetched, but what the craft is drawn
+ * as (`shape`) and who flies it (`operator`) are only published, never queried -- so a new
+ * model for a craft goes out with this script, not with an hour and a half of Horizons.
+ */
+function fetchedPart(field: (typeof FETCH_FIELDS)[number], value: unknown): unknown {
+  if (field !== 'mission' || value === null || typeof value !== 'object') {
+    return value;
+  }
+  const { shape: _shape, operator: _operator, ...fetched } = value as Record<string, unknown>;
+  return fetched;
+}
+
 /** One body whose definition changed, and which of its top-level fields did. */
 export interface ChangedBody {
   readonly id: string;
@@ -97,7 +111,7 @@ function replace(
       continue;
     }
     for (const field of FETCH_FIELDS) {
-      if (!same(old[field], current[field])) {
+      if (!same(fetchedPart(field, old[field]), fetchedPart(field, current[field]))) {
         problems.push(`${where}: ${old.id}.${field} changed, and its tables were fetched with the old one`);
       }
     }

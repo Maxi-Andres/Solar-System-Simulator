@@ -122,6 +122,29 @@ describe('republishCatalog', () => {
     expect(await read('bodies.json')).toBe(bodies);
   });
 
+  it("publishes a craft's new model, which no fetch depends on", async () => {
+    // Hayabusa2 as it was fetched, still a box; the catalog now has its NASA's Eyes model.
+    const craft = getBody('hayabusa2');
+    const then = { ...craft, mission: { ...craft.mission!, shape: null } };
+    await writeFile(join(dir, 'manifest.json'), pretty({ bodies: ['sun', 'hayabusa2'], tables: {}, smallMoons: { jupiter: { count: 3, sized: 3 } } }));
+    await writeFile(join(dir, 'bodies.json'), pretty([getBody('sun'), then]));
+
+    const report = await republishCatalog(dir, CATALOG);
+
+    expect(report.changed).toEqual([{ id: 'hayabusa2', fields: ['mission'] }]);
+    const written = JSON.parse(await read('bodies.json')) as BodyDefinition[];
+    expect(written[1]!.mission!.shape).toEqual(craft.mission!.shape);
+  });
+
+  it("still refuses a change to a craft's window, which the fetch does depend on", async () => {
+    const craft = getBody('hayabusa2');
+    const then = { ...craft, mission: { ...craft.mission!, windowMonths: 3 } };
+    await writeFile(join(dir, 'manifest.json'), pretty({ bodies: ['sun', 'hayabusa2'], tables: {}, smallMoons: { jupiter: { count: 3, sized: 3 } } }));
+    await writeFile(join(dir, 'bodies.json'), pretty([getBody('sun'), then]));
+
+    await expect(republishCatalog(dir, CATALOG)).rejects.toThrow(/hayabusa2\.mission changed/);
+  });
+
   it('refuses a published body the catalog no longer has', async () => {
     const catalog = CATALOG.filter((body) => body.id !== SMALL[0]);
 
