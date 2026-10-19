@@ -38,6 +38,27 @@ body {
   display: none;
 }
 
+/* A panel that outgrows the window scrolls, and says so with a bar in the panel's own
+   greys. The browser's default is a white trough down the side of a black panel, which
+   looks like a rendering fault rather than a scrollbar. */
+.panel-scroll {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #3a3a3a transparent;
+}
+
+.panel-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 3px;
+}
+
 /* Every control in the overlay answers to the pointer the same way.
 
    Written in `filter` and an inset `box-shadow` rather than in `background` and `color`,

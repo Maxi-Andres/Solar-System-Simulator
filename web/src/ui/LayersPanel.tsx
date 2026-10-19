@@ -162,52 +162,64 @@ function BeltDensityPicker({ belt }: { readonly belt: BeltSource }) {
   // More than the data has means all of it: a choice made against a bigger catalogue.
   const selected = Math.min(chosen, densities.length);
 
+  const current = densities[selected - 1] ?? null;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', margin: '0 0 0.3rem 1.65rem' }}>
-      {densities.length >= 2 &&
-        densities.map((density, index) => {
-          const active = density.tiers === selected;
-          return (
-            <button
-              key={density.tiers}
-              type="button"
-              className="ui-press"
-              aria-pressed={active}
-              onClick={() => setBeltTiers(density.tiers)}
-              title={
-                density.faintestH === null
-                  ? 'Every asteroid in the catalogue'
-                  : `Every asteroid brighter than absolute magnitude ${density.faintestH}`
-              }
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '0.5rem',
-                background: active ? '#181d1a' : 'transparent',
-                border: 'none',
-                borderRadius: '0.2rem',
-                padding: '0.22rem 0.4rem',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: '0.74rem',
-                textAlign: 'left',
-                color: active ? '#ffffff' : '#8a8a8a',
-              }}
-            >
-              <span>{densityLabel(density, index === densities.length - 1)}</span>
-              <span style={{ marginLeft: 'auto', fontSize: '0.66rem', color: '#5e5e5e' }}>
-                {megabytes(density.bytes)} MB
-              </span>
-            </button>
-          );
-        })}
+    <div style={{ display: 'flex', flexDirection: 'column', margin: '0.05rem 0 0.35rem 1.65rem' }}>
+      {densities.length >= 2 && current !== null && (
+        // One line, not one row per choice: bars that rise and fill up to the density
+        // chosen, like a signal meter -- each tier is a magnitude fainter and about twice
+        // the count, so a taller bar is honestly "more" -- and beside them what that
+        // choice is, in asteroids and in download.
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div
+            role="radiogroup"
+            aria-label="Asteroid density"
+            style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '1rem' }}
+          >
+            {densities.map((density, index) => {
+              const filled = density.tiers <= selected;
+              const label = `${densityLabel(density, index === densities.length - 1)}, ${megabytes(density.bytes)} MB`;
+              return (
+                <button
+                  key={density.tiers}
+                  type="button"
+                  role="radio"
+                  aria-checked={density.tiers === selected}
+                  aria-label={label}
+                  title={
+                    density.faintestH === null
+                      ? `${label}: every asteroid in the catalogue`
+                      : `${label}: every asteroid brighter than absolute magnitude ${density.faintestH}`
+                  }
+                  onClick={() => setBeltTiers(density.tiers)}
+                  style={{
+                    width: '0.55rem',
+                    // The tallest bar fills the row; the shortest is a third of it.
+                    height: `${34 + (66 * index) / Math.max(densities.length - 1, 1)}%`,
+                    padding: 0,
+                    border: 'none',
+                    borderRadius: '1px',
+                    background: filled ? '#4a86ff' : '#2e2e2e',
+                    cursor: 'pointer',
+                  }}
+                />
+              );
+            })}
+          </div>
+          <span style={{ fontSize: '0.7rem', color: '#a8a8a8', whiteSpace: 'nowrap' }}>
+            {densityLabel(current, selected === densities.length)}
+            <span style={{ color: '#5e5e5e' }}> · {megabytes(current.bytes)} MB</span>
+          </span>
+        </div>
+      )}
       {status !== null && (
         <div
           style={{
             display: 'flex',
             gap: '0.5rem',
-            padding: '0.22rem 0.4rem',
-            fontSize: '0.66rem',
+            padding: '0.25rem 0 0',
+            fontSize: '0.64rem',
             color: progress.failed ? '#e06c5a' : '#6a6a6a',
           }}
         >

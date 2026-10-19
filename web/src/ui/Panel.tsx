@@ -20,7 +20,7 @@ export function Panel({
   const closing = useClosing();
   return (
     <div
-      className={closing ? 'panel-exit' : 'panel-enter'}
+      className={`panel-scroll ${closing ? 'panel-exit' : 'panel-enter'}`}
       style={{
         position: 'absolute',
         top: '50%',
