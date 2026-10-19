@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from './describeWithData.ts';
 
 import { BYTES_PER_SAMPLE } from './chunkedTable.ts';
 import {
@@ -40,7 +41,7 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 }
 
 const store = await tryLoad();
-const describeWithData = store === null ? describe.skip : describe;
+const describeWithData = withData(store !== null);
 
 if (store === null) {
   console.warn('[ephemerisStore.test] No generated data found; run `pnpm fetch:data`. Skipping.');

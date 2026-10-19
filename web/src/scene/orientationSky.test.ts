@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from '../core/describeWithData.ts';
 
 import {
   loadEphemerisStore,
@@ -57,7 +58,7 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 }
 
 const store = await tryLoad();
-const describeWithData = store === null ? describe.skip : describe;
+const describeWithData = withData(store !== null);
 
 /**
  * Sub-solar latitudes straight from JPL Horizons, in degrees.

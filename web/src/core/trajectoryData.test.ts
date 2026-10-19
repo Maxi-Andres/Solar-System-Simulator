@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { PathTable, VectorTable } from '@sss/tools/types';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from './describeWithData.ts';
 
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { interpolateState } from './hermite.ts';
@@ -30,7 +31,7 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 }
 
 const store = await tryLoad();
-const describeWithData = store === null ? describe.skip : describe;
+const describeWithData = withData(store !== null);
 
 /** A craft's whole table, its chunks joined on their shared boundary samples. */
 async function fullTable(s: EphemerisStore, id: string): Promise<VectorTable> {

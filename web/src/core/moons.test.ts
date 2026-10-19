@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from './describeWithData.ts';
 
 import {
   bodiesToResolve,
@@ -44,7 +45,7 @@ async function tryLoad(): Promise<EphemerisData | null> {
 }
 
 const data = await tryLoad();
-const describeWithData = data === null ? describe.skip : describe;
+const describeWithData = withData(data !== null);
 
 /** 2026-10-07 13:37:00 TDB, off every sampling grid in the catalog. */
 const CAPTURE_JD = 2461321.0673611;
@@ -262,7 +263,8 @@ describeWithData('a moon outside its window', () => {
   });
 });
 
-describe('the Small Moons layer', () => {
+// Reads the real small-moon bundles, so it needs the data like the rest.
+describeWithData('the Small Moons layer', () => {
   it('hides the small moons, and their fetches, when it is off', async () => {
     const requested: string[] = [];
     const counting = new EphemerisStore({

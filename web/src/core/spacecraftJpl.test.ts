@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from './describeWithData.ts';
 
 import { SPACECRAFT_ANGULAR_TOLERANCE, SPACECRAFT_TOLERANCE_KM } from '@sss/tools/config';
 
@@ -35,7 +36,7 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 }
 
 const store = await tryLoad();
-const describeWithData = store === null ? describe.skip : describe;
+const describeWithData = withData(store !== null);
 
 /** One Horizons state: body, what it is measured from, instant (TDB), position (km). */
 interface Capture {

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { describeWithData as withData } from '../core/describeWithData.ts';
 import * as THREE from 'three';
 
 import { CATALOG } from '@sss/tools/catalog';
@@ -164,7 +165,7 @@ async function tryLoad(): Promise<EphemerisStore | null> {
 }
 
 const store = await tryLoad();
-const describeWithData = store === null ? describe.skip : describe;
+const describeWithData = withData(store !== null);
 
 /** Where the planet stands overhead, in the IAU convention JPL reports it in. */
 async function subPlanetPoint(id: string, date: string): Promise<[number, number] | null> {

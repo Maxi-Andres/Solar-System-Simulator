@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { StarCatalog } from '@sss/tools/types';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
+import { describeWithData as withData } from '../core/describeWithData.ts';
 
 import { brightestMagnitude, parseStarCatalog } from '../core/starCatalog.ts';
 import { cross, dot, normalize, type Vec3 } from '../core/vec3.ts';
@@ -48,7 +49,7 @@ async function tryLoad(): Promise<StarCatalog | null> {
 }
 
 const catalog = await tryLoad();
-const describeWithData = catalog === null ? describe.skip : describe;
+const describeWithData = withData(catalog !== null);
 const sky = catalog as StarCatalog;
 
 /** Where a catalogue entry points, in the scene's own frame. */
