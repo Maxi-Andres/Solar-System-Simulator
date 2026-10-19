@@ -2,13 +2,17 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  BELT_NAMES_FILE,
+  COMETS_INFO_FILE,
   OUTPUT_DIR,
   POSITION_DECIMALS,
   TIME_DECIMALS,
   VELOCITY_DECIMALS,
 } from './config.ts';
 import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
+import type { CometBuild } from './belt/comets.ts';
 import type {
+  BeltInfo,
   BodyDefinition,
   ChunkInfo,
   Manifest,
@@ -174,17 +178,22 @@ export async function writeStars(stars: StarCatalog): Promise<void> {
 }
 
 /**
- * The asteroid belt, as belt/belt.json and its tiers' binary files of elements beside
- * it. See BeltInfo.
+ * The asteroid belt and the comets, as belt/: belt.json and its tiers' binary files of
+ * elements, the search index names.json, and comets.json with comets.bin. See BeltInfo
+ * and CometInfo.
  *
  * Takes the directory, unlike the writers above, because the belt can be regenerated on
  * its own (`pnpm fetch:belt`) into a data directory a full run already filled. So it
  * replaces belt/ and nothing else: the other files there are a different run's, and
- * still valid. The binaries are written before the JSON that describes them, so an
+ * still valid. belt.json is written last, after every file it points to, so an
  * interrupted write leaves no belt.json at all -- which the app reads as no belt --
  * never a description of a file that is not there, or not all there.
  */
-export async function writeBelt(build: BeltBuild, outputDir = OUTPUT_DIR): Promise<void> {
+export async function writeBelt(
+  build: BeltBuild,
+  comets: CometBuild,
+  outputDir = OUTPUT_DIR,
+): Promise<void> {
   const directory = join(outputDir, 'belt');
   await rm(directory, { recursive: true, force: true });
   await mkdir(directory, { recursive: true });
@@ -192,7 +201,14 @@ export async function writeBelt(build: BeltBuild, outputDir = OUTPUT_DIR): Promi
   for (const { tier, records } of build.tiers) {
     await writeFile(join(directory, tier.file), beltBytes(records));
   }
-  await writeJson(join(directory, 'belt.json'), build.info);
+  await writeFile(join(directory, BELT_NAMES_FILE), build.namesJson, 'utf8');
+  await writeFile(join(directory, comets.info.file), beltBytes(comets.records));
+  await writeJson(join(directory, COMETS_INFO_FILE), comets.info);
+  const info: BeltInfo = {
+    ...build.info,
+    comets: { file: COMETS_INFO_FILE, count: comets.info.count },
+  };
+  await writeJson(join(directory, 'belt.json'), info);
 }
 
 export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<void> {

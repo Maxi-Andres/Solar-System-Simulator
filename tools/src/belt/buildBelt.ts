@@ -1,10 +1,11 @@
-import { AU_KM, beltTierFile, SBDB_QUERY_API_URL } from '../config.ts';
+import { AU_KM, BELT_NAMES_FILE, beltTierFile, SBDB_QUERY_API_URL } from '../config.ts';
 import { fromJulianDay } from '../horizons/queries.ts';
 import {
   BELT_CLASSES,
   BELT_RECORD_FLOATS,
   type BeltClass,
   type BeltInfo,
+  type BeltNames,
   type BeltTier,
   type BodyDefinition,
 } from '../types.ts';
@@ -163,6 +164,40 @@ export function storedMeanAnomaly(radians: number): number {
   return radians;
 }
 
+/**
+ * The classes whose every member goes in the names index, named or not: the near-Earth
+ * asteroids, which people look up by their provisional designations ("2024 YR4"), and the
+ * centaurs and trans-Neptunian objects ("2015 BP519"). See BeltNames.
+ */
+const ALWAYS_NAMED_CLASSES: ReadonlySet<string> = new Set(['APO', 'ATE', 'AMO', 'IEO', 'CEN', 'TNO']);
+
+/**
+ * How the app names an asteroid, from SBDB's full name; see BeltNames.display.
+ *
+ *   "   433 Eros (A898 PA)"   ->  "433 Eros", and "A898 PA" to search on too
+ *   "  4596 (1981 QB)"        ->  "4596 (1981 QB)"
+ *   "       (2024 YR4)"       ->  "2024 YR4"
+ */
+export function beltDisplayName(
+  fullName: string | null,
+  designation: string,
+): { readonly display: string; readonly designation: string | null } {
+  const trimmed = (fullName ?? designation).trim();
+  const match = /^(.*?)\s*\(([^()]+)\)$/.exec(trimmed);
+  if (match === null) {
+    return { display: trimmed, designation: null };
+  }
+  const head = match[1]!;
+  const provisional = match[2]!;
+  if (head === '') {
+    return { display: provisional, designation: null };
+  }
+  if (/^\d+$/.test(head)) {
+    return { display: trimmed, designation: null };
+  }
+  return { display: head, designation: provisional };
+}
+
 /** One tier as written: its entry in BeltInfo.tiers and its records. */
 export interface BuiltTier {
   readonly tier: BeltTier;
@@ -176,6 +211,9 @@ export interface BeltBuild {
   /** Every tier's records one after another, BELT_RECORD_FLOATS per asteroid. */
   readonly records: Float32Array;
   readonly tiers: readonly BuiltTier[];
+  /** The search index, and the JSON it is written as -- BeltInfo.names counts its bytes. */
+  readonly names: BeltNames;
+  readonly namesJson: string;
   /** The excluded designations SBDB actually returned. */
   readonly excludedFound: readonly string[];
   /** Orbits whose SBDB epoch is more than STALE_EPOCH_YEARS from `referenceJd`. */
@@ -206,6 +244,8 @@ interface PackedOrbit {
   readonly h: number;
   readonly epochJd: number;
   readonly values: readonly number[];
+  /** Its names, when it goes in the search index. */
+  readonly label: { readonly display: string; readonly designation: string | null } | null;
 }
 
 /**
@@ -225,6 +265,7 @@ interface PackedOrbit {
 export class BeltAccumulator {
   readonly #referenceJd: number;
   readonly #candidates: ReadonlySet<string>;
+  readonly #namesBrighterThan: number;
   readonly #classIndex = new Map<string, number>(BELT_CLASSES.map((code, index) => [code, index]));
 
   #count = 0;
@@ -239,10 +280,24 @@ export class BeltAccumulator {
   #notElliptic = 0;
   #missingElements = 0;
   #noMagnitude = 0;
+  // The search index's entries, by the slot their orbit was packed into.
+  readonly #nameSlot: number[] = [];
+  readonly #nameDisplay: string[] = [];
+  readonly #nameDesignation: (string | null)[] = [];
 
-  constructor(options: { readonly referenceJd: number; readonly candidates: readonly string[] }) {
+  /**
+   * `namesBrighterThan`: every asteroid brighter than this H goes in the search index by
+   * its designation, named or not -- tier 0's limit, so everything drawn by default can
+   * be found. See BeltNames for the rest of what goes in.
+   */
+  constructor(options: {
+    readonly referenceJd: number;
+    readonly candidates: readonly string[];
+    readonly namesBrighterThan: number;
+  }) {
     this.#referenceJd = options.referenceJd;
     this.#candidates = new Set(options.candidates);
+    this.#namesBrighterThan = options.namesBrighterThan;
   }
 
   /** Room for `more` orbits, doubling, so a catalogue of pages costs a few copies. */
@@ -265,6 +320,11 @@ export class BeltAccumulator {
 
   #push(orbit: PackedOrbit): void {
     this.#reserve(1);
+    if (orbit.label !== null) {
+      this.#nameSlot.push(this.#count);
+      this.#nameDisplay.push(orbit.label.display);
+      this.#nameDesignation.push(orbit.label.designation);
+    }
     this.#records.set(orbit.values, this.#count * BELT_RECORD_FLOATS);
     this.#h[this.#count] = orbit.h;
     this.#spkid[this.#count] = orbit.spkid;
@@ -324,10 +384,15 @@ export class BeltAccumulator {
         this.#unknownClasses.set(key, (this.#unknownClasses.get(key) ?? 0) + 1);
         continue;
       }
+      const named =
+        row.name !== null ||
+        ALWAYS_NAMED_CLASSES.has(row.orbitClass!) ||
+        h < this.#namesBrighterThan;
       const orbit: PackedOrbit = {
         spkid: row.spkid,
         h,
         epochJd,
+        label: named ? beltDisplayName(row.fullName, row.designation) : null,
         values: [
           aAu * AU_KM,
           e,
@@ -427,6 +492,32 @@ export class BeltAccumulator {
       start = end;
     }
 
+    // The search index: each entry's slot, where its orbit was packed, turned into the
+    // tier and record its orbit was sorted to.
+    const position = new Uint32Array(count);
+    for (let index = 0; index < count; index += 1) {
+      position[order[index]!] = index;
+    }
+    const tierStarts = tiers.map(({ records }) => records.byteOffset / 4 / BELT_RECORD_FLOATS);
+    const entries = this.#nameSlot.map((slot, k) => ({ k, slot, at: position[slot]! }));
+    entries.sort((p, q) => p.at - q.at);
+    const tierOf = (at: number): number => {
+      let tier = tierStarts.length - 1;
+      while (tierStarts[tier]! > at) {
+        tier -= 1;
+      }
+      return tier;
+    };
+    const names: BeltNames = {
+      count: entries.length,
+      display: entries.map(({ k }) => this.#nameDisplay[k]!),
+      designation: entries.map(({ k }) => this.#nameDesignation[k]!),
+      tier: entries.map(({ at }) => tierOf(at)),
+      index: entries.map(({ at }) => at - tierStarts[tierOf(at)]!),
+      classIndex: entries.map(({ slot }) => packed[slot * BELT_RECORD_FLOATS + 8]!),
+    };
+    const namesJson = `${JSON.stringify(names)}\n`;
+
     const info: BeltInfo = {
       source: {
         name: 'JPL Small-Body Database (SBDB) Query API',
@@ -456,12 +547,19 @@ export class BeltAccumulator {
         missingElements: this.#missingElements,
         noMagnitude: this.#noMagnitude,
       },
+      names: {
+        file: BELT_NAMES_FILE,
+        count: names.count,
+        bytes: Buffer.byteLength(namesJson, 'utf8'),
+      },
     };
 
     return {
       info,
       records,
       tiers,
+      names,
+      namesJson,
       excludedFound: excludedFound.sort(compareDesignations),
       staleEpochs: this.#staleEpochs,
     };
@@ -474,11 +572,17 @@ export interface BuildBeltInput extends FinishBeltOptions {
   readonly referenceJd: number;
 }
 
+/** Tier 0's limit: every asteroid in it goes in the search index. */
+function firstTierLimit(tierLimits: readonly number[]): number {
+  return tierLimits[0] ?? Infinity;
+}
+
 /** The belt from rows already in hand: one page, finished at once. */
 export function buildBelt(input: BuildBeltInput): BeltBuild {
   const accumulator = new BeltAccumulator({
     referenceJd: input.referenceJd,
     candidates: input.excluded,
+    namesBrighterThan: firstTierLimit(input.tierLimits),
   });
   accumulator.add(input.rows);
   return accumulator.finish(input);

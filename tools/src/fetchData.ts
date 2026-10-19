@@ -13,12 +13,13 @@
  *     Position, proper motion, magnitude and colour index for every star drawn.
  *
  *   JPL Small-Body Database Query API -- https://ssd-api.jpl.nasa.gov/sbdb_query.api
- *     Osculating elements for the asteroid belt. See belt/buildBelt.ts.
+ *     Osculating elements for the asteroid belt and the comets. See belt/.
  */
 
 import { pathToFileURL } from 'node:url';
 
 import { BeltAccumulator, catalogDesignations, describeBelt } from './belt/buildBelt.ts';
+import { buildComets, describeComets, fetchComets } from './belt/comets.ts';
 import { fetchBelt } from './belt/sbdb.ts';
 import { CATALOG, SSB_CENTER } from './catalog.ts';
 import {
@@ -567,8 +568,8 @@ async function main(): Promise<void> {
   console.log(`[fetch-data] ${CATALOG.length} bodies, center ${SSB_CENTER}`);
 
   // Three independent services, so they run together. The sky is two requests against
-  // VizieR and the belt sixteen against SBDB, about five minutes, and both come back long
-  // before Horizons has finished with the planets.
+  // VizieR, the belt sixteen against SBDB, about five minutes, and the comets one more;
+  // all come back long before Horizons has finished with the planets.
   //
   // The belt is packed page by page as it arrives (see BeltAccumulator), with its mean
   // anomalies moved to the run's own instant: `toJulianDay(epoch)`, the same number every
@@ -577,12 +578,12 @@ async function main(): Promise<void> {
   // to nothing because the file states it as a TDB Julian day and every anomaly is
   // computed for exactly that number.
   //
-  // A failure of either fails the run, as the stars always have. The deploy publishes a
+  // A failure of any of them fails the run, as the stars always have. The deploy publishes a
   // fresh data directory or nothing (deploy.yml: a half-published site is worse than a
   // late one), and a release that silently lost its belt would look like a release with
   // fewer asteroids, not like an outage; the previous deploy stays up instead. SBDB has
   // its own retries first, so this is a fault that outlasted a minute of backoff.
-  const [natural, hipparcosRows, tycho2Rows, beltRead] = await Promise.all([
+  const [natural, hipparcosRows, tycho2Rows, beltRead, cometRows] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -599,9 +600,11 @@ async function main(): Promise<void> {
         new BeltAccumulator({
           referenceJd: toJulianDay(epoch),
           candidates: catalogDesignations(CATALOG),
+          namesBrighterThan: BELT_TIER_LIMITS[0]!,
         }),
       BELT_MAGNITUDE_LIMIT,
     ),
+    fetchComets(),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -719,7 +722,8 @@ async function main(): Promise<void> {
     excluded: catalogDesignations(catalog),
     tierLimits: BELT_TIER_LIMITS,
   });
-  for (const line of describeBelt(belt)) {
+  const comets = buildComets({ ...cometRows, referenceJd: toJulianDay(epoch) });
+  for (const line of [...describeBelt(belt), ...describeComets(comets)]) {
     console.log(line.replace('[belt]', '[fetch-data] belt'));
   }
 
@@ -789,7 +793,7 @@ async function main(): Promise<void> {
 
   await writeCatalog(startupCatalog);
   await writeStars(stars);
-  await writeBelt(belt);
+  await writeBelt(belt, comets);
 
   // The window every full-window body can answer for: the intersection of their
   // tables, not the range we asked for. Publishing the request instead would claim
@@ -841,7 +845,8 @@ async function main(): Promise<void> {
   const samples = results.reduce((total, result) => total + result.vectors.count, 0);
   console.log(
     `[fetch-data] Wrote ${results.length} bodies (${samples} samples) and ` +
-      `${stars.count} stars and ${belt.info.count} asteroids to ${OUTPUT_DIR}`,
+      `${stars.count} stars, ${belt.info.count} asteroids and ${comets.info.count} comets ` +
+      `to ${OUTPUT_DIR}`,
   );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');

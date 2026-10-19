@@ -11,6 +11,7 @@ import { writeBelt } from '../writeOutput.ts';
 import {
   BeltAccumulator,
   beltBytes,
+  beltDisplayName,
   buildBelt,
   catalogDesignations,
   FLOAT32_BELOW_PI,
@@ -19,8 +20,10 @@ import {
   wrapMeanAnomaly,
   wrapRadians,
 } from './buildBelt.ts';
+import { buildComets, parseCometResponse } from './comets.ts';
 import { parseSbdbResponse, type SbdbRow } from './sbdb.ts';
 import sbdbBelt from './__fixtures__/sbdb-belt.json' with { type: 'json' };
+import sbdbComets from './__fixtures__/sbdb-comets.json' with { type: 'json' };
 import sbdbFaint from './__fixtures__/sbdb-faint.json' with { type: 'json' };
 
 /**
@@ -444,7 +447,7 @@ describe('the tiers', () => {
   });
 
   it('come out the same however the rows were paged', () => {
-    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED });
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED, namesBrighterThan: 15 });
     const reversed = [...all].reverse();
     accumulator.add(reversed.slice(0, 7));
     accumulator.add(reversed.slice(7, 20));
@@ -461,7 +464,7 @@ describe('the tiers', () => {
 
 describe('a small body the run did not publish', () => {
   it('goes back into the belt, rather than vanish from the sky', () => {
-    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED });
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: EXCLUDED, namesBrighterThan: 15 });
     accumulator.add(ROWS);
     const withVesta = accumulator.finish({
       queriedAt: '2026-10-19T15:24:52.471Z',
@@ -475,7 +478,7 @@ describe('a small body the run did not publish', () => {
   });
 
   it('can only be one the pages set aside', () => {
-    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: ['1'] });
+    const accumulator = new BeltAccumulator({ referenceJd: REFERENCE_JD, candidates: ['1'], namesBrighterThan: 15 });
     accumulator.add(ROWS);
     expect(() =>
       accumulator.finish({ queriedAt: '', excluded: ['1', '4'], tierLimits: BELT_TIER_LIMITS }),
@@ -483,20 +486,110 @@ describe('a small body the run did not publish', () => {
   });
 });
 
+describe('the names index', () => {
+  const belt = build([...ROWS, ...parseSbdbResponse(sbdbFaint).rows]);
+  const { names } = belt;
+  const entry = (display: string) => {
+    const k = names.display.indexOf(display);
+    expect(k, display).toBeGreaterThanOrEqual(0);
+    return {
+      designation: names.designation[k],
+      tier: names.tier[k]!,
+      index: names.index[k]!,
+      classIndex: names.classIndex[k]!,
+    };
+  };
+  /** The record an entry points at, read from its tier's file. */
+  const recordAt = ({ tier, index }: { tier: number; index: number }) =>
+    record(belt.tiers[tier]!.records, index);
+  const aOf = (designation: string) =>
+    Math.fround(
+      [...ROWS, ...parseSbdbResponse(sbdbFaint).rows].find((r) => r.designation === designation)!
+        .aAu! * AU_KM,
+    );
+
+  it('names an asteroid the way the app shows it, and keeps the rest to search on', () => {
+    expect(beltDisplayName('   433 Eros (A898 PA)', '433')).toEqual({
+      display: '433 Eros',
+      designation: 'A898 PA',
+    });
+    expect(beltDisplayName('  4596 (1981 QB)', '4596')).toEqual({
+      display: '4596 (1981 QB)',
+      designation: null,
+    });
+    expect(beltDisplayName('       (2024 YR4)', '2024 YR4')).toEqual({
+      display: '2024 YR4',
+      designation: null,
+    });
+    expect(beltDisplayName(null, '2002 PD153')).toEqual({ display: '2002 PD153', designation: null });
+  });
+
+  it('points at its own record, by tier and index', () => {
+    const eros = entry('433 Eros');
+    expect(eros.designation).toBe('A898 PA');
+    expect(recordAt(eros)[0]).toBe(aOf('433'));
+    // In a fainter tier too: 9498, H 16.00, is in tier 2.
+    const faint = names.display.findIndex((display) => display.startsWith('9498 '));
+    const at = { tier: names.tier[faint]!, index: names.index[faint]! };
+    expect(at.tier).toBe(2);
+    expect(recordAt(at)[0]).toBe(aOf('9498'));
+    for (let k = 0; k < names.count; k += 1) {
+      expect(recordAt({ tier: names.tier[k]!, index: names.index[k]! })[8]).toBe(
+        names.classIndex[k],
+      );
+    }
+  });
+
+  it('has every named asteroid, every NEO, centaur and TNO, and all of tier 0', () => {
+    // 3199 Nefertiti and 719 Albert are named; 10145 (1994 CK1) is an unnamed Apollo at
+    // H 17; 2003 SQ222, an unnumbered one at H 30.1; 1927 LA, unnamed, is in tier 0.
+    for (const display of ['3199 Nefertiti', '719 Albert', '2003 SQ222', '1927 LA', '2020 MQ53']) {
+      entry(display);
+    }
+    expect(names.display.some((display) => display.startsWith('10145 ('))).toBe(true);
+    // 9603, unnamed and main-belt at H 15.00, is the kind that is left out.
+    expect(names.display.some((display) => display.startsWith('9603'))).toBe(false);
+    expect(names.count).toBe(names.display.length);
+  });
+
+  it('is in brightness order: tier, then index', () => {
+    const order = names.tier.map((tier, k) => tier * 1e7 + names.index[k]!);
+    expect(order).toEqual([...order].sort((p, q) => p - q));
+  });
+
+  it('says in BeltInfo where it is and how large', () => {
+    expect(belt.info.names).toEqual({
+      file: 'names.json',
+      count: names.count,
+      bytes: Buffer.byteLength(belt.namesJson),
+    });
+    expect(JSON.parse(belt.namesJson)).toEqual(names);
+  });
+});
+
 describe('writing it', () => {
+  const comets = buildComets({
+    rows: parseCometResponse(sbdbComets).rows,
+    queriedAt: '2026-10-19T16:00:00.000Z',
+    referenceJd: REFERENCE_JD,
+  });
+
   it('replaces belt/ and leaves the rest of the data directory alone', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'belt-'));
     try {
       await writeFile(join(directory, 'manifest.json'), '{}');
-      await writeBelt(BELT, directory);
-      await writeBelt(BELT, directory);
+      await writeBelt(BELT, comets, directory);
+      await writeBelt(BELT, comets, directory);
       expect((await readdir(directory)).sort()).toEqual(['belt', 'manifest.json']);
       expect((await readdir(join(directory, 'belt'))).sort()).toEqual([
         'belt.json',
+        'comets.bin',
+        'comets.json',
         ...[0, 1, 2, 3, 4].map(beltTierFile),
+        'names.json',
       ]);
       const info = JSON.parse(await readFile(join(directory, 'belt', 'belt.json'), 'utf8'));
-      expect(info).toEqual(BELT.info);
+      expect(info).toEqual({ ...BELT.info, comets: { file: 'comets.json', count: 15 } });
       for (const { tier, records } of BELT.tiers) {
         const bytes = await readFile(join(directory, 'belt', tier.file));
         expect(bytes.byteLength).toBe(tier.bytes);
@@ -506,6 +599,16 @@ describe('writing it', () => {
       }
       // This fixture is all brighter than 15: the fainter tiers are there, and empty.
       expect(BELT.info.tiers!.map((tier) => tier.count)).toEqual([16, 0, 0, 0, 0]);
+      const names = await readFile(join(directory, 'belt', 'names.json'), 'utf8');
+      expect(Buffer.byteLength(names)).toBe(BELT.info.names!.bytes);
+      expect(JSON.parse(await readFile(join(directory, 'belt', 'comets.json'), 'utf8'))).toEqual(
+        comets.info,
+      );
+      const cometBytes = await readFile(join(directory, 'belt', 'comets.bin'));
+      expect(cometBytes.byteLength).toBe(comets.info.bytes);
+      expect(
+        new Float32Array(cometBytes.buffer, cometBytes.byteOffset, cometBytes.byteLength / 4),
+      ).toEqual(comets.records);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -43,6 +43,8 @@ import { retryDelayMs } from '../horizons/client.ts';
 export const SBDB_FIELDS = [
   'spkid',
   'pdes',
+  'full_name',
+  'name',
   'a',
   'e',
   'i',
@@ -62,6 +64,10 @@ export interface SbdbRow {
   readonly spkid: number;
   /** Primary designation: the IAU number when numbered ('1', '134340'), else '2002 PD153'. */
   readonly designation: string;
+  /** SBDB's full name, padded as it sends it: "   433 Eros (A898 PA)", "       (2024 YR4)". */
+  readonly fullName: string | null;
+  /** The IAU name, when it has one: "Eros". */
+  readonly name: string | null;
   readonly aAu: number | null;
   readonly e: number | null;
   readonly iDeg: number | null;
@@ -119,7 +125,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * a missing value as null; anything else is not a number and fails loudly rather than
  * becoming a zero, which would be a real place.
  */
-function numberOrNull(raw: unknown, field: string, label: string): number | null {
+export function numberOrNull(raw: unknown, field: string, label: string): number | null {
   if (raw === null || raw === undefined || raw === '') {
     return null;
   }
@@ -130,21 +136,29 @@ function numberOrNull(raw: unknown, field: string, label: string): number | null
   return value;
 }
 
-function stringOrNull(raw: unknown): string | null {
+export function stringOrNull(raw: unknown): string | null {
   if (raw === null || raw === undefined || raw === '') {
     return null;
   }
   return String(raw);
 }
 
+/** An SBDB answer's rows, with each column found by its name. */
+export interface SbdbTable {
+  readonly count: number;
+  readonly rows: readonly (readonly unknown[])[];
+  at(row: readonly unknown[], field: string): unknown;
+}
+
 /**
- * Parses one SBDB Query API response.
+ * Reads the envelope of one SBDB Query API response: its count, its rows, and where each
+ * of the `required` fields is.
  *
  * Columns are read by the names in `fields`, never by position: the API echoes the
  * field list, and a row read against the wrong column would put every asteroid's
  * inclination on its node without anything looking wrong.
  */
-export function parseSbdbResponse(body: unknown): SbdbPage {
+export function readSbdbTable(body: unknown, required: readonly string[]): SbdbTable {
   if (!isRecord(body)) {
     throw new Error('SBDB response is not a JSON object.');
   }
@@ -161,28 +175,40 @@ export function parseSbdbResponse(body: unknown): SbdbPage {
     throw new Error('SBDB response `data` is not a list.');
   }
   const index = new Map(fields.map((name, position) => [String(name), position]));
-  for (const field of SBDB_FIELDS) {
+  for (const field of required) {
     if (!index.has(field)) {
       throw new Error(`SBDB response has no field "${field}". Got: ${fields.join(', ')}`);
     }
   }
-  const at = (row: readonly unknown[], field: (typeof SBDB_FIELDS)[number]): unknown =>
-    row[index.get(field) as number];
-
-  const rows = ((data ?? []) as unknown[]).map((raw, position): SbdbRow => {
-    if (!Array.isArray(raw)) {
+  const rows = (data ?? []) as unknown[];
+  for (const [position, row] of rows.entries()) {
+    if (!Array.isArray(row)) {
       throw new Error(`SBDB row ${position} is not a list.`);
     }
-    const designation = stringOrNull(at(raw, 'pdes'));
-    const spkid = numberOrNull(at(raw, 'spkid'), 'spkid', `row ${position}`);
+  }
+  return {
+    count,
+    rows: rows as unknown[][],
+    at: (row, field) => row[index.get(field) as number],
+  };
+}
+
+/** Parses one page of the belt query. */
+export function parseSbdbResponse(body: unknown): SbdbPage {
+  const table = readSbdbTable(body, SBDB_FIELDS);
+  const rows = table.rows.map((raw, position): SbdbRow => {
+    const designation = stringOrNull(table.at(raw, 'pdes'));
+    const spkid = numberOrNull(table.at(raw, 'spkid'), 'spkid', `row ${position}`);
     if (designation === null || spkid === null) {
       throw new Error(`SBDB row ${position} has no designation or SPK-ID.`);
     }
     const number = (field: (typeof SBDB_FIELDS)[number]) =>
-      numberOrNull(at(raw, field), field, designation);
+      numberOrNull(table.at(raw, field), field, designation);
     return {
       spkid,
       designation,
+      fullName: stringOrNull(table.at(raw, 'full_name')),
+      name: stringOrNull(table.at(raw, 'name')),
       aAu: number('a'),
       e: number('e'),
       iDeg: number('i'),
@@ -192,12 +218,12 @@ export function parseSbdbResponse(body: unknown): SbdbPage {
       epochJd: number('epoch'),
       meanMotionDegPerDay: number('n'),
       h: number('H'),
-      orbitClass: stringOrNull(at(raw, 'class')),
-      equinox: stringOrNull(at(raw, 'equinox')),
+      orbitClass: stringOrNull(table.at(raw, 'class')),
+      equinox: stringOrNull(table.at(raw, 'equinox')),
     };
   });
 
-  return { count, rows };
+  return { count: table.count, rows };
 }
 
 function delay(ms: number): Promise<void> {
@@ -223,11 +249,12 @@ function isPermanent(error: unknown): boolean {
   );
 }
 
-/** Runs one SBDB query, with retries and backoff, and returns the parsed page. */
-export async function querySbdb(
+/** Runs one SBDB query, with retries and backoff, and returns it as `parse` reads it. */
+export async function querySbdb<T>(
   params: Readonly<Record<string, string>>,
   label: string,
-): Promise<SbdbPage> {
+  parse: (body: unknown) => T,
+): Promise<T> {
   const url = new URL(SBDB_QUERY_API_URL);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
@@ -268,7 +295,7 @@ export async function querySbdb(
         // A truncated body: the connection dropped part way through a 16 MB answer.
         throw new Error(`SBDB returned ${text.length} bytes that are not JSON.`);
       }
-      return parseSbdbResponse(body);
+      return parse(body);
     } catch (error) {
       lastError = error;
       if (isPermanent(error) || attempt === MAX_RETRIES) {
@@ -361,6 +388,7 @@ async function readOnce<T extends BeltSink>(
     const page = await querySbdb(
       beltQuery(magnitudeLimit, read, pageRows),
       `belt (${describeLimit(magnitudeLimit)}), from row ${read}`,
+      parseSbdbResponse,
     );
     if (expected !== null && page.count !== expected) {
       throw new CountChangedError(

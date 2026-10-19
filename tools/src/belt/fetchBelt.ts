@@ -1,5 +1,6 @@
 /**
- * Regenerates the asteroid belt alone, without the Horizons run: `pnpm fetch:belt`.
+ * Regenerates the asteroid belt and the comets alone, without the Horizons run:
+ * `pnpm fetch:belt`.
  *
  * A full `pnpm fetch:data` spends nearly all its time on Horizons, thousands of requests;
  * the belt is one SBDB request of about twelve seconds. This writes belt/ into an
@@ -28,6 +29,7 @@ import { toJulianDay } from '../horizons/queries.ts';
 import type { BodyDefinition } from '../types.ts';
 import { writeBelt } from '../writeOutput.ts';
 import { BeltAccumulator, catalogDesignations, describeBelt } from './buildBelt.ts';
+import { buildComets, describeComets, fetchComets } from './comets.ts';
 import { fetchBelt } from './sbdb.ts';
 
 /** The bodies the data directory already draws, or null when it has no catalog yet. */
@@ -54,10 +56,19 @@ async function main(): Promise<void> {
 
   const excluded = catalogDesignations(published ?? CATALOG);
   const referenceJd = toJulianDay(todayUtcMidnight());
-  const read = await fetchBelt(
-    () => new BeltAccumulator({ referenceJd, candidates: excluded }),
-    BELT_MAGNITUDE_LIMIT,
-  );
+  // The comets alongside: one request, back long before the belt's sixteen.
+  const [read, cometRows] = await Promise.all([
+    fetchBelt(
+      () =>
+        new BeltAccumulator({
+          referenceJd,
+          candidates: excluded,
+          namesBrighterThan: BELT_TIER_LIMITS[0]!,
+        }),
+      BELT_MAGNITUDE_LIMIT,
+    ),
+    fetchComets(),
+  ]);
   console.log(
     `[belt] ${read.count} rows from SBDB in ${((performance.now() - started) / 1000).toFixed(1)} s`,
   );
@@ -66,11 +77,12 @@ async function main(): Promise<void> {
     excluded,
     tierLimits: BELT_TIER_LIMITS,
   });
-  for (const line of describeBelt(belt)) {
+  const comets = buildComets({ ...cometRows, referenceJd });
+  for (const line of [...describeBelt(belt), ...describeComets(comets)]) {
     console.log(line);
   }
 
-  await writeBelt(belt, outputDir);
+  await writeBelt(belt, comets, outputDir);
   // maxRSS is in kilobytes. Logged because the whole catalogue is the one thing in the
   // tools that could outgrow a CI runner's memory, and the place to see it first is here.
   console.log(

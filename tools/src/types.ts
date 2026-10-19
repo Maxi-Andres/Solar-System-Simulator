@@ -865,4 +865,134 @@ export interface BeltInfo {
      */
     readonly noMagnitude?: number;
   };
+  /** The search index of the belt's notable asteroids, `belt/<file>`; see BeltNames. */
+  readonly names?: {
+    readonly file: string;
+    readonly count: number;
+    readonly bytes: number;
+  };
+  /** The comets, `belt/<file>` (their CometInfo); see CometInfo. Absent before B2c. */
+  readonly comets?: {
+    readonly file: string;
+    readonly count: number;
+  };
+}
+
+/**
+ * The belt asteroids a search can find by name, written to `belt/names.json` and fetched
+ * only when search is opened (step B2c). Columnar: entry k is `display[k]`,
+ * `designation[k]`, ... Not every asteroid -- 1.57 million designations would be tens of
+ * megabytes -- but every one people look up by name:
+ *
+ *   - every asteroid with an IAU name (26,567 in SBDB on 2026-10-19);
+ *   - every near-Earth asteroid, class APO, ATE, AMO or IEO, named or not ("2024 YR4");
+ *   - every centaur and trans-Neptunian object, CEN and TNO ("2015 BP519");
+ *   - every asteroid in tier 0, H < 15, by designation.
+ *
+ * Ordered by tier and then record index, which is brightness: a search that keeps the
+ * index order lists the largest match first.
+ */
+export interface BeltNames {
+  readonly count: number;
+  /**
+   * How the app names it: "433 Eros" for a numbered asteroid with a name, "4596 (1981 QB)"
+   * for a numbered one without, "2024 YR4" for one not numbered yet -- SBDB's own
+   * `full_name`, trimmed, with the parentheses dropped when it is the only designation.
+   */
+  readonly display: readonly string[];
+  /**
+   * The provisional designation `display` does not already show, for search to match on
+   * as well: "A898 PA" for 433 Eros. Null where `display` holds every designation it has.
+   */
+  readonly designation: readonly (string | null)[];
+  /** Which tier file its record is in: an index into BeltInfo.tiers. */
+  readonly tier: readonly number[];
+  /** Its record's index inside that tier's file, counted in records, not floats. */
+  readonly index: readonly number[];
+  /** Its orbit class: an index into BELT_CLASSES, as in the record. */
+  readonly classIndex: readonly number[];
+}
+
+/**
+ * Comet orbit classes, in the order their codes are written: SBDB's own, the codes its
+ * comet rows carry (https://ssd.jpl.nasa.gov/sb/orbit_classes.html). Every one of them
+ * appeared in the 4,080 comets SBDB held on 2026-10-19. A new class goes at the end.
+ */
+export const COMET_CLASSES = [
+  'ETc', // Encke-type (Tj > 3, a < a_Jupiter)
+  'JFc', // Jupiter-family (2 < Tj < 3)
+  'JFC', // Jupiter-family, classical definition (P < 20 y)
+  'CTc', // Chiron-type (Tj > 3, a > a_Jupiter)
+  'HTC', // Halley-type, classical definition (20 y < P < 200 y)
+  'PAR', // Parabolic orbit, e = 1
+  'HYP', // Hyperbolic orbit, e > 1
+  'COM', // Comet orbit matching no other class
+] as const;
+
+export type CometClass = (typeof COMET_CLASSES)[number];
+
+/**
+ * Floats per comet in `belt/comets.bin`, little-endian float32, in this order:
+ *
+ *   0  q      perihelion distance, km
+ *   1  e      eccentricity: < 1 ellipse, exactly 1 parabola, > 1 hyperbola
+ *   2  i      inclination, radians
+ *   3  node   longitude of the ascending node, radians
+ *   4  peri   argument of perihelion, radians
+ *   5  tp     time of perihelion passage, days after CometInfo.referenceJd (negative: before)
+ *   6  M1     total magnitude parameter; NaN where SBDB has none
+ *   7  K1     total magnitude slope; NaN where SBDB has none
+ *   8  class  index into COMET_CLASSES
+ *
+ * Perihelion distance and time rather than a and M, because a and M do not exist for the
+ * 2,283 comets on parabolic or hyperbolic orbits, and q and tp do for every conic. A
+ * position is the Sun's plus the two-body conic about it, with the Sun's GM as bodies.json
+ * gives it: Kepler's equation for e < 1, Barker's for e = 1, the hyperbolic one for e > 1.
+ * Same frame as the belt: heliocentric, ecliptic and mean equinox of J2000.
+ *
+ * tp is relative so float32 can hold it: its step is at most 0.004 days, six minutes, for
+ * a perihelion within 180 years of referenceJd, and an hour and a half at the oldest SBDB
+ * gives, 2,172 years before it. A comet's brightness is m = M1 + 5 log10(Δ) + K1 log10(r), with
+ * Δ and r its distances from the observer and the Sun in AU (SBDB's definition).
+ */
+export const COMET_RECORD_FLOATS = 9;
+
+/**
+ * The comets, as `belt/comets.json`, with their records in `belt/<file>`. Ordered by M1,
+ * brightest first, comets with no M1 last; equal M1 by SPK-ID.
+ */
+export interface CometInfo {
+  readonly source: {
+    readonly name: string;
+    readonly url: string;
+    readonly queriedAt: string;
+  };
+  /** The binary file of records, relative to `belt/`. */
+  readonly file: string;
+  readonly count: number;
+  readonly bytes: number;
+  readonly recordFloats: typeof COMET_RECORD_FLOATS;
+  /** The TDB Julian day every record's `tp` is counted from: the belt's referenceJd. */
+  readonly referenceJd: number;
+  /** The span of the orbits' own SBDB epochs, TDB Julian days. */
+  readonly elementEpochs: { readonly minJd: number; readonly maxJd: number };
+  /** The classes, in code order; see COMET_CLASSES. */
+  readonly classes: readonly CometClass[];
+  readonly classCounts: Readonly<Partial<Record<CometClass, number>>>;
+  /**
+   * Each comet's name, in record order: SBDB's full name, trimmed -- "1P/Halley",
+   * "C/1995 O1 (Hale-Bopp)", "73P/Schwassmann-Wachmann 3-B". Every fragment SBDB
+   * designates is its own comet with its own orbit, and is kept.
+   */
+  readonly names: readonly string[];
+  /** Rows SBDB returned that were not written, and why. */
+  readonly dropped: {
+    readonly missingElements: number;
+    /**
+     * D/ comets: those the IAU designates as no longer existing or lost -- Shoemaker-Levy
+     * 9's fragments, which hit Jupiter in 1994, among them. Their last orbit propagated
+     * to today would put a body where none is.
+     */
+    readonly defunct: number;
+  };
 }

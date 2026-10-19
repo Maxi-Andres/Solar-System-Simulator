@@ -14,6 +14,9 @@ import sbdbBelt from './__fixtures__/sbdb-belt.json' with { type: 'json' };
  * one of each NEO class the H < 15 belt has (Eros, Sisyphus, an Aten), Hektor, Chiron,
  * Quaoar, Sedna and an Oort-cloud orbit at e = 0.996; the two hyperbolic rows, the one row
  * with no mean anomaly, the one orbit whose epoch is 1927, and two of equal H.
+ *
+ * Its `full_name` and `name` columns were added for step B2c, from a second query for the
+ * same SPK-IDs the same week; the other columns are the original response's.
  */
 
 const byDesignation = (designation: string) =>
@@ -55,6 +58,8 @@ describe('reading the response', () => {
     expect(byDesignation('1')).toStrictEqual({
       spkid: 20000001,
       designation: '1',
+      fullName: '     1 Ceres (A801 AA)',
+      name: 'Ceres',
       aAu: 2.765552595034094,
       // SBDB writes '.07969229514816586', with no leading zero.
       e: 0.07969229514816586,

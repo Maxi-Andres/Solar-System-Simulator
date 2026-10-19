@@ -88,7 +88,7 @@ pnpm dev             # serve the app at http://localhost:5173
 Other commands:
 
 ```bash
-pnpm fetch:belt      # regenerate only the asteroid belt, from JPL's SBDB (~5 minutes)
+pnpm fetch:belt      # regenerate only the belt and the comets, from JPL's SBDB (~5 minutes)
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
 pnpm build           # production build (with the GitHub Pages base path)
@@ -141,6 +141,9 @@ web/public/data/
 ├─ small-moons/<planet>.json  # a planet's small moons, fetched when its system is entered
 ├─ belt/belt.json         # the asteroid belt: source, tiers, reference instant, classes
 ├─ belt/elements-<n>.bin  # one magnitude tier's orbital elements, little-endian float32
+├─ belt/names.json       # the search index: the belt's named, near-Earth and outer asteroids
+├─ belt/comets.json      # the comets: source, classes, names
+├─ belt/comets.bin       # their orbits, as perihelion distance and time, float32
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -336,6 +339,46 @@ for 2020 M4 (a = 14,513 AU, e = 0.9996), from the rounding of its semi-major axi
 those brighter than H 15, 1,051 of them TNOs — and for those the drift above is a lower
 bound. The oldest is 1927 LA, whose elements SBDB gives
 at a 1927 epoch: its drawn place is a century of two-body extrapolation.
+
+### Names and comets
+
+**The search index**, `belt/names.json`, is fetched only when search is opened. It does
+not hold all 1.57 million designations — that would be tens of megabytes to find one —
+but the 135,995 asteroids people look up: every one with an IAU name, every near-Earth
+asteroid, every centaur and trans-Neptunian object, and everything brighter than H 15.
+Each entry points at its record by tier and index, so the app reads a found asteroid's
+orbit straight from the file it is already loading. 4.5 MB, 1.4 MB gzipped. The fifteen
+named small bodies are not in it: they are bodies of their own, and searched as such.
+
+**The comets** are every comet in SBDB, 4,080 on 2026-10-19, less the 39 marked D/ —
+those the IAU designates as no longer existing or lost, Shoemaker-Levy 9's fragments
+among them, whose last orbit propagated to today would draw a body where none is. 4,041
+are written, 145 KB. More than half are not ellipses: 1,763 are parabolas (e = 1, the
+orbit fit's assumption for a comet seen too briefly to tell) and 520 hyperbolas, up to
+e = 6.14 for 3I/ATLAS. So each is stored by what every conic has — its perihelion
+distance and time — rather than a semi-major axis and mean anomaly, with its total
+magnitude M1 and slope K1 where SBDB has them, which for half of them it does not.
+Every fragment SBDB designates, 73P-B, 73P-C and seventy more, has its own orbit and
+is kept.
+
+**A comet is less accurate than an asteroid**, for two reasons stacked. Its orbit is
+two-body like the belt's, and on top of the planets the gas it sheds near the Sun pushes
+it — the non-gravitational forces no conic can follow. And many of SBDB's comet orbits
+are old: they are the last solution fitted, at the epoch it was fitted for. Measured
+against Horizons, from the packed records:
+
+| Comet | Orbit | Its SBDB epoch | At its epoch | A year before | At the run | A year after |
+|---|---|---|---|---|---|---|
+| 67P/Churyumov-Gerasimenko | Jupiter-family | 2015 | 94 km | 18 million km | 48 million km | 121 million km |
+| 12P/Pons-Brooks | Halley-type | 2023 | 39 km | 162,000 km | 453,000 km | 898,000 km |
+| 1P/Halley | Halley-type | 1968 | 811 km | 27 million km | 28 million km | 28 million km |
+| C/2025 N1 (3I/ATLAS) | hyperbolic | 2026 | 105 km | 80,000 km | 1.3 million km | 3.4 million km |
+| C/2019 Q4 (2I/Borisov) | hyperbolic | 2020 | 406 km | 2.2 million km | 2.8 million km | 3.3 million km |
+
+At their own epochs all five land within 40 to 800 km of Horizons — float32's rounding
+of the record, so the frame, units and conic are right — and what grows is two-body
+propagation across the elements' age: eleven years and a 2021 perihelion for 67P, with
+Jupiter close by, and 58 years for Halley's, fitted before its 1986 return.
 
 ### Spacecraft sampling
 
@@ -590,7 +633,7 @@ two, never drawn somewhere approximate and then moved.
 | [ESA Hipparcos, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/239/hip_main) | Position, proper motion, magnitude and colour index — the bright sky |
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
-| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements of the asteroid belt, every asteroid in the catalogue; comets *(planned)* |
+| [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements and names of every asteroid and comet in the catalogue |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
@@ -813,7 +856,7 @@ Stated plainly, since the point of the project is that everything else is not:
 ## Credits
 
 - Ephemerides: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Horizons System.
-- Asteroid orbits: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Small-Body
+- Asteroid and comet orbits: **NASA/JPL-Caltech**, Solar System Dynamics Group, JPL Small-Body
   Database.
 - Star positions, proper motions, magnitudes and colours: the **ESA Hipparcos
   catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),

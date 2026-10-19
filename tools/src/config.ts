@@ -393,3 +393,10 @@ export const AU_KM = 149_597_870.7;
 export function beltTierFile(index: number): string {
   return `elements-${index}.bin`;
 }
+
+/** The belt's search index, inside `belt/`; see BeltNames. */
+export const BELT_NAMES_FILE = 'names.json';
+
+/** The comets' description and records, inside `belt/`; see CometInfo. */
+export const COMETS_INFO_FILE = 'comets.json';
+export const COMETS_FILE = 'comets.bin';
