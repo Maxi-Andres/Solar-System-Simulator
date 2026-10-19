@@ -800,9 +800,11 @@ const SHAPES = {
 /**
  * NASA's own models from Eyes on the Solar System (eyes.nasa.gov/assets/static/models/),
  * step A5f, credited NASA/JPL-Caltech. No licence is stated in them or around them; NASA
- * Eyes was asked on 2026-10-08 and had not answered, and Maxi chose to use them under
- * NASA's media guidelines. Every one is in metres -- Eyes itself loads them at 0.001, to
- * kilometres:
+ * Eyes was asked on 2026-10-08 and had not answered when they were added, under NASA's
+ * media guidelines, on 2026-10-14. It answered by email on 2026-10-19 (Jason Craig, JPL):
+ * "Yes, you may use those models, as long as you continue to give credit to NASA" -- these
+ * six only; see web/public/models/CREDITS.md. Every one is in metres -- Eyes itself loads
+ * them at 0.001, to kilometres:
  *
  *   model       measured                       published
  *   Lucy        15.60 m across the arrays      15.8 m (NASA)
@@ -1243,7 +1245,14 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *                                    (JAXA ISAS)
  *
  * **No shape** for Aditya-L1: ISRO publishes only its 6 m magnetometer boom, and a box
- * needs three dimensions. Its marker stays at any range. Euclid, Gaia, Solar Orbiter,
+ * needs three dimensions. Its marker stays at any range. The figures quoted elsewhere --
+ * a 0.89 x 0.89 x 0.615 m cuboid and one wing of two 1.20 x 0.81 m panels (eoPortal,
+ * whence Space.com) -- are eoPortal's own words for "Aditya-1", the 400 kg, 400 W concept
+ * the mission grew out of; the craft that flew has 1,481 kg and about 1,820 W on a
+ * modified Mars Orbiter Mission bus (Prasad et al. 2025, Solar Physics 300, 128), far
+ * beyond two panels of a square metre each. Rechecked 2026-10-19: ISRO's mission page,
+ * brochure and booklet, the Horizons summary and the instrument papers give no other.
+ * Euclid, Gaia, Solar Orbiter,
  * BepiColombo and Hera, boxes here once, are ESA's own models now: see ESA_SHAPES; IMAP,
  * Artemis I and II, CAPSTONE and ESCAPADE are NASA's, from Eyes: see EYES_SHAPES.
  */

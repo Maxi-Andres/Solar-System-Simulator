@@ -17,16 +17,28 @@ United States", and may be used for "computer graphical simulations and Internet
 pages". **NASA should be acknowledged as the source**, which is what this file and the
 About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 
-### NASA's Eyes on the Solar System
+### NASA's Eyes on the Solar System — by written permission
 
 Six models come from NASA's Eyes on the Solar System, as its app loads them from
 eyes.nasa.gov/assets/static/models/: Lucy, Psyche, IMAP, ESCAPADE (both probes), CAPSTONE
 and Orion (Artemis I and II). They are credited **NASA/JPL-Caltech**. No licence or terms
-are stated in them, on the page, or in the app; NASA Eyes was asked for permission on
-2026-10-08 and had not answered when they were added (2026-10-14), and the project owner
-chose to use them under NASA's media guidelines above. Orion's textures carry the NASA
-and ESA logos as the real spacecraft does; they are part of the model and are not used
-as branding here.
+are stated in them, on the page, or in the app, so the NASA's Eyes team was asked on
+2026-10-08 whether they could be used "compressed, otherwise unchanged, served from the
+site and credited 3D model: NASA/JPL-Caltech (NASA's Eyes)".
+
+They were added on 2026-10-14, **before any answer**, under NASA's media guidelines above:
+the project owner's choice, recorded here as it was made. The answer came by email on
+2026-10-19, from Jason Craig of the NASA's Eyes team at JPL:
+
+> Yes, you may use those models, as long as you continue to give credit to NASA.
+
+The permission covers exactly the six models named in the request and nothing else Eyes
+publishes; any other Eyes model needs asking again. Its one condition, credit to NASA, is
+met where the models are used -- each craft's info panel names its model NASA's, and the
+About panel says these six are NASA's, from Eyes -- and by this file. The request's own
+terms are kept too: the files are compressed and otherwise unchanged (see below). Orion's
+textures carry the NASA and ESA logos as the real spacecraft does; they are part of the
+model and are not used as branding here.
 
 ### ESA — by written permission
 
@@ -128,8 +140,13 @@ Hera 479,908, Euclid 136,061, BepiColombo 111,536, Gaia 45,634, Mars Express 33,
 TGO 27,288, Solar Orbiter 9,596.
 The six from NASA's Eyes came as glTF, three with Draco geometry and KTX2 (Basis)
 textures; those were decoded with three.js's own Basis transcoder to JPEG or PNG, then
-compressed as above. Five keep every triangle; IMAP lost 104 of 66,405, sub-tenth-of-a-
-millimetre slivers merged by the vertex weld.
+compressed as above. All six keep every triangle: Lucy 60,829, Psyche 23,354, IMAP
+66,405, ESCAPADE 30,818, CAPSTONE 5,025, Orion 112,517. An earlier count here said IMAP
+had lost 104 to the vertex weld. It had not: `optimize`'s instancing pass draws a part
+IMAP repeats as one GPU-instanced mesh (EXT_mesh_gpu_instancing), and that count took the
+instances as one. Rechecked on 2026-10-19 against the decoded source, instances counted:
+66,405 triangles in both, and every source triangle is in the file within 0.03 mm, the
+16-bit position quantisation -- so IMAP was not re-exported.
 
 Unused camera and sky nodes from the FBX scenes were dropped, identical vertices
 welded, and the zero-length normals the converter left on degenerate triangles
@@ -139,15 +156,24 @@ lifts for these six.
 
 ## Not here
 
-Juice, Lucy and Psyche are drawn as plain boxes of their published dimensions instead.
-Juice's model is on ESA's SPICE server with no licence stated; Lucy's and Psyche's exist
-only as NASA Eyes runtime assets, with no terms published. Using any of them would be
-using something nobody has said may be used.
+Seven craft have no model here, because none may be used yet. Six are plain NO MODEL
+boxes of their published dimensions; Aditya-L1 is its marker alone. Searched 2026-10-19
+for an official model from each operator, or any with a licence that allows hosting it
+on a public website (fan-made models are not used, whatever their licence):
 
-The same goes for ESA's models of Solar Orbiter, BepiColombo, Hera, Euclid, Gaia and
-SOHO (on its SPICE server and Scifleet), JAXA's none for Hayabusa2 or Akatsuki, and
-NASA's printable-only DART: boxes, or -- for Gaia and Aditya-L1, whose three dimensions
-are not published -- the marker alone.
+| Craft | Operator | What exists |
+|---|---|---|
+| Hayabusa2 | JAXA | None from JAXA: its 3D page (hayabusa2.jaxa.jp/en/galleries/3D) and DARTS archive, SPICE bundle included, carry Ryugu's shape only. NASA's Eyes has a model (sc_hayabusa_2), outside the six its permission covers. |
+| Akatsuki | JAXA | None: JAXA publishes a papercraft and an origami model (akatsuki.isas.jaxa.jp/en/gallery/papercraft/), no 3D file. |
+| LICIACube | ASI | None from ASI or Argotec, its builder; none in NASA 3D Resources or Eyes. |
+| Hope | UAE Space Agency / MBRSC | None published; the mission site now redirects to space.gov.ae. |
+| Danuri | KARI | None from KARI, whose site's copyright policy reserves its content. NASA's Eyes has a model (sc_danuri), outside the six its permission covers. |
+| Chandrayaan-2 | ISRO | None from ISRO. |
+| Aditya-L1 | ISRO | None from ISRO -- nor three dimensions for a box: see `MORE_SHAPES` in `tools/src/catalog.ts`. |
+
+Each operator is to be asked for permission, and NASA's Eyes for its Hayabusa2 and
+Danuri; a model is added only once an answer allows it, and recorded here with that
+answer.
 
 ## Processing
 
