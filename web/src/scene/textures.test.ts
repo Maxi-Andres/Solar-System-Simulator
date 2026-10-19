@@ -108,10 +108,10 @@ describe('the texture files', () => {
     );
     const totalMb = sizes.reduce((sum, size) => sum + size, 0) / 1024 / 1024;
 
-    // 12.4 MB today: both map sets, the ring strip, Earth's three extras, and twenty moon
-    // maps at 6.5 MB -- most of them grainy greyscale mosaics that JPEG cannot squeeze
-    // much (quality 80 saved only a tenth). It briefly held a 3.8 MB sky panorama as
-    // well. A visitor pays for none of it up front: each map is fetched only when its
+    // 13.5 MB today: both map sets, the ring strip, Earth's three extras, twenty moon
+    // maps at 6.5 MB, and Dawn's Ceres and Vesta at 1.1 MB -- most of them grainy
+    // greyscale mosaics that JPEG cannot squeeze much (quality 80 saved only a tenth). It
+    // briefly held a 3.8 MB sky panorama as well. A visitor pays for none of it up front: each map is fetched only when its
     // body is on screen. The guard is on the repository as much as on the page:
     // swapping in 8k body maps would be a 40 MB decision, not an accident.
     expect(totalMb).toBeLessThan(14);
@@ -187,8 +187,10 @@ describe('no map has an unfilled gap', () => {
   it.each(surfaceMaps)('leaves no unmapped region in %s', async (file) => {
     const pixels = decode(await readFile(join(TEXTURE_DIR, file)), { useTArray: true });
 
-    // Stray black pixels are normal; a hole is 30% of the image.
-    expect(blackFraction(pixels)).toBeLessThan(0.01);
+    // Stray black pixels are normal; a hole is 30% of the image. The most is Vesta's
+    // 1.04%, and it is shadow, not a gap: crater floors between 60 and 77 N, where Dawn
+    // saw the Sun a few degrees above the horizon. The unlit cap beyond them is filled.
+    expect(blackFraction(pixels)).toBeLessThan(0.02);
   });
 
   it("fills Pluto's polar night with the average of what was mapped", async () => {

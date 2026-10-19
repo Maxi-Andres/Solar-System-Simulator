@@ -1,5 +1,5 @@
 import { SMALL_BODY_TOLERANCE_KM } from './config.ts';
-import type { BodyDefinition, BodyKind, RotationalElements } from './types.ts';
+import type { BodyDefinition, BodyKind, RotationalElements, TextureVariant } from './types.ts';
 
 /**
  * The named small bodies about the Sun, step B1a: the dwarf planets beside Pluto, the
@@ -56,6 +56,14 @@ interface SmallBodySpec {
   /** False where the shape cannot be drawn yet; see the header. */
   readonly shapeDrawn: boolean;
   readonly color: string;
+  /**
+   * The surface map, or null for a body drawn without one. One map serves both sets, as
+   * for the moons: nothing here has an illustrative map and a calibrated one to choose
+   * between. Only Ceres and Vesta have one -- Dawn's global mosaics -- and they are the
+   * only bodies here with the IAU rotation a map needs to be turned the right way. See
+   * the note above each.
+   */
+  readonly map: TextureVariant | null;
 }
 
 /** IAU rotation from pck00011.tpc: constant pole, prime meridian and rate. */
@@ -102,7 +110,7 @@ function smallBody(spec: SmallBodySpec): BodyDefinition {
     rotation: spec.rotation,
     color: spec.color,
     drawOrbit: true,
-    textures: null,
+    textures: spec.map === null ? null : { illustrative: spec.map, photometric: spec.map },
     rings: null,
     mission: null,
     sampling: { toleranceKm: SMALL_BODY_TOLERANCE_KM, windowMonths: null },
@@ -126,6 +134,14 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: iauRotation(291.418, 66.764, 170.65, 952.1532),
     shapeDrawn: true,
     color: '#8f8a83',
+    // Dawn's HAMO clear-filter global mosaic (DLR, PDS CE_HAMO_G_00N_180E_EQU_CLR), "in
+    // the IAU-approved Kait longitude system": the tiny crater Kait at 0 E, which is what
+    // the W0 of 170.65 above was fitted to hold (Dawn's Ceres coordinate document,
+    // CERES_COORD_SYS_180628). Centred on 180 E, so its left edge is longitude 0.
+    // Dawn's final solution moved W0 to 170.309 with a rate 0.0000635 deg/day faster; the
+    // two agree on where Kait is to 0.3 degrees in 2026, under two texels of this map.
+    // Occator's faculae land on the Gazetteer's 19.7 N, 239.6 E: textureAlignment.test.ts.
+    map: { file: 'ceres.jpg', longitudeOriginDeg: 0 },
   }),
   // Haumea. Semi-axes 1161 x 852 x 513 km: Ortiz et al., Nature 550, 219 (2017),
   // doi:10.1038/nature24051, which also gives its pole (the ring's) and uses the period
@@ -144,6 +160,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#d6d6d6',
+    map: null,
   }),
   // Makemake. 1434 x 1422 km across the projected disc, +-14 km each: Brown, ApJL 767, L7
   // (2013), reanalysing the 2011 occultation (Ortiz et al., Nature 491, 566, 2012). The
@@ -162,6 +179,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: true,
     color: '#c9a98a',
+    map: null,
   }),
   // Eris. Radius 1163 +- 6 km, and the occultation fits a sphere: Sicardy et al., Nature
   // 478, 493 (2011), doi:10.1038/nature10550. GM 1099 km^3/s^2 for Eris and Dysnomia
@@ -180,6 +198,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: true,
     color: '#d8d4cc',
+    map: null,
   }),
   // Apophis. 0.34 km volume-equivalent diameter from the radar shape model: Brozovic et
   // al., Icarus 300, 115 (2018), via SBDB. It tumbles -- 27.38 h and 263 h, Pravec et al.,
@@ -196,6 +215,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#a8a196',
+    map: null,
   }),
   // Bennu. 0.5047 x 0.4918 x 0.4567 km: Daly et al., Sci. Adv. 6, eabd3649 (2020). GM:
   // Chesley et al., JGR Planets 125, e06363 (2020). Period: Hergenrother et al., Nat.
@@ -212,6 +232,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#6f6a64',
+    map: null,
   }),
   // Ryugu. 1.004 km across the equator, 0.876 pole to pole; GM and period: Watanabe et
   // al., Science 364, 267 (2019). Via SBDB.
@@ -227,6 +248,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#6a6560',
+    map: null,
   }),
   // Didymos. Radii 0.39167 x 0.39167 x 0.29195 km, pole, period 2.2600 h and the system's
   // GM, 3.48961e-8 km^3/s^2 (Didymos with Dimorphos): NAIF didymos_system_15.tpc
@@ -243,6 +265,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#a59d90',
+    map: null,
   }),
   // Dinkinesh. 0.719 km mean diameter and GM: Levison et al., Nature (2024),
   // doi:10.1038/s41586-024-07378-0. Period: Mottola et al., MNRAS Letters (2023),
@@ -259,6 +282,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#a09a8e',
+    map: null,
   }),
   // Vesta. Radii and rotation: pck00011, whose long axis lies on the prime meridian
   // (BODY2000004_LONG_AXIS = 0), the same convention the triaxial moons are drawn in. GM:
@@ -275,6 +299,17 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: iauRotation(309.031, 42.235, 285.39, 1617.3329428),
     shapeDrawn: true,
     color: '#b5ab9c',
+    // Dawn's HAMO global mosaic (DLR, USGS Vesta_Dawn_FC_HAMO_Mosaic_Global_74ppd).
+    // Vesta has had four prime meridians, and this map and this rotation had to be in the
+    // same one. Dawn flew in its own "Claudia" system, W0 = 75.39, Claudia crater at 356
+    // E; "Claudia Prime" moved it to 295.39; the IAU adopted "Claudia Double Prime", W0 =
+    // 285.39 -- the value above -- which puts Claudia at 146 E and keeps the prime
+    // meridian within a degree of the IAU-2000 system's (Dawn's VESTA_COORDINATES_131018,
+    // Table 1). USGS shifted this mosaic 150 degrees east from Dawn's system into Claudia
+    // Double Prime, and its ISIS label centres it on 0 with its left edge at minus pi R:
+    // longitude 180 W. Marcia and Aricia Tholus land on the Gazetteer's coordinates, which
+    // are Claudia Double Prime too (Claudia: 146.0 E): textureAlignment.test.ts.
+    map: { file: 'vesta.jpg', longitudeOriginDeg: 180 },
   }),
   // Donaldjohanson. 8.8 x 4.4 x 3.1 km from Lucy's April 2025 flyby: Marchi et al.,
   // Science 392, 1291 (2026), doi:10.1126/science.aec0503. It tumbles, at 252.6 h and
@@ -292,6 +327,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#8a857c',
+    map: null,
   }),
   // Pallas. 568 x 532 x 448 km: Marsset et al., Nature Astronomy 4, 569 (2020). GM:
   // Vernazza et al., A&A 654, A56 (2021). Period: Carry et al., Icarus 205, 460 (2010).
@@ -309,6 +345,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#9a978f',
+    map: null,
   }),
   // Psyche. 278 x 238 x 171 km: Shepard et al., PSJ 2, 125 (2021). GM: Farnocchia et
   // al., AJ 168, 21 (2024). Period: the Light Curve Database (Warner et al. 2009, rev.
@@ -327,6 +364,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#a39d93',
+    map: null,
   }),
   // Eurybates, Lucy's 2027 target. Convex model 77.5 x 71.3 x 61.8 km, pole and period
   // 8.7027283 h: Mottola et al., PSJ 4, 18 (2023), doi:10.3847/PSJ/acaf79. A mass from its
@@ -344,6 +382,7 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#7d7871',
+    map: null,
   }),
   // Arrokoth. 36 x 20 x 10 km overall, two lobes of 20.6 x 19.9 x 9.4 and 15.4 x 13.8 x
   // 9.8 km; period 15.92 h; pole: Spencer et al., Science 367, eaay3999 (2020). A contact
@@ -360,5 +399,6 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     rotation: null,
     shapeDrawn: false,
     color: '#a0705a',
+    map: null,
   }),
 ];

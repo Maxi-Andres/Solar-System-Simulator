@@ -1,4 +1,4 @@
-import type { CraftShape, Seam } from '@sss/tools/types';
+import type { BodyDefinition, CraftShape, Seam } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
@@ -223,6 +223,7 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
   const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
   const periodDays = elements === null ? null : elements.periodSec / 86_400;
   const rotationHours = body.rotationPeriodHours;
+  const mapNote = surfaceMapNote(body);
 
   return (
     <>
@@ -251,6 +252,7 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
         // of these radii would be a shape it does not have.
         <Row label="Shape">Not drawn yet: marker only</Row>
       )}
+      {mapNote !== null && <Row label="Surface map">{mapNote}</Row>}
       {/* A zero GM here means unmeasured, not massless: the small moons have none. */}
       <Row label="GM">
         {body.gmKm3S2 === 0 ? 'Not measured' : `${body.gmKm3S2.toLocaleString('en-US')} km³/s²`}
@@ -303,6 +305,63 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Why a body has no surface map, for the bodies where the reason is known.
+ *
+ * "None exists" is said only where it is true. A flat-coloured body reads the same
+ * whether nobody has ever photographed it or nobody here has drawn the photographs, and
+ * those are different facts: no spacecraft has ever been to Eris, while Bennu was mapped
+ * to the centimetre (USGS Astrogeology lists OSIRIS-REx's global basemap) and is a marker
+ * only because its shape is not drawn yet.
+ *
+ * Sources for the dates: NASA's mission pages (science.nasa.gov, read 2026-10-19) --
+ * Lucy passes Eurybates on 11 August 2027, Psyche reaches its asteroid by August 2029,
+ * OSIRIS-APEX reaches Apophis in April 2029. Hera's arrival is the catalog's, in
+ * smallBodies.ts.
+ */
+const MAP_NOTES: Readonly<Record<string, string>> = {
+  eris: 'None exists: never visited',
+  makemake: 'None exists: never visited',
+  haumea: 'None exists: never visited',
+  pallas: 'None exists: never visited',
+  '16-psyche': 'None yet: Psyche arrives in 2029',
+  eurybates: 'None yet: Lucy flies past in August 2027',
+  apophis: 'None yet: OSIRIS-APEX arrives in 2029',
+  bennu: 'Mapped by OSIRIS-REx; not drawn yet',
+  ryugu: 'Imaged whole by Hayabusa2; not drawn yet',
+  didymos: 'Seen in part by DART; Hera arrives December 2026',
+  dinkinesh: 'None exists: one side seen in a Lucy flyby',
+  donaldjohanson: 'None exists: one side seen in a Lucy flyby',
+  arrokoth: 'None exists: one face seen by New Horizons',
+  // See the note on Deimos in catalog.ts: the one map, from Viking, cannot be placed in
+  // longitude.
+  deimos: 'Viking-based map exists; cannot be placed',
+};
+
+/**
+ * The "Surface map" line for a natural body drawn without one, or null for a body that
+ * has a map, or is a craft.
+ *
+ * Data-driven twice over: whether to say anything comes from the catalog (`textures`),
+ * and a moon whose size JPL does not publish says why on that evidence alone -- had any
+ * camera resolved it, its size would be measured. The rest of the small moons get the
+ * line that claims nothing beyond what is on screen; several were photographed by
+ * Voyager, Galileo or Cassini, and "never imaged" would be untrue of them.
+ */
+export function surfaceMapNote(
+  body: Pick<BodyDefinition, 'id' | 'kind' | 'textures' | 'radiusPublished'>,
+): string | null {
+  if (body.textures !== null || body.kind === 'spacecraft') {
+    return null;
+  }
+  return (
+    MAP_NOTES[body.id] ??
+    (body.radiusPublished === false
+      ? 'None exists: never resolved, only a point of light'
+      : 'None drawn')
   );
 }
 

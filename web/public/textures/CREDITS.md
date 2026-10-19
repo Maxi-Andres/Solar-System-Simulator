@@ -87,6 +87,8 @@ to prove the check still has teeth.
 | `oberon.jpg` | Oberon | [NASA 3D Resources (USGS/Tammy Becker, Voyager 2)](https://github.com/nasa/NASA-3D-Resources) | Public domain |
 | `triton.jpg` | Triton | [USGS Astrogeology, Voyager 2 colour global mosaic with fill, 600 m](https://planetarymaps.usgs.gov/mosaic/Triton_Voyager2_ClrMosaic_GlobalFill_600m.tif) | Public domain |
 | `charon.jpg` | Charon | [USGS Astrogeology, New Horizons LORRI/MVIC global mosaic 300 m](https://planetarymaps.usgs.gov/mosaic/Charon_NewHorizons_Global_Mosaic_300m_Jul2017_8bit.tif) | Public domain |
+| `ceres.jpg` | Ceres | [NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, Dawn FC HAMO clear-filter global mosaic 140 m (DLR), PDS CE_HAMO_G_00N_180E_EQU_CLR](https://sbnarchive.psi.edu/pds3/dawn/fc/DWNCHCFC2_2/DATA/CE_HAMO_G_00N_180E_EQU_CLR.IMG) | Public domain |
+| `vesta.jpg` | Vesta | [NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, USGS Astrogeology, Dawn FC HAMO global mosaic 60 m](https://planetarymaps.usgs.gov/mosaic/Vesta_Dawn_FC_HAMO_Mosaic_Global_74ppd.tif) | Public domain |
 
 ## Attribution
 
@@ -161,10 +163,65 @@ edge of an imaged region is anti-aliased into the black and otherwise survives a
 outline. It reads as missing data rather than as a black cap. Nothing in those regions is
 an observation.
 
-**Deimos has no map**, by decision. The one global map, Stooke's from Viking, cannot be
-placed: its USGS world file and its author's guide disagree about where longitude 0 is,
-and Deimos's two named craters are too small to settle it from the pixels. It stays in
-flat colour until a map can be registered.
+**Deimos has no map**, by decision, and the decision was checked again in October 2026.
+The one global map, Stooke's from Viking, cannot be placed: its USGS world file and its
+author's guide disagree about where longitude 0 is, and Deimos's two named craters are
+too small to settle it from the pixels. Nothing newer replaces it. USGS Astrogeology's
+data portal lists, for Deimos, a stereophotoclinometry shape model and about 950
+co-registered images in the Small Body Mapping Tool (Ernst et al. 2015, 2018) -- and,
+where it lists a Viking and an HRSC global mosaic for Phobos, no image mosaic of Deimos
+at all. The Emirates Mars Mission's 2023 flybys have been used for crater and boulder
+maps in papers, not released as a basemap. It stays in flat colour until a map can be
+registered, and the info panel says why.
+
+## Ceres and Vesta
+
+The two Dawn mosaics, from its High Altitude Mapping Orbits: Ceres in August to October
+2015 at 140 m a pixel, Vesta in September to November 2011 at 60 m. Framing Camera images
+assembled by **DLR** (Roatsch et al., Planet. Space Sci. 125, 103, 2016, for Ceres;
+Roatsch et al., Planet. Space Sci. 73, 283, 2012, for Vesta). NASA and USGS products are
+in the public domain; the credit Dawn asks for is **NASA/JPL-Caltech/UCLA/MPS/DLR/IDA**,
+and USGS asks that the authors be cited. Both are clear filter, so greyscale, like the
+moons; Dawn's colour mosaics are separate products per filter, 28 GB for Ceres alone.
+
+**Where each starts, and why that took more than the label.** Ceres's is the PDS product
+CE_HAMO_G_00N_180E_EQU_CLR, "in the IAU-approved Kait longitude system": centred on 180 E,
+so its left edge is 0. Kait, a crater under a kilometre across, defines Ceres's 0 E, and
+the catalog's W0 of 170.65 is the value that was fitted to hold it there (Dawn's
+CERES_COORD_SYS_180628). Vesta's is harder, because Vesta has had four prime meridians:
+IAU-2000, Dawn's own "Claudia" system (Claudia crater at 356 E), "Claudia Prime", and the
+IAU-adopted "Claudia Double Prime", which puts Claudia at 146 E and whose W0 of 285.39 is
+the catalog's (Dawn's VESTA_COORDINATES_131018, Table 1). USGS's mosaic was shifted 150
+degrees east out of Dawn's system into Claudia Double Prime, and its ISIS label centres
+it on 0, with `UpperLeftCornerX` at minus pi R: left edge 180 W. The PDS archive's copy,
+VE_HAMO_00N_330E_CYL_CLEAR, states the same system in its label ("in the IAU-approved
+Claudia Double-Prime longitude system") and is centred on 330 E instead. The Gazetteer
+gives Vesta's features in Claudia Double Prime too: Claudia is at 146.0 E there.
+
+**Then measured.** `textureAlignment.test.ts` puts the Gazetteer's coordinates through the
+renderer and looks for the feature nearby: Ceres's Cerealia Facula, in Occator, comes out
+0.37 degrees from where it belongs -- two texels; Vesta's Tuccia 0.75 degrees and Aricia
+Tholus 2.1, each well inside its own radius. It also checks that Vesta read in Dawn's
+Claudia system, 150 degrees round, loses Aricia Tholus. Dawn's final Ceres solution moved
+W0 to 170.309 with a slightly faster spin; in 2026 that differs from the catalog's by 0.3
+degrees, under two texels.
+
+**What was never imaged is filled, a little differently from the moons.** Vesta's north
+was in winter darkness while Dawn was there: the mosaic holds the camera's floor value, 1,
+over 5.8% of the map, nearly all of it north of 60 N. Ceres's south polar cap, south of
+about 85 S, and the deepest shadows near both poles are the product's missing value, 0:
+8.9%. Both were downscaled to 2048 x 1024 with Lanczos resampling *with those pixels
+left out* -- the mosaic and its coverage resampled separately and divided -- so the edge
+of a gap does not survive as a dark outline, and a texel less than half observed is a
+gap. Each gap was then given a starting value and relaxed by 200 passes of a 3 x 3
+average over the gap only, wrapping in longitude and clamping at the poles. The starting
+value differs, for a stated reason. Ceres's is the mean of the whole mapped surface,
+128, as for Pluto. Vesta's is the mean of the mapped texels on the gap's own row of
+latitude, because the mapped north is itself dark -- the Sun was a few degrees up there
+-- and the global mean put pale blots in a dark landscape. Nothing in either filled
+region is observation. What remains black in Vesta, 1.04%, is crater shadow next to the
+filled cap, not a gap. Saved as single-channel JPEG at quality 85: Ceres 754 KB, Vesta
+383 KB.
 
 ## Two things worth knowing about how these are drawn
 

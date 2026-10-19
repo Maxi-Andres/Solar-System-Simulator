@@ -126,19 +126,32 @@ async function texelAt(
   variant: TextureVariant,
   jd = JD,
 ): Promise<Pixel> {
+  const { x, y } = await texelPosition(body, landmark, variant, jd);
+  const { width, data } = await image(variant.file);
+  const offset = (y * width + x) * 4;
+
+  return { r: data[offset]!, g: data[offset + 1]!, b: data[offset + 2]! };
+}
+
+/** Which texel of the file the renderer draws at a point on the surface: the same trip. */
+async function texelPosition(
+  body: BodyDefinition,
+  landmark: Landmark,
+  variant: TextureVariant,
+  jd = JD,
+): Promise<{ x: number; y: number }> {
   const world = surfaceDirection(body, landmark, jd);
   const local = new THREE.Vector3(world.x, world.y, world.z).applyQuaternion(
     bodyOrientation(jd, body, variant.longitudeOriginDeg).clone().invert(),
   );
 
   const { u, v } = uvForLocalDirection(local);
-  const { width, height, data } = await image(variant.file);
+  const { width, height } = await image(variant.file);
   // Textures load with flipY, so v = 1 is the top row of the file.
-  const x = Math.min(width - 1, Math.max(0, Math.round(u * width)));
-  const y = Math.min(height - 1, Math.max(0, Math.round((1 - v) * height)));
-  const offset = (y * width + x) * 4;
-
-  return { r: data[offset]!, g: data[offset + 1]!, b: data[offset + 2]! };
+  return {
+    x: Math.min(width - 1, Math.max(0, Math.round(u * width))),
+    y: Math.min(height - 1, Math.max(0, Math.round((1 - v) * height))),
+  };
 }
 
 const EARTH: readonly Landmark[] = [
@@ -378,6 +391,108 @@ describe('the moons are drawn the way their maps are drawn', () => {
   });
 });
 
+/**
+ * Ceres and Vesta, where the question is sharper than a half turn.
+ *
+ * Both have a prime-meridian history -- Vesta four systems, 210 degrees apart at the
+ * widest -- so a map in one system and a rotation in another would be wrong by an angle
+ * that is not 180 and that no flip test notices. So these measure where the feature is:
+ * the renderer's texel for the Gazetteer's coordinates, then the brightest or darkest
+ * spot within seven degrees of it, then how far apart the two are. That distance has to
+ * be inside the feature's own radius.
+ *
+ * Measured (2026): Cerealia Facula 0.37 degrees from where it belongs, about two texels,
+ * against a radius of 0.85; Tuccia 0.75 against 1.3; Aricia Tholus 2.1 against 4.4 -- a
+ * dark dome 39 km across whose darkest spot need not be its centre. Coordinates are the
+ * Gazetteer's: Kait's system on Ceres, Claudia Double Prime on Vesta (Claudia is at
+ * 146.0 E), both planetocentric and east-positive.
+ */
+describe('Ceres and Vesta are drawn where Dawn mapped them', () => {
+  const SEARCH_PX = 40;
+
+  /**
+   * The extreme of a small averaged patch near where the renderer draws a coordinate, and
+   * how far from it, in degrees of arc on the surface.
+   */
+  async function nearestExtreme(
+    id: string,
+    latitudeDeg: number,
+    longitudeEastDeg: number,
+    kind: 'bright' | 'dark',
+    halfPx: number,
+    variant = getBody(id).textures!.illustrative,
+  ): Promise<{ value: number; offsetDeg: number }> {
+    const body = getBody(id);
+    const { x, y } = await texelPosition(body, spot('feature', latitudeDeg, longitudeEastDeg), variant);
+    const { width, height, data } = await image(variant.file);
+    const sign = kind === 'bright' ? 1 : -1;
+    let best = -Infinity;
+    let bestDx = 0;
+    let bestDy = 0;
+    for (let dy = -SEARCH_PX; dy <= SEARCH_PX; dy += 1) {
+      for (let dx = -SEARCH_PX; dx <= SEARCH_PX; dx += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let a = -halfPx; a <= halfPx; a += 1) {
+          for (let b = -halfPx; b <= halfPx; b += 1) {
+            const row = Math.min(height - 1, Math.max(0, y + dy + a));
+            const column = (((x + dx + b) % width) + width) % width;
+            sum += data[(row * width + column) * 4]!;
+            count += 1;
+          }
+        }
+        if ((sign * sum) / count > best) {
+          best = (sign * sum) / count;
+          bestDx = dx;
+          bestDy = dy;
+        }
+      }
+    }
+    const east = ((bestDx * 360) / width) * Math.cos((latitudeDeg * Math.PI) / 180);
+    const north = (bestDy * 180) / height;
+    return { value: sign * best, offsetDeg: Math.hypot(east, north) };
+  }
+
+  it.each([
+    // [body, feature, latitude, longitude east, bright or dark, patch half-width px,
+    //  the feature's radius in degrees of arc from its Gazetteer diameter]
+    ['ceres', 'Cerealia Facula', 19.7, 239.623, 'bright', 1, 0.85],
+    ['vesta', 'Tuccia', -39.8572, 346.8055, 'bright', 1, 1.31],
+    ['vesta', 'Aricia Tholus', 13.3765, 311.5452, 'dark', 3, 4.38],
+  ] as const)('finds %s’s %s inside its own radius', async (id, _name, lat, lon, kind, half, radius) => {
+    const { offsetDeg } = await nearestExtreme(id, lat, lon, kind, half);
+
+    expect(offsetDeg).toBeLessThan(radius);
+  });
+
+  it('puts Occator’s faculae, the brightest thing on Ceres, where the Gazetteer does', async () => {
+    // Not just the nearest bright spot: the facula, at nearly full white against a
+    // surface that averages 128. Half a turn out, the same search finds nothing like it.
+    const ceres = getBody('ceres');
+    const variant = ceres.textures!.illustrative;
+    const flipped = { ...variant, longitudeOriginDeg: variant.longitudeOriginDeg + 180 };
+    const right = await nearestExtreme('ceres', 19.7, 239.623, 'bright', 1);
+    const wrong = await nearestExtreme('ceres', 19.7, 239.623, 'bright', 1, flipped);
+
+    expect(right.value).toBeGreaterThan(240);
+    expect(wrong.value).toBeLessThan(right.value - 40);
+  });
+
+  it('would fail on Vesta drawn in Dawn’s own Claudia system, 150 degrees round', async () => {
+    // The mistake actually on offer: Dawn's first papers on Vesta (Science, 2012) give
+    // their coordinates in the team's Claudia system, where every longitude is 150
+    // degrees less than in the IAU's -- Marcia at 190 E rather than the Gazetteer's 339.5.
+    // Read with that origin, Aricia Tholus's darkness is nowhere near where it should be.
+    const vesta = getBody('vesta');
+    const variant = vesta.textures!.illustrative;
+    const claudia = { ...variant, longitudeOriginDeg: (variant.longitudeOriginDeg + 150) % 360 };
+    const right = await nearestExtreme('vesta', 13.3765, 311.5452, 'dark', 3);
+    const wrong = await nearestExtreme('vesta', 13.3765, 311.5452, 'dark', 3, claudia);
+
+    expect(right.value).toBeLessThan(wrong.value - 15);
+  });
+});
+
 describe('the catalog says where every image starts', () => {
   const variants = CATALOG.flatMap((body) =>
     body.textures === null
@@ -396,14 +511,15 @@ describe('the catalog says where every image starts', () => {
     // Solar System Scope, NASA Blue Marble and the NASA 3D Resources maps all centre
     // on the prime meridian, so their left edge is 180 W. NASA's Pluto mosaic starts
     // at 0, and so do the USGS products centred on 180 -- Europa, Ganymede, Callisto,
-    // Enceladus and Titan -- where the rest of USGS's moons centre on 0. Each measured
-    // from its ISIS label and against named features; see CREDITS.md. Pinned so a new
-    // map cannot quietly inherit the wrong one.
+    // Enceladus and Titan -- where the rest of USGS's moons centre on 0. So does Dawn's
+    // Ceres mosaic in the PDS, while USGS's Vesta centres on 0. Each measured from its
+    // label and against named features; see CREDITS.md. Pinned so a new map cannot
+    // quietly inherit the wrong one.
     const startingAtZero = variants.filter((v) => v.longitudeOriginDeg === 0);
     const startingAt180 = variants.filter((v) => v.longitudeOriginDeg === 180);
 
     expect(new Set(startingAtZero.map((v) => v.id))).toEqual(
-      new Set(['pluto', 'europa', 'ganymede', 'callisto', 'enceladus', 'titan']),
+      new Set(['pluto', 'europa', 'ganymede', 'callisto', 'enceladus', 'titan', 'ceres']),
     );
     expect(startingAtZero.length + startingAt180.length).toBe(variants.length);
   });

@@ -14,6 +14,7 @@
     "preview": "pnpm --filter @sss/web preview",
     "fetch:data": "pnpm --filter @sss/tools fetch:data",
     "fetch:belt": "pnpm --filter @sss/tools fetch:belt",
+    "write:catalog": "pnpm --filter @sss/tools write:catalog",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }
