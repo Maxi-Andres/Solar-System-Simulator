@@ -15,7 +15,8 @@
  * belt.json says which instant it is for.
  *
  * What it leaves out is what that data directory draws as bodies: the small bodies and
- * Pluto in its bodies.json, or the whole catalog's when there is none yet.
+ * Pluto in its bodies.json, out of the belt, and its famous comets out of the comets -- or
+ * the whole catalog's when there is none yet.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -23,6 +24,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { CATALOG } from '../catalog.ts';
+import { cometDesignations } from '../famousComets.ts';
 import { BELT_MAGNITUDE_LIMIT, BELT_TIER_LIMITS, OUTPUT_DIR } from '../config.ts';
 import { todayUtcMidnight } from '../fetchData.ts';
 import { toJulianDay } from '../horizons/queries.ts';
@@ -77,7 +79,11 @@ async function main(): Promise<void> {
     excluded,
     tierLimits: BELT_TIER_LIMITS,
   });
-  const comets = buildComets({ ...cometRows, referenceJd });
+  const comets = buildComets({
+    ...cometRows,
+    referenceJd,
+    excluded: cometDesignations(published ?? CATALOG),
+  });
   for (const line of [...describeBelt(belt), ...describeComets(comets)]) {
     console.log(line);
   }

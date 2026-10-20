@@ -572,6 +572,7 @@ describe('writing it', () => {
     rows: parseCometResponse(sbdbComets).rows,
     queriedAt: '2026-10-19T16:00:00.000Z',
     referenceJd: REFERENCE_JD,
+    excluded: [],
   });
 
   it('replaces belt/ and leaves the rest of the data directory alone', async () => {

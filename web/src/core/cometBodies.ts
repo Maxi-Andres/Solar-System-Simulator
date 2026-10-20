@@ -15,8 +15,10 @@ import type { StateVector } from './vec3.ts';
  * the Sun. For a parabola or a hyperbola none is, for now: the orbit line is a closed
  * loop, and an open conic would need a line of its own with somewhere honest to stop.
  *
- * Kind 'comet' is generic on purpose: the famous comets will be Horizons-vector bodies of
- * their own one day, and this is only how one with nothing but SBDB elements becomes one.
+ * Kind 'comet' is generic on purpose: the famous comets -- Halley, 67P, the interstellar
+ * two, eighteen in all (famousComets.ts in tools/) -- are bodies of their own from the
+ * start, on JPL's integrated vectors like the named asteroids, and are left out of the
+ * cloud. This is only how one with nothing but SBDB elements becomes one.
  */
 
 const DEG = 180 / Math.PI;
@@ -148,6 +150,25 @@ export function cometBodyDefinition(id: BodyId, name: string, closed: boolean): 
     radiusPublished: false,
     shapeDrawn: false,
   };
+}
+
+/**
+ * The eccentricity of the two-body conic through a state about the Sun right now: below 1
+ * an ellipse, above it a hyperbola. For the info panel of a comet on JPL's vectors, whose
+ * orbit is drawn only while it is closed and which may not be: the elements published
+ * with it are those of the day the data was built.
+ *
+ *   e = ((v^2 - mu / r) r - (r . v) v) / mu
+ */
+export function osculatingEccentricity(state: StateVector, mu: number): number {
+  const { position: r, velocity: v } = state;
+  const rMag = Math.hypot(r.x, r.y, r.z);
+  const v2 = v.x * v.x + v.y * v.y + v.z * v.z;
+  const rDotV = r.x * v.x + r.y * v.y + r.z * v.z;
+  const scale = v2 - mu / rMag;
+  return (
+    Math.hypot(scale * r.x - rDotV * v.x, scale * r.y - rDotV * v.y, scale * r.z - rDotV * v.z) / mu
+  );
 }
 
 /** The comet bodies added from search and still in the store: two at most. */

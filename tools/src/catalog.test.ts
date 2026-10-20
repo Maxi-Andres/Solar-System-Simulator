@@ -12,8 +12,14 @@ const moons = CATALOG.filter((body) => body.kind === 'moon' && body.sampling ===
 const craft = CATALOG.filter((body) => body.kind === 'spacecraft');
 
 describe('CATALOG', () => {
-  it('covers the Sun, the eight planets, Pluto and the named small bodies', () => {
-    expect(primaries.filter((body) => !smallBodyIds.has(body.id)).map((body) => body.id)).toEqual([
+  it('covers the Sun, the eight planets, Pluto, the named small bodies and the comets', () => {
+    // The small bodies and the comets have their own tests: smallBodies.test.ts and
+    // famousComets.test.ts.
+    expect(
+      primaries
+        .filter((body) => !smallBodyIds.has(body.id) && body.kind !== 'comet')
+        .map((body) => body.id),
+    ).toEqual([
       'sun',
       'mercury',
       'venus',
@@ -59,8 +65,9 @@ describe('CATALOG', () => {
       expect(body.radiusPolarKm).toBeLessThanOrEqual(body.radiusEquatorialKm);
       // Flattening stays under 0.1 even for Saturn, the most oblate body pulled round.
       // Phobos and Deimos are not round at all -- 0.30 and 0.35 -- and are exempt, and so
-      // are the small bodies: Haumea, spun into an ellipsoid, is 0.56.
-      if (body.parent !== 'mars' && !smallBodyIds.has(body.id)) {
+      // are the small bodies: Haumea, spun into an ellipsoid, is 0.56. And the comets:
+      // Halley's nucleus is twice as long as it is wide.
+      if (body.parent !== 'mars' && !smallBodyIds.has(body.id) && body.kind !== 'comet') {
         const flattening = 1 - body.radiusPolarKm / body.radiusEquatorialKm;
         expect(flattening, body.id).toBeLessThan(0.1);
       }
@@ -92,7 +99,14 @@ describe('CATALOG', () => {
       'eurybates',
       'arrokoth',
     ]);
-    expect(triaxial.filter((body) => !smallBodyIds.has(body.id)).map((body) => body.id)).toEqual([
+    expect(triaxial.filter((body) => body.kind === 'comet').map((body) => body.id)).toEqual([
+      '1p-halley',
+    ]);
+    expect(
+      triaxial
+        .filter((body) => !smallBodyIds.has(body.id) && body.kind !== 'comet')
+        .map((body) => body.id),
+    ).toEqual([
       'phobos',
       'deimos',
       'io',

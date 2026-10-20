@@ -28,8 +28,10 @@ import { numberOrNull, querySbdb, readSbdbTable, stringOrNull } from './sbdb.ts'
  *
  * **What is left out.** D/ comets, which the IAU designates as no longer existing or lost:
  * a body propagated from its last orbit would be drawn where none is. Rows with an element
- * missing. Nothing else: every fragment SBDB designates -- 73P-B, 73P-C and the seventy
- * more of Schwassmann-Wachmann 3 -- is a body with its own orbit, and is kept.
+ * missing. The famous comets the run draws as bodies of their own, from Horizons' vectors
+ * (famousComets.ts): they are `excluded`, as the named asteroids are from the belt, so
+ * none is drawn twice. Nothing else: every fragment SBDB designates -- 73P-B, 73P-C and
+ * the seventy more of Schwassmann-Wachmann 3 -- is a body with its own orbit, and is kept.
  */
 
 const DEG = Math.PI / 180;
@@ -138,11 +140,18 @@ export function buildComets(input: {
   readonly rows: readonly CometRow[];
   readonly queriedAt: string;
   readonly referenceJd: number;
+  /**
+   * SBDB designations of the comets drawn as bodies, left out here: see
+   * cometDesignations in famousComets.ts.
+   */
+  readonly excluded: readonly string[];
 }): CometBuild {
   const classIndex = new Map<string, number>(COMET_CLASSES.map((code, index) => [code, index]));
   const unknownClasses = new Map<string, number>();
   let missingElements = 0;
   let defunct = 0;
+  const excluded = new Set(input.excluded);
+  const excludedFound = new Set<string>();
   const comets: {
     spkid: number;
     m1: number;
@@ -152,6 +161,10 @@ export function buildComets(input: {
   }[] = [];
 
   for (const row of input.rows) {
+    if (excluded.has(row.designation)) {
+      excludedFound.add(row.designation);
+      continue;
+    }
     if (row.prefix === 'D') {
       defunct += 1;
       continue;
@@ -211,6 +224,14 @@ export function buildComets(input: {
   if (comets.length === 0) {
     throw new Error('No comet survived the build.');
   }
+  // A designation that matched nothing would leave its comet in the cloud and drawn twice
+  // -- SBDB renamed it, or the catalog has it wrong. As for the belt, the run stops.
+  const missing = [...excluded].filter((designation) => !excludedFound.has(designation));
+  if (missing.length > 0) {
+    throw new Error(
+      `Comets excluded from the cloud but not among SBDB's: ${missing.join(', ')}.`,
+    );
+  }
 
   // Brightest first, the comets with no M1 after every comet with one; equal by SPK-ID.
   comets.sort((p, q) => {
@@ -254,6 +275,7 @@ export function buildComets(input: {
       ]),
     ),
     names: comets.map((comet) => comet.name),
+    excluded: [...excludedFound].sort(),
     dropped: { missingElements, defunct },
   };
   return { info, records };
@@ -270,6 +292,7 @@ export function describeComets(build: CometBuild): string[] {
     `[belt] ${info.count} comets, ${(info.bytes / 1e3).toFixed(0)} KB: ${classes}`,
     `[belt] comet elements from ${day(info.elementEpochs.minJd)} to ` +
       `${day(info.elementEpochs.maxJd)}; left out ${info.dropped.defunct} defunct (D/), ` +
-      `${info.dropped.missingElements} missing an element`,
+      `${info.dropped.missingElements} missing an element, ` +
+      `${info.excluded?.length ?? 0} drawn as bodies (${(info.excluded ?? []).join(', ')})`,
   ];
 }

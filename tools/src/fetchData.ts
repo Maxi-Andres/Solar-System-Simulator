@@ -22,6 +22,7 @@ import { BeltAccumulator, catalogDesignations, describeBelt } from './belt/build
 import { buildComets, describeComets, fetchComets } from './belt/comets.ts';
 import { fetchBelt } from './belt/sbdb.ts';
 import { CATALOG, SSB_CENTER } from './catalog.ts';
+import { cometDesignations } from './famousComets.ts';
 import {
   BELT_MAGNITUDE_LIMIT,
   BELT_TIER_LIMITS,
@@ -330,7 +331,11 @@ export async function fetchAdaptiveBody(
   // A moon is bound to its planet, an asteroid to the Sun. An open orbit means Horizons
   // answered for some other object under that number -- see majorBodyIds in
   // moons/buildMoonList.ts.
-  if (!(elements.eccentricity < 1)) {
+  //
+  // Not so a comet: 2I and 3I are on hyperbolas, and a long-period comet near e = 1 can
+  // be on either side of it on the day of a run. Its elements are published as they are,
+  // and the app draws no ellipse and propagates nothing from an open orbit.
+  if (!(elements.eccentricity < 1) && body.kind !== 'comet') {
     console.log(
       `[fetch-data] ${body.name}: unbound about ${body.parent} (e = ${elements.eccentricity.toFixed(3)}), ` +
         'not the moon; left out',
@@ -608,7 +613,8 @@ async function main(): Promise<void> {
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
-  // craft is held to a kilometre only near a body it is measured against.
+  // craft is held to a kilometre only near a body it is measured against. The famous
+  // comets with them (famousComets.ts), sampled the same way.
   const smallBodies = await mapWithConcurrency(
     CATALOG.filter((body) => body.sampling !== undefined && !isSmallMoon(body)),
     MAX_CONCURRENT_REQUESTS,
@@ -722,7 +728,12 @@ async function main(): Promise<void> {
     excluded: catalogDesignations(catalog),
     tierLimits: BELT_TIER_LIMITS,
   });
-  const comets = buildComets({ ...cometRows, referenceJd: toJulianDay(epoch) });
+  // And the famous comets out of the comet cloud, the same way.
+  const comets = buildComets({
+    ...cometRows,
+    referenceJd: toJulianDay(epoch),
+    excluded: cometDesignations(catalog),
+  });
   for (const line of [...describeBelt(belt), ...describeComets(comets)]) {
     console.log(line.replace('[belt]', '[fetch-data] belt'));
   }

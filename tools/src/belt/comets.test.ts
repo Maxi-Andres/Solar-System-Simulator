@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { AU_KM, COMETS_FILE } from '../config.ts';
+import { CATALOG } from '../catalog.ts';
+import { cometDesignations } from '../famousComets.ts';
 import { COMET_CLASSES, COMET_RECORD_FLOATS } from '../types.ts';
-import { buildComets, cometQuery, COMET_FIELDS, parseCometResponse } from './comets.ts';
+import { buildComets, cometQuery, COMET_FIELDS, describeComets, parseCometResponse } from './comets.ts';
 import sbdbComets from './__fixtures__/sbdb-comets.json' with { type: 'json' };
 
 /**
@@ -18,7 +20,12 @@ const DEG = Math.PI / 180;
 const REFERENCE_JD = 2461332.5;
 const ROWS = parseCometResponse(sbdbComets).rows;
 const row = (designation: string) => ROWS.find((r) => r.designation === designation)!;
-const BUILD = buildComets({ rows: ROWS, queriedAt: '2026-10-19T16:00:00.000Z', referenceJd: REFERENCE_JD });
+const BUILD = buildComets({
+  rows: ROWS,
+  queriedAt: '2026-10-19T16:00:00.000Z',
+  referenceJd: REFERENCE_JD,
+  excluded: [],
+});
 const NAMES = BUILD.info.names;
 const recordOf = (name: string): number[] => {
   const index = NAMES.indexOf(name);
@@ -171,6 +178,7 @@ describe('building them', () => {
         rows: [{ ...row('1P'), orbitClass: 'XYZ' }],
         queriedAt: '',
         referenceJd: REFERENCE_JD,
+        excluded: [],
       }),
     ).toThrow(/XYZ x1/);
   });
@@ -182,5 +190,35 @@ describe('building them', () => {
       const [x, y, z] = conicPosition(record, record[5]!);
       expect(Math.hypot(x!, y!, z!) / record[0]!, name).toBeCloseTo(1, 6);
     }
+  });
+
+  it('leaves out the comets drawn as bodies, by their SBDB designations', () => {
+    // The catalog's famous comets that are in the fixture: Halley, Encke, Pons-Brooks,
+    // 67P, Hale-Bopp and the two interstellar ones. The rest of the catalog's are not in
+    // these sixteen rows, so they are asked of a build that has them all below.
+    const inFixture = cometDesignations(CATALOG).filter((designation) =>
+      ROWS.some((candidate) => candidate.designation === designation),
+    );
+    expect(inFixture).toEqual(['12P', '1995 O1', '1P', '2019 Q4', '2025 N1', '2P', '67P']);
+    const build = buildComets({
+      rows: ROWS,
+      queriedAt: '',
+      referenceJd: REFERENCE_JD,
+      excluded: inFixture,
+    });
+    expect(build.info.count).toBe(15 - inFixture.length);
+    expect(build.info.excluded).toEqual(inFixture);
+    for (const name of ['1P/Halley', 'C/2019 Q4 (Borisov)', 'C/2025 N1 (ATLAS)', 'C/1995 O1 (Hale-Bopp)']) {
+      expect(build.info.names, name).not.toContain(name);
+    }
+    // Fragments are not the comet: 73P is not excluded, and neither are its pieces.
+    expect(build.info.names).toContain('73P/Schwassmann-Wachmann 3-B');
+    expect(describeComets(build)[1]).toMatch(/7 drawn as bodies \(12P, 1995 O1, 1P, /);
+  });
+
+  it('stops on an excluded comet SBDB does not have, rather than draw it twice', () => {
+    expect(() =>
+      buildComets({ rows: ROWS, queriedAt: '', referenceJd: REFERENCE_JD, excluded: ['1P', '9P'] }),
+    ).toThrow(/9P/);
   });
 });

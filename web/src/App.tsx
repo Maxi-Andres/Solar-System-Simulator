@@ -136,7 +136,12 @@ export function App() {
     }
     const check = (): void => {
       const body = store.body(focus);
-      if (body.kind === 'spacecraft' && !store.isCoveredAt(focus, clock.tdbJulianDay)) {
+      // And a famous comet on an open orbit: with no ellipse to carry it on, it is not placed
+      // outside its table either (see the elements in ephemerisStore.ts).
+      const unplaceable =
+        body.kind === 'spacecraft' ||
+        (body.kind === 'comet' && !store.isPropagatedBody(focus) && store.elementsFor(focus) === null);
+      if (unplaceable && !store.isCoveredAt(focus, clock.tdbJulianDay)) {
         setFocus(body.parent ?? 'sun');
       }
     };

@@ -200,7 +200,11 @@ export class EphemerisStore {
     this.#chunkBudget = new ChunkBudget(chunkBudgetBytes);
     this.#tree = new FrameTree(data.bodies);
     this.#bodies = [...data.bodies];
-    this.#elements = new Map(data.elements);
+    // Only closed orbits. A comet's published elements can be a hyperbola -- 2I and 3I
+    // always, a long-period comet near e = 1 on some days (see famousComets.ts) -- and
+    // there is no ellipse to draw or to propagate on. Without elements it is a body like a
+    // spacecraft: exact inside its table, and absent outside it rather than misplaced.
+    this.#elements = new Map([...data.elements].filter(([, elements]) => elements.eccentricity < 1));
     this.#tables = new Map(Object.entries(data.manifest.tables));
 
     for (const id of data.manifest.bodies) {

@@ -8,11 +8,12 @@ import {
 import { SMALL_MOON_RECORDS } from './moons/smallMoons.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
 import { SMALL_BODIES } from './smallBodies.ts';
+import { FAMOUS_COMETS } from './famousComets.ts';
 import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
 
 /**
  * Body catalog: the Sun, the eight planets, Pluto, the named small bodies (smallBodies.ts),
- * the moons, and the spacecraft.
+ * the famous comets (famousComets.ts), the moons, and the spacecraft.
  *
  * Physical constants are hard-coded rather than scraped from Horizons' OBJ_DATA
  * block, which is free-form prose and differs per body. These values do not change,
@@ -2884,6 +2885,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     mission: null,
   },
   ...SMALL_BODIES,
+  ...FAMOUS_COMETS,
   ...MOONS,
   ...SMALL_MOONS,
   ...SPACECRAFT,

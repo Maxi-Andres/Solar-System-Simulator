@@ -381,6 +381,38 @@ of the record, so the frame, units and conic are right — and what grows is two
 propagation across the elements' age: eleven years and a 2021 perihelion for 67P, with
 Jupiter close by, and 58 years for Halley's, fitted before its 1986 return.
 
+**So the comets people look for are not in the cloud.** Eighteen of them are bodies of
+their own (`tools/src/famousComets.ts`), drawn from Horizons' vectors as the named
+asteroids are: 1P/Halley, 2P/Encke, 12P/Pons-Brooks, 55P/Tempel-Tuttle and
+109P/Swift-Tuttle (the Leonids' and the Perseids' parents); the mission comets 9P/Tempel 1,
+19P/Borrelly, 21P/Giacobini-Zinner, 46P/Wirtanen, 67P/Churyumov-Gerasimenko, 81P/Wild 2
+and 103P/Hartley 2; the great comets Hale-Bopp, NEOWISE, ZTF (C/2022 E3) and
+Tsuchinshan-ATLAS; and 2I/Borisov and 3I/ATLAS. Horizons starts from the same orbit
+solutions SBDB has — `DES=1P;CAP;`, the last apparition's — and integrates them, every
+planet and JPL's fitted non-gravitational terms included. Each is sampled adaptively to a
+kilometre over the whole twenty years, and the build leaves its designation out of
+`comets.bin`, so none is drawn twice. Measured on 2026-10-20, all eighteen over the full
+window:
+
+| | Samples | Requests to Horizons | Worst of 300 instants against Horizons |
+|---|---|---|---|
+| 1P/Halley | 57 | 7 | 0.50 km |
+| 2P/Encke | 2,823 | 18 | 0.48 km |
+| 67P/Churyumov-Gerasimenko | 1,482 | 12 | 0.50 km |
+| 2I/Borisov | 414 | 10 | 0.50 km |
+| 3I/ATLAS | 414 | 10 | 0.51 km |
+| C/2023 A3 (Tsuchinshan-ATLAS) | 639 | 12 | 0.50 km |
+| all eighteen | 17,572 | ~200 | |
+
+A third of the instants were within twenty days of the comet's closest pass to the Sun in
+the window. What is left is JPL's own uncertainty, which for a comet far from the years it
+was observed in — Halley's solution was fitted to 1835-1994 — is far larger than this.
+Four of the eighteen are on hyperbolas on the day of a run: the two interstellar comets,
+ZTF and Tsuchinshan-ATLAS (heliocentric e = 1.00007 and 1.00019 on 2026-10-20). Their
+elements are published like any other's, but the app draws no orbit line for an open
+orbit and, outside the twenty years, has no ellipse to carry them on: there they are not
+placed at all, as a spacecraft is not outside its trajectory.
+
 ### Spacecraft sampling
 
 A spacecraft is the case no single step can serve. Juice cruises for months on a curve

@@ -98,8 +98,9 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
         ) : (
           <NaturalFacts store={store} />
         )}
-        {/* A belt asteroid made a body from search: its class, H and what its place is worth. */}
-        <BeltBodyFacts id={focus} />
+        {/* A belt asteroid or comet made a body from search, or a famous comet on JPL's
+            vectors: where it came from and what its place is worth. */}
+        <BeltBodyFacts id={focus} store={store} jd={jd} />
       </dl>
     </Panel>
   );

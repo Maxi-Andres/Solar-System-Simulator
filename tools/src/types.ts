@@ -985,6 +985,12 @@ export interface CometInfo {
    * designates is its own comet with its own orbit, and is kept.
    */
   readonly names: readonly string[];
+  /**
+   * Comets drawn as bodies of their own, from Horizons' vectors (famousComets.ts), left
+   * out here so they are not drawn twice: their SBDB designations, '1P', '1995 O1'.
+   * Absent in data written before them.
+   */
+  readonly excluded?: readonly string[];
   /** Rows SBDB returned that were not written, and why. */
   readonly dropped: {
     readonly missingElements: number;

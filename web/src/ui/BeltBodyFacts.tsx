@@ -2,13 +2,17 @@ import type { BodyId } from '@sss/tools/types';
 
 import { BELT_FAMILIES } from '../core/belt.ts';
 import { beltBodyFacts } from '../core/beltBodies.ts';
-import { cometBodyFacts } from '../core/cometBodies.ts';
+import { cometBodyFacts, osculatingEccentricity } from '../core/cometBodies.ts';
+import type { EphemerisStore } from '../core/ephemerisStore.ts';
 
 /**
  * The facts a belt asteroid made into a body has beyond any body's (see beltBodies.ts):
  * for the info panel, which shows them under the orbit when the focus is one, and nothing
  * otherwise. Its radius, GM and orbit the panel shows as it does for any body; what only
  * this knows is where the asteroid came from, and what its position is worth.
+ *
+ * And the same for the comets, both kinds: one from the cloud, made a body from search and
+ * placed on its two-body conic; and the famous ones, on JPL's integrated vectors.
  */
 
 const AU_KM = 149_597_870.7;
@@ -72,9 +76,62 @@ function CometFacts({ id }: { readonly id: BodyId }) {
   );
 }
 
-export function BeltBodyFacts({ id }: { readonly id: BodyId }) {
+/**
+ * A famous comet on JPL's vectors (famousComets.ts in tools/): what its place is worth, and
+ * whether its orbit is closed now -- the panel above shows the ellipse of the day the data
+ * was built, and nothing for an open one.
+ */
+function JplCometFacts({ id, store, jd }: { readonly id: BodyId; readonly store: EphemerisStore; readonly jd: number }) {
+  const coverage = store.coverage(id);
+  const closed = store.elementsFor(id) !== null;
+  const state = store.stateRelativeTo(id, 'sun', jd);
+  const mu = store.body('sun').gmBodyOnlyKm3S2 + store.body(id).gmKm3S2;
+  const e = state === null ? null : osculatingEccentricity(state, mu);
+  const inTable = store.isCoveredAt(id, jd);
+  return (
+    <>
+      <div style={{ gridColumn: '1 / -1', height: 1, background: '#242424', margin: '0.3rem 0' }} />
+      {coverage !== null && (
+        <>
+          <dt style={TERM}>JPL path</dt>
+          <dd style={VALUE}>{`${jdToDate(coverage.startJd)} to ${jdToDate(coverage.stopJd)}`}</dd>
+        </>
+      )}
+      {e !== null && (
+        <>
+          <dt style={TERM}>Orbit now</dt>
+          <dd style={VALUE}>{`${e < 1 ? 'Ellipse' : 'Hyperbola'}, e ${e.toFixed(5)}`}</dd>
+        </>
+      )}
+      <dd style={NOTE}>
+        Placed from JPL Horizons’ integration of its orbit: every planet’s pull, and the push of
+        its own outgassing where JPL’s fit measured one, followed to within a kilometre of
+        JPL’s numbers{coverage === null ? '' : ` from ${jdToDate(coverage.startJd)} to ${jdToDate(coverage.stopJd)}`}.
+        Away from the years it was observed in, that is JPL’s prediction.{' '}
+        {closed
+          ? 'Outside those dates it is carried on its two-body ellipse instead, and marked approximate.'
+          : 'Its orbit was open on the day the data was built, so no orbit is drawn, and outside those dates it is not placed at all.'}
+        {!inTable && state === null && ' It is not placed now.'}
+      </dd>
+    </>
+  );
+}
+
+export function BeltBodyFacts({
+  id,
+  store,
+  jd,
+}: {
+  readonly id: BodyId;
+  readonly store: EphemerisStore;
+  readonly jd: number;
+}) {
   const facts = beltBodyFacts(id);
   if (facts === null) {
+    // A comet with a table is one of the famous ones; one without came from the cloud.
+    if (store.body(id).kind === 'comet' && store.coverage(id) !== null) {
+      return <JplCometFacts id={id} store={store} jd={jd} />;
+    }
     return <CometFacts id={id} />;
   }
   return (
