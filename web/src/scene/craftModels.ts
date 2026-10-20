@@ -122,9 +122,10 @@ export function modelUrl(file: string): string {
 /**
  * The glTF loader and its meshopt decoder, fetched with the first model rather than with
  * the app: 23 KB compressed that a visit which never approaches a craft does not need.
+ * The asteroids' shape models come through it too (shapeModels.ts).
  */
 let loader: Promise<GLTFLoader> | null = null;
-function gltfLoader(): Promise<GLTFLoader> {
+export function gltfLoader(): Promise<GLTFLoader> {
   loader ??= Promise.all([
     import('three/examples/jsm/loaders/GLTFLoader.js'),
     import('three/examples/jsm/libs/meshopt_decoder.module.js'),

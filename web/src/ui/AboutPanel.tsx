@@ -342,12 +342,16 @@ export function smallMoonSentence(store: EphemerisStore): string {
 /** The named small bodies about the Sun, counted and their drawn shapes named from the data. */
 export function smallBodySentence(store: EphemerisStore): string {
   const small = store.bodies.filter((body) => body.sampling !== undefined && body.parent === null);
-  const shaped = small.filter((body) => body.shapeDrawn !== false).map((body) => body.name);
-  const listed =
-    shaped.length < 2
-      ? shaped.join('')
-      : `${shaped.slice(0, -1).join(', ')} and ${shaped.at(-1)}`;
-  return `${capitalised(spelled(small.length))} named small bodies — the other dwarf planets, the largest asteroids, and the ones spacecraft here have visited or are flying to, Apophis for its 2029 pass inside the geostationary ring — from JPL’s own integrations rather than propagated elements, held to a kilometre everywhere because the craft fly beside them. Sizes, masses and spins from JPL’s Small-Body Database and the papers it cites. A shape is drawn only where one can be honestly: ${listed}. The irregular ones — a spinning top, two lobes stuck together, a tumbling peanut — are markers until their shape models are in.`;
+  const drawn = small.filter((body) => body.shapeDrawn !== false);
+  const listed = (names: readonly string[]) =>
+    names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  const round = listed(drawn.filter((body) => body.shapeModel === undefined).map((body) => body.name));
+  const modelled = listed(drawn.filter((body) => body.shapeModel !== undefined).map((body) => body.name));
+  const models =
+    modelled === ''
+      ? ' The irregular ones are markers until their shape models are in.'
+      : ` ${modelled} are drawn from their mission teams’ own shape models — OSIRIS-REx’s, Hayabusa2’s, DART’s, New Horizons’ and Lucy’s — at true size, turned by the rotation of the very frame each model is published in, Bennu and Ryugu with their missions’ global maps draped on them and scaled to their measured albedo: Bennu reflects 4.4% of the light that falls on it. Ryugu’s model and map are ISAS/JAXA’s, converted and compressed here; its map’s images JAXA, University of Tokyo & collaborators’. Where a spin is known only near a flyby, the info panel says so. The rest, a tumbling peanut or a body no team has published a shape of, are markers.`;
+  return `${capitalised(spelled(small.length))} named small bodies — the other dwarf planets, the largest asteroids, and the ones spacecraft here have visited or are flying to, Apophis for its 2029 pass inside the geostationary ring — from JPL’s own integrations rather than propagated elements, held to a kilometre everywhere because the craft fly beside them. Sizes, masses and spins from JPL’s Small-Body Database and the papers it cites. A shape is drawn only where one can be honestly: ${round} from their radii and rotation.${models}`;
 }
 
 /** Julian day to a calendar date, YYYY-MM-DD; a day's precision is all prose needs. */

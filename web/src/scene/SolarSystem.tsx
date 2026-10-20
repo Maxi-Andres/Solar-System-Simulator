@@ -28,7 +28,7 @@ import {
 } from './earthExtras.ts';
 import { bodiesToResolve, isShown, isSmallMoon } from './floatingOrigin.ts';
 import { markerTexture } from './markerTexture.ts';
-import { bodyOrientation } from './orientation.ts';
+import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
@@ -54,6 +54,7 @@ import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './sat
 import { starColor } from './blackbody.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
+import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeModels.ts';
 import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { labelRank } from './LabelProjector.tsx';
@@ -272,6 +273,13 @@ interface BodyHandles {
   craftShapeWantedAt: number;
   texturesWantedAt: number;
   /**
+   * An irregular body's shape model, once it has arrived; null until then, and for every
+   * body without one. Asked for, drawn and let go by a craft's rules, with
+   * `craftShapeWantedAt` as its clock. See shapeModels.ts.
+   */
+  bodyShape: LoadedShape | null;
+  bodyShapeRequested: boolean;
+  /**
    * For a craft on another body's surface: the ground drawn under it and the way it
    * came, once its stops have arrived. See surfaceGround.ts.
    */
@@ -324,12 +332,42 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
 }
 
 /**
+ * Asks for an irregular body's shape model once it is big enough to be worth it, at the
+ * size a craft's model is asked for. The marker carries on alone until it arrives; a
+ * failed fetch is logged and may be asked for again.
+ */
+function requestBodyShape(handle: BodyHandles, pixelRadius: number, anisotropy: number): void {
+  if (handle.bodyShapeRequested || pixelRadius < MODEL_REQUEST_PX) {
+    return;
+  }
+  handle.bodyShapeRequested = true;
+  loadShapeModel(handle.definition, anisotropy)
+    .then((loaded) => {
+      loaded.object.visible = false;
+      handle.group.add(loaded.object);
+      handle.bodyShape = loaded;
+    })
+    .catch((error: unknown) => {
+      handle.bodyShapeRequested = false;
+      console.error(`Could not load the shape of ${handle.definition.id}`, error);
+    });
+}
+
+/**
  * Lets go of a body's detail once it has been small long enough: the craft's model or
- * box, and every map the body asked for. Each goes back to how it was before it was
- * fetched -- the marker, the catalog colour, no night lights -- and is asked for again
- * when the body grows back. See detailRelease.ts.
+ * box, an asteroid's shape model, and every map the body asked for. Each goes back to
+ * how it was before it was fetched -- the marker, the catalog colour, no night lights --
+ * and is asked for again when the body grows back. See detailRelease.ts.
  */
 function releaseUnusedDetail(handle: BodyHandles, nowMs: number): void {
+  // Only once it has arrived: one still on its way is let go the frame after it lands.
+  if (handle.bodyShape !== null && detailExpired(handle.craftShapeWantedAt, nowMs)) {
+    handle.group.remove(handle.bodyShape.object);
+    releaseShapeModel(handle.bodyShape);
+    handle.bodyShape = null;
+    handle.bodyShapeRequested = false;
+  }
+
   if (handle.craftShape !== null && detailExpired(handle.craftShapeWantedAt, nowMs)) {
     handle.group.remove(handle.craftShape);
     const model = (handle.definition.mission?.shape as CraftShape | undefined)?.model ?? null;
@@ -695,6 +733,8 @@ export function SolarSystem({
         craftShapeShownPx: SHAPE_SHOWN_PX,
         craftShapeWantedAt: -Infinity,
         texturesWantedAt: -Infinity,
+        bodyShape: null,
+        bodyShapeRequested: false,
         surfaceGround: null,
       };
     };
@@ -809,7 +849,11 @@ export function SolarSystem({
         kmToUnits(rebased.positionKm.z),
       );
 
-      const variant = handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null;
+      // A body drawn from its shape model wears its map there, never on the sphere it
+      // does not show. See shapeModels.ts.
+      const shapeModel = handle.definition.shapeModel ?? null;
+      const variant =
+        shapeModel === null ? (handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null) : null;
 
       // Point the axis where the IAU says it points and turn the body so the image
       // lands where the image belongs. One assignment carrying the axial tilt, the
@@ -875,14 +919,43 @@ export function SolarSystem({
       if (detailWanted(pixelRadius, TEXTURE_REQUEST_PX)) {
         handle.texturesWantedAt = nowMs;
       }
+      // An irregular body with its team's shape model is drawn from that, never as the
+      // ellipsoid of its radii; asked for at a craft's size, and the marker stands alone
+      // until it lands.
+      if (shapeModel !== null && handle.definition.rotation !== null) {
+        requestBodyShape(handle, pixelRadius, gl.capabilities.getMaxAnisotropy());
+      }
       // A moon whose size JPL does not publish is a marker at any range, like a craft
       // with no shape: a sphere would claim a size nobody has measured. So is an
       // asteroid whose shape cannot be drawn yet: an ellipsoid would claim a shape.
       const sized =
-        handle.definition.radiusPublished !== false && handle.definition.shapeDrawn !== false;
-      const shaped = craft === null ? sized : handle.craftShape !== null;
+        handle.definition.radiusPublished !== false &&
+        handle.definition.shapeDrawn !== false &&
+        shapeModel === null;
+      const shaped =
+        craft !== null
+          ? handle.craftShape !== null
+          : shapeModel !== null
+            ? handle.bodyShape !== null
+            : sized;
       const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
       const sphereOpacity = craft === null && sized ? meshOpacity(pixelRadius) : 0;
+      if (handle.bodyShape !== null && shapeModel !== null) {
+        // A craft's rule, for the same reason: thousands of facets wait until they cover
+        // pixels enough to be worth it, while the marker stands in -- from the catalog's
+        // facet count, so it is settled before the file arrives. See shapeShownPx.
+        const object = handle.bodyShape.object;
+        const markerStandsIn = showIcons && ringOpacity > 0.005;
+        object.visible = shapeVisible(
+          pixelRadius,
+          markerStandsIn ? shapeShownPx(shapeModel.facets) : SHAPE_SHOWN_PX,
+          object.visible,
+        );
+        if (object.visible) {
+          // Its own frame, the mission's: +z the pole, +x the prime meridian.
+          bodyFixedOrientation(jd, handle.definition, object.quaternion);
+        }
+      }
       if (handle.craftShape !== null && craftShape !== null) {
         // A heavy model waits until it covers pixels enough to be worth its triangles --
         // but only while the marker is there to stand in for it. With the markers off it

@@ -115,10 +115,12 @@ export interface RotationalElements {
    */
   readonly rotationRateDegPerDay: number;
   /**
-   * d²W/dt², degrees per day squared. Zero everywhere but Phobos.
+   * The quadratic coefficient of W, degrees per day squared, as a PCK writes it (W2 in
+   * W0 + W1 d + W2 d²: half the acceleration). Zero everywhere but Phobos and Bennu.
    *
    * Phobos is spiralling into Mars, so its orbit -- and its locked rotation -- speed up.
    * The term is 9.5e-9 deg/day², which sounds like nothing and is 0.9 degrees by 2026.
+   * Bennu is spun up by sunlight, YORP: 2.0e-6, 192 degrees by 2026.
    */
   readonly primeMeridianAccelDegPerDay2: number;
   /**
@@ -294,6 +296,73 @@ export interface BodyDefinition {
    * and rotation above are the whole of its shape.
    */
   readonly shapeDrawn?: boolean;
+  /**
+   * The mission team's shape model, for an irregular body drawn from one instead of from
+   * its radii; absent for every other body. See ShapeModel.
+   */
+  readonly shapeModel?: ShapeModel;
+}
+
+/**
+ * A body's real shape, as the team that visited it published it: step B1b.
+ *
+ * The model is drawn in place of the sphere, turned by the body's `rotation` -- which
+ * must therefore be the rotation of the very frame the model is published in, the
+ * mission's own PCK, or every hill on it lands somewhere else. The radii stay what they
+ * were, the measured extents the info panel quotes and the camera frames by.
+ *
+ * Its surface is the body's measured albedo, or the mission's map draped by each vertex's
+ * own latitude and longitude, scaled to that albedo: a dark body looks dark. The map is
+ * the shape's, not the body's `textures`, which stay null: it is drawn on nothing else.
+ */
+export interface ShapeModel {
+  /**
+   * File under web/public/shapes/: a GLB, meshopt-compressed, of one triangle mesh.
+   * Positions in kilometres in the body-fixed frame -- +z the north pole, +x the prime
+   * meridian -- vertex normals, and texture coordinates where it has a map: u east from
+   * the map's left edge, running past 1 on the facets that straddle it, v = 1 at the
+   * north pole, as three.js reads an image.
+   */
+  readonly file: string;
+  /**
+   * Triangles in it. Known before the file is fetched, so the size on screen it is
+   * drawn from (`shapeShownPx`) is settled from the catalog alone.
+   */
+  readonly facets: number;
+  /** What it is, in the info panel's words: the team, the product and its resolution. */
+  readonly product: string;
+  /**
+   * Where the turning it is drawn with is known only near one time -- a spin phase
+   * measured at a flyby and carried forward on an uncertain period, a tumble drawn as a
+   * spin -- the panel's words for it; null where the rotation holds throughout.
+   */
+  readonly orientationNote: string | null;
+  /**
+   * Geometric albedo, visual: the share of light the surface sends back toward the Sun,
+   * and the reflectance it is drawn with. Bennu's is 0.044, as dark as fresh asphalt.
+   */
+  readonly albedo: number;
+  /** The mission's global map draped on it, or null for a body drawn in its albedo alone. */
+  readonly map: ShapeMap | null;
+}
+
+/**
+ * A global map for a shape model: equirectangular, planetocentric, east-positive, in the
+ * same body-fixed frame as the model. Its texture coordinates are in the model file,
+ * worked out from each vertex's own latitude and longitude, so the two ship together.
+ */
+export interface ShapeMap {
+  /** File under web/public/shapes/. */
+  readonly file: string;
+  /** Longitude at the image's left edge, degrees east: what the coordinates assume. */
+  readonly longitudeOriginDeg: number;
+  /**
+   * Mean linear reflectance of the image as the file holds it, measured from its pixels.
+   * The map is drawn scaled by albedo / this, so it carries the surface's variation and
+   * the albedo its level: a mosaic stretched to fill its 8 bits is not the body's
+   * brightness.
+   */
+  readonly meanLinear: number;
 }
 
 /**

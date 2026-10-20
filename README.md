@@ -118,6 +118,7 @@ pnpm preview         # serve the build to verify it before publishing
 | `web/public/data/` | **Generated, not versioned.** Recreate with `pnpm fetch:data`. |
 | `web/public/textures/` | Surface maps, **committed**. Static third-party assets that never change, so the build does not depend on a third-party host being up. Credited in `CREDITS.md`, which a test enforces. |
 | `web/public/models/` | NASA's spacecraft models, compressed, **committed** for the same reason. Credited in `CREDITS.md`, which a test enforces. |
+| `web/public/shapes/` | The mission teams' shape models of Bennu, Ryugu, Didymos, Arrokoth and Donaldjohanson, and Bennu's and Ryugu's maps, compressed, **committed** for the same reason. Credited in `CREDITS.md`, which a test enforces. |
 
 The site is fully static — there is no backend. JPL Horizons is queried only at build
 time, never from a visitor's browser.
@@ -265,10 +266,25 @@ held to its kilometre at Bennu, not to the hundreds its distance from Earth woul
 Sizes, masses and spin come from JPL's Small-Body Database and the papers it cites, the
 rest from the literature, each cited in `tools/src/smallBodies.ts`. A shape is drawn only
 where it can be drawn honestly: Ceres and Vesta from their IAU rotation and radii, Eris
-and Makemake round as measured. The rest are irregular — Bennu a spinning top, Arrokoth
-two lobes stuck together, Apophis tumbling — with no orientation published in a form the
-app can use, so they are **markers** for now, with their measured dimensions in the info
-panel and "Shape: not drawn yet" said plainly.
+and Makemake round as measured.
+
+**The visited irregular ones are their mission teams' own shape models**, at true size:
+Bennu (OSIRIS-REx SPO v54, 196,608 facets), Ryugu (Hayabusa2 SPC v20200323, 196,608),
+Didymos (DART v003, 196,608), Arrokoth (New Horizons, Porter et al. 2024, 40,960) and
+Donaldjohanson (Lucy/DLR, 547,996) — each the team's own published resolution, never
+decimated here. Each is turned by the PCK of the very frame its model is published in,
+checked two ways: the rotation against NAIF's SPICE toolkit evaluating the same kernel,
+to two arcseconds; and the model against the IAU Gazetteer — Bennu's Benben Saxum, its
+22 m boulder, comes out 0.85° from the Gazetteer's position through the renderer's own
+transform, Ryugu's Otohime Saxum 0.31°, and the same search half a turn round finds
+nothing. Bennu and Ryugu wear their missions' global maps (OSIRIS-REx's 5 cm PAN mosaic,
+Hayabusa2's normal-albedo map), scaled so the surface reflects what the body measured:
+Bennu 4.4%, as dark as asphalt. Where a spin is known only near a flyby — Didymos's phase
+after DART, Arrokoth's after New Horizons, Donaldjohanson's tumble — the info panel says
+so. Models and maps are in `web/public/shapes/`, credited in its `CREDITS.md`, which a
+test enforces; they are fetched only once their body is a few pixels across. The rest —
+Apophis tumbling, Dinkinesh with no released model — are **markers**, with their
+measured dimensions in the info panel.
 
 ### The asteroid belt
 
@@ -687,7 +703,7 @@ two, never drawn somewhere approximate and then moved.
   data is generated: 83,828 asteroids to H 15 from SBDB, as orbital elements, for
   instancing and Keplerian propagation in the vertex shader (B2a), and the whole
   catalogue of 1.57 million is generated in five magnitude tiers for progressive loading
-  (B2b); next, the named bodies' shape models.
+  (B2b); the visited ones are drawn from their teams' shape models (B1b).
 - **Phase C** — Earth-orbiting satellites from CelesTrak, propagated with SGP4 in a
   worker.
 - **Phase D** — real distances for the nearest stars, from Gaia parallaxes, out to

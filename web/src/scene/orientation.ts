@@ -253,6 +253,44 @@ export function bodyOrientation(
   return new THREE.Quaternion().setFromRotationMatrix(basis);
 }
 
+const scratchBasis = new THREE.Matrix4();
+const scratchX = new THREE.Vector3();
+const scratchY = new THREE.Vector3();
+const scratchZ = new THREE.Vector3();
+
+/**
+ * The orientation of a body drawn from its shape model rather than a sphere.
+ *
+ * A shape model is published in its body's own fixed frame, the one the mission's PCK
+ * turns: +z along the north pole, +x through the prime meridian on the equator, +y at
+ * 90 degrees east. That is not the sphere's local frame above, whose pole is +y and whose
+ * -x is wherever an image happens to start, so it gets a basis of its own:
+ *
+ *   local +x  ->  the prime meridian
+ *   local +y  ->  90 degrees east of it
+ *   local +z  ->  the IAU north pole
+ *
+ * For a small body the IAU's north is the positive pole, the one it turns anticlockwise
+ * about (WGCCRE 2009), so W only ever increases and a retrograde rotator's pole simply
+ * lies below its orbit. No map origin enters: the vertices are where they are in
+ * longitude, and a map draped on them is placed by each vertex's own coordinates.
+ */
+export function bodyFixedOrientation(
+  jdTdb: number,
+  body: BodyDefinition,
+  out = new THREE.Quaternion(),
+): THREE.Quaternion {
+  const pole = poleDirection(jdTdb, body);
+  const meridian = primeMeridianDirection(jdTdb, body);
+  const east = cross(pole, meridian);
+  scratchBasis.makeBasis(
+    scratchX.set(meridian.x, meridian.y, meridian.z),
+    scratchY.set(east.x, east.y, east.z),
+    scratchZ.set(pole.x, pole.y, pole.z),
+  );
+  return out.setFromRotationMatrix(scratchBasis);
+}
+
 /** A point on a body's surface, as the maps label it. */
 export interface Geographic {
   /** Degrees north of the body's equator, -90 to 90. */

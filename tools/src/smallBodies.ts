@@ -1,5 +1,11 @@
 import { SMALL_BODY_TOLERANCE_KM } from './config.ts';
-import type { BodyDefinition, BodyKind, RotationalElements, TextureVariant } from './types.ts';
+import type {
+  BodyDefinition,
+  BodyKind,
+  RotationalElements,
+  ShapeModel,
+  TextureVariant,
+} from './types.ts';
 
 /**
  * The named small bodies about the Sun, step B1a: the dwarf planets beside Pluto, the
@@ -20,10 +26,14 @@ import type { BodyDefinition, BodyKind, RotationalElements, TextureVariant } fro
  *
  * **Shape.** Drawn only where it can be drawn honestly. Ceres and Vesta have their IAU
  * rotation and radii in NAIF's pck00011.tpc, the same source as the moons'; Eris and
- * Makemake are round to within their measurements. Everything else is irregular -- a
- * spinning top, a contact binary, a tumbling peanut -- with no published orientation in
- * a form this app takes, so it is a marker (`shapeDrawn: false`) whose measured
- * dimensions the info panel gives. Their shape models are step B1b.
+ * Makemake are round to within their measurements. The irregular ones a spacecraft has
+ * visited are drawn from their mission team's own shape model (`shape`, step B1b),
+ * turned by the PCK of the very frame that model is published in -- never by a rotation
+ * from elsewhere, which would put every hill somewhere else. Each says where it comes
+ * from below, and web/public/shapes/CREDITS.md what may be done with it. The rest are a
+ * marker (`shapeDrawn: false`) whose measured dimensions the info panel gives: no shape
+ * model has been released for Dinkinesh, and Haumea, Pallas, 16 Psyche, Eurybates and
+ * Apophis have none from close up.
  *
  * **Rotation sense.** A negative period is retrograde, as for the planets: the spin pole
  * more than 90 degrees from the orbit's. Computed here from each published pole and the
@@ -64,14 +74,20 @@ interface SmallBodySpec {
    * the note above each.
    */
   readonly map: TextureVariant | null;
+  /** The mission team's shape model, drawn instead of the radii; see the header. */
+  readonly shape?: ShapeModel;
 }
 
-/** IAU rotation from pck00011.tpc: constant pole, prime meridian and rate. */
+/**
+ * IAU-form rotation: constant pole, prime meridian and rate, from pck00011.tpc or the
+ * mission's own PCK -- plus, for Bennu, the quadratic term YORP's spin-up puts in W.
+ */
 function iauRotation(
   poleRaDeg: number,
   poleDecDeg: number,
   primeMeridianDeg: number,
   rotationRateDegPerDay: number,
+  primeMeridianAccelDegPerDay2 = 0,
 ): RotationalElements {
   return {
     poleRaDeg,
@@ -80,7 +96,7 @@ function iauRotation(
     poleDecRateDegPerCentury: 0,
     primeMeridianDeg,
     rotationRateDegPerDay,
-    primeMeridianAccelDegPerDay2: 0,
+    primeMeridianAccelDegPerDay2,
     periodicTerms: [],
   };
 }
@@ -115,6 +131,7 @@ function smallBody(spec: SmallBodySpec): BodyDefinition {
     mission: null,
     sampling: { toleranceKm: SMALL_BODY_TOLERANCE_KM, windowMonths: null },
     ...(spec.shapeDrawn ? {} : { shapeDrawn: false }),
+    ...(spec.shape === undefined ? {} : { shapeModel: spec.shape }),
   };
 }
 
@@ -220,6 +237,25 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
   // Bennu. 0.5047 x 0.4918 x 0.4567 km: Daly et al., Sci. Adv. 6, eabd3649 (2020). GM:
   // Chesley et al., JGR Planets 125, e06363 (2020). Period: Hergenrother et al., Nat.
   // Commun. 10, 1291 (2019). Via SBDB.
+  //
+  // Rotation: bennu_v17.tpc, the last of OSIRIS-REx's PCKs (M. Nolan, LPL; KinetX), in
+  // NAIF's OSIRIS-REx kernels: the navigation team's pole and phase fitted through the
+  // mission, and W2 = 2.0e-6 deg/day^2, the spin-up YORP gives it: 192 degrees of phase
+  // by 2026 that a constant rate would miss, against a phase the kernel puts at 0.1
+  // degree (~50 cm) at the mission's epoch. Every version since 1.2
+  // keeps a chosen boulder on the prime meridian, so it turns every OSIRIS-REx shape
+  // model; the shape's own draft PCK (spov54_bennu_v15_draft2.tpc) agrees with it to
+  // 0.02 degrees in 2019 and 0.5 in 2026.
+  //
+  // Shape: the team's SPO v54 -- SPC and OLA lidar combined, the one its archive says to
+  // use for science -- at 3.17 m, the 196,608-facet level of the 3.1 million. The
+  // Gazetteer's Benben Saxum, its 22 m boulder, is its highest point there:
+  // shapeModels.test.ts. Albedo 0.044: Hergenrother et al. 2019, via SBDB.
+  //
+  // Map: Bennett et al.'s global PAN mosaic (Icarus 357, 113690, 2021), 5 cm/px, the
+  // USGS 8-bit copy, left edge 0 E, area-averaged to 2048 x 1024 -- 0.77 m/px, four to
+  // a facet. Its 8-bit stretch is taken as linear in reflectance; only its mean is used
+  // for the level, which is the albedo's.
   smallBody({
     id: 'bennu',
     name: 'Bennu',
@@ -229,13 +265,36 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     radiiKm: [0.25235, 0.2459, 0.22835],
     gmKm3S2: 4.8904e-9,
     rotationPeriodHours: -4.296061,
-    rotation: null,
-    shapeDrawn: false,
+    rotation: iauRotation(85.45864, -60.36468, 150.48977, 2011.143058731885, 2.0e-6),
+    shapeDrawn: true,
     color: '#6f6a64',
     map: null,
+    shape: {
+      file: 'bennu.glb',
+      facets: 196_608,
+      product: 'OSIRIS-REx SPO v54 (SPC + lidar), 3.2 m',
+      orientationNote: null,
+      albedo: 0.044,
+      map: { file: 'bennu.jpg', longitudeOriginDeg: 0, meanLinear: 0.2973 },
+    },
   }),
   // Ryugu. 1.004 km across the equator, 0.876 pole to pole; GM and period: Watanabe et
   // al., Science 364, 267 (2019). Via SBDB.
+  //
+  // Rotation: ryugu_v10.tpc, the last of Hayabusa2's PCKs (JAXA DARTS, Hayabusa2 SPICE
+  // bundle, doi:10.17597/isas.darts/hyb2-00600), W0 at J2000 TDB as the Ryugu Coordinate
+  // System Description states it: the prime meridian on the mound of Catafo Saxum, as
+  // fixed at 2018-07-01 and kept since. Pole to 0.03 degree, rate to 1e-4 deg/day -- a
+  // quarter of a degree by 2026. v08, the only other, has drifted 3.3 degrees from it.
+  //
+  // Shape: the team's SPC model v20200323, the one that PCK was fitted with, at the
+  // 196,608-plate level of four; published as a DSK, read out to vertices and plates
+  // unchanged. Otohime Saxum, the 160 m boulder by the south pole, and Catafo itself are
+  // its highest points where the Gazetteer puts them: shapeModels.test.ts.
+  //
+  // Map: Hayabusa2 ONC's v-band normal albedo map (Yokota et al., PSJ 2, 177, 2021), at
+  // its own 0.1 degree, left edge 0 E; the 2% never seen, near the poles, filled from
+  // the edges. Albedo 0.045: Sugita et al., Science 364, eaaw0422 (2019), via the PCK.
   smallBody({
     id: 'ryugu',
     name: 'Ryugu',
@@ -245,14 +304,35 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     radiiKm: [0.502, 0.502, 0.438],
     gmKm3S2: 3.0e-8,
     rotationPeriodHours: -7.63262,
-    rotation: null,
-    shapeDrawn: false,
+    rotation: iauRotation(96.43112, -66.38741, 274.16225, 1131.98280286),
+    shapeDrawn: true,
     color: '#6a6560',
     map: null,
+    shape: {
+      file: 'ryugu.glb',
+      facets: 196_608,
+      // ISAS's data policy asks for the origin, and to say it was modified.
+      product: 'Hayabusa2 SPC v20200323 (ISAS/JAXA; converted)',
+      orientationNote: null,
+      albedo: 0.045,
+      map: { file: 'ryugu.jpg', longitudeOriginDeg: 0, meanLinear: 0.4973 },
+    },
   }),
   // Didymos. Radii 0.39167 x 0.39167 x 0.29195 km, pole, period 2.2600 h and the system's
   // GM, 3.48961e-8 km^3/s^2 (Didymos with Dimorphos): NAIF didymos_system_15.tpc
   // (2023-09-21), citing Naidu et al., PSJ 5 (2024). Dimorphos is not drawn yet.
+  //
+  // Rotation: that same PCK, BODY920065803 -- Didymos the body, the system's barycentre
+  // being 20065803 -- the latest in DART's SPICE archive. Its W0 is 0 "arbitrarily", and
+  // the prime meridian was then pinned to a boulder, Gong Saxum at 1.9 E, in DART's
+  // images (didymos_coordinate_system_description_v1, doi:10.26007/30x0-fv64), so the
+  // phase is right in September 2022. The period is 2.2600 +- 0.0001 h: +-0.7 of a turn
+  // by October 2026, which the panel says. The shape's own document gives the pole of
+  // the previous PCK, v14, 0.8 degrees from this one; v14 is no longer archived.
+  //
+  // Shape: DART's SPC model v003 (Daly et al., Nature 616, 443, 2023) at 4.66 m, the
+  // 196,608-facet level of the 3.1 million, its origin the centre of mass. Albedo 0.15:
+  // Hasselmann et al., PSJ 5, 91 (2024).
   smallBody({
     id: 'didymos',
     name: 'Didymos',
@@ -262,10 +342,18 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     radiiKm: [0.39167, 0.39167, 0.29195],
     gmKm3S2: 3.48961e-8,
     rotationPeriodHours: -2.26,
-    rotation: null,
-    shapeDrawn: false,
+    rotation: iauRotation(69.326861266078069, -72.724550395829496, 0, 3823.008849557522),
+    shapeDrawn: true,
     color: '#a59d90',
     map: null,
+    shape: {
+      file: 'didymos.glb',
+      facets: 196_608,
+      product: 'DART SPC v003, 4.7 m',
+      orientationNote: 'Spin phase measured at DART’s 2022 impact; ±0.7 turn by late 2026',
+      albedo: 0.15,
+      map: null,
+    },
   }),
   // Dinkinesh. 0.719 km mean diameter and GM: Levison et al., Nature (2024),
   // doi:10.1038/s41586-024-07378-0. Period: Mottola et al., MNRAS Letters (2023),
@@ -315,6 +403,18 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
   // Science 392, 1291 (2026), doi:10.1126/science.aec0503. It tumbles, at 252.6 h and
   // 455.2 h, so no single period describes it. Its mass in that paper is assumed, not
   // measured.
+  //
+  // Rotation: donaldjohanson_v12.tpc (S. Mottola, DLR, 2025-07-15), the Lucy project's
+  // official kernel and the frame of the shape: a plain spin, 251.09 h about a pole at
+  // RA 324.66, Dec +50.96, with "the intersection of the principal axis of least inertia
+  // with the shape" on the prime meridian. It is the tumble drawn as a spin -- no model of
+  // the tumble itself has been released -- so it holds at the April 2025 flyby and
+  // drifts from it, which the panel says.
+  //
+  // Shape: lcy_donj_k548_iso20m_v10.bds (DLR, Mottola and Preusker; Lucy SPICE archive),
+  // the one Marchi et al. point to: stereophotogrammetry of the imaged side, the rest
+  // two ellipsoids fitted to its outline, 547,996 facets at 20 m; the only resolution
+  // published. Albedo 0.103: NEOWISE (Masiero et al., ApJ 741, 68, 2011), via SBDB.
   smallBody({
     id: 'donaldjohanson',
     name: 'Donaldjohanson',
@@ -324,10 +424,18 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     radiiKm: [4.4, 2.2, 1.55],
     gmKm3S2: 0,
     rotationPeriodHours: null,
-    rotation: null,
-    shapeDrawn: false,
+    rotation: iauRotation(324.66115, 50.95721, 293.17865, 34.409504086),
+    shapeDrawn: true,
     color: '#8a857c',
     map: null,
+    shape: {
+      file: 'donaldjohanson.glb',
+      facets: 547_996,
+      product: 'Lucy (DLR) stereo + fitted far side, 20 m',
+      orientationNote: 'It tumbles; drawn spinning as at Lucy’s April 2025 flyby',
+      albedo: 0.103,
+      map: null,
+    },
   }),
   // Pallas. 568 x 532 x 448 km: Marsset et al., Nature Astronomy 4, 569 (2020). GM:
   // Vernazza et al., A&A 654, A56 (2021). Period: Carry et al., Icarus 205, 460 (2010).
@@ -384,21 +492,47 @@ export const SMALL_BODIES: readonly BodyDefinition[] = [
     color: '#7d7871',
     map: null,
   }),
-  // Arrokoth. 36 x 20 x 10 km overall, two lobes of 20.6 x 19.9 x 9.4 and 15.4 x 13.8 x
-  // 9.8 km; period 15.92 h; pole: Spencer et al., Science 367, eaay3999 (2020). A contact
-  // binary no ellipsoid describes: a marker. Mass unmeasured.
+  // Arrokoth. A contact binary no ellipsoid describes. Period 15.92 h: Spencer et al.,
+  // Science 367, eaay3999 (2020). Mass unmeasured.
+  //
+  // Shape: Porter et al.'s 2024 model (PDS, nh_derived:arrokoth_shapemodel_porter2024),
+  // which superseded every earlier one -- whose pole was wrong, "resulting a much
+  // flatter shape". 40,960 facets, the one resolution published. Overall 34.546 x 19.838
+  // x 13.822 km, the radii below; its lobes Wenu, 20.1 x 19.8 x 13.7 km, on +x where the
+  // prime meridian is ("along the long axis on the largest lobe", Beyer and Porter's
+  // coordinate system document), and Weeyo, 15.0 x 14.4 x 13.6.
+  //
+  // Rotation: nh_arrokoth_002.tpc (B. Enke, SwRI, 2024), whose comment says its values
+  // "were used in the arrokoth_porter_2024_v01 shape model": the frame it was fitted
+  // in. Its rate, 559.39 deg/day, is a period of 15.445 h -- 3% off every published one,
+  // Spencer's 15.92 and Buie et al.'s 15.9380 +- 0.0005 h (AJ 159, 130, 2020) -- and
+  // nothing published explains it. Kept, because it is what turns the model onto the
+  // images at the January 2019 flyby; but at either rate the phase today is unknown,
+  // and the panel says so. The period quoted stays the published one.
+  //
+  // Albedo 0.21, geometric, at 550 nm: Hofgartner et al., Icarus 356, 113723 (2021). Its
+  // red is the catalog colour's. Porter's albedo map covers the imaged half, in a
+  // projection of its own; not drawn.
   smallBody({
     id: 'arrokoth',
     name: 'Arrokoth',
     horizonsId: '486958;',
     kind: 'asteroid',
     stepDays: 32,
-    radiiKm: [18, 10, 5],
+    radiiKm: [17.273, 9.919, 6.911],
     gmKm3S2: 0,
     rotationPeriodHours: -15.92,
-    rotation: null,
-    shapeDrawn: false,
+    rotation: iauRotation(319.368582, -25.5875063, 71.9541475, 559.393617318826386509),
+    shapeDrawn: true,
     color: '#a0705a',
     map: null,
+    shape: {
+      file: 'arrokoth.glb',
+      facets: 40_960,
+      product: 'New Horizons, Porter et al. 2024',
+      orientationNote: 'Turned as at New Horizons’ January 2019 flyby; phase today unknown',
+      albedo: 0.21,
+      map: null,
+    },
   }),
 ];

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody } from '@sss/tools/catalog';
 
-import { surfaceMapNote } from './InfoPanel.tsx';
+import { shapeNote, surfaceMapNote } from './InfoPanel.tsx';
 
 /**
  * The "Surface map" line: what the panel says about a body drawn in flat colour.
@@ -29,7 +29,8 @@ describe('surfaceMapNote', () => {
 
   it('gives every natural body without a map a line, and every body with one none', () => {
     for (const body of CATALOG.filter((candidate) => candidate.kind !== 'spacecraft')) {
-      expect(surfaceMapNote(body) === null, body.id).toBe(body.textures !== null);
+      const mapped = body.textures !== null || (body.shapeModel?.map ?? null) !== null;
+      expect(surfaceMapNote(body) === null, body.id).toBe(mapped);
     }
   });
 
@@ -46,14 +47,17 @@ describe('surfaceMapNote', () => {
     expect(surfaceMapNote(getBody('apophis'))).toContain('OSIRIS-APEX');
   });
 
-  it('never says "none exists" of a body a spacecraft mapped whole', () => {
-    // Bennu has a USGS-listed global basemap; Ryugu was imaged all round by Hayabusa2.
-    // Their lines say they were mapped and are simply not drawn yet.
+  it('says nothing of Bennu and Ryugu, whose global maps are draped on their shapes', () => {
+    // OSIRIS-REx's PAN mosaic and Hayabusa2's normal-albedo map: see smallBodies.ts.
     for (const id of ['bennu', 'ryugu']) {
-      const note = surfaceMapNote(getBody(id))!;
-      expect(note, id).not.toMatch(/none/i);
-      expect(note, id).toContain('not drawn yet');
+      expect(surfaceMapNote(getBody(id)), id).toBeNull();
     }
+  });
+
+  it('never says "none exists" of a body whose imaged half was mapped', () => {
+    const note = surfaceMapNote(getBody('arrokoth'))!;
+    expect(note).not.toMatch(/none/i);
+    expect(note).toContain('not drawn');
   });
 
   it("says why Deimos's map is missing rather than that it has none", () => {
@@ -76,6 +80,28 @@ describe('surfaceMapNote', () => {
     // Amalthea by Galileo, Hyperion and Phoebe by Cassini, Proteus by Voyager 2.
     for (const id of ['amalthea', 'hyperion', 'phoebe', 'proteus']) {
       expect(surfaceMapNote(getBody(id)), id).toBe('None drawn');
+    }
+  });
+});
+
+describe('shapeNote', () => {
+  it("names each shape model's product and the facets drawn of it", () => {
+    expect(shapeNote(getBody('bennu').shapeModel!)).toBe(
+      'OSIRIS-REx SPO v54 (SPC + lidar), 3.2 m, 196,608 facets',
+    );
+    for (const body of CATALOG.filter((candidate) => candidate.shapeModel !== undefined)) {
+      expect(shapeNote(body.shapeModel!), body.id).toContain(
+        body.shapeModel!.facets.toLocaleString('en-US'),
+      );
+    }
+  });
+
+  it('says where a spin is known only near one time', () => {
+    for (const id of ['didymos', 'arrokoth', 'donaldjohanson']) {
+      expect(getBody(id).shapeModel!.orientationNote, id).not.toBeNull();
+    }
+    for (const id of ['bennu', 'ryugu']) {
+      expect(getBody(id).shapeModel!.orientationNote, id).toBeNull();
     }
   });
 });

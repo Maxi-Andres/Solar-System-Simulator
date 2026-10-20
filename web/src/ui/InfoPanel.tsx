@@ -1,4 +1,4 @@
-import type { BodyDefinition, CraftShape, Seam } from '@sss/tools/types';
+import type { BodyDefinition, CraftShape, Seam, ShapeModel } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
@@ -256,6 +256,11 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
         // of these radii would be a shape it does not have.
         <Row label="Shape">Not drawn yet: marker only</Row>
       )}
+      {body.shapeModel !== undefined && <Row label="Shape">{shapeNote(body.shapeModel)}</Row>}
+      {(body.shapeModel?.orientationNote ?? null) !== null && (
+        // Where the spin it is drawn with holds only near one time: said, not hidden.
+        <Row label="Orientation">{body.shapeModel!.orientationNote}</Row>
+      )}
       {mapNote !== null && <Row label="Surface map">{mapNote}</Row>}
       {/* A zero GM here means unmeasured, not massless: the small moons have none. */}
       <Row label="GM">
@@ -317,9 +322,9 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
  *
  * "None exists" is said only where it is true. A flat-coloured body reads the same
  * whether nobody has ever photographed it or nobody here has drawn the photographs, and
- * those are different facts: no spacecraft has ever been to Eris, while Bennu was mapped
- * to the centimetre (USGS Astrogeology lists OSIRIS-REx's global basemap) and is a marker
- * only because its shape is not drawn yet.
+ * those are different facts: no spacecraft has ever been to Eris, while Arrokoth's
+ * imaged half was mapped by New Horizons and is simply not drawn. Bennu's and Ryugu's
+ * global maps are drawn on their shape models, so they need no line.
  *
  * Sources for the dates: NASA's mission pages (science.nasa.gov, read 2026-10-19) --
  * Lucy passes Eurybates on 11 August 2027, Psyche reaches its asteroid by August 2029,
@@ -334,12 +339,11 @@ const MAP_NOTES: Readonly<Record<string, string>> = {
   '16-psyche': 'None yet: Psyche arrives in 2029',
   eurybates: 'None yet: Lucy flies past in August 2027',
   apophis: 'None yet: OSIRIS-APEX arrives in 2029',
-  bennu: 'Mapped by OSIRIS-REx; not drawn yet',
-  ryugu: 'Imaged whole by Hayabusa2; not drawn yet',
   didymos: 'Seen in part by DART; Hera arrives December 2026',
   dinkinesh: 'None exists: one side seen in a Lucy flyby',
   donaldjohanson: 'None exists: one side seen in a Lucy flyby',
-  arrokoth: 'None exists: one face seen by New Horizons',
+  // Porter et al. 2024 mapped the imaged half's albedo, in a projection of its own.
+  arrokoth: 'Imaged half mapped by New Horizons; not drawn',
   // See the note on Deimos in catalog.ts: the one map, from Viking, cannot be placed in
   // longitude.
   deimos: 'Viking-based map exists; cannot be placed',
@@ -356,9 +360,14 @@ const MAP_NOTES: Readonly<Record<string, string>> = {
  * Voyager, Galileo or Cassini, and "never imaged" would be untrue of them.
  */
 export function surfaceMapNote(
-  body: Pick<BodyDefinition, 'id' | 'kind' | 'textures' | 'radiusPublished'>,
+  body: Pick<BodyDefinition, 'id' | 'kind' | 'textures' | 'radiusPublished' | 'shapeModel'>,
 ): string | null {
-  if (body.textures !== null || body.kind === 'spacecraft') {
+  // A shape model's map is draped on the model, and is as much a map as a sphere's.
+  if (
+    body.textures !== null ||
+    (body.shapeModel?.map ?? null) !== null ||
+    body.kind === 'spacecraft'
+  ) {
     return null;
   }
   return (
@@ -367,6 +376,14 @@ export function surfaceMapNote(
       ? 'None exists: never resolved, only a point of light'
       : 'None drawn')
   );
+}
+
+/**
+ * The "Shape" line of a body drawn from its mission's shape model: whose model, and how
+ * many facets of it are drawn, so a coarser copy of a finer model never passes for it.
+ */
+export function shapeNote(shape: Pick<ShapeModel, 'product' | 'facets'>): string {
+  return `${shape.product}, ${shape.facets.toLocaleString('en-US')} facets`;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
