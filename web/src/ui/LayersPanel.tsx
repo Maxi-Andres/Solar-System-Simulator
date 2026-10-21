@@ -9,6 +9,8 @@ import {
   type BeltProgress,
   type BeltSource,
 } from '../core/belt.ts';
+import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
+import { BULK_WINDOW_DAYS, chipCounts, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
 import { LAYERS, useViewStore, type LayerDefinition } from '../state/store.ts';
 import { Panel } from './Panel.tsx';
 
@@ -21,9 +23,16 @@ import { Panel } from './Panel.tsx';
  *
  * Under Asteroids, while it is on, sits the belt's density -- how many of its magnitude
  * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
- * BeltFamilies.
+ * BeltFamilies. Under Satellites, the same chips for its groups, and the days it is drawn
+ * for.
  */
-export function LayersPanel({ belt }: { readonly belt: BeltSource }) {
+export function LayersPanel({
+  belt,
+  satellites,
+}: {
+  readonly belt: BeltSource;
+  readonly satellites: SatelliteSource;
+}) {
   const layers = useViewStore((state) => state.layers);
   const toggleLayer = useViewStore((state) => state.toggleLayer);
   const closePanel = useViewStore((state) => state.closePanel);
@@ -43,6 +52,12 @@ export function LayersPanel({ belt }: { readonly belt: BeltSource }) {
                 <BeltDensityPicker belt={belt} />
                 <BeltFamilies belt={belt} />
                 <BeltNote />
+              </>
+            )}
+            {layer.id === 'satellites' && layers.satellites && (
+              <>
+                <SatelliteChips satellites={satellites} />
+                <SatelliteNote satellites={satellites} />
               </>
             )}
           </LayerRow>
@@ -356,6 +371,93 @@ function BeltNote() {
     </p>
   );
 }
+
+/**
+ * Which of the satellites' groups to draw: the chips of satelliteGroups.ts, in the belt's
+ * chip style. Each count is the group's satellites in the data, named and dots together;
+ * before the data arrives the chips are there without counts, so the panel does not jump.
+ */
+function SatelliteChips({ satellites }: { readonly satellites: SatelliteSource }) {
+  const data = useSyncExternalStore(satellites.subscribe, () => satellites.value);
+  const state = useSyncExternalStore(satellites.subscribe, () => satellites.state);
+  const shown = useViewStore((store) => store.satelliteChips);
+  const toggle = useViewStore((store) => store.toggleSatelliteChip);
+  if (state === 'absent') {
+    return <p style={NOTE_STYLE}>The published data has no satellites yet.</p>;
+  }
+  const counts = data === null ? null : chipCounts(data);
+  return (
+    <div
+      role="group"
+      aria-label="Satellite groups"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', margin: '0 0 0.4rem 1.65rem' }}
+    >
+      {SATELLITE_CHIPS.map((chip, index) => {
+        const on = chipShown(shown, index);
+        const count = counts?.[index] ?? null;
+        return (
+          <button
+            key={chip.id}
+            type="button"
+            className="ui-press"
+            aria-pressed={on}
+            onClick={() => toggle(index)}
+            title={`${chip.description}${count === null ? '' : `: ${count.toLocaleString('en-US')}`}`}
+            style={{
+              background: on ? '#16203a' : 'transparent',
+              border: `1px solid ${on ? '#4a86ff' : '#2a2a2a'}`,
+              borderRadius: '0.6rem',
+              color: on ? '#d6d6d6' : '#5e5e5e',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '0.62rem',
+              lineHeight: 1.3,
+              padding: '0.05rem 0.4rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {chip.label}
+            {count !== null && <span style={{ color: on ? '#7a8fb8' : '#454545' }}> {compactCount(count)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A UTC Julian day as "21 Oct". */
+function shortDate(jdUtc: number): string {
+  return new Date((jdUtc - 2440587.5) * 86_400_000).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * The days the satellites are drawn for, said where they are switched on: element sets
+ * are good for days, not years, and outside them nothing is drawn rather than something
+ * wrong. And what the dots are, as the belt's note says it.
+ */
+function SatelliteNote({ satellites }: { readonly satellites: SatelliteSource }) {
+  const data = useSyncExternalStore(satellites.subscribe, () => satellites.value);
+  if (data === null) {
+    return null;
+  }
+  const reference = data.info.referenceJdUtc;
+  return (
+    <p style={NOTE_STYLE}>
+      {`Drawn ${shortDate(reference - BULK_WINDOW_DAYS)} to ${shortDate(reference + BULK_WINDOW_DAYS)}; named satellites within ${NAMED_WINDOW_DAYS} days of their elements. Each dot marks where an object is, not its size.`}
+    </p>
+  );
+}
+
+const NOTE_STYLE: React.CSSProperties = {
+  margin: '0 0 0.4rem 1.65rem',
+  fontSize: '0.64rem',
+  lineHeight: 1.45,
+  color: '#6a6a6a',
+};
 
 function Checkbox({
   checked,

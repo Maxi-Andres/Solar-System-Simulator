@@ -3,15 +3,37 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 
 import { BELT_FAMILIES, httpBeltFetchers, type BeltSource } from '../core/belt.ts';
 import { addBeltBody, beltBodyId } from '../core/beltBodies.ts';
-import { searchable, searchNames, type NameIndex, type NameIndexSource } from '../core/beltNames.ts';
+import {
+  searchable,
+  searchNames,
+  type NameIndex,
+  type NameIndexSource,
+  type Searchable,
+} from '../core/beltNames.ts';
 import { addCometBody, cometBodyId } from '../core/cometBodies.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { describeBody, layersFor, parentNameOf, searchBodies } from '../core/search.ts';
+import {
+  addBulkSatelliteBody,
+  addSgpSatelliteBody,
+  bulkSatelliteBodyId,
+  sgpSatelliteBodyId,
+} from '../core/satelliteBodies.ts';
+import { chipShown, satelliteBodyChip } from '../core/satelliteGroups.ts';
+import {
+  BULK_WINDOW_DAYS,
+  NAMED_WINDOW_DAYS,
+  type LazySource,
+  type SatelliteNameIndex,
+  type Satellites,
+  type SatelliteSource,
+} from '../core/satellites.ts';
+import { describeBody, layersFor, normalizeName, parentNameOf, searchBodies } from '../core/search.ts';
+import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { useViewStore } from '../state/store.ts';
-import { craftUnavailability } from './BodyPicker.tsx';
+import { craftUnavailability, satelliteUnavailability } from './BodyPicker.tsx';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -34,6 +56,11 @@ import { Panel } from './Panel.tsx';
  * And the comets, by the names in comets.json, fetched with them when the panel opens;
  * listed before the belt's names, since there are few of them and people look for them
  * by name. Choosing one makes it a body the same way (see cometBodies.ts).
+ *
+ * And Earth's satellites: the named ones are bodies already, found with the rest -- by
+ * name, operator, or catalogue number ("25544", "1998-067A"). The others by CelesTrak's
+ * name or number, after the comets: those on SGP4 first, then the dots, whose names are
+ * fetched when the panel opens. Choosing one makes it a body (see satelliteBodies.ts).
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -45,13 +72,20 @@ const NAME_LIMIT = 20;
 /** And at most this many comets, between the two. */
 const COMET_LIMIT = 10;
 
+/** And at most this many satellites that are not bodies yet, after the comets. */
+const SATELLITE_LIMIT = 12;
+
 const ACCENT = '#3ddc84';
 
 /** A result: a body in the store, or entry `k` of the belt's name index. */
 type Result =
   | { readonly kind: 'body'; readonly id: BodyId }
   | { readonly kind: 'name'; readonly k: number }
-  | { readonly kind: 'comet'; readonly k: number };
+  | { readonly kind: 'comet'; readonly k: number }
+  /** Entry `k` of the SGP4 tier (sgp4.json). */
+  | { readonly kind: 'sgp4'; readonly k: number }
+  /** Bulk record `k`. */
+  | { readonly kind: 'bulk'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -60,6 +94,8 @@ export function SearchPanel({
   belt,
   names,
   comets,
+  satellites,
+  satelliteNames,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -67,10 +103,14 @@ export function SearchPanel({
   readonly belt: BeltSource;
   readonly names: NameIndexSource;
   readonly comets: CometSource;
+  readonly satellites: SatelliteSource;
+  readonly satelliteNames: LazySource<SatelliteNameIndex>;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
   const setLayer = useViewStore((state) => state.setLayer);
+  const satelliteChips = useViewStore((state) => state.satelliteChips);
+  const toggleSatelliteChip = useViewStore((state) => state.toggleSatelliteChip);
 
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
@@ -81,6 +121,10 @@ export function SearchPanel({
   const version = useStoreVersion(store);
   const nameIndex = useSyncExternalStore(names.subscribe, () => names.index);
   const cometData = useSyncExternalStore(comets.subscribe, () => comets.comets);
+  const satelliteData = useSyncExternalStore(satellites.subscribe, () => satellites.value);
+  const bulkNames = useSyncExternalStore(satelliteNames.subscribe, () => satelliteNames.value);
+  // The SGP4 tier's names, made comparable once, when the satellites arrive.
+  const sgpIndex = useMemo(() => (satelliteData === null ? null : sgpSearchIndex(satelliteData)), [satelliteData]);
   // Four thousand names made comparable once, when the comets arrive.
   const cometIndex = useMemo(
     () => (cometData === null ? null : searchable(cometData.info.names)),
@@ -94,7 +138,9 @@ export function SearchPanel({
     }
     void names.request();
     void comets.request();
-  }, [store, names, comets]);
+    // The names wait on the satellites themselves, so this asks for both.
+    void satelliteNames.request();
+  }, [store, names, comets, satelliteNames]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -115,8 +161,9 @@ export function SearchPanel({
         : searchNames(nameIndex, query, NAME_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(beltBodyId(nameIndex.names.tier[k]!, nameIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'name', k }));
-    return [...bodies, ...fromComets, ...fromNames].slice(0, RESULT_LIMIT);
-  }, [store, query, version, nameIndex, cometIndex]);
+    const fromSatellites = satelliteResults(store, query, satelliteData, sgpIndex, bulkNames);
+    return [...bodies, ...fromComets, ...fromSatellites, ...fromNames].slice(0, RESULT_LIMIT);
+  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames]);
 
   // A new query starts at the top.
   useEffect(() => {
@@ -132,14 +179,30 @@ export function SearchPanel({
   // Read when typed, not ticked: a craft greyed out stays so until the next keystroke,
   // which is far more often than the clock moves one past a launch date.
   const jd = clock.tdbJulianDay;
-  const unavailable = (result: Result): string | null =>
-    result.kind === 'body' && store.body(result.id).kind === 'spacecraft'
-      ? craftUnavailability(store, result.id, jd)
-      : null;
+  const unavailable = (result: Result): string | null => {
+    if (result.kind === 'body') {
+      const kind = store.body(result.id).kind;
+      return kind === 'spacecraft'
+        ? craftUnavailability(store, result.id, jd)
+        : kind === 'satellite'
+          ? satelliteUnavailability(store, result.id, jd)
+          : null;
+    }
+    if ((result.kind === 'sgp4' || result.kind === 'bulk') && satelliteData !== null) {
+      return satelliteResultUnavailability(satelliteData, result, jd);
+    }
+    return null;
+  };
 
   const go = (id: BodyId): void => {
-    for (const layer of layersFor(store.body(id))) {
+    const body = store.body(id);
+    for (const layer of layersFor(body)) {
       setLayer(layer, true);
+    }
+    // A satellite needs its chip on too, or the app steps straight back to Earth.
+    const chip = body.kind === 'satellite' ? satelliteBodyChip(id) : -1;
+    if (chip >= 0 && !chipShown(satelliteChips, chip)) {
+      toggleSatelliteChip(chip);
     }
     setFocus(id);
     closePanel();
@@ -156,6 +219,20 @@ export function SearchPanel({
     if (result.kind === 'comet') {
       if (cometData !== null) {
         go(addCometBody(store, cometData, result.k, focus));
+      }
+      return;
+    }
+    if (result.kind === 'sgp4' || result.kind === 'bulk') {
+      const id =
+        satelliteData === null
+          ? null
+          : result.kind === 'sgp4'
+            ? addSgpSatelliteBody(store, satelliteData, result.k, focus)
+            : bulkNames === null
+              ? null
+              : addBulkSatelliteBody(store, satelliteData, bulkNames, result.k, focus);
+      if (id !== null) {
+        go(id);
       }
       return;
     }
@@ -194,7 +271,7 @@ export function SearchPanel({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Planet, moon, asteroid, spacecraft…"
+        placeholder="Planet, moon, spacecraft, satellite…"
         aria-label="Search bodies"
         aria-controls="search-results"
         spellCheck={false}
@@ -229,7 +306,14 @@ export function SearchPanel({
         {results.map((result, index) => {
           const reason = unavailable(result);
           const active = index === selected;
-          const row = describeResult(store, result, nameIndex, cometData?.info.names ?? null);
+          const row = describeResult(
+            store,
+            result,
+            nameIndex,
+            cometData?.info.names ?? null,
+            satelliteData,
+            bulkNames,
+          );
           return (
             <li
               key={result.kind === 'body' ? result.id : `${result.kind}-${result.k}`}
@@ -284,11 +368,13 @@ function describeResult(
   result: Result,
   nameIndex: NameIndex | null,
   cometNames: readonly string[] | null,
+  satellites: Satellites | null,
+  bulkNames: SatelliteNameIndex | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
   if (result.kind === 'body') {
     const body = store.body(result.id);
     return {
-      glyph: body.kind === 'spacecraft' ? '◆' : '●',
+      glyph: body.kind === 'spacecraft' || body.kind === 'satellite' ? '◆' : '●',
       color: body.color,
       name: body.name,
       detail: describeBody(body, parentNameOf(store.bodies, body.parent)),
@@ -296,6 +382,24 @@ function describeResult(
   }
   if (result.kind === 'comet') {
     return { glyph: '·', color: '#9ecbe6', name: cometNames![result.k]!, detail: 'Comet' };
+  }
+  if (result.kind === 'sgp4') {
+    const omm = satellites!.sgp4[result.k]!.omm;
+    return {
+      glyph: '·',
+      color: '#f2e2b8',
+      name: omm.OBJECT_NAME,
+      detail: `Earth satellite · NORAD ${omm.NORAD_CAT_ID} · ${omm.OBJECT_ID}`,
+    };
+  }
+  if (result.kind === 'bulk') {
+    const names = bulkNames!.names;
+    return {
+      glyph: '·',
+      color: '#f2e2b8',
+      name: names.name[result.k]!,
+      detail: `Earth satellite · NORAD ${names.noradId[result.k]} · ${names.cosparId[result.k]}`,
+    };
   }
   const names = nameIndex!.names;
   const orbitClass = nameIndex!.info.classes[names.classIndex[result.k]!];
@@ -308,4 +412,77 @@ function describeResult(
     name: names.display[result.k]!,
     detail: ['Asteroid', family?.label, designation ?? undefined].filter((part) => part !== undefined).join(' · '),
   };
+}
+
+/** The SGP4 tier, searchable: CelesTrak's name, and the COSPAR id as a second. */
+function sgpSearchIndex(satellites: Satellites): Searchable & { readonly byNorad: ReadonlyMap<number, number> } {
+  return {
+    display: satellites.sgp4.map((satellite) => normalizeName(satellite.omm.OBJECT_NAME)),
+    designation: satellites.sgp4.map((satellite) => normalizeName(satellite.omm.OBJECT_ID)),
+    byNorad: new Map(satellites.sgp4.map((satellite, k) => [satellite.omm.NORAD_CAT_ID, k] as const)),
+  };
+}
+
+/**
+ * The satellites that match and are not bodies yet: a catalogue number exactly first, then
+ * by name -- the SGP4 tier's, then the dots'.
+ */
+function satelliteResults(
+  store: EphemerisStore,
+  query: string,
+  satellites: Satellites | null,
+  sgpIndex: (Searchable & { readonly byNorad: ReadonlyMap<number, number> }) | null,
+  bulkNames: SatelliteNameIndex | null,
+): Result[] {
+  if (satellites === null) {
+    return [];
+  }
+  const out: Result[] = [];
+  const seen = new Set<string>();
+  const push = (kind: 'sgp4' | 'bulk', k: number): void => {
+    const id = kind === 'sgp4' ? sgpSatelliteBodyId(satellites.sgp4[k]!.omm.NORAD_CAT_ID) : bulkSatelliteBodyId(k);
+    if (!seen.has(id) && !store.isPropagatedBody(id)) {
+      seen.add(id);
+      out.push({ kind, k });
+    }
+  };
+  const trimmed = query.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const sgp = sgpIndex?.byNorad.get(Number(trimmed));
+    if (sgp !== undefined) {
+      push('sgp4', sgp);
+    }
+    const bulk = bulkNames?.byNorad.get(Number(trimmed));
+    if (bulk !== undefined) {
+      push('bulk', bulk);
+    }
+  }
+  if (sgpIndex !== null) {
+    for (const { k } of searchNames(sgpIndex, query, SATELLITE_LIMIT)) {
+      push('sgp4', k);
+    }
+  }
+  if (bulkNames !== null) {
+    for (const { k } of searchNames(bulkNames, query, SATELLITE_LIMIT)) {
+      push('bulk', k);
+    }
+  }
+  return out.slice(0, SATELLITE_LIMIT);
+}
+
+/**
+ * Why a satellite not yet a body cannot be chosen now: the clock is outside the days it
+ * is drawn for -- its own elements' week for one on SGP4, the data's for a dot.
+ */
+function satelliteResultUnavailability(
+  satellites: Satellites,
+  result: { readonly kind: 'sgp4' | 'bulk'; readonly k: number },
+  jdTdb: number,
+): string | null {
+  const { jdUtc } = satelliteInstant(jdTdb);
+  if (result.kind === 'bulk') {
+    return Math.abs(jdUtc - satellites.info.referenceJdUtc) <= BULK_WINDOW_DAYS ? null : 'no elements';
+  }
+  const epoch = Date.parse(`${satellites.sgp4[result.k]!.omm.EPOCH}Z`) / 86_400_000 + 2440587.5;
+  return Math.abs(jdUtc - epoch) <= NAMED_WINDOW_DAYS ? null : 'no elements';
 }

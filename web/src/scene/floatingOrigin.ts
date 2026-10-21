@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { satelliteBodyChip, satelliteChipLayer } from '../core/satelliteGroups.ts';
 import type { Vec3 } from '../core/vec3.ts';
 
 /**
@@ -115,10 +116,16 @@ export function isSmallMoon(body: BodyDefinition): boolean {
   return body.sampling !== undefined && body.parent !== null;
 }
 
-/** Whether a body's layers are on: its kind's, and for a small moon the Small Moons too. */
+/**
+ * Whether a body's layers are on: its kind's, for a small moon the Small Moons too, and for
+ * an Earth satellite its chip in the Satellites layer (see satelliteGroups.ts) -- so a
+ * named satellite goes with the dots of its group.
+ */
 export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>): boolean {
   return (
-    visibleKinds.has(body.kind) && (!isSmallMoon(body) || visibleKinds.has(SMALL_MOON_LAYER))
+    visibleKinds.has(body.kind) &&
+    (!isSmallMoon(body) || visibleKinds.has(SMALL_MOON_LAYER)) &&
+    (body.kind !== 'satellite' || visibleKinds.has(satelliteChipLayer(satelliteBodyChip(body.id))))
   );
 }
 

@@ -12,6 +12,7 @@
   "scripts": {
     "fetch:data": "node src/fetchData.ts",
     "fetch:belt": "node src/belt/fetchBelt.ts",
+    "fetch:satellites": "node src/satellites/fetchSatellites.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",
@@ -20,7 +21,11 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "astronomy-engine": "2.1.19",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "satellite.js": "^7.1.0"
   }
 }

@@ -5,6 +5,13 @@ import type { StarCatalog } from '@sss/tools/types';
 import { BeltSource, httpBeltFetchers } from './belt.ts';
 import { loadNameIndex, NameIndexSource } from './beltNames.ts';
 import { CometSource, loadComets } from './comets.ts';
+import {
+  LazySource,
+  loadSatelliteNames,
+  loadSatellites,
+  type SatelliteNameIndex,
+  type Satellites,
+} from './satellites.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
@@ -37,6 +44,13 @@ export interface Simulation {
   readonly comets: CometSource;
   /** The belt's name index, fetched when search first opens; see beltNames.ts. */
   readonly names: NameIndexSource;
+  /**
+   * Earth's satellites, fetched once the Satellites layer is first on or search opens;
+   * see satellites.ts.
+   */
+  readonly satellites: LazySource<Satellites>;
+  /** The bulk satellites' names, fetched when search first opens. */
+  readonly satelliteNames: LazySource<SatelliteNameIndex>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -74,6 +88,20 @@ export function useSimulation(refreshHz = 10): Simulation {
   cometsRef.current ??= new CometSource(() => loadComets(httpBeltFetchers, import.meta.env.BASE_URL));
   const namesRef = useRef<NameIndexSource>(null);
   namesRef.current ??= new NameIndexSource(() => loadNameIndex(httpBeltFetchers, import.meta.env.BASE_URL));
+  const satellitesRef = useRef<LazySource<Satellites>>(null);
+  satellitesRef.current ??= new LazySource(
+    () => loadSatellites(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the satellites',
+  );
+  const satelliteNamesRef = useRef<LazySource<SatelliteNameIndex>>(null);
+  satelliteNamesRef.current ??= new LazySource(async () => {
+    const source = satellitesRef.current!;
+    await source.request();
+    const satellites = source.value;
+    return satellites === null
+      ? null
+      : loadSatelliteNames(httpBeltFetchers, satellites.info, import.meta.env.BASE_URL);
+  }, 'the satellite names');
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);
@@ -159,6 +187,8 @@ export function useSimulation(refreshHz = 10): Simulation {
     belt: beltRef.current,
     comets: cometsRef.current,
     names: namesRef.current,
+    satellites: satellitesRef.current,
+    satelliteNames: satelliteNamesRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

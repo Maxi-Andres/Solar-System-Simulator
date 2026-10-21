@@ -151,10 +151,10 @@ export function declutterLabels(
 
 /**
  * Label precedence: the Sun, planets and dwarf planets first, then moons and asteroids,
- * then spacecraft. Depth only decides between bodies of the same rank.
+ * then spacecraft and Earth satellites. Depth only decides between bodies of the same rank.
  */
 export function labelRank(kind: string, parent: BodyId | null): number {
-  if (kind === 'spacecraft') {
+  if (kind === 'spacecraft' || kind === 'satellite') {
     return 2;
   }
   return parent === null && kind !== 'asteroid' && kind !== 'comet' ? 0 : 1;

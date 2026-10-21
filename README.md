@@ -89,6 +89,7 @@ Other commands:
 
 ```bash
 pnpm fetch:belt      # regenerate only the belt and the comets, from JPL's SBDB (~5 minutes)
+pnpm fetch:satellites  # regenerate only the Earth satellites, from CelesTrak (~10 seconds)
 pnpm write:catalog   # publish catalog-only changes (a new map, a radius) into bodies.json, no fetch
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
@@ -146,6 +147,11 @@ web/public/data/
 ├─ belt/names.json       # the search index: the belt's named, near-Earth and outer asteroids
 ├─ belt/comets.json      # the comets: source, classes, names
 ├─ belt/comets.bin       # their orbits, as perihelion distance and time, float32
+├─ satellites/satellites.json  # Earth satellites: source, reference instant, TEME matrix, groups, accuracy
+├─ satellites/named.json       # the named satellites, each with its full OMM for SGP4
+├─ satellites/bulk.bin         # every other satellite, SGP4 mean elements and rates, float32
+├─ satellites/bulk-names.json  # the bulk's names, NORAD and COSPAR numbers, element ages
+├─ satellites/sgp4.json        # the satellites the bulk model cannot follow, full OMM
 └─ elements/<id>.json     # osculating orbital elements at one epoch
 ```
 
@@ -429,6 +435,121 @@ elements are published like any other's, but the app draws no orbit line for an 
 orbit and, outside the twenty years, has no ellipse to carry them on: there they are not
 placed at all, as a spacecraft is not outside its trajectory.
 
+### Earth satellites
+
+**Every satellite CelesTrak publishes by group**, from its GP API as OMM mean elements for
+SGP4, the US Space Force's public catalogue as the 18th and 19th Space Defense Squadrons
+publish it on Space-Track. Space-Track itself needs an account, which a build that runs
+anywhere cannot carry. `pnpm fetch:data` reads it alongside the stars; `pnpm
+fetch:satellites` regenerates `satellites/` alone (`--out <dir>`, and `--cache <dir>` to
+keep CelesTrak's answers while iterating).
+
+**What "the whole catalogue" means here.** CelesTrak publishes no all-objects file, only
+groups. `active` — every payload the catalogue marks operational — is the backbone, and
+the rest of the tracked population is reached through the groups that hold it: the
+brightest objects (rocket bodies among them) and three debris clouds. The other dead
+payloads, rocket bodies and fragments Space-Track tracks are not offered as a group, and
+are not here. Downloaded 2026-10-21:
+
+| Group | Objects | | Group | Objects |
+|---|---|---|---|---|
+| `active` | 16,766 | | `weather` | 73 |
+| `stations` | 21 | | `resource` | 167 |
+| `visual` | 155 | | `science` | 46 |
+| `gnss` | 171 | | `fengyun-1c-debris` | 1,983 |
+| `geo` | 568 | | `iridium-33-debris` | 109 |
+| `tdrss` (TDRS and the craft that relay through it) | 26 | | `cosmos-2251-debris` | 586 |
+
+20,671 rows, **19,572 objects** once merged by NORAD number, each keeping a bit for every
+group it was in so the app can filter by them. Starlink, OneWeb and Kuiper are read from
+the name rather than downloaded again: CelesTrak's `starlink` group held 11,121, the names
+11,148 — all of the group plus 27 launched the day before and not yet added to it.
+Written: **19,500**. Left out: 70 element sets of objects in drag older than 14 days (61
+debris fragments, an Iridium, and eight craft on transfer orbits still raising their
+apogees; navigation satellites with month-old sets are kept, since nothing but a
+manoeuvre makes those stale), one Starlink at 250 km that SGP4 already puts below the
+ground, and TESS, which the catalog draws from Horizons — its orbit is in 2:1 resonance
+with the Moon, out to 375,000 km, and SGP4 is not a model of it.
+
+**CelesTrak's usage policy is the rule the client is written to.** GP data updates every
+two hours, a group downloaded again before then is refused with HTTP 403, and it asks
+clients to stop at the first non-200 rather than retry — 50 errors in two hours sends
+the address to the firewall. So a run makes **fourteen requests, one at a time, 4.7
+MB**, never retries an HTTP error, and stops at the first: a group not read loses only its
+filter bit (`groupsMissing`), and if `active` is not read there are no satellites that
+run. Unlike the belt, **that does not fail `fetch:data`**: a CI runner's address is
+shared, so the refusal can be caused by someone else's download, and failing the deploy
+on it would be a lottery; the app shows no satellites rather than fewer, and the next
+day's run brings them back.
+
+**Three tiers, every satellite in exactly one.**
+
+- **53 named satellites**, `named.json`, propagated with full SGP4 in the browser: the
+  ISS and Tiangong, Hubble, Chandra, Fermi, Swift and the rest of the observatories, NASA's
+  Earth-science fleet, the JPSS and GOES weather satellites, every TDRS, Envisat. Each
+  carries its OMM exactly as CelesTrak's JSON does, the operator, and the launch date from
+  CelesTrak's SATCAT.
+- **19,054 in the bulk**, `bulk.bin`, twelve float32 numbers each for the GPU: SGP4's own
+  mean elements at the run's instant, read out of satellite.js's port of the reference
+  code rather than re-derived — the published mean motion is Kozai's, not Kepler's, and
+  every angle moves at SGP4's secular rates (the ISS's node regresses 4.95° a day) — plus
+  their rates fitted over ±3 days, a Δt² drag term, and the largest of SGP4's periodic
+  terms near Earth, J3's shift of the eccentricity vector, which takes a LEO satellite
+  from 10 km off SGP4 to 3. See `SATELLITE_RECORD_FLOATS` in `tools/src/types.ts`.
+- **393 on SGP4**, `sgp4.json`: what the bulk model cannot follow, measured per satellite
+  — any it puts more than 50 km from full SGP4 somewhere in the run ± 3 days. 342 are
+  Starlinks raising or lowering their orbits, whose mean motion changes too fast for a
+  parabola, three of them re-entering, which SGP4 itself stops placing; 29 more in low
+  orbit, Kuiper and Qianfan satellites climbing to station and small craft in heavy drag;
+  16 on very eccentric orbits (THEMIS 700 to 1,300 km off, PROBA-3 290 km), where the Sun's
+  and Moon's periodic terms are large; and six inclined geosynchronous, four of them
+  BeiDou.
+
+**How accurate the bulk is**, against full SGP4 from the same element sets, every bulk
+record of the 2026-10-21 run, in float32 as the GPU computes it — median / 95th percentile:
+
+| Regime | Satellites | At the run | ±1 hour | ±1 day | ±3 days | ±7 days |
+|---|---|---|---|---|---|---|
+| LEO | 18,277 | 3.2 / 5.9 km | 4.2 / 6.0 km | 4.0 / 6.1 km | 4.2 / 7.1 km | 4.8 / 47 km |
+| MEO | 195 | 9.7 / 27 km | 11 / 28 km | 11 / 30 km | 12 / 34 km | 13 / 30 km |
+| GEO | 569 | 27 / 32 km | 28 / 34 km | 29 / 34 km | 32 / 37 km | 29 / 39 km |
+| HEO | 13 | 17 / 38 km | 21 / 38 km | 20 / 34 km | 24 / 43 km | 26 / 42 km |
+
+And for four satellites, from their own element epoch:
+
+| Satellite | At epoch | ±1 hour | ±1 day | ±3 days | ±7 days |
+|---|---|---|---|---|---|
+| ISS | 0.2 km | 2.2 km | 0.3 km | 0.8 km | 3.4 km |
+| STARLINK-3005 | 6.1 km | 4.6 km | 6.1 km | 6.1 km | 6.1 km |
+| NAVSTAR 43 (GPS) | 6.2 km | 10 km | 6.3 km | 6.2 km | 11 km |
+| GOES-19 (GEO) | 25 km | 28 km | 27 km | 31 km | 38 km |
+
+What is left near Earth is J2's short-period terms; at GEO it is the Sun's and Moon's
+periodic terms, about 30 km on a 42,164 km orbit — 0.04°. **The bulk is meant for the run
+± 3 days**: past that the tail grows as SGP4's drag departs from the parabola, and the
+element sets themselves age. A deploy every day keeps "now" inside it; the weekly cron in
+`deploy.yml` does not, for the last four days of each week. Measured on every fifth object, before the worst
+went to SGP4, the LEO 95th percentile at 1, 3 and 7 days is 6, 8 and 99 km fitted over ±3
+days, and 11, 28 and 22 km fitted over ±7 (`SATELLITE_WINDOW_DAYS`). Float32 costs under half a kilometre in that window.
+None of this is SGP4's own error against where a satellite really is, which is larger and
+grows with every day of drag nobody has observed yet. Measured once for Chandra against the Chandra X-ray Center's own
+trajectory: 10 to 21 km near apogee, 240 km through perigee.
+
+**Frame and time.** SGP4's output is TEME — true equator, mean equinox of date — and the
+scene is ecliptic J2000. `satellites.json` carries one matrix for the run: IAU 1976
+precession (0.374° since J2000, 44 km at LEO's radius, 275 km at GEO's), IAU 1980
+nutation, the equation of the equinoxes, then the IAU 1976 obliquity Horizons' ECLIPTIC
+frame uses. One matrix drifts from the exact one by 0.13″ a day, 4.2″ over a month — a
+kilometre at GEO. And **SGP4 runs on UTC**, so every Julian day in this layer is UTC: the
+app's TDB clock is turned back 69.184 s first, without which a LEO satellite is 530 km
+along its track. Checked end to end against Horizons' ISS, which is built from the same
+element sets: SGP4, the matrix and the time scale together land within 10 m of it, every
+two hours for the day and a half after the element set's epoch.
+
+Sizes: `bulk.bin` 0.91 MB (0.74 MB gzipped), `bulk-names.json` 0.78 MB (0.17 MB),
+`sgp4.json` 191 KB (26 KB), `named.json` 42 KB (6 KB). Building it from the downloads
+takes two seconds of SGP4.
+
 ### Spacecraft sampling
 
 A spacecraft is the case no single step can serve. Juice cruises for months on a curve
@@ -683,7 +804,7 @@ two, never drawn somewhere approximate and then moved.
 | [Tycho-2, via VizieR](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/259/tyc2) | The same, for the faint stars Hipparcos never completed |
 | [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements and names of every asteroid and comet in the catalogue |
-| [CelesTrak GP](https://celestrak.org/NORAD/elements/) | TLE/OMM data for Earth-orbiting satellites *(planned)* |
+| [CelesTrak GP](https://celestrak.org/NORAD/elements/) and [SATCAT](https://celestrak.org/satcat/) | SGP4 elements (OMM) of the Earth satellites, and their object types and launch dates |
 | [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
 
 ## Roadmap
@@ -736,6 +857,10 @@ Stated plainly, since the point of the project is that everything else is not:
   tens of thousands of km off within months of the elements' epoch, a degree a decade
   out, and far worse for an asteroid that passes close to a planet. The named small
   bodies are not part of it and stay exact. See *The asteroid belt*.
+- **The Earth satellites are SGP4's, and most of them a simplified SGP4.** SGP4 from a
+  public element set is itself kilometres off near its epoch and worse with every day of
+  unobserved drag. The bulk adds 3 to 7 km in low orbit and about 30 km at GEO on top of
+  that, within three days of the build. See *Earth satellites*.
 
 - **The sky is drawn to magnitude 8, and how bright a star looks is compressed.**
   Which stars are there is a measurement: 46,071 real stars at their own positions,
@@ -914,7 +1039,9 @@ Stated plainly, since the point of the project is that everything else is not:
   catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),
   accessed through the **VizieR** service at CDS, Strasbourg (Ochsenbein, Bauer &
   Marcout 2000, A&AS 143, 23).
-- Satellite orbital data: **CelesTrak**.
+- Satellite orbital data: **CelesTrak** (Dr. T.S. Kelso), relaying the US Space Force's
+  public catalogue, published by the **18th and 19th Space Defense Squadrons** on
+  Space-Track.org.
 - Planetary surface maps: **Solar System Scope** (CC BY 4.0); **NASA/JHUAPL/SwRI** New
   Horizons mosaic for Pluto; **NASA Earth Observatory** Blue Marble and **NASA 3D
   Resources** for the unused true-colour files. Full details in

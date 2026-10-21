@@ -81,6 +81,32 @@ export interface EphemerisData {
   readonly loadSmallMoons?: ((planet: BodyId) => Promise<SmallMoonBundle>) | null;
 }
 
+/**
+ * How a body added by addPropagatedBody is read. Every field is optional: none set is a
+ * belt asteroid or a comet -- a state about the Sun, approximate everywhere, placed at
+ * any instant.
+ */
+export interface PropagatedOptions {
+  /**
+   * The state function gives the body's state about its parent, not about the Sun: an
+   * Earth satellite, whose SGP4 position is geocentric.
+   */
+  readonly aboutParent?: boolean;
+  /**
+   * The span it is placed in, TDB Julian days; outside it the body has no position at all,
+   * as a spacecraft before launch has none. For a satellite, the days around its element
+   * epoch its elements are good for.
+   */
+  readonly coverage?: { readonly startJd: number; readonly stopJd: number };
+  /**
+   * Not flagged APPROXIMATE inside its coverage. For a satellite on SGP4: the elements are
+   * mean elements fitted for exactly that model, so SGP4 is how they are meant to be read
+   * rather than a fallback from something better -- unlike a planet propagated from
+   * osculating elements outside its table, off by thousands of kilometres.
+   */
+  readonly exact?: boolean;
+}
+
 /** Fetches the stops of a craft on another body's surface. */
 export type SurfaceLoader = (id: BodyId) => Promise<SurfaceTrack>;
 
@@ -174,7 +200,9 @@ export class EphemerisStore {
    * Bodies with no table, and their state about the Sun; see addPropagatedBody. Null for
    * one with neither elements nor a state, which therefore has no position.
    */
-  readonly #propagated = new Map<BodyId, ((jd: number) => StateVector) | null>();
+  readonly #propagated = new Map<BodyId, ((jd: number) => StateVector | null) | null>();
+  /** How each propagated body's state is to be read; see PropagatedOptions. */
+  readonly #propagatedOptions = new Map<BodyId, PropagatedOptions>();
   readonly #smallMoonsPending = new Map<BodyId, Promise<void>>();
   readonly #smallMoonsFailedAt = new Map<BodyId, number>();
   #version = 0;
@@ -332,6 +360,10 @@ export class EphemerisStore {
    *
    * The smallest change that makes such a thing focusable: the frame tree, the labels and
    * the scene take it from here as they take a small moon arriving.
+   *
+   * An Earth satellite is added the same way (see satelliteBodies.ts), with options: its
+   * state is about Earth, it exists only in the days its elements are good for, and in
+   * them it is not flagged approximate. See PropagatedOptions.
    */
   addPropagatedBody(
     body: BodyDefinition,
@@ -339,19 +371,45 @@ export class EphemerisStore {
     /**
      * Its state about the Sun, km and km/s, where elements cannot say it: a comet on a
      * parabola or hyperbola, which has no ellipse to propagate (see cometBodies.ts).
-     * Without it, the elements are propagated.
+     * Without it, the elements are propagated. With `options.aboutParent`, its state
+     * about its parent instead.
      */
     heliocentric: ((jd: number) => StateVector) | null = null,
+    options: PropagatedOptions = {},
   ): void {
-    if (this.#tree.has(body.id)) {
-      return;
+    this.addPropagatedBodies([{ body, elements, state: heliocentric, options }]);
+  }
+
+  /**
+   * addPropagatedBody for many at once, with one rebuild of the frame tree and one notice
+   * to the listeners: the named satellites arrive together, a hundred of them, and each
+   * rebuild walks every body.
+   */
+  addPropagatedBodies(
+    entries: readonly {
+      readonly body: BodyDefinition;
+      readonly elements: OsculatingElements | null;
+      /** Null at an instant where it cannot be placed: a satellite SGP4 has lost. */
+      readonly state: ((jd: number) => StateVector | null) | null;
+      readonly options?: PropagatedOptions;
+    }[],
+  ): void {
+    let added = false;
+    for (const { body, elements, state, options = {} } of entries) {
+      if (this.#tree.has(body.id) || this.#propagated.has(body.id)) {
+        continue;
+      }
+      this.#bodies.push(body);
+      if (elements !== null) {
+        this.#elements.set(body.id, elements);
+      }
+      this.#propagated.set(body.id, state ?? (elements === null ? null : (jd) => propagate(elements, jd)));
+      this.#propagatedOptions.set(body.id, options);
+      added = true;
     }
-    this.#bodies.push(body);
-    if (elements !== null) {
-      this.#elements.set(body.id, elements);
+    if (added) {
+      this.#changed();
     }
-    this.#propagated.set(body.id, heliocentric ?? (elements === null ? null : (jd) => propagate(elements, jd)));
-    this.#changed();
   }
 
   /** Takes away a body addPropagatedBody added; any other is left alone. */
@@ -360,6 +418,7 @@ export class EphemerisStore {
       return;
     }
     this.#propagated.delete(id);
+    this.#propagatedOptions.delete(id);
     const index = this.#bodies.findIndex((body) => body.id === id);
     if (index >= 0) {
       this.#bodies.splice(index, 1);
@@ -399,9 +458,17 @@ export class EphemerisStore {
     return this.#elements.get(id) ?? null;
   }
 
-  /** The span a body's vectors cover, or null for a body with no table. */
+  /**
+   * The span a body's vectors cover -- or a satellite's window, the days its elements are
+   * good for -- or null for a body with neither.
+   */
   coverage(id: BodyId): { readonly startJd: number; readonly stopJd: number } | null {
-    return this.#tables.get(id) ?? this.#data.manifest.surfaces[id] ?? null;
+    return (
+      this.#tables.get(id) ??
+      this.#data.manifest.surfaces[id] ??
+      this.#propagatedOptions.get(id)?.coverage ??
+      null
+    );
   }
 
   /**
@@ -415,8 +482,14 @@ export class EphemerisStore {
     // A body with nothing to propagate -- a spacecraft -- is never approximate. Outside
     // its table it is simply not there: before launch, or past the end of its
     // trajectory, there is nowhere honest to put it.
-    return ids.every(
-      (id) => !this.#propagated.has(id) && (this.isCoveredAt(id, jd) || !this.#elements.has(id)),
+    //
+    // A propagated body is approximate unless it was added as exact -- a satellite, on the
+    // very model its elements are fitted for -- and such a one has a window it is placed
+    // in and is absent outside it, as a craft is.
+    return ids.every((id) =>
+      this.#propagated.has(id)
+        ? this.#propagatedOptions.get(id)?.exact === true
+        : this.isCoveredAt(id, jd) || !this.#elements.has(id),
     );
   }
 
@@ -618,10 +691,19 @@ export class EphemerisStore {
     // Approximate always: two-body motion, not an ephemeris.
     const propagated = this.#propagated.get(id);
     if (propagated !== undefined) {
-      if (propagated === null) {
+      const options = this.#propagatedOptions.get(id) ?? {};
+      const span = options.coverage;
+      if (propagated === null || (span !== undefined && (jd < span.startJd || jd > span.stopJd))) {
         return null;
       }
+      // A satellite's state is about Earth already, which is the frame the tree wants.
       const about = propagated(jd);
+      if (about === null) {
+        return null;
+      }
+      if (options.aboutParent === true) {
+        return { position: about.position, velocity: about.velocity, approximate: options.exact !== true };
+      }
       const sun = id === 'sun' ? null : this.localState('sun', jd);
       return {
         position: {

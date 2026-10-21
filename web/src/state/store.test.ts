@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { bodiesDifferingBySet, TEXTURE_SETS } from '@sss/tools/catalog';
 
+import { ALL_SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import {
   isLayerAvailable,
   LAYERS,
@@ -83,6 +84,12 @@ describe('layer catalog', () => {
   it('shows the moons from the start, now that they are real', () => {
     expect(isLayerAvailable('moons')).toBe(true);
     expect(INITIAL.layers.moons).toBe(true);
+  });
+
+  it('keeps the satellites off until asked for, every group with them', () => {
+    expect(isLayerAvailable('satellites')).toBe(true);
+    expect(INITIAL.layers.satellites).toBe(false);
+    expect(INITIAL.satelliteChips).toBe(ALL_SATELLITE_CHIPS);
   });
 
   it('shows the spacecraft from the start too', () => {

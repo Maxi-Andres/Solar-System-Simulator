@@ -2,6 +2,7 @@ import type { BodyDefinition } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
 import { describeBody, layersFor, normalizeName, searchBodies } from './search.ts';
+import { tagSatelliteBody, untagSatelliteBody } from './satelliteGroups.ts';
 
 /** Just enough of a body for the search; the rest is never read. */
 function body(
@@ -121,5 +122,40 @@ describe('layersFor', () => {
     expect(layersFor(BODIES.find((b) => b.id === 'titan')!)).toEqual(['moons']);
     expect(layersFor(BODIES.find((b) => b.id === 'sun')!)).toEqual(['planets']);
     expect(layersFor(BODIES.find((b) => b.id === 'psyche')!)).toEqual(['spacecraft']);
+  });
+});
+
+describe('searchBodies, Earth satellites', () => {
+  it('finds a satellite by its catalogue name before a word that merely contains it', () => {
+    // "International Space Station" has no word "iss"; the catalogue calls it ISS (ZARYA).
+    // Before the catalogue name was searched, "iss" found Larissa first.
+    const iss = body('iss', 'International Space Station', 'satellite', 'earth');
+    const hubble = body('hubble', 'Hubble Space Telescope', 'satellite', 'earth');
+    const larissa = body('larissa', 'Larissa', 'moon', 'neptune');
+    tagSatelliteBody('iss', {
+      chip: 0,
+      operator: 'NASA / Roscosmos / ESA / JAXA / CSA',
+      noradId: 25544,
+      cosparId: '1998-067A',
+      catalogueName: 'ISS (ZARYA)',
+    });
+    tagSatelliteBody('hubble', {
+      chip: 0,
+      operator: 'NASA / ESA',
+      noradId: 20580,
+      cosparId: '1990-037B',
+      catalogueName: 'HST',
+    });
+    try {
+      const found = (query: string) =>
+        searchBodies([larissa, iss, hubble], query).map((result) => result.body.id);
+      expect(found('iss')[0]).toBe('iss');
+      expect(found('hst')).toEqual(['hubble']);
+      expect(found('25544')).toEqual(['iss']);
+      expect(found('larissa')).toEqual(['larissa']);
+    } finally {
+      untagSatelliteBody('iss');
+      untagSatelliteBody('hubble');
+    }
   });
 });

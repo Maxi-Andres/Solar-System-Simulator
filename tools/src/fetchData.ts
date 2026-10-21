@@ -14,6 +14,10 @@
  *
  *   JPL Small-Body Database Query API -- https://ssd-api.jpl.nasa.gov/sbdb_query.api
  *     Osculating elements for the asteroid belt and the comets. See belt/.
+ *
+ *   CelesTrak GP data -- https://celestrak.org/NORAD/elements/
+ *     SGP4 mean elements for the Earth satellites, from the US Space Force's catalogue.
+ *     See satellites/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -62,6 +66,7 @@ import {
   simplifyPath,
 } from './paths.ts';
 import { buildStarCatalog } from './stars/buildStarCatalog.ts';
+import { loadSatellites } from './satellites/fetchSatellites.ts';
 import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
 import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
 import type {
@@ -82,6 +87,7 @@ import {
   prepareOutputDir,
   writeBelt,
   writeCatalog,
+  writeSatellites,
   writeElements,
   writeSmallMoonBundle,
   writeManifest,
@@ -588,7 +594,16 @@ async function main(): Promise<void> {
   // late one), and a release that silently lost its belt would look like a release with
   // fewer asteroids, not like an outage; the previous deploy stays up instead. SBDB has
   // its own retries first, so this is a fault that outlasted a minute of backoff.
-  const [natural, hipparcosRows, tycho2Rows, beltRead, cometRows] = await Promise.all([
+  //
+  // Not so the satellites, a fourth service, read alongside. A run that cannot read them
+  // publishes without satellites/ -- which the app shows as no satellites, not as fewer --
+  // and still succeeds. CelesTrak's usage policy forbids what makes failing the run
+  // reasonable for the others: it asks clients to stop at the first non-200 rather than
+  // retry, and refuses a group already downloaded from the same address since its last
+  // update -- and a CI runner's address is shared, so that refusal can be caused by
+  // someone else's download. Failing the deploy on it would be a lottery, and the fix,
+  // tomorrow's run, comes by itself. See satellites/celestrak.ts.
+  const [natural, hipparcosRows, tycho2Rows, beltRead, cometRows, satellites] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -610,6 +625,10 @@ async function main(): Promise<void> {
       BELT_MAGNITUDE_LIMIT,
     ),
     fetchComets(),
+    loadSatellites().catch((error: unknown) => {
+      console.error(`[fetch-data] satellites: FAILED, left out of this run (${String(error).slice(0, 300)})`);
+      return null;
+    }),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -805,6 +824,11 @@ async function main(): Promise<void> {
   await writeCatalog(startupCatalog);
   await writeStars(stars);
   await writeBelt(belt, comets);
+  if (satellites !== null) {
+    await writeSatellites(satellites);
+  } else {
+    console.error('[fetch-data] NO SATELLITES this run: CelesTrak could not be read (see above).');
+  }
 
   // The window every full-window body can answer for: the intersection of their
   // tables, not the range we asked for. Publishing the request instead would claim
@@ -862,6 +886,9 @@ async function main(): Promise<void> {
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
   console.log("[fetch-data] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
+  if (satellites !== null) {
+    console.log(`[fetch-data] ${satellites.info.credit}`);
+  }
 
   if (failedCraft.length > 0) {
     console.error(

@@ -400,3 +400,89 @@ export const BELT_NAMES_FILE = 'names.json';
 /** The comets' description and records, inside `belt/`; see CometInfo. */
 export const COMETS_INFO_FILE = 'comets.json';
 export const COMETS_FILE = 'comets.bin';
+
+/**
+ * CelesTrak's GP and SATCAT query endpoints, for the Earth satellites; see
+ * satellites/celestrak.ts for how they are used and the usage policy they are used under.
+ * Documented at https://celestrak.org/NORAD/documentation/gp-data-formats.php and
+ * https://celestrak.org/satcat/satcat-format.php.
+ */
+export const CELESTRAK_GP_URL = 'https://celestrak.org/NORAD/elements/gp.php';
+export const CELESTRAK_SATCAT_URL = 'https://celestrak.org/satcat/records.php';
+
+/**
+ * How often CelesTrak's GP data changes, hours: its own figure. Nothing is downloaded
+ * again inside it -- CelesTrak refuses that with a 403 -- and the development cache keeps
+ * a response this long.
+ */
+export const CELESTRAK_UPDATE_HOURS = 2;
+
+/** Timeout for one CelesTrak request. `active`, the largest, is 2.5 MB. */
+export const CELESTRAK_REQUEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Element sets of objects in drag -- perigee below 2,000 km -- older than this at the
+ * build are dropped, days: 14. Above that, nothing is cut beyond CelesTrak's own limit:
+ * it publishes nothing older than 30 days.
+ *
+ * An element set is a fit to observations, and in low orbit what it cannot foresee -- the
+ * atmosphere's density, which follows the Sun's activity -- grows quadratically along the
+ * track. Two weeks without a new observation is where that stops being a correction to
+ * the position and becomes a guess at it. Without drag there is nothing comparable: a
+ * navigation satellite's month-old set is still the orbit it flies, unless it has
+ * manoeuvred, which a fresher set would not have foreseen either.
+ *
+ * On 2026-10-21, 76 of CelesTrak's 19,572 objects were 14 to 30 days old. Dropped, 70:
+ * 61 debris fragments and an Iridium in low orbit, and eight craft on transfer orbits
+ * dipping to 600-1,800 km, still raising their apogees -- three O3b mPOWER, TJS-13 and four
+ * of one launch, 2026-167. Kept, five navigation and O3b satellites between 8,000 and
+ * 23,000 km. (The 76th, TESS, is drawn from Horizons; see named.ts.)
+ */
+export const SATELLITE_MAX_ELEMENT_AGE_DAYS = 14;
+/** The perigee altitude below which SATELLITE_MAX_ELEMENT_AGE_DAYS applies, km. */
+export const SATELLITE_DRAG_ALTITUDE_KM = 2000;
+
+/**
+ * The window the bulk model is built for, days either side of the reference: three. Its
+ * rates are fitted over it, its accuracy is stated over it, and a satellite it misses SGP4
+ * by more than SATELLITE_SGP4_THRESHOLD_KM anywhere inside it goes to the SGP4 tier.
+ *
+ * Three days assumes the site is rebuilt about daily, so that "now" is within a day or
+ * two of the reference. On a weekly rebuild seven is the better choice: measured on every
+ * fifth object of the 2026-10-21 catalogue, LEO's 95th-percentile miss at 1, 3 and 7 days
+ * is 6, 8 and 99 km fitted over ±3 days, and 11, 28 and 22 km over ±7 (see FIT_DAYS).
+ */
+export const SATELLITE_WINDOW_DAYS = 3;
+
+/**
+ * Largest miss against full SGP4 a bulk satellite may have inside the window, km: fifty,
+ * a hundredth of the way round the Earth -- about the gap between two Starlinks in one
+ * plane. Measured 2026-10-21, 393 of 19,447 unnamed satellites exceed it and go to the SGP4
+ * tier: 371 in low orbit -- 342 of them Starlinks raising or lowering their orbits, whose
+ * mean motion changes too fast for the model's parabola, and Kuiper and Qianfan craft
+ * climbing to station -- 16 on very eccentric orbits (THEMIS 700 to 1,300 km off), and six
+ * inclined geosynchronous, four of them BeiDou.
+ */
+export const SATELLITE_SGP4_THRESHOLD_KM = 50;
+
+/** Days from the reference the bulk model's accuracy is published at; see SatelliteAccuracy. */
+export const SATELLITE_ACCURACY_DAYS: readonly number[] = [0, 1 / 24, 1, 3, 7];
+
+/**
+ * How far either side of the reference the one TEME-to-ecliptic matrix is checked, days.
+ * Precession turns it 0.14" a day: 4.2" over thirty days, which is 0.9 km at GEO.
+ */
+export const SATELLITE_FRAME_WINDOW_DAYS = 30;
+
+/** The satellites' directory inside the data directory, and its files; see SatelliteInfo. */
+export const SATELLITES_DIR = 'satellites';
+export const SATELLITES_INFO_FILE = 'satellites.json';
+export const SATELLITES_NAMED_FILE = 'named.json';
+export const SATELLITES_BULK_FILE = 'bulk.bin';
+export const SATELLITES_NAMES_FILE = 'bulk-names.json';
+export const SATELLITES_SGP4_FILE = 'sgp4.json';
+
+/** The credit CelesTrak's data is shown with: its relay, and the catalogue's origin. */
+export const SATELLITE_CREDIT =
+  'Satellite orbits from CelesTrak (Dr. T.S. Kelso), relaying the US Space Force catalogue ' +
+  '(18th and 19th Space Defense Squadrons, Space-Track.org).';

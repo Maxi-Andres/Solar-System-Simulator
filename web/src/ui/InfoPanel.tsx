@@ -6,6 +6,7 @@ import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
 import { BeltBodyFacts } from './BeltBodyFacts.tsx';
 import { Panel } from './Panel.tsx';
+import { SatelliteFacts } from './SatelliteFacts.tsx';
 
 /**
  * Facts about the focused body.
@@ -93,7 +94,10 @@ export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
 
         <Divider />
 
-        {isCraft ? (
+        {body.kind === 'satellite' ? (
+          // An Earth satellite: its catalogue entry, its height now, and its elements' age.
+          <SatelliteFacts id={focus} store={store} jd={jd} />
+        ) : isCraft ? (
           <CraftFacts store={store} jd={jd} distanceMode={distanceMode} />
         ) : (
           <NaturalFacts store={store} />

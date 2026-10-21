@@ -3,6 +3,7 @@ import { create } from 'zustand';
 
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
 import { ALL_BELT_FAMILIES, toggledFamily } from '../core/belt.ts';
+import { ALL_SATELLITE_CHIPS, toggledChip } from '../core/satelliteGroups.ts';
 import { readStoredInteger, writeStoredInteger } from './persisted.ts';
 
 /**
@@ -67,6 +68,7 @@ export type LayerId =
   | 'asteroids'
   | 'comets'
   | 'spacecraft'
+  | 'satellites'
   | 'constellations'
   | 'trails'
   | 'orbits'
@@ -99,6 +101,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
+  // Earth's satellites from CelesTrak (Phase C): a hundred named ones as bodies, and tens
+  // of thousands more as dots. Off by default: they matter only near Earth, and switched
+  // on they download a few megabytes.
+  { id: 'satellites', label: 'Satellites', pending: null },
 
   // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
   // be its orbit drawn twice, so the layer is the craft's alone.
@@ -123,6 +129,7 @@ const DEFAULT_LAYERS: LayerState = {
   asteroids: false,
   comets: false,
   spacecraft: true,
+  satellites: false,
   constellations: false,
   trails: true,
   orbits: true,
@@ -157,6 +164,11 @@ export interface ViewState {
    * default, and kept for the viewer between visits like the density.
    */
   readonly beltFamilies: number;
+  /**
+   * Which of the satellites' chips are drawn, a bit per SATELLITE_CHIPS entry: all by
+   * default, and kept between visits like the belt's families.
+   */
+  readonly satelliteChips: number;
 
   readonly setFocus: (id: BodyId) => void;
   readonly toggleLayer: (id: LayerId) => void;
@@ -164,6 +176,7 @@ export interface ViewState {
   readonly setLighting: (mode: LightingMode) => void;
   readonly setBeltTiers: (tiers: number) => void;
   readonly toggleBeltFamily: (index: number) => void;
+  readonly toggleSatelliteChip: (index: number) => void;
   readonly togglePanel: (id: PanelId) => void;
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
@@ -176,6 +189,9 @@ export const BELT_TIERS_KEY = 'belt-tiers';
 /** Where the belt's families are kept between visits; see `beltFamilies`. */
 export const BELT_FAMILIES_KEY = 'belt-families';
 
+/** Where the satellites' chips are kept between visits; see `satelliteChips`. */
+export const SATELLITE_CHIPS_KEY = 'satellite-chips';
+
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
   layers: DEFAULT_LAYERS,
@@ -186,6 +202,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // Masked to the families there are: bits a later version might add are not set by an
   // older stored value, and junk beyond them is dropped.
   beltFamilies: readStoredInteger(BELT_FAMILIES_KEY, ALL_BELT_FAMILIES, 0) & ALL_BELT_FAMILIES,
+  satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
 
   setFocus: (id) => {
     set({ focus: id });
@@ -208,6 +225,12 @@ export const useViewStore = create<ViewState>((set, get) => ({
     const beltFamilies = toggledFamily(get().beltFamilies, index);
     writeStoredInteger(BELT_FAMILIES_KEY, beltFamilies);
     set({ beltFamilies });
+  },
+
+  toggleSatelliteChip: (index) => {
+    const satelliteChips = toggledChip(get().satelliteChips, index);
+    writeStoredInteger(SATELLITE_CHIPS_KEY, satelliteChips);
+    set({ satelliteChips });
   },
 
   setLighting: (mode) => {

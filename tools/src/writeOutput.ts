@@ -6,11 +6,14 @@ import {
   COMETS_INFO_FILE,
   OUTPUT_DIR,
   POSITION_DECIMALS,
+  SATELLITES_DIR,
+  SATELLITES_INFO_FILE,
   TIME_DECIMALS,
   VELOCITY_DECIMALS,
 } from './config.ts';
 import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
 import type { CometBuild } from './belt/comets.ts';
+import type { SatelliteBuild } from './satellites/buildSatellites.ts';
 import type {
   BeltInfo,
   BodyDefinition,
@@ -209,6 +212,24 @@ export async function writeBelt(
     comets: { file: COMETS_INFO_FILE, count: comets.info.count },
   };
   await writeJson(join(directory, 'belt.json'), info);
+}
+
+/**
+ * The Earth satellites, as satellites/: see SatelliteInfo. Like the belt it takes the
+ * directory, because `pnpm fetch:satellites` regenerates it on its own, and it replaces
+ * satellites/ and nothing else. satellites.json goes last, after every file it names, so an
+ * interrupted write leaves no satellites.json -- which the app reads as no satellites.
+ */
+export async function writeSatellites(build: SatelliteBuild, outputDir = OUTPUT_DIR): Promise<void> {
+  const directory = join(outputDir, SATELLITES_DIR);
+  await rm(directory, { recursive: true, force: true });
+  await mkdir(directory, { recursive: true });
+  const { info } = build;
+  await writeFile(join(directory, info.bulk.file), beltBytes(build.bulk));
+  await writeCompactJson(join(directory, info.names.file), build.names);
+  await writeCompactJson(join(directory, info.sgp4.file), build.sgp4);
+  await writeJson(join(directory, info.named.file), build.named);
+  await writeJson(join(directory, SATELLITES_INFO_FILE), info);
 }
 
 export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<void> {

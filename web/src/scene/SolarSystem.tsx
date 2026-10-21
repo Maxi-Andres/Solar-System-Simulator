@@ -120,6 +120,24 @@ const DEG = Math.PI / 180;
 /** The one body with night lights, clouds and oceans. See earthExtras.ts. */
 const EARTH_ID = 'earth';
 
+/**
+ * The radius an orbit line is held to: the body's own, except for an Earth satellite.
+ *
+ * A line is drawn to a quarter of the body's radius and rebuilt when its shape would move
+ * by four tenths of it (see OrbitLine). A satellite's radius is 50 m of camera framing,
+ * not a size, and its orbit is the osculating ellipse of an SGP4 state -- which itself
+ * breathes by ten kilometres a revolution as J2's short-period terms come and go. Held to
+ * metres it would be rebuilt every frame for nothing anyone could see; held to this, the
+ * line is within 250 m of the ellipse and rebuilt when it moves by 400.
+ */
+const SATELLITE_ORBIT_PRECISION_KM = 1;
+
+function orbitPrecisionKm(definition: BodyDefinition): number {
+  return definition.kind === 'satellite'
+    ? Math.max(definition.radiusEquatorialKm, SATELLITE_ORBIT_PRECISION_KM)
+    : definition.radiusEquatorialKm;
+}
+
 /** Marker diameter on screen, in CSS pixels. Matches the NASA Eyes look. */
 const MARKER_PIXELS = 11;
 
@@ -467,7 +485,10 @@ export function SolarSystem({
       // The small moons share one coarse unit sphere, scaled below: four hundred spheres
       // of their own would be 30 MB of geometry for bodies a few kilometres across.
       const smallMoon = isSmallMoon(definition);
-      const geometry = smallMoon
+      // An Earth satellite shares it too: it is never drawn as a sphere (no size is
+      // published for it), and a hundred 64-segment spheres would be geometry for nothing.
+      const sharedSphere = smallMoon || definition.kind === 'satellite';
+      const geometry = sharedSphere
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
@@ -511,14 +532,16 @@ export function SolarSystem({
         definition.radiusPolarKm / definition.radiusEquatorialKm,
         triaxial === null ? 1 : triaxial[1] / triaxial[0],
       );
-      if (smallMoon) {
+      if (sharedSphere) {
         mesh.scale.multiplyScalar(radiusUnits);
       }
       group.add(mesh);
 
       const marker = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: markerTexture(definition.kind === 'spacecraft' ? 'diamond' : 'circle'),
+          map: markerTexture(
+            definition.kind === 'spacecraft' || definition.kind === 'satellite' ? 'diamond' : 'circle',
+          ),
           color: definition.color,
           transparent: true,
           depthTest: false,
@@ -666,7 +689,7 @@ export function SolarSystem({
         // Segment count and float32 anchoring are both handled inside OrbitLine;
         // see that file for why a fixed 512 segments put Pluto 93 radii off its own
         // orbit.
-        orbit = new OrbitLine(elements, definition.radiusEquatorialKm, definition.color);
+        orbit = new OrbitLine(elements, orbitPrecisionKm(definition), definition.color);
       }
 
       // A planet orbits the Sun; a moon orbits its planet -- and orbits the planet

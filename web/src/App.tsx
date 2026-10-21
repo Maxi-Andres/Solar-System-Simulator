@@ -1,7 +1,9 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
-import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 import type { DistanceMode, EphemerisStore } from './core/ephemerisStore.ts';
+import { addNamedSatellites } from './core/satelliteBodies.ts';
+import { chipShown, SATELLITE_CHIPS, satelliteChipLayer } from './core/satelliteGroups.ts';
 import type { Signal } from './core/signal.ts';
 import { useSignal } from './core/useSignal.ts';
 import { useSimulation } from './core/useSimulation.ts';
@@ -44,10 +46,14 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   moons: ['moon'],
   smallMoons: [SMALL_MOON_LAYER],
   spacecraft: ['spacecraft'],
+  // The named satellites as bodies, the rest as dots (see SatelliteSwarm), each also
+  // under its chip -- see visibleKinds.
+  satellites: ['satellite'],
 };
 
 export function App() {
-  const { store, stars, belt, comets, names, clock, error, readout } = useSimulation();
+  const { store, stars, belt, comets, names, satellites, satelliteNames, clock, error, readout } =
+    useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -58,6 +64,7 @@ export function App() {
   const setLayer = useViewStore((state) => state.setLayer);
   const beltTiers = useViewStore((state) => state.beltTiers);
   const beltFamilies = useViewStore((state) => state.beltFamilies);
+  const satelliteChips = useViewStore((state) => state.satelliteChips);
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
 
@@ -72,8 +79,15 @@ export function App() {
         }
       }
     }
+    // The satellites' chips, as kinds of their own: a named satellite is shown only while
+    // its chip is on, as its group's dots are (see isShown).
+    SATELLITE_CHIPS.forEach((_, index) => {
+      if (chipShown(satelliteChips, index)) {
+        kinds.add(satelliteChipLayer(index));
+      }
+    });
     return kinds;
-  }, [layers]);
+  }, [layers, satelliteChips]);
 
   // A planet's small moons are fetched when its system is entered -- the planet, one of
   // its moons or a craft about it in focus -- and not a moment before. The labels below
@@ -111,6 +125,20 @@ export function App() {
     }
   }, [store, comets, visibleKinds]);
 
+  // And the satellites, once, the first time their layer is on -- or search asks. The named
+  // ones become bodies the moment they arrive (see satelliteBodies.ts).
+  useEffect(() => {
+    if (store !== null && visibleKinds.has('satellite')) {
+      void satellites.request();
+    }
+  }, [store, satellites, visibleKinds]);
+  const satelliteData = useSyncExternalStore(satellites.subscribe, () => satellites.value);
+  useEffect(() => {
+    if (store !== null && satelliteData !== null) {
+      addNamedSatellites(store, satelliteData);
+    }
+  }, [store, satelliteData]);
+
   // Switching a layer off while standing on one of its bodies would leave the camera
   // orbiting something that is no longer drawn. Step back to what it orbits.
   useEffect(() => {
@@ -138,8 +166,10 @@ export function App() {
       const body = store.body(focus);
       // And a famous comet on an open orbit: with no ellipse to carry it on, it is not placed
       // outside its table either (see the elements in ephemerisStore.ts).
+      // And a satellite outside the days its elements are good for (see satelliteBodies.ts).
       const unplaceable =
         body.kind === 'spacecraft' ||
+        body.kind === 'satellite' ||
         (body.kind === 'comet' && !store.isPropagatedBody(focus) && store.elementsFor(focus) === null);
       if (unplaceable && !store.isCoveredAt(focus, clock.tdbJulianDay)) {
         setFocus(body.parent ?? 'sun');
@@ -189,6 +219,8 @@ export function App() {
         belt={belt}
         beltFamilies={beltFamilies}
         comets={comets}
+        satellites={satellites}
+        satelliteChips={satelliteChips}
         clock={clock}
         focus={focus}
         showOrbits={layers.orbits}
@@ -258,10 +290,12 @@ export function App() {
               belt={belt}
               names={names}
               comets={comets}
+              satellites={satellites}
+              satelliteNames={satelliteNames}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
-            <LayersPanel belt={belt} />
+            <LayersPanel belt={belt} satellites={satellites} />
           </Presence>
           <Presence show={openPanel === 'lighting'}>
             <LightingPanel />
@@ -284,7 +318,7 @@ export function App() {
       )}
 
       <Presence show={openPanel === 'about'}>
-        <AboutPanel store={store} stars={stars} belt={belt} comets={comets} />
+        <AboutPanel store={store} stars={stars} belt={belt} comets={comets} satellites={satellites} />
       </Presence>
 
       {/* The only way back once the interface is switched off. */}

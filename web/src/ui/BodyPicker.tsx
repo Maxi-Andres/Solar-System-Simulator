@@ -26,6 +26,10 @@ import { Presence, useClosing } from './Presence.tsx';
  * bodies they happen to be near. One that does not exist at the clock's instant -- not
  * launched yet, or past the end of its trajectory -- is listed but cannot be chosen,
  * and says which: there is nowhere to put the camera.
+ *
+ * The named Earth satellites after them, folded under one heading: a hundred rows would
+ * otherwise be most of the list. One outside the days its elements are good for is listed
+ * and cannot be chosen, as a craft before launch.
  */
 
 const ACCENT = '#3ddc84';
@@ -202,6 +206,14 @@ export function craftUnavailability(store: EphemerisStore, id: BodyId, jd: numbe
   return null;
 }
 
+/**
+ * Why a named satellite cannot be chosen right now, or null when it can: the clock is
+ * outside the days around its element epoch it is drawn in (see NAMED_WINDOW_DAYS).
+ */
+export function satelliteUnavailability(store: EphemerisStore, id: BodyId, jd: number): string | null {
+  return store.isCoveredAt(id, jd) ? null : 'no elements';
+}
+
 /** Where a spacecraft is, for grouping the list: what it moves with. */
 export type CraftGroup = 'interplanetary' | 'near-earth' | 'planets' | 'surface';
 
@@ -296,6 +308,11 @@ function BodyList({
   const craft = visibleKinds.has('spacecraft')
     ? store.bodies.filter((body) => body.kind === 'spacecraft')
     : [];
+  // The named satellites whose chip is on; a bulk one gone to from search is among them.
+  const satellites = store.bodies.filter(
+    (body) => body.kind === 'satellite' && isShown(body, visibleKinds),
+  );
+  const satellitesOpen = expanded.has('satellites:named') || focusBody.kind === 'satellite';
 
   const toggle = (id: BodyId): void => {
     setExpanded((current) => {
@@ -513,9 +530,68 @@ function BodyList({
           })}
         </>
       )}
+      {satellites.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Earth satellites</div>
+          <button
+            type="button"
+            aria-expanded={satellitesOpen}
+            aria-label={`${satellitesOpen ? 'Hide' : 'Show'} the named satellites`}
+            onClick={() => toggle('satellites:named')}
+            style={FOLD_STYLE}
+          >
+            <span style={{ flex: 1 }}>Named</span>
+            <span style={{ color: '#5a5a5a', fontSize: '0.62rem' }}>{satellites.length}</span>
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-block',
+                transform: satellitesOpen ? 'rotate(90deg)' : 'none',
+                transition: 'transform 160ms ease',
+                fontSize: '0.8rem',
+                lineHeight: 1,
+                color: '#6a6a6a',
+              }}
+            >
+              &rsaquo;
+            </span>
+          </button>
+          {satellitesOpen &&
+            satellites.map((body) => (
+              <Row
+                key={body.id}
+                body={body}
+                indent
+                active={body.id === focus}
+                inSystem={false}
+                onChoose={onChoose}
+                unavailable={satelliteUnavailability(store, body.id, jd)}
+                trailing={null}
+              />
+            ))}
+        </>
+      )}
     </div>
   );
 }
+
+/** A folding group's heading, as the spacecraft's groups have. */
+const FOLD_STYLE: React.CSSProperties = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.4rem',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '0.25rem',
+  padding: '0.3rem 0.45rem',
+  cursor: 'pointer',
+  color: '#8a8a8a',
+  fontFamily: 'inherit',
+  fontSize: '0.7rem',
+  letterSpacing: '0.04em',
+  textAlign: 'left',
+};
 
 /** The rule and caption above a section of the list. */
 const SECTION_HEADING: React.CSSProperties = {
@@ -633,7 +709,8 @@ function Row({
   onChoose: (id: BodyId) => void;
   trailing: React.ReactNode;
 }) {
-  const craft = body.kind === 'spacecraft';
+  // A satellite is a craft too, and has the craft's diamond, in the scene and here.
+  const craft = body.kind === 'spacecraft' || body.kind === 'satellite';
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <button

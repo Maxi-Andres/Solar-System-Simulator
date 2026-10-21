@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { BeltClass, BeltInfo, CometInfo, StarCatalog } from '@sss/tools/types';
+import type { BeltClass, BeltInfo, CometInfo, SatelliteInfo, StarCatalog } from '@sss/tools/types';
 
 import { beltTiers, type BeltSource, type LoadedTier } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { BULK_WINDOW_DAYS, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
@@ -37,11 +38,13 @@ export function AboutPanel({
   stars,
   belt,
   comets,
+  satellites,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
   belt: BeltSource;
   comets: CometSource;
+  satellites: SatelliteSource;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -51,6 +54,8 @@ export function AboutPanel({
   const beltInfo = beltView.tiers.length > 0 ? beltView.info : null;
   // The same for the comets: described once they are here.
   const cometInfo = useSyncExternalStore(comets.subscribe, () => comets.comets)?.info ?? null;
+  // And the satellites.
+  const satelliteInfo = useSyncExternalStore(satellites.subscribe, () => satellites.value)?.info ?? null;
   const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -195,11 +200,12 @@ export function AboutPanel({
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
               `A spacecraft exists only where JPL has its path: from launch, and until its trajectory ends — for a mission still flying, until its latest prediction does. Outside that it is not drawn and cannot be chosen, because there is nothing honest to propagate it with. Where JPL’s path is stitched from two trajectory files that disagree, it jumps in a single minute. ${seamSentence(store)} The jumps are JPL’s and they are kept: the craft moves across them, and its trail breaks there rather than drawing a stroke nothing flew along.`,
               `Up close, spacecraft are their agencies’ own 3D models, at their true size in metres — Europa Clipper is 30.5 m across against a 3,100 km Europa. Models courtesy of NASA. Juice, Solar Orbiter, BepiColombo, Hera, Euclid, Gaia, Mars Express and the Trace Gas Orbiter are ESA’s, used by ESA’s written permission, their geometry as ESA made it: ${ESA_MODEL_CREDIT} Lucy’s, Psyche’s, IMAP’s, ESCAPADE’s, CAPSTONE’s and Orion’s are NASA’s, from its Eyes on the Solar System, and so are Hayabusa2’s and Danuri’s — NASA’s models of JAXA’s and KARI’s craft, neither agency having published one. Where no model may be used — many craft have none published at all — the craft is a plain white box of its published size, marked NO MODEL: as long as its solar-array span, as wide as one array, as deep as its body. A box says how big a craft is and claims nothing about its shape.`,
-              `Not every spacecraft is here — ${spelled(craftCount(store))} are: those between the planets, at the Lagrange points, around the Moon and Mars, on the ground on Mars, and Juno, Cassini and Akatsuki at their planets. NASA Eyes shows 174, a chosen set of science missions. JPL Horizons, the source of every path here, carries about 276 spacecraft, spent rocket stages included. And around Earth alone tens of thousands of objects are tracked — mostly communications constellations such as Starlink, weather and navigation satellites, and debris — and none of them is shown yet. They come next, from the public orbital elements CelesTrak publishes, propagated live.`,
+              `Not every spacecraft is here — ${spelled(craftCount(store))} are: those between the planets, at the Lagrange points, around the Moon and Mars, on the ground on Mars, and Juno, Cassini and Akatsuki at their planets. NASA Eyes shows 174, a chosen set of science missions. JPL Horizons, the source of every path here, carries about 276 spacecraft, spent rocket stages included. Around Earth, the tens of thousands of tracked objects — communications constellations such as Starlink, weather and navigation satellites, rocket bodies and debris — are the Satellites layer’s, from the public orbital elements CelesTrak publishes.`,
               'The craft on Mars are placed, not interpolated. JPL has no ephemeris worth using for them — Horizons keeps Curiosity at its 2012 landing site, fourteen kilometres from where it has driven since — so each rover stands where NASA’s mission maps put the end of its latest drive, facing the heading they report, and turns with Mars by the same rotation the surface map is drawn with. The maps give the sol of each drive, not the hour, so the rover moves on at the end of that sol, and between drives it is drawn where the last one ended: the line behind it joins those places, and the drives themselves went their own way between them. InSight never moved; its heading is not published, and it is drawn facing north. Mars here is the smooth reference ellipsoid, with no terrain — Curiosity is really at the bottom of Gale crater, 4.5 km below it — and the planet is a sphere of flat faces that sag up to 4 km inside that ellipsoid between their corners, which at a rover’s scale is everything. So under each one the ellipsoid itself is drawn, two degrees across, with the same map on it.',
               'Which way a spacecraft in space faces is modelled, not measured. JPL’s attitude records exist for some of them, as gigabytes of binary, and for none of Pioneer, Parker or JWST. So each is drawn by the rule it flies by: Voyager, Pioneer and New Horizons keep their dish on Earth; Parker keeps its heat shield on the Sun, JWST its sunshield, and the solar-powered craft their arrays. The roll about that axis is not published at all and is a convention here.',
               ...(beltInfo === null ? [] : [beltAccuracySentence(beltInfo)]),
               ...(cometInfo === null ? [] : [cometAccuracySentence(cometInfo)]),
+              satelliteAccuracySentence(satelliteInfo),
               'Outside the downloaded window the app falls back to Keplerian propagation and says APPROXIMATE while it does. The moons have a narrower window than the planets — a year either side of the build, against ten — because Phobos alone needs 35,000 samples a year. Their data arrives in pieces as the clock reaches it, so a moon can be missing for a moment, never misplaced.',
               'The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager photographed them through clear filters, and the colour versions that exist are enhanced into the ultraviolet and infrared. The Moon is in natural colour, Titan is its surface at 938 nm seen through the haze, and Io and Triton carry uncalibrated mission colour.',
               'Several moons were half in darkness when they were photographed: the northern hemispheres of Uranus’s five and of Triton when Voyager 2 passed, Charon’s south for New Horizons. Like Pluto’s south, those areas are filled with the average of what was seen. Nothing there is an observation.',
@@ -268,6 +274,18 @@ export function AboutPanel({
               J2000.
             </Prose>
           )}
+
+          <Prose>
+            Earth satellite orbital elements from <Strong>CelesTrak</Strong> (Dr. T.S. Kelso),
+            from data originated by the US Space Force’s <Strong>18th Space Defense
+            Squadron</Strong> and published on <Strong>Space-Track.org</Strong>, fetched once a day
+            when the data is built and never by your browser
+            {satelliteInfo === null
+              ? '.'
+              : `: ${satelliteInfo.count.toLocaleString('en-US')} objects, queried ${satelliteInfo.source.queriedAt.slice(0, 10)}. ${satelliteInfo.credit}`}{' '}
+            Propagated with <Strong>satellite.js</Strong> (MIT licence), David Vallado’s SGP4 in
+            JavaScript.
+          </Prose>
 
           <Prose>
             Courtesy of <Strong>NASA/JPL-Caltech</Strong>, Solar System Dynamics Group; where
@@ -420,6 +438,33 @@ export function beltSentence(info: BeltInfo, tiers: readonly LoadedTier[]): stri
 }
 
 /** What the belt's positions are worth, and why its dots are the size they are. */
+/**
+ * The satellites, as a paragraph: what places them, how well, and for how long. The
+ * measured figures from the data when it is here; the rule alone before.
+ */
+export function satelliteAccuracySentence(info: SatelliteInfo | null): string {
+  const leo = info?.accuracy.find((row) => row.regime === 'leo') ?? null;
+  const geo = info?.accuracy.find((row) => row.regime === 'geo') ?? null;
+  const at = (row: typeof leo, days: number): string | null => {
+    if (row === null) {
+      return null;
+    }
+    const k = row.days.findIndex((day) => day >= days);
+    return k < 0 ? null : `${Math.round(row.medianKm[k]!)} km (95%: ${Math.round(row.p95Km[k]!)} km)`;
+  };
+  const leoText = at(leo, BULK_WINDOW_DAYS);
+  const geoText = at(geo, BULK_WINDOW_DAYS);
+  const measured =
+    leoText === null || geoText === null
+      ? ''
+      : ` Measured on each day’s own elements, the dots are off SGP4 by a median ${leoText} in low orbit at ${BULK_WINDOW_DAYS} days, and ${geoText} at the geostationary ring, where the Moon and Sun pull hardest.`;
+  return (
+    `Earth’s satellites are placed from the US Space Force’s element sets, which are not positions but the mean elements of one model, SGP4, fitted to radar and optical tracking. The named satellites, and a few hundred the simpler model cannot follow — Molniya and transfer orbits, Starlinks still raising their orbits — are run through SGP4 itself, which is how the elements are meant to be read: good to a kilometre or two near their epoch, drifting as drag does after it. The tens of thousands of others are dots placed by the graphics card from SGP4’s secular terms alone, J3 included and the short-period wobbles left out.` +
+    measured +
+    ` SGP4 answers in its own frame, true equator and mean equinox of the date, turned here into the ecliptic of J2000 through the 1976 precession and the 1980 nutation: against JPL Horizons’ International Space Station, built from the same element set, the station lands within 10 metres. The elements are only good for days: a named satellite is drawn within ${NAMED_WINDOW_DAYS} days of its own — the ISS’s, run back a week, is already 38 km off — and the dots within ${BULK_WINDOW_DAYS} days of the day the data was built; outside that they are not drawn at all. Every dot is a convention, a pixel or so whatever the distance: the ISS is 109 m across, a fifth of a pixel from a thousand kilometres. Satellites are off until the Satellites layer is switched on, and cost nothing before.`
+  );
+}
+
 /** How many comets of `info` are on each kind of conic, from their class counts. */
 function openCount(info: CometInfo): { readonly parabolic: number; readonly hyperbolic: number } {
   return { parabolic: info.classCounts.PAR ?? 0, hyperbolic: info.classCounts.HYP ?? 0 };

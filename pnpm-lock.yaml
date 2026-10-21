@@ -9,10 +9,17 @@ importers:
   .: {}
 
   tools:
+    dependencies:
+      satellite.js:
+        specifier: ^7.1.0
+        version: 7.1.0
     devDependencies:
       '@types/node':
         specifier: ^22.20.1
         version: 22.20.1
+      astronomy-engine:
+        specifier: 2.1.19
+        version: 2.1.19
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -34,6 +41,9 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+      satellite.js:
+        specifier: ^7.1.0
+        version: 7.1.0
       three:
         specifier: ^0.185.1
         version: 0.185.1
@@ -339,6 +349,9 @@ packages:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
 
+  astronomy-engine@2.1.19:
+    resolution: {integrity: sha512-8yWKNf7UeNbH458h3sAJ6ZgAjE5jTXp/mNNRFoC20j2SHwZIjAQeEsBB2Q3uCFRaTCCJRv33K2XhkhZQMXoX6w==}
+
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
@@ -596,6 +609,9 @@ packages:
     resolution: {integrity: sha512-VD2IE5PUG4Oj8zz2VGykiYd5wbnjdIiSsNQb8Qu5B+noEp+A78mu2iVvpp27g8es14Tk9rofNs5Tku9iQCS4fA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  satellite.js@7.1.0:
+    resolution: {integrity: sha512-U6nRml9Nb7dV9LJPiMNPyna7U7ry+1nXYkOeCEG7K/YbojQQLHHmcjPisp03VNY+HLcbQHqbt7t4t1vQMaKCLQ==}
 
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
@@ -1051,6 +1067,8 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
+  astronomy-engine@2.1.19: {}
+
   base64-js@1.5.1: {}
 
   bidi-js@1.0.3:
@@ -1260,6 +1278,8 @@ snapshots:
       '@rolldown/binding-openharmony-arm64': 1.2.5
       '@rolldown/binding-win32-arm64-msvc': 1.2.5
       '@rolldown/binding-win32-x64-msvc': 1.2.5
+
+  satellite.js@7.1.0: {}
 
   scheduler@0.27.0: {}
 

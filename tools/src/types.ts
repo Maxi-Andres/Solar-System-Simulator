@@ -8,7 +8,8 @@
 /** Stable slug for a body, used in file names and as a map key everywhere. */
 export type BodyId = string;
 
-export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'comet' | 'moon' | 'spacecraft';
+/** 'satellite' is an Earth satellite from the satellites layer, placed by SGP4; never in bodies.json. */
+export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'comet' | 'moon' | 'spacecraft' | 'satellite';
 
 /**
  * Which surface-map set a body is being drawn with.
@@ -1070,4 +1071,307 @@ export interface CometInfo {
      */
     readonly defunct: number;
   };
+}
+
+/**
+ * Earth satellites (Phase C): CelesTrak's GP data -- the US Space Force's catalogue, as
+ * the 18th and 19th Space Defense Squadrons publish it on Space-Track and CelesTrak
+ * relays it. Written to `satellites/`; optional: a data directory without
+ * `satellites/satellites.json` simply has no satellites.
+ *
+ * Three tiers, and every satellite is in exactly one:
+ *
+ *   - The named satellites (`named.json`, NamedSatellite[]) carry their whole OMM and are
+ *     propagated with full SGP4 in the browser: satellite.js `json2satrec(omm)` reads the
+ *     `omm` object as it is.
+ *   - The bulk (`bulk.bin`) is a record per satellite for the GPU: SGP4's mean elements at
+ *     one reference instant plus SGP4's own secular rates, so a position is Kepler's
+ *     ellipse with its node, perigee and mean anomaly drifting -- see
+ *     SATELLITE_RECORD_FLOATS.
+ *   - The rest (`sgp4.json`, SgpSatellite[]) are the satellites the bulk model cannot
+ *     follow: those it would put more than SatelliteInfo.sgp4.thresholdKm from full SGP4
+ *     somewhere in the reference ± windowDays -- very eccentric orbits, where the Sun's
+ *     and Moon's periodic terms reach a thousand km, and craft under thrust or decaying,
+ *     whose drag terms are far from a parabola. Propagated with SGP4, as the named are.
+ *
+ * **Frame.** Every element here, the OMMs' and the records', is in TEME, the frame SGP4
+ * works in (true equator, mean equinox, of date). The scene is ecliptic and mean equinox
+ * of J2000, so a TEME position is turned by SatelliteInfo.frame.temeToEclipticJ2000 --
+ * precession and nutation from J2000 to the reference instant, then the IAU 1976
+ * obliquity -- before Earth's position is added. That holds for SGP4's output too: one
+ * matrix for the run, whose error over the window is SatelliteInfo.frame.maxErrorArcsec.
+ *
+ * **Time.** SGP4 runs on UTC. Every Julian day in this layer is UTC, not TDB as everywhere
+ * else in the data: the app's TDB instant must be turned to UTC first (69.184 s in 2026).
+ * Skipping it is not small -- a LEO satellite covers 500 km in 69 s.
+ */
+
+/**
+ * CelesTrak's GP groups this layer is built from, in bit order: bit k of a satellite's
+ * group mask is membership of SATELLITE_GROUPS[k]. The codes are CelesTrak's own GROUP=
+ * names (https://celestrak.org/NORAD/elements/), so a filter can be checked against its
+ * definitions -- except `starlink`, `oneweb` and `kuiper`, read from the object's name
+ * ("STARLINK-1007") rather than downloaded a second time: they are most of `active`, and
+ * CelesTrak asks for nothing to be fetched twice. A new group goes at the end.
+ */
+export const SATELLITE_GROUPS = [
+  'active', // active payloads: the backbone
+  'stations', // space stations and what is docked to them
+  'visual', // the hundred or so brightest, rocket bodies among them
+  'starlink',
+  'oneweb',
+  'kuiper',
+  'gnss', // GPS, GLONASS, Galileo, BeiDou, QZSS, NavIC
+  'geo', // active geosynchronous
+  'tdrss', // NASA's Tracking and Data Relay Satellites
+  'weather',
+  'resource', // Earth resources: Landsat, Sentinel, ...
+  'science', // space and Earth science
+  'fengyun-1c-debris', // China's 2007 anti-satellite test
+  'iridium-33-debris', // the 2009 Iridium 33 / Cosmos 2251 collision, both halves
+  'cosmos-2251-debris',
+] as const;
+
+export type SatelliteGroup = (typeof SATELLITE_GROUPS)[number];
+
+/**
+ * Orbit regimes, in code order, from each object's own mean elements:
+ *
+ *   leo  apogee below 2,000 km altitude
+ *   meo  everything not in another class (the navigation constellations, ~20,000 km)
+ *   geo  geosynchronous: 0.9 to 1.1 revolutions a day, eccentricity below 0.25
+ *   heo  eccentricity 0.25 or more and not LEO (Molniya, Tundra, transfer orbits)
+ */
+export const SATELLITE_REGIMES = ['leo', 'meo', 'geo', 'heo'] as const;
+export type SatelliteRegime = (typeof SATELLITE_REGIMES)[number];
+
+/**
+ * SATCAT object types, in code order: payload, rocket body, debris, unknown -- from
+ * CelesTrak's SATCAT where it was read (the active and visual groups), and from the name
+ * for the debris groups' members ("FENGYUN 1C DEB").
+ */
+export const SATELLITE_OBJECT_TYPES = ['PAY', 'R/B', 'DEB', 'UNK'] as const;
+export type SatelliteObjectType = (typeof SATELLITE_OBJECT_TYPES)[number];
+
+/**
+ * A record's `flags` float is an integer below 2^24, which float32 holds exactly:
+ *
+ *   bits 0..15   group mask, bit k = SATELLITE_GROUPS[k]
+ *   bits 16..17  regime, index into SATELLITE_REGIMES
+ *   bits 18..19  object type, index into SATELLITE_OBJECT_TYPES
+ *
+ * NamedSatellite.flags is packed the same way.
+ */
+export const SATELLITE_REGIME_SHIFT = 16;
+export const SATELLITE_TYPE_SHIFT = 18;
+
+/**
+ * Floats per satellite in `satellites/bulk.bin`, little-endian float32, in this order:
+ *
+ *   0  a      mean semi-major axis, km: SGP4's own -- the Kozai mean motion un-Kozai'd as
+ *             sgp4init does, times WGS-72's 6,378.135 km
+ *   1  e      mean eccentricity
+ *   2  i      mean inclination, radians
+ *   3  node   right ascension of the ascending node at SatelliteInfo.referenceJdUtc, rad
+ *   4  peri   argument of perigee at referenceJdUtc, rad
+ *   5  M      mean anomaly at referenceJdUtc, radians in [−π, π)
+ *   6  dM     dM/dt, rad/day: SGP4's secular rate (J2, J2², J4), not the bare mean motion
+ *   7  dNode  dnode/dt, rad/day: SGP4's secular rate
+ *   8  dPeri  dperi/dt, rad/day: SGP4's secular rate
+ *   9  ddM    drag: the coefficient of Δt² in M, rad/day²
+ *  10  ay     J3's long-period term: a constant added to the eccentricity vector's
+ *             component along the node's normal, e·sin(peri) (SGP4's aycof / (a(1 − e²)))
+ *  11  flags  group mask, regime and object type; see SATELLITE_REGIME_SHIFT
+ *
+ * At UTC Julian day t, with Δt = t − referenceJdUtc in days:
+ *
+ *   M = M0 + dM·Δt + ddM·Δt²      node = node0 + dNode·Δt      peri = peri0 + dPeri·Δt
+ *   ex = e·cos(peri)   ey = e·sin(peri) + ay              (J3, as SGP4 adds it)
+ *   e' = sqrt(ex² + ey²)   peri' = atan2(ey, ex)   M' = M + peri − peri'
+ *   E − e'·sin E = M'                                     (Kepler's equation, by Newton)
+ *   p = (a(cos E − e'), a·sqrt(1 − e'²)·sin E, 0)                      perifocal, km
+ *   r_TEME  = Rz(node)·Rx(i)·Rz(peri')·p                          from Earth's centre
+ *   r_scene = temeToEclipticJ2000 · r_TEME + Earth's position
+ *
+ * The J3 step is worth its six operations: without it a LEO satellite is a median 10 km
+ * from SGP4, with it 3 km. The angles are moved to referenceJdUtc in float64 by the
+ * generator, so float32 carries only Δt-sized products. What the model still leaves out
+ * against full SGP4 -- J2's short-period terms, the deep-space lunisolar periodic terms --
+ * is measured per regime in SatelliteInfo.accuracy.
+ */
+export const SATELLITE_RECORD_FLOATS = 12;
+
+/**
+ * One satellite's OMM exactly as CelesTrak's GP JSON carries it -- the CCSDS OMM field
+ * names (502.0-B-3) -- so satellite.js `json2satrec(omm)` takes it unchanged. Mean
+ * elements in TEME for SGP4 (EPHEMERIS_TYPE 0).
+ */
+export interface SatelliteOmm {
+  readonly OBJECT_NAME: string;
+  /** COSPAR international designator, "1998-067A". */
+  readonly OBJECT_ID: string;
+  /** "2026-10-21T04:56:12.345678": UTC, with no zone suffix. */
+  readonly EPOCH: string;
+  /** Kozai mean motion, revolutions per day. */
+  readonly MEAN_MOTION: number;
+  readonly ECCENTRICITY: number;
+  /** Degrees, as are the three angles after it. */
+  readonly INCLINATION: number;
+  readonly RA_OF_ASC_NODE: number;
+  readonly ARG_OF_PERICENTER: number;
+  readonly MEAN_ANOMALY: number;
+  readonly EPHEMERIS_TYPE: number;
+  readonly CLASSIFICATION_TYPE: string;
+  readonly NORAD_CAT_ID: number;
+  readonly ELEMENT_SET_NO: number;
+  readonly REV_AT_EPOCH: number;
+  /** SGP4's drag term, per Earth radius. */
+  readonly BSTAR: number;
+  /** Half the first derivative of the mean motion, rev/day² (the TLE convention). */
+  readonly MEAN_MOTION_DOT: number;
+  /** A sixth of its second derivative, rev/day³. */
+  readonly MEAN_MOTION_DDOT: number;
+}
+
+/** A satellite drawn by name and propagated with full SGP4: one entry of `named.json`. */
+export interface NamedSatellite {
+  /** Stable slug: 'iss', 'hubble', 'landsat-9'. */
+  readonly id: string;
+  /** How the app names it: "International Space Station", "Landsat 9". */
+  readonly name: string;
+  readonly noradId: number;
+  /** COSPAR designator, "1998-067A". */
+  readonly cosparId: string;
+  /** Who flies it, as it names itself: "NASA", "NASA/USGS", "NOAA", "CMSA". */
+  readonly operator: string;
+  /** Launch date, ISO "YYYY-MM-DD", from CelesTrak's SATCAT; null where it has none. */
+  readonly launchDate: string | null;
+  /** Group mask, regime and object type, packed as a record's `flags`. */
+  readonly flags: number;
+  /** What SGP4 does poorly for it, in the info panel's words; null where it is the right model. */
+  readonly note: string | null;
+  readonly omm: SatelliteOmm;
+}
+
+/** A satellite of the SGP4 tier, `sgp4.json`: one the bulk model cannot follow. */
+export interface SgpSatellite {
+  /** Group mask, regime and object type, packed as a record's `flags`. */
+  readonly flags: number;
+  /** Launch date, ISO "YYYY-MM-DD", from CelesTrak's SATCAT; null where it has none. */
+  readonly launchDate: string | null;
+  /**
+   * The bulk model's largest miss against SGP4 in the window, km: why it is here. Null
+   * where SGP4 itself stops inside the window -- the object is re-entering.
+   */
+  readonly bulkErrorKm: number | null;
+  readonly omm: SatelliteOmm;
+}
+
+/** The bulk model's error against full SGP4 for one regime; see SatelliteInfo.accuracy. */
+export interface SatelliteAccuracy {
+  readonly regime: SatelliteRegime;
+  /** Satellites measured: a sample of this run's bulk in that regime. */
+  readonly count: number;
+  /** Days from the reference instant, both signs measured and the worse kept. */
+  readonly days: readonly number[];
+  /** Median position error at each of `days`, km. */
+  readonly medianKm: readonly number[];
+  /** 95th-percentile position error at each of `days`, km. */
+  readonly p95Km: readonly number[];
+}
+
+/**
+ * `satellites/satellites.json`: what the layer holds and how to read it. Written last, so
+ * a directory that has it has every file it names.
+ */
+export interface SatelliteInfo {
+  readonly source: {
+    readonly name: string;
+    readonly url: string;
+    /** When the GP data was downloaded, ISO UTC. */
+    readonly queriedAt: string;
+  };
+  /** The line to show wherever satellites are drawn. */
+  readonly credit: string;
+  /** UTC Julian day the records' angles are given at, and the frame matrix is for. */
+  readonly referenceJdUtc: number;
+  readonly frame: {
+    /** The elements' frame, as SGP4 defines it. */
+    readonly elements: 'TEME';
+    /**
+     * TEME at referenceJdUtc to ecliptic and mean equinox of J2000, row-major 3×3:
+     * r_scene = m · r_TEME. IAU 1976 precession, IAU 1980 nutation with the equation of
+     * the equinoxes, then the IAU 1976 obliquity Horizons' ECLIPTIC frame uses.
+     */
+    readonly temeToEclipticJ2000: readonly number[];
+    /**
+     * Largest angle between this one matrix and the exact one for the instant, over
+     * referenceJdUtc ± windowDays, arcseconds.
+     */
+    readonly maxErrorArcsec: number;
+    readonly windowDays: number;
+  };
+  /** SATELLITE_GROUPS, in bit order. */
+  readonly groups: readonly SatelliteGroup[];
+  /** Satellites in each group, named and bulk together. */
+  readonly groupCounts: Readonly<Partial<Record<SatelliteGroup, number>>>;
+  /**
+   * Groups not read this run, whose bit is therefore never set: CelesTrak refused or
+   * failed, and it asks clients to stop at the first error rather than retry.
+   */
+  readonly groupsMissing: readonly SatelliteGroup[];
+  readonly regimes: readonly SatelliteRegime[];
+  readonly regimeCounts: Readonly<Partial<Record<SatelliteRegime, number>>>;
+  readonly objectTypes: readonly SatelliteObjectType[];
+  /** Satellites written, both tiers. */
+  readonly count: number;
+  /** `named.json`: NamedSatellite[]. */
+  readonly named: { readonly file: string; readonly count: number };
+  /** `bulk.bin`: SATELLITE_RECORD_FLOATS float32s per satellite. */
+  readonly bulk: {
+    readonly file: string;
+    readonly count: number;
+    readonly bytes: number;
+    readonly recordFloats: typeof SATELLITE_RECORD_FLOATS;
+  };
+  /** `bulk-names.json`: SatelliteNames, entry k for bulk record k. */
+  readonly names: { readonly file: string };
+  /** `sgp4.json`: SgpSatellite[], and the rule that put them there. */
+  readonly sgp4: {
+    readonly file: string;
+    readonly count: number;
+    /** A satellite the bulk model misses SGP4 by more than this is here, km. */
+    readonly thresholdKm: number;
+    /** Over referenceJdUtc ± this many days. */
+    readonly windowDays: number;
+  };
+  /** The span of the element epochs written, UTC Julian days. */
+  readonly epochs: { readonly minJdUtc: number; readonly maxJdUtc: number };
+  /**
+   * Element sets older than this at the reference were dropped as stale, days -- for
+   * objects with a perigee below 2,000 km, in drag. Higher ones are kept to CelesTrak's
+   * own 30 days.
+   */
+  readonly maxElementAgeDays: number;
+  /** Objects CelesTrak returned that were not written, and why. */
+  readonly dropped: {
+    /** In drag, and not observed for maxElementAgeDays: almost all of them debris. */
+    readonly stale: number;
+    /** SGP4 cannot place them at the reference: decayed, or elements outside its range. */
+    readonly invalid: number;
+    /** Drawn from Horizons as bodies of their own (TESS), so not twice. */
+    readonly excluded: number;
+  };
+  /** The bulk model against full SGP4, measured on this run's own elements. */
+  readonly accuracy: readonly SatelliteAccuracy[];
+}
+
+/** `satellites/bulk-names.json`, columnar: entry k is bulk record k. */
+export interface SatelliteNames {
+  /** CelesTrak's OBJECT_NAME: "STARLINK-1007", "COSMOS 2251 DEB". */
+  readonly name: readonly string[];
+  readonly noradId: readonly number[];
+  readonly cosparId: readonly string[];
+  /** Element epoch minus referenceJdUtc, days, to 0.01: negative, older than the reference. */
+  readonly ageDays: readonly number[];
 }

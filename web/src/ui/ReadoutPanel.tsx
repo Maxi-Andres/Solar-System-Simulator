@@ -84,8 +84,15 @@ export function ReadoutPanel({
         </thead>
         <tbody>
           {store.bodies
-            // Not the small moons: a hundred rows of Jupiter's would bury the table.
-            .filter((body) => visibleKinds.has(body.kind) && !isSmallMoon(body))
+            // Not the small moons: a hundred rows of Jupiter's would bury the table. Nor the
+            // Earth satellites but the one in focus: fifty rows of Earth's distance from the
+            // Sun, to the AU, say nothing the Earth row does not.
+            .filter(
+              (body) =>
+                visibleKinds.has(body.kind) &&
+                !isSmallMoon(body) &&
+                (body.kind !== 'satellite' || body.id === focus),
+            )
             .map((body) => {
               const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);
               const speed = store.speedRelativeTo(body.id, 'sun', jd);

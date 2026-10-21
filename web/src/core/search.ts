@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { isSmallMoon } from '../scene/floatingOrigin.ts';
+import { satelliteBodyTag } from './satelliteGroups.ts';
 import type { LayerId } from '../state/store.ts';
 
 /**
@@ -56,6 +57,10 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       const operator = body.mission?.operator ?? null;
       return operator === null ? 'Spacecraft' : `Spacecraft · ${operator}`;
     }
+    case 'satellite': {
+      const tag = satelliteBodyTag(body.id);
+      return tag?.operator == null ? 'Earth satellite' : `Earth satellite · ${tag.operator}`;
+    }
   }
 }
 
@@ -79,6 +84,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['comets'];
     case 'spacecraft':
       return ['spacecraft'];
+    case 'satellite':
+      return ['satellites'];
     case 'moon':
       return isSmallMoon(body) ? ['moons', 'smallMoons'] : ['moons'];
   }
@@ -96,6 +103,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   asteroid: 3,
   comet: 3,
   spacecraft: 4,
+  satellite: 4,
 };
 
 /** How well one query word matches one field, 0 best; null for no match. */
@@ -148,8 +156,18 @@ export function searchBodies(
   for (const body of bodies) {
     const name = normalizeName(body.name);
     const parentName = body.parent === null ? '' : normalizeName(nameOf.get(body.parent) ?? '');
-    const operator = normalizeName(body.mission?.operator ?? '');
-    const kind = normalizeName(`${body.kind} ${body.kind === 'spacecraft' ? 'craft probe' : ''}`);
+    const tag = body.kind === 'satellite' ? satelliteBodyTag(body.id) : null;
+    const operator = normalizeName(body.mission?.operator ?? tag?.operator ?? '');
+    const kind = normalizeName(
+      `${body.kind} ${body.kind === 'spacecraft' ? 'craft probe' : body.kind === 'satellite' ? 'earth' : ''}`,
+    );
+    // A satellite is also found by its catalogue name and numbers: "ISS", "HST", "25544",
+    // "1998-067A". The International Space Station is "ISS (ZARYA)" in the catalogue, and
+    // without that, "iss" found Larissa first.
+    const catalogue =
+      tag === null
+        ? ''
+        : normalizeName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
     const exact = name === words.join(' ') || squeezed(name) === whole;
@@ -159,6 +177,11 @@ export function searchBodies(
       const inName = wordScore(word, name);
       if (inName !== null) {
         score += inName;
+        continue;
+      }
+      const inCatalogue = catalogue === '' ? null : wordScore(word, catalogue);
+      if (inCatalogue !== null) {
+        score += inCatalogue;
         continue;
       }
       const elsewhere = [parentName, operator, kind]
