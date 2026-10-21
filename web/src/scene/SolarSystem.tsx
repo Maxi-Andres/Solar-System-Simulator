@@ -109,6 +109,8 @@ const scratchScreen = new THREE.Vector3();
 
 /** The south ecliptic pole, as a direction in the scene's frame. */
 const ECLIPTIC_SOUTH = { x: 0, y: 0, z: -1 } as const;
+/** An Earth satellite's velocity about Earth, reused each frame: its forward axis. */
+const scratchForward = { x: 0, y: 0, z: 0 };
 const scratchSun = new THREE.Vector3();
 const scratchBody = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
@@ -1009,6 +1011,18 @@ export function SolarSystem({
                 handle.craftShape.quaternion,
                 headingDirection(frame, track.headingDeg[index] ?? null),
               );
+            }
+          } else if (craftShape.pointsAt === 'nadir') {
+            // An Earth satellite in LVLH: one side on Earth's centre and the forward axis
+            // along its velocity about Earth -- both from the same state, Earth seen from
+            // the satellite, whose velocity is the satellite's own reversed.
+            const earth = store.stateRelativeTo('earth', handle.definition.id, jd);
+            if (earth !== null) {
+              const v = earth.velocity;
+              scratchForward.x = -v.x;
+              scratchForward.y = -v.y;
+              scratchForward.z = -v.z;
+              craftOrientation(craftShape, earth.position, handle.craftShape.quaternion, scratchForward);
             }
           } else {
             const toTarget =

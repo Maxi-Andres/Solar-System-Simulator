@@ -12,7 +12,12 @@
  *
  * The operator is the agency that flies it, as it names itself; the launch date is not
  * here but taken from CelesTrak's SATCAT at build, so it cannot be mistyped.
+ *
+ * Each carries its look -- what it is drawn as up close, a model or a NO MODEL box, and
+ * which way it faces -- from LOOKS in looks.ts, where every source is.
  */
+
+import { LOOKS, type SatelliteLook } from './looks.ts';
 
 export interface NamedEntry {
   readonly id: string;
@@ -21,6 +26,8 @@ export interface NamedEntry {
   readonly operator: string;
   /** What SGP4 does poorly for it, in the info panel's words; null where it is the right model. */
   readonly note: string | null;
+  /** What it is drawn as up close, or null for one that stays a marker: see looks.ts. */
+  readonly look: SatelliteLook | null;
 }
 
 const NASA = 'NASA';
@@ -43,69 +50,69 @@ const HIGH_ORBIT_NOTE =
 
 export const NAMED_SATELLITES: readonly NamedEntry[] = [
   // Crewed stations.
-  { id: 'iss', noradId: 25544, name: 'International Space Station', operator: 'NASA, Roscosmos, ESA, JAXA, CSA', note: null },
-  { id: 'tiangong', noradId: 48274, name: 'Tiangong', operator: 'CMSA', note: null },
+  { id: 'iss', noradId: 25544, name: 'International Space Station', operator: 'NASA, Roscosmos, ESA, JAXA, CSA', note: null, look: LOOKS.iss },
+  { id: 'tiangong', noradId: 48274, name: 'Tiangong', operator: 'CMSA', note: null, look: LOOKS.tiangong },
 
   // Observatories.
-  { id: 'hubble', noradId: 20580, name: 'Hubble Space Telescope', operator: 'NASA, ESA', note: null },
-  { id: 'chandra', noradId: 25867, name: 'Chandra X-ray Observatory', operator: NASA, note: HIGH_ORBIT_NOTE },
-  { id: 'xmm-newton', noradId: 25989, name: 'XMM-Newton', operator: 'ESA', note: HIGH_ORBIT_NOTE },
-  { id: 'swift', noradId: 28485, name: 'Swift', operator: NASA, note: null },
-  { id: 'fermi', noradId: 33053, name: 'Fermi Gamma-ray Space Telescope', operator: NASA, note: null },
-  { id: 'nustar', noradId: 38358, name: 'NuSTAR', operator: NASA, note: null },
-  { id: 'ixpe', noradId: 49954, name: 'IXPE', operator: 'NASA, ASI', note: null },
-  { id: 'sdo', noradId: 36395, name: 'Solar Dynamics Observatory', operator: NASA, note: null },
-  { id: 'iris', noradId: 39197, name: 'IRIS', operator: NASA, note: null },
-  { id: 'hinode', noradId: 29479, name: 'Hinode', operator: 'JAXA', note: null },
-  { id: 'timed', noradId: 26998, name: 'TIMED', operator: NASA, note: null },
-  { id: 'mms-1', noradId: 40482, name: 'MMS 1', operator: NASA, note: HIGH_ORBIT_NOTE },
-  { id: 'mms-2', noradId: 40483, name: 'MMS 2', operator: NASA, note: HIGH_ORBIT_NOTE },
-  { id: 'mms-3', noradId: 40484, name: 'MMS 3', operator: NASA, note: HIGH_ORBIT_NOTE },
-  { id: 'mms-4', noradId: 40485, name: 'MMS 4', operator: NASA, note: HIGH_ORBIT_NOTE },
-  { id: 'smile', noradId: 69123, name: 'SMILE', operator: 'ESA, CAS', note: HIGH_ORBIT_NOTE },
+  { id: 'hubble', noradId: 20580, name: 'Hubble Space Telescope', operator: 'NASA, ESA', note: null, look: LOOKS.hubble },
+  { id: 'chandra', noradId: 25867, name: 'Chandra X-ray Observatory', operator: NASA, note: HIGH_ORBIT_NOTE, look: LOOKS.chandra },
+  { id: 'xmm-newton', noradId: 25989, name: 'XMM-Newton', operator: 'ESA', note: HIGH_ORBIT_NOTE, look: LOOKS.xmmNewton },
+  { id: 'swift', noradId: 28485, name: 'Swift', operator: NASA, note: null, look: LOOKS.swift },
+  { id: 'fermi', noradId: 33053, name: 'Fermi Gamma-ray Space Telescope', operator: NASA, note: null, look: LOOKS.fermi },
+  { id: 'nustar', noradId: 38358, name: 'NuSTAR', operator: NASA, note: null, look: LOOKS.nustar },
+  { id: 'ixpe', noradId: 49954, name: 'IXPE', operator: 'NASA, ASI', note: null, look: LOOKS.ixpe },
+  { id: 'sdo', noradId: 36395, name: 'Solar Dynamics Observatory', operator: NASA, note: null, look: LOOKS.sdo },
+  { id: 'iris', noradId: 39197, name: 'IRIS', operator: NASA, note: null, look: LOOKS.iris },
+  { id: 'hinode', noradId: 29479, name: 'Hinode', operator: 'JAXA', note: null, look: LOOKS.hinode },
+  { id: 'timed', noradId: 26998, name: 'TIMED', operator: NASA, note: null, look: LOOKS.timed },
+  { id: 'mms-1', noradId: 40482, name: 'MMS 1', operator: NASA, note: HIGH_ORBIT_NOTE, look: LOOKS.mms1 },
+  { id: 'mms-2', noradId: 40483, name: 'MMS 2', operator: NASA, note: HIGH_ORBIT_NOTE, look: LOOKS.mms2 },
+  { id: 'mms-3', noradId: 40484, name: 'MMS 3', operator: NASA, note: HIGH_ORBIT_NOTE, look: LOOKS.mms3 },
+  { id: 'mms-4', noradId: 40485, name: 'MMS 4', operator: NASA, note: HIGH_ORBIT_NOTE, look: LOOKS.mms4 },
+  { id: 'smile', noradId: 69123, name: 'SMILE', operator: 'ESA, CAS', note: HIGH_ORBIT_NOTE, look: LOOKS.smile },
 
   // Earth science.
-  { id: 'terra', noradId: 25994, name: 'Terra', operator: NASA, note: null },
-  { id: 'aqua', noradId: 27424, name: 'Aqua', operator: NASA, note: null },
-  { id: 'aura', noradId: 28376, name: 'Aura', operator: NASA, note: null },
-  { id: 'landsat-8', noradId: 39084, name: 'Landsat 8', operator: 'NASA, USGS', note: null },
-  { id: 'landsat-9', noradId: 49260, name: 'Landsat 9', operator: 'NASA, USGS', note: null },
-  { id: 'grace-fo-1', noradId: 43476, name: 'GRACE-FO 1', operator: 'NASA, GFZ', note: null },
-  { id: 'grace-fo-2', noradId: 43477, name: 'GRACE-FO 2', operator: 'NASA, GFZ', note: null },
-  { id: 'smap', noradId: 40376, name: 'SMAP', operator: NASA, note: null },
-  { id: 'pace', noradId: 58928, name: 'PACE', operator: NASA, note: null },
-  { id: 'icesat-2', noradId: 43613, name: 'ICESat-2', operator: NASA, note: null },
-  { id: 'swot', noradId: 54754, name: 'SWOT', operator: 'NASA, CNES', note: null },
-  { id: 'oco-2', noradId: 40059, name: 'OCO-2', operator: NASA, note: null },
-  { id: 'gpm', noradId: 39574, name: 'GPM Core Observatory', operator: 'NASA, JAXA', note: null },
-  { id: 'jason-3', noradId: 41240, name: 'Jason-3', operator: 'NOAA, EUMETSAT, CNES, NASA', note: null },
-  { id: 'sentinel-6a', noradId: 46984, name: 'Sentinel-6 Michael Freilich', operator: 'ESA, EUMETSAT, NASA, NOAA', note: null },
-  { id: 'sentinel-6b', noradId: 66514, name: 'Sentinel-6B', operator: 'ESA, EUMETSAT, NASA, NOAA', note: null },
-  { id: 'sentinel-2a', noradId: 40697, name: 'Sentinel-2A', operator: 'ESA', note: null },
-  { id: 'sentinel-2b', noradId: 42063, name: 'Sentinel-2B', operator: 'ESA', note: null },
-  { id: 'cryosat-2', noradId: 36508, name: 'CryoSat-2', operator: 'ESA', note: null },
+  { id: 'terra', noradId: 25994, name: 'Terra', operator: NASA, note: null, look: LOOKS.terra },
+  { id: 'aqua', noradId: 27424, name: 'Aqua', operator: NASA, note: null, look: LOOKS.aqua },
+  { id: 'aura', noradId: 28376, name: 'Aura', operator: NASA, note: null, look: LOOKS.aura },
+  { id: 'landsat-8', noradId: 39084, name: 'Landsat 8', operator: 'NASA, USGS', note: null, look: LOOKS.landsat8 },
+  { id: 'landsat-9', noradId: 49260, name: 'Landsat 9', operator: 'NASA, USGS', note: null, look: LOOKS.landsat9 },
+  { id: 'grace-fo-1', noradId: 43476, name: 'GRACE-FO 1', operator: 'NASA, GFZ', note: null, look: LOOKS.graceFo1 },
+  { id: 'grace-fo-2', noradId: 43477, name: 'GRACE-FO 2', operator: 'NASA, GFZ', note: null, look: LOOKS.graceFo2 },
+  { id: 'smap', noradId: 40376, name: 'SMAP', operator: NASA, note: null, look: LOOKS.smap },
+  { id: 'pace', noradId: 58928, name: 'PACE', operator: NASA, note: null, look: LOOKS.pace },
+  { id: 'icesat-2', noradId: 43613, name: 'ICESat-2', operator: NASA, note: null, look: LOOKS.icesat2 },
+  { id: 'swot', noradId: 54754, name: 'SWOT', operator: 'NASA, CNES', note: null, look: LOOKS.swot },
+  { id: 'oco-2', noradId: 40059, name: 'OCO-2', operator: NASA, note: null, look: LOOKS.oco2 },
+  { id: 'gpm', noradId: 39574, name: 'GPM Core Observatory', operator: 'NASA, JAXA', note: null, look: LOOKS.gpm },
+  { id: 'jason-3', noradId: 41240, name: 'Jason-3', operator: 'NOAA, EUMETSAT, CNES, NASA', note: null, look: LOOKS.jason3 },
+  { id: 'sentinel-6a', noradId: 46984, name: 'Sentinel-6 Michael Freilich', operator: 'ESA, EUMETSAT, NASA, NOAA', note: null, look: LOOKS.sentinel6a },
+  { id: 'sentinel-6b', noradId: 66514, name: 'Sentinel-6B', operator: 'ESA, EUMETSAT, NASA, NOAA', note: null, look: LOOKS.sentinel6b },
+  { id: 'sentinel-2a', noradId: 40697, name: 'Sentinel-2A', operator: 'ESA', note: null, look: LOOKS.sentinel2a },
+  { id: 'sentinel-2b', noradId: 42063, name: 'Sentinel-2B', operator: 'ESA', note: null, look: LOOKS.sentinel2b },
+  { id: 'cryosat-2', noradId: 36508, name: 'CryoSat-2', operator: 'ESA', note: null, look: LOOKS.cryosat2 },
 
   // Weather: the polar orbiters and the geostationary GOES that NASA builds for NOAA.
-  { id: 'suomi-npp', noradId: 37849, name: 'Suomi NPP', operator: NOAA_NASA, note: null },
-  { id: 'noaa-20', noradId: 43013, name: 'NOAA-20', operator: NOAA_NASA, note: null },
-  { id: 'noaa-21', noradId: 54234, name: 'NOAA-21', operator: NOAA_NASA, note: null },
-  { id: 'goes-16', noradId: 41866, name: 'GOES-16', operator: NOAA_NASA, note: null },
-  { id: 'goes-17', noradId: 43226, name: 'GOES-17', operator: NOAA_NASA, note: null },
-  { id: 'goes-18', noradId: 51850, name: 'GOES-18', operator: NOAA_NASA, note: null },
-  { id: 'goes-19', noradId: 60133, name: 'GOES-19', operator: NOAA_NASA, note: null },
+  { id: 'suomi-npp', noradId: 37849, name: 'Suomi NPP', operator: NOAA_NASA, note: null, look: LOOKS.suomiNpp },
+  { id: 'noaa-20', noradId: 43013, name: 'NOAA-20', operator: NOAA_NASA, note: null, look: LOOKS.noaa20 },
+  { id: 'noaa-21', noradId: 54234, name: 'NOAA-21', operator: NOAA_NASA, note: null, look: LOOKS.noaa21 },
+  { id: 'goes-16', noradId: 41866, name: 'GOES-16', operator: NOAA_NASA, note: null, look: LOOKS.goes16 },
+  { id: 'goes-17', noradId: 43226, name: 'GOES-17', operator: NOAA_NASA, note: null, look: LOOKS.goes17 },
+  { id: 'goes-18', noradId: 51850, name: 'GOES-18', operator: NOAA_NASA, note: null, look: LOOKS.goes18 },
+  { id: 'goes-19', noradId: 60133, name: 'GOES-19', operator: NOAA_NASA, note: null, look: LOOKS.goes19 },
 
   // NASA's Tracking and Data Relay Satellites, every one still in the catalogue's active set.
-  { id: 'tdrs-3', noradId: 19548, name: 'TDRS-3', operator: NASA, note: null },
-  { id: 'tdrs-5', noradId: 21639, name: 'TDRS-5', operator: NASA, note: null },
-  { id: 'tdrs-6', noradId: 22314, name: 'TDRS-6', operator: NASA, note: null },
-  { id: 'tdrs-7', noradId: 23613, name: 'TDRS-7', operator: NASA, note: null },
-  { id: 'tdrs-8', noradId: 26388, name: 'TDRS-8', operator: NASA, note: null },
-  { id: 'tdrs-11', noradId: 39070, name: 'TDRS-11', operator: NASA, note: null },
-  { id: 'tdrs-12', noradId: 39504, name: 'TDRS-12', operator: NASA, note: null },
-  { id: 'tdrs-13', noradId: 42915, name: 'TDRS-13', operator: NASA, note: null },
+  { id: 'tdrs-3', noradId: 19548, name: 'TDRS-3', operator: NASA, note: null, look: LOOKS.tdrs3 },
+  { id: 'tdrs-5', noradId: 21639, name: 'TDRS-5', operator: NASA, note: null, look: LOOKS.tdrs5 },
+  { id: 'tdrs-6', noradId: 22314, name: 'TDRS-6', operator: NASA, note: null, look: LOOKS.tdrs6 },
+  { id: 'tdrs-7', noradId: 23613, name: 'TDRS-7', operator: NASA, note: null, look: LOOKS.tdrs7 },
+  { id: 'tdrs-8', noradId: 26388, name: 'TDRS-8', operator: NASA, note: null, look: LOOKS.tdrs8 },
+  { id: 'tdrs-11', noradId: 39070, name: 'TDRS-11', operator: NASA, note: null, look: LOOKS.tdrs11 },
+  { id: 'tdrs-12', noradId: 39504, name: 'TDRS-12', operator: NASA, note: null, look: LOOKS.tdrs12 },
+  { id: 'tdrs-13', noradId: 42915, name: 'TDRS-13', operator: NASA, note: null, look: LOOKS.tdrs13 },
 
   // Dead, and the largest thing in low orbit that nobody controls.
-  { id: 'envisat', noradId: 27386, name: 'Envisat', operator: 'ESA', note: null },
+  { id: 'envisat', noradId: 27386, name: 'Envisat', operator: 'ESA', note: null, look: LOOKS.envisat },
 ];
 
 /**

@@ -241,6 +241,8 @@ export function buildSatellites(options: BuildOptions): SatelliteBuild {
         launchDate,
         flags,
         note: entry.note,
+        // Its look, from the list rather than CelesTrak: see named.ts.
+        ...(entry.look === null ? {} : { spanM: entry.look.spanM, shape: entry.look.shape }),
         omm,
       });
     } else {

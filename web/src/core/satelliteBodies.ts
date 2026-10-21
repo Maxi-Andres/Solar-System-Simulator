@@ -1,6 +1,7 @@
 import type {
   BodyDefinition,
   BodyId,
+  CraftShape,
   OsculatingElements,
   SatelliteOmm,
 } from '@sss/tools/types';
@@ -258,8 +259,44 @@ export function bulkWindow(referenceJdUtc: number): { readonly startJd: number; 
   };
 }
 
-/** The body a satellite becomes: a marker, a label, an orbit; no size claimed. */
-export function satelliteDefinition(id: BodyId, name: string): BodyDefinition {
+/** What a named satellite is drawn as up close, from `named.json`; see NamedSatellite. */
+export interface SatelliteLook {
+  readonly spanM: number;
+  readonly shape: CraftShape;
+  readonly operator: string;
+  readonly launchDate: string | null;
+}
+
+/**
+ * The body a satellite becomes: a marker, a label, an orbit; no size claimed.
+ *
+ * Unless it has a `look` -- a named satellite with a model or a NO MODEL box, as the
+ * spacecraft have -- and then it is framed and drawn as a spacecraft is: its radius half
+ * its published span, and its `mission.shape` the craft's shape path in SolarSystem.tsx
+ * reads, asked for at MODEL_REQUEST_PX, shown from `shapeShownPx`, let go when small.
+ * Its `kind` stays 'satellite', which is what the panels and search go by.
+ */
+export function satelliteDefinition(id: BodyId, name: string, look: SatelliteLook | null = null): BodyDefinition {
+  if (look !== null) {
+    const radiusKm = look.spanM / 2 / 1000;
+    // Its span is published, and it is drawn: framed, and labelled clear of it, as a
+    // craft is -- so neither marker-only flag is carried over.
+    const { radiusPublished: _published, shapeDrawn: _drawn, ...marker } = satelliteDefinition(id, name);
+    return {
+      ...marker,
+      radiusEquatorialKm: radiusKm,
+      radiusPolarKm: radiusKm,
+      mission: {
+        // A date with no time: the SATCAT's, which is all the panel shows.
+        launchUtc: look.launchDate ?? '',
+        operator: look.operator,
+        endUtc: null,
+        windowMonths: null,
+        site: null,
+        shape: look.shape,
+      },
+    };
+  }
   return {
     id,
     name,
@@ -301,6 +338,7 @@ function entryFor(
   epochJdUtc: number,
   state: (jd: number) => StateVector | null,
   options: PropagatedOptions,
+  look: SatelliteLook | null = null,
 ): Entry | null {
   const epochJd = utcToTdb(epochJdUtc);
   const atEpoch = state(epochJd);
@@ -312,7 +350,7 @@ function entryFor(
     console.warn(`${name} cannot be placed at its own epoch; it is left out.`);
     return null;
   }
-  return { body: satelliteDefinition(id, name), elements, state, options };
+  return { body: satelliteDefinition(id, name, look), elements, state, options };
 }
 
 /** SGP4's record for an OMM, or null where satellite.js cannot read it. */
@@ -349,11 +387,25 @@ export function addNamedSatellites(store: EphemerisStore, satellites: Satellites
     if (satrec === null) {
       return;
     }
-    const entry = entryFor(store, id, satellite.name, satrec.jdsatepoch, (jd) => sgp4State(satrec, jd), {
-      aboutParent: true,
-      coverage: sgp4Window(satrec.jdsatepoch),
-      exact: true,
-    });
+    // Data from before the shapes has none, and such a satellite stays a marker.
+    const look: SatelliteLook | null =
+      satellite.shape === undefined || satellite.spanM === undefined
+        ? null
+        : {
+            spanM: satellite.spanM,
+            shape: satellite.shape,
+            operator: satellite.operator,
+            launchDate: satellite.launchDate,
+          };
+    const entry = entryFor(
+      store,
+      id,
+      satellite.name,
+      satrec.jdsatepoch,
+      (jd) => sgp4State(satrec, jd),
+      { aboutParent: true, coverage: sgp4Window(satrec.jdsatepoch), exact: true },
+      look,
+    );
     if (entry === null) {
       return;
     }

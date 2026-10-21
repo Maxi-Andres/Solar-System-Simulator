@@ -4,6 +4,8 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { satelliteFacts, satelliteNow } from '../core/satelliteBodies.ts';
 import { satelliteBodyChip, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import { BULK_WINDOW_DAYS, NAMED_WINDOW_DAYS, REGIME_SHIFT, TYPE_SHIFT } from '../core/satellites.ts';
+import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
+import { facingRule } from './facing.ts';
 
 /**
  * What the info panel says about an Earth satellite (see satelliteBodies.ts): who it is in
@@ -56,6 +58,10 @@ export function SatelliteFacts({ id, store, jd }: { readonly id: BodyId; readonl
   const regime = (flags >>> REGIME_SHIFT) & 3;
   const type = (flags >>> TYPE_SHIFT) & 3;
   const chip = SATELLITE_CHIPS[satelliteBodyChip(id)];
+  // A named satellite with a model or a box: what is on screen up close, and which way it
+  // faces -- said, as for a craft, because the facing is a rule and not a measurement.
+  const body = store.body(id);
+  const shape = body.mission?.shape ?? null;
   const bulk = facts.bulk;
   const accuracy =
     bulk === null || now === null
@@ -99,6 +105,26 @@ export function SatelliteFacts({ id, store, jd }: { readonly id: BodyId; readonl
           </dd>
           <dt style={TERM}>Inclination</dt>
           <dd style={VALUE}>{`${now.inclinationDeg.toFixed(2)}°`}</dd>
+        </>
+      )}
+      {shape !== null && (
+        <>
+          <dt style={TERM}>Span</dt>
+          <dd style={VALUE}>{`${(body.radiusEquatorialKm * 2000).toFixed(1)} m`}</dd>
+          <dt style={TERM}>Drawn as</dt>
+          <dd style={VALUE}>
+            {shape.model === null ? 'Box, published size' : `${shape.modelOwner ?? 'NASA'} 3D model`}
+          </dd>
+          {/* ESA's permission asks for its credit wherever its models are used. */}
+          {shape.model !== null && shape.modelOwner === 'ESA' && (
+            <>
+              <dt style={TERM}>Model</dt>
+              <dd style={VALUE}>{ESA_MODEL_CREDIT}</dd>
+            </>
+          )}
+          <dt style={TERM}>Facing (modelled)</dt>
+          <dd style={VALUE}>{facingRule(shape)}</dd>
+          {shape.facingNote !== undefined && <dd style={NOTE}>{shape.facingNote}</dd>}
         </>
       )}
 

@@ -1,10 +1,11 @@
-import type { BodyDefinition, CraftShape, Seam, ShapeModel } from '@sss/tools/types';
+import type { BodyDefinition, Seam, ShapeModel } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { DistanceMode } from '../core/ephemerisStore.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
 import { BeltBodyFacts } from './BeltBodyFacts.tsx';
+import { facingRule } from './facing.ts';
 import { Panel } from './Panel.tsx';
 import { SatelliteFacts } from './SatelliteFacts.tsx';
 
@@ -415,25 +416,6 @@ function Divider() {
       style={{ gridColumn: '1 / -1', height: 1, background: '#202020', margin: '0.4rem 0' }}
     />
   );
-}
-
-/** A craft's pointing rule, in words. See CraftShape. */
-function facingRule(shape: CraftShape): string {
-  const part = {
-    dish: 'Dish',
-    'heat-shield': 'Heat shield',
-    sunshield: 'Sunshield',
-    'solar-arrays': 'Solar arrays',
-    'spin-axis': 'Spin axis',
-    deck: 'Deck',
-  }[shape.pointingPart];
-  const target = {
-    earth: 'Earth',
-    sun: 'Sun',
-    'ecliptic-south': 'ecliptic south',
-    zenith: 'zenith',
-  }[shape.pointsAt];
-  return `${part} to ${target}`;
 }
 
 /** A place on a body, as maps write it: "4.825° S, 137.389° E". */

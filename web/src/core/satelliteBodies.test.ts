@@ -1,4 +1,4 @@
-import { SATELLITE_GROUPS, SATELLITE_RECORD_FLOATS } from '@sss/tools/types';
+import { type CraftShape, SATELLITE_GROUPS, SATELLITE_RECORD_FLOATS } from '@sss/tools/types';
 import { sgp4 } from 'satellite.js/sgp4';
 import { describe, expect, it } from 'vitest';
 
@@ -137,6 +137,42 @@ describe('a named satellite as a body', () => {
     expect(now.periodMinutes).toBeCloseTo(1440 / 15.4897, 0);
     expect(now.inclinationDeg).toBeCloseTo(51.63, 1);
     expect(satelliteFacts(id)?.noradId).toBe(25544);
+  });
+});
+
+describe('a named satellite with a shape', () => {
+  // The ISS as named.json carries it once it has its look: a published span and a shape.
+  const store = makeStore();
+  const { satellites } = satelliteFixture();
+  const shape: CraftShape = {
+    model: 'iss.glb',
+    pivot: [0, 0, 0],
+    metresPerUnit: 1,
+    boxM: null,
+    pointsAt: 'nadir',
+    pointingPart: 'body-axes',
+    pointingAxis: [0, -1, 0],
+    rollAxis: [0, 0, 1],
+  };
+  addNamedSatellites(store, {
+    ...satellites,
+    named: [{ ...satellites.named[0]!, spanM: 109, shape }],
+  });
+  const iss = store.body(namedSatelliteBodyId('iss'));
+
+  it('is framed by half its published span and drawn by the craft’s shape path', () => {
+    expect(iss.kind).toBe('satellite');
+    expect(iss.radiusEquatorialKm * 2000).toBeCloseTo(109, 9);
+    expect(iss.mission?.shape).toEqual(shape);
+    expect(iss.mission?.operator).toBe('NASA/Roscosmos/ESA/JAXA/CSA');
+    // A size that is published, and a shape that is drawn: neither marker-only flag.
+    expect(iss.radiusPublished).toBeUndefined();
+    expect(iss.shapeDrawn).toBeUndefined();
+  });
+
+  it('is still a satellite to search and the panels', () => {
+    expect(describeBody(iss, 'Earth')).toBe('Earth satellite · NASA/Roscosmos/ESA/JAXA/CSA');
+    expect(labelRank(iss.kind, iss.parent)).toBe(labelRank('spacecraft', null));
   });
 });
 

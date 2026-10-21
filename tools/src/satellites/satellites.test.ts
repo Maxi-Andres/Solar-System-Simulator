@@ -178,6 +178,19 @@ describe('the layer', () => {
     }
   });
 
+  it('carries each named satellite’s look, a model or a box, into named.json', () => {
+    // Every one of the list has a published span and a shape: see looks.ts.
+    for (const satellite of BUILD.named) {
+      expect(satellite.spanM, satellite.id).toBeGreaterThan(0);
+      expect(satellite.shape, satellite.id).toBeDefined();
+    }
+    expect(named('iss').spanM).toBe(109);
+    expect(named('iss').shape?.model).toBe('iss.glb');
+    expect(named('iss').shape?.pointsAt).toBe('nadir');
+    expect(named('tiangong').shape?.model).toBeNull();
+    expect(named('tiangong').shape?.boxM).toEqual([16.6, 55.7, 4.2]);
+  });
+
   it('puts every other satellite in exactly one of the bulk and the SGP4 tier', () => {
     const named = new Set(BUILD.named.map((satellite) => satellite.noradId));
     const bulk = new Set(BUILD.names.noradId);

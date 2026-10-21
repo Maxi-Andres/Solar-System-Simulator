@@ -17,6 +17,20 @@ United States", and may be used for "computer graphical simulations and Internet
 pages". **NASA should be acknowledged as the source**, which is what this file and the
 About panel do. No NASA endorsement is implied, and no NASA insignia is used.
 
+The Earth satellites' NASA models come from the same places and under the same
+guidelines -- NASA 3D Resources and NASA's mission pages -- with four hosted elsewhere
+by NASA. SDO's is only in the nasa/NASA-3D-Resources repository, whose README says its
+assets "are free and without copyright". SMAP's and GRACE-FO's are NASA VTAD's, the team
+that made the Voyager and Europa Clipper models, offered for download on JPL's mission
+sites (smap.jpl.nasa.gov, gracefo.jpl.nasa.gov), which state no terms for 3D files --
+JPL's image-use policy covers images and video only. GOES-R's is on its science.nasa.gov
+mission page, which states no terms either and credits its labelled renderings, not the
+file, to Lockheed Martin, GOES-R's builder. All four are used on NASA's media guidelines,
+credited to NASA, and nobody was asked: the project owner's call to confirm. The
+second-generation TDRS model on NASA 3D Resources is credited there "NASA/JPL/Eyes on the
+Solar System", like the Eyes models below, but is published by 3D Resources itself, under
+its rules.
+
 ### NASA's Eyes on the Solar System — six by written permission, two not yet
 
 Six models come from NASA's Eyes on the Solar System, as its app loads them from
@@ -71,6 +85,16 @@ conditions of the two together:
 - any copyright notice or licensing condition attached to an individual model is kept,
   and respected: see each row.
 
+Three Earth satellites are drawn with ESA's models under the second permission, for
+ESA's models generally: XMM-Newton and SMILE from the ESA SPICE Service's Cosmographia
+packages (spiftp.esac.esa.int/data/SPICE/XMM/ and /SMILE/misc/cosmo/), which the SPICE
+Service says are Sci-Fleet's models -- Sci-Fleet itself was unreachable on 2026-10-21 --
+and CryoSat-2 from ESA's Visuals by Earth Online (visuals.earth.esa.int), whose own terms
+forbid redistribution and derivative works without ESA's permission, which the second
+permission is. They carry ESA's credit in the satellite's info panel and in About. The
+SPICE Service asks its data to be cited by its datasets' DOIs; its table lists none for
+XMM-Newton or SMILE (checked 2026-10-21), so they are cited by the package's URL.
+
 The ESA SPICE Service also answered, received 2026-10-14: its models "are publicly
 distributed", free to use, each cited by the DOI of its mission's SPICE kernel dataset.
 Juice's and Hera's models here are assembled from SPICE parts, and their rows carry those
@@ -124,6 +148,38 @@ citations; the other ESA models come from Sci-Fleet, not SPICE.
 | `hayabusa2.glb` | Hayabusa2 | **NASA/JPL-Caltech, from Eyes on the Solar System; not yet covered by the written permission** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_hayabusa_2/hayabusa_2.gltf — NASA's model of JAXA's craft; Draco decoded, KTX2 transcoded |
 | `danuri.glb` | Danuri | **NASA/JPL-Caltech, from Eyes on the Solar System; not yet covered by the written permission** (see Licence). https://eyes.nasa.gov/assets/static/models/sc_danuri/danuri.gltf — NASA's model of KARI's craft; Draco decoded, KTX2 transcoded |
 | `insight.glb` | InSight | https://science.nasa.gov/resource/insight-lander-3d-model/ — `24880_InSight_deployed.glb`, credit NASA/JPL-Caltech; lifted here, see below |
+
+### Earth satellites
+
+The named Earth satellites' models; `tools/src/satellites/looks.ts` gives each one's
+scale, axes and pointing rule, with sources. Downloaded 2026-10-21.
+
+| File | Satellites drawn with it | Source |
+|---|---|---|
+| `iss.glb` | International Space Station | https://science.nasa.gov/resource/international-space-station-3d-model/ — `ISS_stationary.glb`, credit NASA VTAD. About 2020's configuration: Pirs docked, before Nauka, Prichal and the roll-out arrays |
+| `hubble.glb` | Hubble | https://science.nasa.gov/resource/hubble-space-telescope-3d-model/ — `Hubble.glb`, credit NASA VTAD (3D Resources' (A) is DigitalSpace Corporation's, and not used) |
+| `chandra.glb` | Chandra | https://science.nasa.gov/3d-resources/chandra-x-ray-observatory/ — `Chandra X-ray Observatory.glb` |
+| `xmm-newton.glb` | XMM-Newton | **ESA, by permission.** ESA SPICE Cosmographia, https://spiftp.esac.esa.int/data/SPICE/XMM/misc/cosmo/ — `xmm.obj`, `xmm.mtl`, `alb.png` (Sci-Fleet's model), converted |
+| `swift.glb` | Swift | https://science.nasa.gov/3d-resources/swift/ — `Swift.glb` |
+| `fermi.glb` | Fermi | https://science.nasa.gov/3d-resources/fermi-gamma-ray-large-area-space-telescope/ — `Fermi Gamma-ray Large Area Space Telescope.glb` |
+| `sdo.glb` | Solar Dynamics Observatory | https://github.com/nasa/NASA-3D-Resources, `3D Models/Solar Dynamics Observatory/Solar Dynamics Observatory.glb` (its science.nasa.gov page has no file) |
+| `mms.glb` | MMS 1, 2, 3 and 4 | https://science.nasa.gov/3d-resources/magnetospheric-multiscale-mms-b/ — `Magnetospheric Multiscale (MMS) (B).glb`; one model for the four, built alike |
+| `smile.glb` | SMILE | **ESA, by permission.** ESA SPICE Cosmographia, https://spiftp.esac.esa.int/data/SPICE/SMILE/misc/cosmo/models/ — `smile.obj`, `smile.mtl`, `main.png`, `panel.png`, `mli.png`, converted |
+| `terra.glb` | Terra | https://science.nasa.gov/3d-resources/terra/ — `Terra.glb`, untextured: the file points its two textures at TGA files outside it that NASA does not publish (see Processing) |
+| `aqua.glb` | Aqua | https://science.nasa.gov/3d-resources/aqua-b/ — `Aqua (B).glb` |
+| `aura.glb` | Aura | https://science.nasa.gov/3d-resources/aura-b/ — `Aura (B).glb` |
+| `landsat-8.glb` | Landsat 8, Landsat 9 | https://science.nasa.gov/3d-resources/landsat-8/ — `Landsat 8.glb`; Landsat 9, "largely a copy of Landsat 8" (USGS), has a printable STL only |
+| `grace-fo.glb` | GRACE-FO 1, GRACE-FO 2 | https://gracefo.jpl.nasa.gov/resources/86/grace-fo-3d-model — `GRACE-FO.glb`, credit NASA VTAD (see Licence) |
+| `smap.glb` | SMAP | https://smap.jpl.nasa.gov/resources/99/smap-3d-model — `SMAP.glb`, credit NASA VTAD (see Licence) |
+| `icesat-2.glb` | ICESat-2 | https://science.nasa.gov/3d-resources/ice-clouds-and-land-elevation-satellite-2-icesat-2-c/ — `…(ICESat-2) (C).glb`, the one of the three drawn at ICESat-2's published size |
+| `oco-2.glb` | OCO-2 | https://science.nasa.gov/3d-resources/orbiting-carbon-observatory-oco-2/ — `Orbiting Carbon Observatory (OCO) 2.glb` |
+| `gpm.glb` | GPM Core Observatory | https://science.nasa.gov/3d-resources/global-precipitation-measurement/ — `Global Precipitation Measurement.glb` |
+| `sentinel-6.glb` | Sentinel-6 Michael Freilich, Sentinel-6B | https://science.nasa.gov/3d-resources/jason-continuity-of-service-sentinel-6/ — `Jason Continuity of Service (Sentinel-6).glb`; NASA's model, of "two identical satellites" |
+| `cryosat-2.glb` | CryoSat-2 | **ESA, by permission.** ESA Visuals by Earth Online, https://visuals.earth.esa.int/models/high-res/Cryosat-transformed.glb, made for ESA by designdata.de |
+| `suomi-npp.glb` | Suomi NPP, NOAA-20 | https://science.nasa.gov/3d-resources/suomi-national-polar-orbiting-partnership-suomi-npp/ — `…(Suomi NPP).glb`; NOAA-20's bus layout "is the same" (Ball), and NOAA publishes no model of it |
+| `goes-r.glb` | GOES-16, 17, 18, 19 | https://science.nasa.gov/mission/goes-spacecraft-3d-model/ — `GOES-R.glb`, "GOES-R,S,T (does not contain CCOR)": GOES-19's coronagraph is not drawn (see Licence). 3D Resources' GOES model is of an earlier generation, and not used |
+| `tdrs-gen1.glb` | TDRS-3, 5, 6, 7 | https://science.nasa.gov/3d-resources/tracking-and-data-relay-satellites-trds-e/ — `Tracking and Data Relay Satellites (TRDS) (E).glb` (NASA's spelling): TRW's first generation |
+| `tdrs-gen2.glb` | TDRS-8, 11, 12, 13 | https://science.nasa.gov/3d-resources/tracking-and-data-relay-satellites-tdrs-b/ — `Tracking and Data Relay Satellites (TDRS) (B).glb`, credited NASA/JPL/Eyes on the Solar System: Boeing's second generation, whose 21 by 13 m it measures; the third is 21 m across too |
 
 One model serves both Voyagers and Pioneer 10's serves Pioneer 11: each pair was built
 alike, and no model of the second of either has been published.
@@ -190,6 +246,22 @@ NASA 3D Resources, NASA's Eyes, Sketchfab and Wikimedia Commons.
 Each operator is to be asked for permission; a model is added only once an answer or a
 licence allows it, and recorded here with it.
 
+Thirteen named Earth satellites are NO MODEL boxes of published dimensions; `looks.ts`
+has every figure and source. Searched 2026-10-21 the same way: the operators' sites, NASA
+3D Resources and its mirror, NASA's mission and JPL's sites, NASA SVS, ESA's Sci-Fleet,
+SPICE and Visuals, CNES, NOAA, Sketchfab and Wikimedia Commons.
+
+| Satellite | Operator | What exists |
+|---|---|---|
+| Tiangong | CMSA | None from CMSA. Sketchfab's are Standard-licensed, state no licence, or are of Tiangong-1; one CC BY upload of unknown provenance and configuration is not used. |
+| NuSTAR, IXPE, IRIS, TIMED, PACE | NASA (IXPE with ASI) | None. IXPE's old nasa3d.arc.nasa.gov listing, an export-restricted file, is gone; PACE has a paper model only. |
+| SWOT | NASA, CNES | A paper model (CNES); no 3D file. |
+| Jason-3 | NOAA, EUMETSAT, CNES, NASA | None of its own. NASA's Jason-2 (OSTM) model measures 1.0 x 0.5 x 2.2 units against 1 x 1 x 3.7 m and a 9.7 m span: no one factor fits, so it does not stand in. |
+| Sentinel-2A, 2B | ESA | None from ESA (not on Sci-Fleet, SPICE, Visuals or ESA's Sketchfab); store models only. |
+| NOAA-21 | NOAA, NASA | None: NOAA has paper models. Its Northrop Grumman bus is not NOAA-20's, so Suomi NPP's model does not stand in. |
+| Hinode | JAXA | NASA 3D Resources' Hinode (Solar-B) is 1.1 times as tall as it is wide where Hinode is 4 m on 1.6 m: not to scale, not used. |
+| Envisat | ESA | ESA Visuals' model is not to scale -- its array 10.6 m long against 14 m, its ASAR 6.8 m against 10 m, while the array's width is the real 5 m -- and no uniform factor fits it, so it is not used. |
+
 ## Processing
 
 Downloaded 2026-10-06 and compressed with glTF-Transform 4.5.1, two commands per file:
@@ -206,6 +278,20 @@ bits, and JWST lost a third of its vertices to it. Only bitwise-identical vertic
 merged now. Every model's bounds were checked unchanged afterwards. 50 MB of sources
 became 5.9 MB, most of it Europa Clipper (35.7 MB to 3.7 MB). The app decodes meshopt
 with three.js's own decoder, fetched with the first model.
+
+The Earth satellites' 24 files went the same way on 2026-10-21, and each keeps every
+triangle of its source, checked file by file: ICESat-2 751,736, GPM 282,774, SDO 272,770,
+the ISS 247,547, Fermi 172,788, MMS 157,842, Terra 117,120, GOES-R 93,121, Aura 86,821,
+Landsat 85,364, SMAP 70,715, TDRS (first) 66,962, Aqua 49,401, OCO-2 41,004, Swift
+38,032, Chandra 30,132, Sentinel-6 22,866, SMILE 22,843, Hubble 21,129, TDRS (second)
+20,014, XMM-Newton 17,178, CryoSat-2 5,461, Suomi NPP 4,024 and GRACE-FO 3,652. The
+sources' Draco geometry was decoded by glTF-Transform as it read them. Two needed one
+step more. XMM-Newton's and SMILE's OBJ files were converted to GLB first with Cesium's
+obj2gltf 3.2, triangles, normals and texture coordinates as the OBJ has them. Terra's GLB
+names its two textures as TGA files in a `Terra.fbm` folder NASA does not publish; the
+two dangling references were dropped, so Terra is drawn in its materials' own colours,
+its geometry untouched. 125 MB of sources became 24.9 MB, 4.9 MB of it the ISS and 5.8 MB
+ICESat-2's 751,736 triangles.
 
 Units and axes are documented nowhere in the sources. Both were measured: see `SHAPES` in
 `tools/src/catalog.ts`.

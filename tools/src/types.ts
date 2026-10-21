@@ -496,6 +496,14 @@ export type CraftAxis = readonly [number, number, number];
  * shield on the Sun, JWST its sunshield, and the solar-powered craft their arrays. That
  * fixes one axis. The roll about it is not published for any of them and is set by
  * convention -- `rollAxis` held as near ecliptic north as the pointing allows.
+ *
+ * **An Earth satellite** flies one of two rules. An Earth observer, a weather or relay
+ * satellite and the ISS fly in the local-vertical, local-horizontal frame (LVLH): one
+ * side kept on Earth's centre, nadir, and one axis along the orbital velocity, so both
+ * axes are known and nothing is left to convention -- `pointsAt: 'nadir'`, `rollAxis`
+ * the axis that flies forward. An observatory points inertially at whatever its
+ * observing plan says, which no data here carries: it is drawn by its power rule, arrays
+ * to the Sun, and `facingNote` says the real pointing is not known.
  */
 export interface CraftShape {
   /** File under web/public/models/, or null to draw the box instead. */
@@ -531,9 +539,11 @@ export interface CraftShape {
   readonly boxM: readonly [number, number, number] | null;
   /**
    * What the craft keeps `pointingAxis` on: the Earth, the Sun, or -- for Wind, whose
-   * spin axis is held within a degree of it -- the south ecliptic pole.
+   * spin axis is held within a degree of it -- the south ecliptic pole. `nadir` is an
+   * Earth satellite's LVLH attitude: the axis on Earth's centre and `rollAxis` along its
+   * velocity about Earth.
    */
-  readonly pointsAt: 'earth' | 'sun' | 'ecliptic-south' | 'zenith';
+  readonly pointsAt: 'earth' | 'sun' | 'ecliptic-south' | 'zenith' | 'nadir';
   /** What it keeps there, for saying so on screen. */
   readonly pointingPart:
     | 'dish'
@@ -541,14 +551,24 @@ export interface CraftShape {
     | 'sunshield'
     | 'solar-arrays'
     | 'spin-axis'
-    | 'deck';
+    | 'deck'
+    | 'instruments'
+    | 'antennas'
+    | 'body-axes';
   /** In the craft's own frame: the dish's boresight, the shield's or the arrays' normal. */
   readonly pointingAxis: CraftAxis;
   /**
    * In the craft's own frame, perpendicular to `pointingAxis`: held toward ecliptic north
-   * -- or, for a craft on the ground, its front, along its heading.
+   * -- or, for a craft on the ground, its front, along its heading; for `nadir`, the axis
+   * that flies forward, along the velocity.
    */
   readonly rollAxis: CraftAxis;
+  /**
+   * Where the rule stands in for a pointing that is not known -- an observatory turning
+   * from target to target on a plan no data here carries -- the panel's words for it.
+   * Absent where the rule is how the craft flies.
+   */
+  readonly facingNote?: string;
 }
 
 
@@ -1250,6 +1270,14 @@ export interface NamedSatellite {
   readonly flags: number;
   /** What SGP4 does poorly for it, in the info panel's words; null where it is the right model. */
   readonly note: string | null;
+  /**
+   * Largest deployed dimension, metres, as published: what the body's radius stands for,
+   * as a spacecraft's does (Mission's note). Present with `shape`, and only with it; data
+   * from before the shapes has neither, and such a satellite stays a marker.
+   */
+  readonly spanM?: number;
+  /** What it is drawn as up close, as a spacecraft is: see CraftShape. */
+  readonly shape?: CraftShape;
   readonly omm: SatelliteOmm;
 }
 

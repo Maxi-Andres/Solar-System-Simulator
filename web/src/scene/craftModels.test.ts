@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { CATALOG } from '@sss/tools/catalog';
+import { NAMED_SATELLITES } from '@sss/tools/satellites/named';
 import type { CraftShape } from '@sss/tools/types';
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -56,11 +57,18 @@ vi.mock('three/examples/jsm/loaders/GLTFLoader.js', () => ({
 
 const MODELS = join(import.meta.dirname, '../../public/models');
 
-const shapes = CATALOG.flatMap((body) =>
+const craftShapes = CATALOG.flatMap((body) =>
   body.mission === null || body.mission.shape === null
     ? []
     : [{ id: body.id, shape: body.mission.shape }],
 );
+
+/** The named Earth satellites' shapes, as named.json carries them: see named.ts. */
+const satelliteShapes = NAMED_SATELLITES.flatMap((entry) =>
+  entry.look === null ? [] : [{ id: `sat-${entry.id}`, shape: entry.look.shape as CraftShape }],
+);
+
+const shapes = [...craftShapes, ...satelliteShapes];
 
 /**
  * Each model's extent, x by y by z in metres, as measured on NASA's original file before
@@ -114,6 +122,31 @@ const SOURCE_EXTENTS: Record<string, readonly [number, number, number]> = {
   'orion.glb': [17.63, 7.256, 11.283],
   'hayabusa2.glb': [4.241, 2.746, 5.999],
   'danuri.glb': [6.301, 2.793, 2.809],
+  // The named Earth satellites' (satellites/looks.ts), measured on each source file.
+  'iss.glb': [111.988, 68.784, 58.627],
+  'hubble.glb': [11.067, 16.727, 12.361],
+  'chandra.glb': [13.78, 5.138, 19.507],
+  'xmm-newton.glb': [15.923, 4.364, 10.099],
+  'swift.glb': [39.915, 29.44, 28.262],
+  'fermi.glb': [8.546, 12.098, 62.308],
+  'sdo.glb': [37.017, 30.747, 37.035],
+  'mms.glb': [14.512, 8.51, 14.512],
+  'smile.glb': [4.846, 3.521, 9.821],
+  'terra.glb': [13621.761, 10276.638, 26053.829],
+  'aqua.glb': [9.399, 17.777, 5.079],
+  'aura.glb': [8.733, 18.7, 3.435],
+  'landsat-8.glb': [4.97, 10.037, 12.259],
+  'grace-fo.glb': [2.027, 1.0, 3.254],
+  'smap.glb': [6.421, 9.516, 6.185],
+  'icesat-2.glb': [3.796, 2.482, 10.056],
+  'oco-2.glb': [7.627, 15.416, 39.865],
+  'gpm.glb': [189.62, 268.404, 431.896],
+  'sentinel-6.glb': [5.133, 2.324, 4.371],
+  'cryosat-2.glb': [2.571, 1.911, 4.744],
+  'suomi-npp.glb': [2.569, 4.183, 8.959],
+  'goes-r.glb': [8.247, 12.097, 15.261],
+  'tdrs-gen1.glb': [94.44, 21.242, 75.448],
+  'tdrs-gen2.glb': [21.121, 5.759, 13.11],
 };
 
 /**
@@ -158,9 +191,31 @@ const PUBLISHED: Record<string, { readonly axis: 0 | 1 | 2; readonly metres: num
   'escapade.glb': { axis: 0, metres: 4.88, within: 0.01 },
   'hayabusa2.glb': { axis: 2, metres: 6, within: 0.01 },
   'danuri.glb': { axis: 0, metres: 6.3, within: 0.01 },
+  // The named Earth satellites'; sources in satellites/looks.ts.
+  'iss.glb': { axis: 0, metres: 109, within: 0.03 },
+  'chandra.glb': { axis: 2, metres: 19.5, within: 0.01 },
+  'xmm-newton.glb': { axis: 0, metres: 16, within: 0.01 },
+  'swift.glb': { axis: 1, metres: 5.64, within: 0.001 },
+  'fermi.glb': { axis: 2, metres: 15, within: 0.001 },
+  'sdo.glb': { axis: 2, metres: 6.25, within: 0.001 },
+  'smile.glb': { axis: 2, metres: 9.8, within: 0.01 },
+  'terra.glb': { axis: 0, metres: 6.8, within: 0.001 },
+  'aqua.glb': { axis: 1, metres: 16.7, within: 0.07 },
+  'aura.glb': { axis: 1, metres: 17.37, within: 0.08 },
+  'grace-fo.glb': { axis: 2, metres: 3.123, within: 0.05 },
+  'smap.glb': { axis: 1, metres: 9.7, within: 0.02 },
+  'icesat-2.glb': { axis: 2, metres: 10, within: 0.01 },
+  'oco-2.glb': { axis: 2, metres: 9, within: 0.001 },
+  'gpm.glb': { axis: 2, metres: 11.6, within: 0.001 },
+  'sentinel-6.glb': { axis: 0, metres: 5.13, within: 0.01 },
+  'cryosat-2.glb': { axis: 2, metres: 4.6, within: 0.04 },
+  'tdrs-gen1.glb': { axis: 0, metres: 17.4, within: 0.001 },
+  'tdrs-gen2.glb': { axis: 0, metres: 21, within: 0.01 },
   // IMAP's box is its boom; CAPSTONE's arrays are unpublished; Orion's span is the
   // diagonal of its X of wings, 19.34 m, along no one axis of the file.
-  // Wind is scaled by its drum, which is not an extent of the file: its booms are.
+  // Wind is scaled by its drum, which is not an extent of the file: its booms are; so is
+  // MMS. Hubble's file is longer than the telescope by its open aperture door: see below.
+  // Landsat's, Suomi NPP's and GOES-R's overall sizes are unpublished.
 };
 
 interface MeshoptView {
@@ -349,7 +404,7 @@ async function forEachVertex(
 describe('the spacecraft models', () => {
   it('gives every craft but two a shape: a model, or a box of positive size', () => {
     // Aditya-L1 has no three published dimensions, and keeps its marker.
-    expect(shapes).toHaveLength(53);
+    expect(craftShapes).toHaveLength(53);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();
@@ -418,6 +473,21 @@ describe('the spacecraft models', () => {
     },
   );
 
+  it('hubble.glb is as long as Hubble, aft bulkhead to the light shield’s rim', async () => {
+    // The tube's wall, between 1.9 and 2.4 m off the optical axis (y): its length is
+    // NASA's 13.3 m within 3%, the aperture door, open above it, left out.
+    let low = Infinity;
+    let high = -Infinity;
+    await forEachVertex('hubble.glb', (point) => {
+      const r = Math.hypot(point.x, point.z);
+      if (r > 1.9 && r < 2.4) {
+        low = Math.min(low, point.y);
+        high = Math.max(high, point.y);
+      }
+    });
+    expect(Math.abs(high - low - 13.3) / 13.3).toBeLessThan(0.03);
+  });
+
   it.each(Object.keys(PUBLISHED))('%s comes out at its published size', async (file) => {
     const { axis, metres, within } = PUBLISHED[file]!;
     const shape = shapes.find(({ shape }) => shape.model === file)!.shape;
@@ -459,6 +529,24 @@ describe('craftOrientation', () => {
     const q = craftOrientation(shape, { x: 0, y: 0, z: 1 });
     expect(turned(shape.pointingAxis, q).z).toBeCloseTo(1, 9);
     expect(Number.isFinite(q.w)).toBe(true);
+  });
+
+  it('flies the ISS in LVLH: +Z to Earth, +X along its velocity', () => {
+    // NASA's ISS axes on the model: +X the modules' forward end, Harmony, at model +z; +Z
+    // nadir, the side away from the truss, at model -y. See satellites/shapes.ts.
+    const iss = satelliteShapes.find(({ id }) => id === 'sat-iss')!.shape;
+    expect(iss.pointsAt).toBe('nadir');
+    const toEarth = { x: -6000, y: 2500, z: 1800 };
+    const velocity = { x: 1.2, y: 4.1, z: -5.9 };
+    const q = craftOrientation(iss, toEarth, new THREE.Quaternion(), velocity);
+    const nadir = new THREE.Vector3(toEarth.x, toEarth.y, toEarth.z).normalize();
+    expect(turned(iss.pointingAxis, q).distanceTo(nadir)).toBeLessThan(1e-9);
+    // Forward is the velocity with its radial part taken out: the local horizontal.
+    const v = new THREE.Vector3(velocity.x, velocity.y, velocity.z);
+    const horizontal = v.addScaledVector(nadir, -v.dot(nadir)).normalize();
+    expect(turned(iss.rollAxis, q).distanceTo(horizontal)).toBeLessThan(1e-9);
+    expect(turned([0, -1, 0], q).distanceTo(nadir)).toBeLessThan(1e-9);
+    expect(turned([0, 0, 1], q).distanceTo(horizontal)).toBeLessThan(1e-9);
   });
 
   it('turns a shield toward the Sun the same way, whatever axis it is on', () => {
@@ -515,6 +603,12 @@ async function trianglesOf(file: string): Promise<number> {
  */
 const TRIANGLES: Record<string, number> = {
   'juice.glb': 959_923,
+  'icesat-2.glb': 751_736,
+  'gpm.glb': 282_774,
+  'sdo.glb': 272_770,
+  'iss.glb': 247_547,
+  'xmm-newton.glb': 17_178,
+  'grace-fo.glb': 3_652,
   'hera.glb': 479_908,
   'dart.glb': 446_397,
   'hayabusa2.glb': 207_891,
@@ -555,7 +649,9 @@ describe('when a shape is worth its triangles', () => {
     expect(shapeShownPx(TRIANGLES['capstone.glb']!)).toBeCloseTo(1.69, 2);
     expect(shapeShownPx(TRIANGLES['solar-orbiter.glb']!)).toBeCloseTo(2.33, 2);
     expect(shapeShownPx(TRIANGLES['voyager.glb']!)).toBeCloseTo(3.4, 2);
-    for (const file of ['juice.glb', 'orion.glb', 'europa-clipper.glb', 'perseverance.glb']) {
+    // The ISS's 247,547 are drawn from 4 px too, where it is 4,900 triangles a pixel: never
+    // at a speck while the marker stands in for it.
+    for (const file of ['juice.glb', 'orion.glb', 'europa-clipper.glb', 'perseverance.glb', 'iss.glb', 'icesat-2.glb']) {
       expect(shapeShownPx(TRIANGLES[file]!), file).toBe(MARKER_FULL_PX);
     }
   });
@@ -609,14 +705,16 @@ describe('when a shape is worth its triangles', () => {
 });
 
 describe('ESA’s models, by its written permission', () => {
-  const esa = CATALOG.filter((body) => body.mission?.shape?.modelOwner === 'ESA');
+  const esa = shapes.filter(({ shape }) => shape.modelOwner === 'ESA');
 
   it('are every ESA craft here, each drawn with ESA’s own model', () => {
-    // The first permission named six; the second covers ESA's models generally.
-    expect(esa.map((body) => body.id).sort()).toEqual(
+    // The first permission named six; the second covers ESA's models generally. Of the
+    // named Earth satellites, Sentinel-2 has no ESA model published and Envisat's is not
+    // to scale: both are boxes.
+    expect(esa.map(({ id }) => id).sort()).toEqual(
       [
         'bepicolombo', 'euclid', 'exomars-tgo', 'gaia', 'hera', 'juice', 'mars-express',
-        'solar-orbiter',
+        'solar-orbiter', 'sat-xmm-newton', 'sat-smile', 'sat-cryosat-2',
       ].sort(),
     );
   });
@@ -625,17 +723,20 @@ describe('ESA’s models, by its written permission', () => {
     expect(ESA_MODEL_CREDIT).toBe('3D models © ESA (European Space Agency).');
     const info = await readFile(join(import.meta.dirname, '../ui/InfoPanel.tsx'), 'utf8');
     const about = await readFile(join(import.meta.dirname, '../ui/AboutPanel.tsx'), 'utf8');
+    // An Earth satellite's panel is its own: XMM-Newton, SMILE and CryoSat-2 are ESA's.
+    const satellite = await readFile(join(import.meta.dirname, '../ui/SatelliteFacts.tsx'), 'utf8');
     expect(info).toContain('ESA_MODEL_CREDIT');
     expect(about).toContain('ESA_MODEL_CREDIT');
+    expect(satellite).toContain('ESA_MODEL_CREDIT');
   });
 
   it('are recorded as ESA’s, by permission, in the credits', async () => {
     const credits = await readFile(join(MODELS, 'CREDITS.md'), 'utf8');
     expect(credits).toContain(ESA_MODEL_CREDIT);
-    for (const body of esa) {
-      const file = body.mission!.shape!.model!;
+    for (const { id, shape } of esa) {
+      const file = shape.model!;
       const row = credits.split(/\r?\n/).find((line) => line.startsWith('| `' + file + '`'));
-      expect(row, body.id).toContain('ESA, by permission');
+      expect(row, id).toContain('ESA, by permission');
     }
   });
 });
