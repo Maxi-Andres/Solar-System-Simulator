@@ -254,14 +254,24 @@ describeWithData('the generated comets', () => {
     }
   });
 
-  it('puts Halley where its orbit says, near aphelion now', () => {
-    const k = comets.info.names.findIndex((name) => name.startsWith('1P/'));
-    expect(k).toBeGreaterThanOrEqual(0);
+  it('puts every kind of conic at its perihelion distance at its perihelion time', () => {
+    // Any comet of each kind still in the cloud -- not a famous one by name: those are
+    // bodies of their own since they were moved to JPL's vectors, and left out of here
+    // (CometInfo.excluded). Halley was this test's comet until then, and CI found it gone.
     const out = new Float64Array(comets.info.count * 3);
-    // Halley reached aphelion, 35 AU, in December 2023.
-    const r = cometPosition(comets, k, 2460300.5, MU, out);
-    expect(r).toBeGreaterThan(34);
-    expect(r).toBeLessThan(36);
+    const e = (k: number) => comets.records[k * COMET_FLOATS + COMET.e]!;
+    const kinds = [
+      comets.info.names.findIndex((_, k) => e(k) > 0.5 && e(k) < 0.99),
+      comets.info.names.findIndex((_, k) => e(k) === 1),
+      comets.info.names.findIndex((_, k) => e(k) > 1.001),
+    ];
+    for (const k of kinds) {
+      expect(k, 'a comet of this kind in the cloud').toBeGreaterThanOrEqual(0);
+      const q = comets.records[k * COMET_FLOATS + COMET.q]! / AU;
+      const tp = comets.info.referenceJd + comets.records[k * COMET_FLOATS + COMET.tp]!;
+      const r = cometPosition(comets, k, tp, MU, out);
+      expect(Math.abs(r - q) / q, comets.info.names[k]).toBeLessThan(1e-6);
+    }
     expect(SECONDS_PER_DAY).toBe(86_400);
   });
 });
@@ -277,7 +287,10 @@ describeWithData('a comet made a body', () => {
     const comets = generated!;
     const mu = s.body('sun').gmBodyOnlyKm3S2;
     const open = comets.info.names.findIndex((_, k) => comets.records[k * COMET_FLOATS + COMET.e]! > 1);
-    const closed = comets.info.names.findIndex((name) => name.startsWith('1P/'));
+    // A closed one still in the cloud; Halley, which this was, is a body of its own now.
+    const closed = comets.info.names.findIndex(
+      (_, k) => comets.records[k * COMET_FLOATS + COMET.e]! > 0.5 && comets.records[k * COMET_FLOATS + COMET.e]! < 0.99,
+    );
     const openId = addCometBody(s, comets, open, 'sun');
     const closedId = addCometBody(s, comets, closed, openId);
     const jd = comets.info.referenceJd + 12;
@@ -292,6 +305,10 @@ describeWithData('a comet made a body', () => {
     expect(s.body(openId).drawOrbit).toBe(false);
     expect(s.elementsFor(openId)).toBeNull();
     expect(s.body(closedId).drawOrbit).toBe(true);
-    expect(s.elementsFor(closedId)!.eccentricity).toBeCloseTo(0.967, 2);
+    // The eccentricity the body's ellipse is drawn with is the record's, osculating now.
+    expect(s.elementsFor(closedId)!.eccentricity).toBeCloseTo(
+      comets.records[closed * COMET_FLOATS + COMET.e]!,
+      2,
+    );
   });
 });

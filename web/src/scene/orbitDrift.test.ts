@@ -213,8 +213,13 @@ describeWithData('orbit drawn from the live state', () => {
     // advertised window; see 'reported orbit defects'. The ones a uniform polyline cannot
     // hold -- Apophis would need 138,000 segments against a cap of 16,384, and sagged
     // eighteen of its radii off its line -- are held by the refinement at the body.
+    // The asteroids and dwarf planets, not the famous comets: those are sampled the same
+    // way but can be on an open orbit on the build day -- ZTF and Tsuchinshan-ATLAS were,
+    // at e = 1.00007 and 1.00019 -- and an open orbit has no ellipse to drift from. They
+    // have a test of their own below.
     const named = s.bodies.filter(
-      (candidate) => candidate.parent === null && candidate.sampling !== undefined,
+      (candidate) =>
+        candidate.parent === null && candidate.sampling !== undefined && candidate.kind !== 'comet',
     );
     expect(named.length).toBeGreaterThan(10);
     for (const body of named) {
@@ -223,6 +228,29 @@ describeWithData('orbit drawn from the live state', () => {
         const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
         await s.whenLoadedAt(jd, [body.id]);
         const drift = driftInRadii(s, body.id, jd);
+        expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
+        expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
+      }
+    }
+  }, 300_000);
+
+  it('keeps every famous comet on its orbit when it has one, and draws none when it has not', async () => {
+    const comets = s.bodies.filter((candidate) => candidate.kind === 'comet' && candidate.sampling !== undefined);
+    for (const body of comets) {
+      const span = s.coverage(body.id)!;
+      for (const fraction of [0.003, 0.29, 0.61, 0.997]) {
+        const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
+        await s.whenLoadedAt(jd, [body.id]);
+        const drift = driftInRadii(s, body.id, jd);
+        // Open at this instant -- a near-parabolic comet can be either side of e = 1 from
+        // one month to the next -- there is no ellipse to drift from, and none is drawn.
+        const state = s.stateRelativeTo(body.id, 'sun', jd)!;
+        const openNow =
+          stateToOsculatingElements(state, s.body('sun').gmBodyOnlyKm3S2, jd, body.id, '500@10') === null;
+        if (openNow) {
+          expect(drift, `${body.id} at ${fraction}`).toBeNull();
+          continue;
+        }
         expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
         expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
       }
