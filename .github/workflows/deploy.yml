@@ -1,6 +1,7 @@
 name: Deploy to GitHub Pages
 
-# Runs on every push to main, plus a weekly refresh and a manual button.
+# Runs on every push to main, plus a weekly refresh, a daily satellite refresh and a
+# manual button.
 #
 # The weekly run is not cosmetic maintenance. The site ships a window of ephemerides
 # baked in at build time, and re-running keeps that window centred on the present so
@@ -11,8 +12,15 @@ on:
   push:
     branches: [main]
   schedule:
-    # Mondays at 06:00 UTC.
+    # Mondays at 06:00 UTC: everything, fetched fresh.
     - cron: '0 6 * * 1'
+    # Every day at 06:30 UTC: the Earth satellites only. Their elements are fitted for a
+    # few days either side of the run (the bulk model is measured for ±3 days, see
+    # tools/src/satellites/), so on a weekly deploy the published site would have none to
+    # show four days in seven. Re-fetching CelesTrak takes seconds; re-fetching Horizons
+    # takes an hour and a half and changes nothing in a day. So this run takes the rest
+    # of the data from the last full run and fetches only the satellites.
+    - cron: '30 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -45,10 +53,48 @@ jobs:
       - name: Type-check
         run: pnpm typecheck
 
-      # Always fetched fresh for a deploy, never from cache: the whole point of the
-      # run is to publish a window centred on today.
+      # The daily satellite run is the only one that does not fetch everything.
+      - name: Choose the run
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "30 6 * * *" ]; then
+            echo "satellites_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "satellites_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The daily run: everything but the satellites from the last full run. Its data is
+      # saved below under a key per run; the newest one matching the prefix comes back.
+      - name: Restore the last full run's data
+        id: restore
+        if: steps.mode.outputs.satellites_only == 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: web/public/data
+          key: deploy-data-none
+          restore-keys: |
+            deploy-data-
+
+      # A full run: always fetched fresh, never from cache -- the whole point of it is to
+      # publish a window centred on today. Also the daily run's fallback when no saved
+      # data came back (the cache is evicted after a week unused).
       - name: Fetch ephemerides from JPL Horizons
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         run: pnpm fetch:data
+
+      - name: Save the data for the daily satellite runs
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/save@v6
+        with:
+          path: web/public/data
+          key: deploy-data-${{ github.run_id }}
+
+      # The daily run's whole job: today's elements over yesterday's. If CelesTrak refuses
+      # (it answers 403 to a group fetched again before it updates, and runners share
+      # addresses), the run fails here and publishes nothing: yesterday's site stays up.
+      - name: Fetch Earth satellites from CelesTrak
+        if: steps.mode.outputs.satellites_only == 'true' && steps.restore.outputs.cache-matched-key != ''
+        run: pnpm fetch:satellites
 
       # Runs after the fetch so the integration tests have real data to check
       # against. They verify the published numbers against JPL's own values.
