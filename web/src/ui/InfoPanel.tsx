@@ -8,6 +8,9 @@ import { BeltBodyFacts } from './BeltBodyFacts.tsx';
 import { facingRule } from './facing.ts';
 import { Panel } from './Panel.tsx';
 import { SatelliteFacts } from './SatelliteFacts.tsx';
+import { StarFacts } from './StarFacts.tsx';
+import { isCatalogueStar } from '../core/starBodies.ts';
+import type { Stars3dSource } from '../core/stars3d.ts';
 
 /**
  * Facts about the focused body.
@@ -23,14 +26,34 @@ export interface InfoPanelProps {
   readonly jd: number;
   readonly distanceMode: DistanceMode;
   readonly tick: number;
+  /** For a star's details file; null before the sky is in. */
+  readonly stars3d?: Stars3dSource | null;
 }
 
-export function InfoPanel({ store, jd, distanceMode, tick }: InfoPanelProps) {
+export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: InfoPanelProps) {
   const focus = useViewStore((state) => state.focus);
   const closePanel = useViewStore((state) => state.closePanel);
   void tick;
 
   const body = store.body(focus);
+  // A star other than the Sun: its own facts, in place of an orbit about the Sun it does
+  // not have. See StarFacts.
+  if (isCatalogueStar(body)) {
+    return (
+      <Panel title={body.name} onClose={closePanel} width="17.5rem">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ color: body.color, fontSize: '0.9rem' }}>&#9679;</span>
+          <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>
+            star
+          </span>
+        </div>
+        <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
+          <StarFacts id={focus} jd={jd} stars3d={stars3d} />
+        </dl>
+      </Panel>
+    );
+  }
 
   // What the body orbits. A moon's orbital speed, period and apsides are about its
   // planet; quoting its speed against the Sun would mostly be the planet's.

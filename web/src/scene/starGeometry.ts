@@ -82,3 +82,40 @@ export function buildStarAttributes(catalog: StarCatalog): StarAttributes {
 export function yearsSinceEpoch(jdTdb: number): number {
   return (jdTdb - J2000_JD) / DAYS_PER_JULIAN_YEAR;
 }
+
+/**
+ * Where the sky's vertex shader puts star `index` at `years` from J2000: its direction,
+ * carried by its proper motion as a rotation of the unit vector -- STAR_VERTEX_SHADER's
+ * lines in TypeScript, in float64. What the 3D stars are measured against: from the Sun
+ * they must land in the same place (see stars3dSky.test.ts).
+ */
+export function skyDirection(attributes: StarAttributes, index: number, years: number): Vec3 {
+  const p = attributes.positions;
+  const length = Math.hypot(p[index * 3]!, p[index * 3 + 1]!, p[index * 3 + 2]!);
+  const d = { x: p[index * 3]! / length, y: p[index * 3 + 1]! / length, z: p[index * 3 + 2]! / length };
+  const pole = EQUATORIAL_POLE_IN_SCENE;
+  let east = {
+    x: pole.y * d.z - pole.z * d.y,
+    y: pole.z * d.x - pole.x * d.z,
+    z: pole.x * d.y - pole.y * d.x,
+  };
+  const eastLength = Math.hypot(east.x, east.y, east.z);
+  east =
+    eastLength > 1e-6
+      ? { x: east.x / eastLength, y: east.y / eastLength, z: east.z / eastLength }
+      : { x: 1, y: 0, z: 0 };
+  const north = {
+    x: d.y * east.z - d.z * east.y,
+    y: d.z * east.x - d.x * east.z,
+    z: d.x * east.y - d.y * east.x,
+  };
+  const pmEast = attributes.properMotions[index * 2]! * years;
+  const pmNorth = attributes.properMotions[index * 2 + 1]! * years;
+  const moved = {
+    x: d.x + east.x * pmEast + north.x * pmNorth,
+    y: d.y + east.y * pmEast + north.y * pmNorth,
+    z: d.z + east.z * pmEast + north.z * pmNorth,
+  };
+  const movedLength = Math.hypot(moved.x, moved.y, moved.z);
+  return vec3(moved.x / movedLength, moved.y / movedLength, moved.z / movedLength);
+}

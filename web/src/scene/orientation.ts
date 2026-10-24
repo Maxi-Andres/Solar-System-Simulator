@@ -29,7 +29,11 @@ import { cross, dot, length, normalize, vec3, type Vec3 } from '../core/vec3.ts'
 /**
  * Obliquity of the ecliptic at J2000, degrees.
  *
- * IAU 2006 value, 84381.406 arcseconds. This is the single rotation between the frame
+ * 84381.448 arcseconds: the IAU 1976 value, which is what the number below is (it was
+ * labelled the IAU 2006 one, 84381.406, which it is not -- the two differ by 0.042",
+ * 2e-7 rad). The 1976 value is the right one here, because it is the one JPL defines its
+ * "Ecliptic of J2000.0" with: every Horizons header says so ("IAU76 obliquity of
+ * 84381.448 arcseconds wrt ICRF X-Y plane"). This is the single rotation between the frame
  * the IAU pole directions are published in (ICRF equatorial) and the frame the
  * ephemerides and the scene live in (ICRF ecliptic). Getting it wrong tilts every
  * body in the Solar System by 23 degrees in unison, which is the kind of error that

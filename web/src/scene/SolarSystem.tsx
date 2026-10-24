@@ -489,7 +489,13 @@ export function SolarSystem({
       const smallMoon = isSmallMoon(definition);
       // An Earth satellite shares it too: it is never drawn as a sphere (no size is
       // published for it), and a hundred 64-segment spheres would be geometry for nothing.
-      const sharedSphere = smallMoon || definition.kind === 'satellite';
+      // And a catalogue star made a body (see starBodies.ts): no catalogue it comes from
+      // publishes a radius, so it is never drawn as a sphere either -- the star renderer
+      // draws its light.
+      const sharedSphere =
+        smallMoon ||
+        definition.kind === 'satellite' ||
+        (definition.kind === 'star' && definition.id !== 'sun');
       const geometry = sharedSphere
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
@@ -702,7 +708,9 @@ export function SolarSystem({
       const orbitCenter = `500@${parentDefinition.horizonsId}`;
 
       let glare: THREE.Mesh | null = null;
-      if (definition.kind === 'star') {
+      // The Sun's alone: the veil is scaled by its drawn disc (solarGlare.ts). Another star
+      // is a point source drawn by the star renderer, wings and all.
+      if (definition.id === 'sun') {
         // The Sun's own colour, from its colour index through the same Planck and CIE
         // path the stars use: scattered sunlight is still sunlight.
         const [red, green, blue] = starColor(SUN_COLOR_INDEX);

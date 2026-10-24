@@ -29,6 +29,8 @@ import {
   type SatelliteSource,
 } from '../core/satellites.ts';
 import { describeBody, layersFor, normalizeName, parentNameOf, searchBodies } from '../core/search.ts';
+import { addStarBody, starBodyId } from '../core/starBodies.ts';
+import type { StarNameIndex, Stars3dSource } from '../core/stars3d.ts';
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
@@ -61,6 +63,12 @@ import { Panel } from './Panel.tsx';
  * name, operator, or catalogue number ("25544", "1998-067A"). The others by CelesTrak's
  * name or number, after the comets: those on SGP4 first, then the dots, whose names are
  * fetched when the panel opens. Choosing one makes it a body (see satelliteBodies.ts).
+ *
+ * And the stars (step D2): every star with a proper name, a Bayer or Flamsteed letter, or
+ * in one of the nearest systems, by any of its designations -- "Sirius", "alf CMa", "HIP
+ * 32349", "Gaia DR3 ..." -- from the 3D stars' name index, fetched when the panel opens.
+ * Listed right after the bodies: a star is looked for by name. Choosing one makes it a
+ * body (see starBodies.ts) and asks for the 3D stars, so its light is drawn where it is.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -75,6 +83,9 @@ const COMET_LIMIT = 10;
 /** And at most this many satellites that are not bodies yet, after the comets. */
 const SATELLITE_LIMIT = 12;
 
+/** And at most this many stars that are not bodies yet, right after the bodies. */
+const STAR_LIMIT = 12;
+
 const ACCENT = '#3ddc84';
 
 /** A result: a body in the store, or entry `k` of the belt's name index. */
@@ -85,7 +96,9 @@ type Result =
   /** Entry `k` of the SGP4 tier (sgp4.json). */
   | { readonly kind: 'sgp4'; readonly k: number }
   /** Bulk record `k`. */
-  | { readonly kind: 'bulk'; readonly k: number };
+  | { readonly kind: 'bulk'; readonly k: number }
+  /** Entry `k` of the stars' name index. */
+  | { readonly kind: 'star'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -96,6 +109,8 @@ export function SearchPanel({
   comets,
   satellites,
   satelliteNames,
+  stars3d,
+  starNames,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -105,6 +120,8 @@ export function SearchPanel({
   readonly comets: CometSource;
   readonly satellites: SatelliteSource;
   readonly satelliteNames: LazySource<SatelliteNameIndex>;
+  readonly stars3d: Stars3dSource | null;
+  readonly starNames: LazySource<StarNameIndex> | null;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -123,6 +140,10 @@ export function SearchPanel({
   const cometData = useSyncExternalStore(comets.subscribe, () => comets.comets);
   const satelliteData = useSyncExternalStore(satellites.subscribe, () => satellites.value);
   const bulkNames = useSyncExternalStore(satelliteNames.subscribe, () => satelliteNames.value);
+  const starIndex = useSyncExternalStore(
+    starNames?.subscribe ?? noSubscribe,
+    () => starNames?.value ?? null,
+  );
   // The SGP4 tier's names, made comparable once, when the satellites arrive.
   const sgpIndex = useMemo(() => (satelliteData === null ? null : sgpSearchIndex(satelliteData)), [satelliteData]);
   // Four thousand names made comparable once, when the comets arrive.
@@ -140,7 +161,8 @@ export function SearchPanel({
     void comets.request();
     // The names wait on the satellites themselves, so this asks for both.
     void satelliteNames.request();
-  }, [store, names, comets, satelliteNames]);
+    void starNames?.request();
+  }, [store, names, comets, satelliteNames, starNames]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -162,8 +184,14 @@ export function SearchPanel({
             .filter(({ k }) => !store.isPropagatedBody(beltBodyId(nameIndex.names.tier[k]!, nameIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'name', k }));
     const fromSatellites = satelliteResults(store, query, satelliteData, sgpIndex, bulkNames);
-    return [...bodies, ...fromComets, ...fromSatellites, ...fromNames].slice(0, RESULT_LIMIT);
-  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames]);
+    const fromStars: Result[] =
+      starIndex === null
+        ? []
+        : searchNames(starIndex, query, STAR_LIMIT)
+            .filter(({ k }) => !store.isPropagatedBody(starBodyId(starIndex.names.tier[k]!, starIndex.names.index[k]!)))
+            .map(({ k }) => ({ kind: 'star', k }));
+    return [...bodies, ...fromStars, ...fromComets, ...fromSatellites, ...fromNames].slice(0, RESULT_LIMIT);
+  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames, starIndex]);
 
   // A new query starts at the top.
   useEffect(() => {
@@ -214,6 +242,18 @@ export function SearchPanel({
     }
     if (result.kind === 'body') {
       go(result.id);
+      return;
+    }
+    if (result.kind === 'star') {
+      if (stars3d !== null && starIndex !== null) {
+        // Its light is drawn by the 3D stars: asked for now, not when the camera leaves.
+        void stars3d.request();
+        addStarBody(store, stars3d, starIndex, result.k, focus)
+          .then(go)
+          .catch((error: unknown) => {
+            console.error(`Could not go to ${starIndex.names.display[result.k]}`, error);
+          });
+      }
       return;
     }
     if (result.kind === 'comet') {
@@ -271,7 +311,7 @@ export function SearchPanel({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Planet, moon, spacecraft, satellite…"
+        placeholder="Planet, moon, star, spacecraft…"
         aria-label="Search bodies"
         aria-controls="search-results"
         spellCheck={false}
@@ -313,6 +353,7 @@ export function SearchPanel({
             cometData?.info.names ?? null,
             satelliteData,
             bulkNames,
+            starIndex,
           );
           return (
             <li
@@ -370,7 +411,26 @@ function describeResult(
   cometNames: readonly string[] | null,
   satellites: Satellites | null,
   bulkNames: SatelliteNameIndex | null,
+  starIndex: StarNameIndex | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'star') {
+    const names = starIndex!.names;
+    const k = result.k;
+    const nearest = names.nearest[k];
+    return {
+      glyph: '·',
+      color: '#f4ecd2',
+      name: names.display[k]!,
+      detail: [
+        'Star',
+        names.spectralType[k] ?? undefined,
+        names.system[k] !== null && names.system[k] !== names.display[k] ? names.system[k]! : undefined,
+        nearest == null ? undefined : `nearest system no. ${nearest}`,
+      ]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'body') {
     const body = store.body(result.id);
     return {
@@ -413,6 +473,8 @@ function describeResult(
     detail: ['Asteroid', family?.label, designation ?? undefined].filter((part) => part !== undefined).join(' · '),
   };
 }
+
+const noSubscribe = (): (() => void) => () => {};
 
 /** The SGP4 tier, searchable: CelesTrak's name, and the COSPAR id as a second. */
 function sgpSearchIndex(satellites: Satellites): Searchable & { readonly byNorad: ReadonlyMap<number, number> } {

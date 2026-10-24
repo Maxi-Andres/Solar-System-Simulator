@@ -122,6 +122,11 @@ export function isSmallMoon(body: BodyDefinition): boolean {
  * named satellite goes with the dots of its group.
  */
 export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>): boolean {
+  // A catalogue star made a body (starBodies.ts) is in no layer: the stars are always
+  // drawn, and so is the marker of one you went to. The Sun rides with the Planets.
+  if (body.kind === 'star' && body.id !== 'sun') {
+    return true;
+  }
   return (
     visibleKinds.has(body.kind) &&
     (!isSmallMoon(body) || visibleKinds.has(SMALL_MOON_LAYER)) &&

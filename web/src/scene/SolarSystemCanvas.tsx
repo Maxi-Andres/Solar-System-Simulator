@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import type { BeltSource } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { SatelliteSource } from '../core/satellites.ts';
+import type { Stars3dSource } from '../core/stars3d.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
@@ -14,9 +15,12 @@ import { renderDemand } from '../core/renderDemand.ts';
 import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
+import { DistanceRings } from './DistanceRings.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
+import { ScaleBarProbe } from './ScaleBarProbe.tsx';
+import type { ScaleBarElements } from '../ui/ScaleBar.tsx';
 import type { SharedFrame } from './satellites.ts';
 // Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
@@ -72,6 +76,10 @@ export { FOV_DEG };
 export interface SolarSystemCanvasProps {
   readonly store: EphemerisStore;
   readonly stars: StarCatalog;
+  /** The stars at their real distances; null until the sky is in. */
+  readonly stars3d: Stars3dSource | null;
+  /** The Star Map layer. */
+  readonly showStarMap: boolean;
   readonly belt: BeltSource;
   /** Which of the belt's families are drawn; see the view store's `beltFamilies`. */
   readonly beltFamilies: number;
@@ -88,11 +96,18 @@ export interface SolarSystemCanvasProps {
   readonly lighting: LightingMode;
   readonly visibleKinds: ReadonlySet<string>;
   readonly labelElements: RefObject<Map<BodyId, HTMLElement | null>>;
+  readonly showDistanceRings: boolean;
+  /** The distance rings' names, by ring, laid over the canvas like the bodies'. */
+  readonly ringLabels: RefObject<(HTMLElement | null)[]>;
+  /** The scale bar's nodes, written by ScaleBarProbe. */
+  readonly scaleBar: RefObject<ScaleBarElements | null>;
 }
 
 export function SolarSystemCanvas({
   store,
   stars,
+  stars3d,
+  showStarMap,
   belt,
   beltFamilies,
   comets,
@@ -107,6 +122,9 @@ export function SolarSystemCanvas({
   lighting,
   visibleKinds,
   labelElements,
+  showDistanceRings,
+  ringLabels,
+  scaleBar,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -134,6 +152,8 @@ export function SolarSystemCanvas({
     lighting,
     visibleKinds,
     satelliteChips,
+    showDistanceRings,
+    showStarMap,
   ]);
 
   return (
@@ -150,7 +170,15 @@ export function SolarSystemCanvas({
       camera={{ fov: FOV_DEG, near: CAMERA_NEAR_UNITS, far: CAMERA_FAR_UNITS }}
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
-      <Starfield catalog={stars} clock={clock} />
+      <Starfield
+        catalog={stars}
+        clock={clock}
+        store={store}
+        focus={focus}
+        stars3d={stars3d}
+        showMap={showStarMap}
+        sunShown={visibleKinds.has('star')}
+      />
       <SolarSystem
         store={store}
         clock={clock}
@@ -193,6 +221,13 @@ export function SolarSystemCanvas({
         chips={satelliteChips}
         sharedFrame={sharedFrame}
       />
+      <DistanceRings
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showDistanceRings}
+        labels={ringLabels}
+      />
       <LabelProjector
         store={store}
         clock={clock}
@@ -215,6 +250,7 @@ export function SolarSystemCanvas({
         minDistance={radiusUnits * 1.05}
         maxDistance={kmToUnits(MAX_VIEW_DISTANCE_KM)}
       />
+      <ScaleBarProbe elements={scaleBar} />
       {/* Decides whether another frame follows this one. See renderDemand.ts. */}
       <RenderOnDemand store={store} />
     </Canvas>

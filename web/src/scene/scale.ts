@@ -68,18 +68,54 @@ export const FOV_DEG = 27;
 export const AU_KM = 149_597_870.7;
 
 /**
- * The farthest the camera may pull back from its focus, km: 2,000 AU.
- *
- * Set by the farthest thing in the catalog. Voyager 1 is 207 AU from the Sun at the end
- * of the data window, and fitting it inside half the vertical field takes 207 AU /
- * tan(13.5 degrees) = 862 AU; 2,000 puts every craft in the inner half of the picture
- * with the planets a dot in the middle, which is the view NASA Eyes zooms out to.
- *
- * Bounded the other way by the star sphere (`SPHERE_RADIUS`, 6,685 AU): the sky follows
- * the camera at that radius, and the Sun must stay in front of it. Phase D, out to the
- * nearest stars, is what moves both.
+ * One light year, km: the distance light travels in a Julian year of 365.25 days, as the
+ * IAU defines it -- 299,792.458 km/s times 31,557,600 s. Exact, not measured.
  */
-export const MAX_VIEW_DISTANCE_KM = 2000 * AU_KM;
+export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
+
+/**
+ * One parsec, km: the distance at which 1 AU subtends one arcsecond, 648,000/pi AU (IAU
+ * 2015 resolution B2). The unit the star catalogues give distances in, through parallax.
+ */
+export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
+
+/**
+ * The farthest the camera may pull back from its focus, km: **3,000 light years.**
+ *
+ * Set, as it was at 2,000 AU, by the farthest thing worth seeing whole -- and by the same
+ * rule. Then it was Voyager 1 at 207 AU, and 2,000 AU put every craft in the inner half of
+ * the picture. Now it is the edge of the Gaia Catalogue of Nearby Stars, the 100-parsec
+ * census the 3D stars are complete to: a sphere 326 light years in radius. Seen from
+ * outside, a sphere fills a field of half-angle h when the camera is R / sin(h) away, so
+ * putting it in the inner half of the 27 degree frame -- an angular radius of 6.75
+ * degrees -- takes 326 / sin(6.75 deg) = 2,773 ly. 3,000 is that, rounded up.
+ *
+ * Not 1,000: from there the 100-pc sphere is 19 degrees in radius and overfills the
+ * frame's height, so the one object this scale exists to show could never be seen whole.
+ *
+ * What it costs is measured where it is paid: the depth buffer's range (logDepth.ts), and
+ * float32 at the camera, which is 2.8e13 scene units out at this distance -- a step of
+ * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
+ * (5e-4 rad) for anything the camera can see from there.
+ */
+export const MAX_VIEW_DISTANCE_KM = 3000 * LIGHT_YEAR_KM;
+
+/**
+ * Where the Solar System ends, for the breadcrumb and the scale's levels: the camera this
+ * far from its focus or farther is looking at the Solar neighbourhood. 10,000 AU, 0.16
+ * ly -- inside the Oort cloud's inner edge, but past everything the catalog holds, so
+ * from here the whole Solar System is a point and the nearest stars are what is around.
+ * A convention for naming a level, not a boundary anything physical draws.
+ */
+export const NEIGHBOURHOOD_FROM_KM = 10_000 * AU_KM;
+
+/**
+ * Where the breadcrumb's Solar Neighbourhood puts the camera, km from the Sun: 50 light
+ * years. From there the 10-ly ring -- a dozen systems inside it -- spans 80 % of the
+ * frame's half-height, tan^-1(10 / 50) = 11.3 of 13.5 degrees, and the 50-ly ring is
+ * the circle the camera stands on.
+ */
+export const NEIGHBOURHOOD_FRAMING_KM = 50 * LIGHT_YEAR_KM;
 
 export function kmToUnits(km: number): number {
   return km / KM_PER_UNIT;

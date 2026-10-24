@@ -14,6 +14,8 @@ import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
 import { BodyPicker } from './ui/BodyPicker.tsx';
+import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
+import { DISTANCE_RINGS_LY, ringLabel } from './scene/distanceRings.ts';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
@@ -52,8 +54,20 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
 };
 
 export function App() {
-  const { store, stars, belt, comets, names, satellites, satelliteNames, clock, error, readout } =
-    useSimulation();
+  const {
+    store,
+    stars,
+    stars3d,
+    starNames,
+    belt,
+    comets,
+    names,
+    satellites,
+    satelliteNames,
+    clock,
+    error,
+    readout,
+  } = useSimulation();
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
@@ -67,6 +81,8 @@ export function App() {
   const satelliteChips = useViewStore((state) => state.satelliteChips);
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
+  const ringLabels = useRef<(HTMLElement | null)[]>([]);
+  const scaleBar = useRef<ScaleBarElements | null>(null);
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
   // turn off the Sun separately, and NASA Eyes does not offer that either.
@@ -216,6 +232,8 @@ export function App() {
       <SolarSystemCanvas
         store={store}
         stars={stars}
+        stars3d={stars3d}
+        showStarMap={layers.starMap}
         belt={belt}
         beltFamilies={beltFamilies}
         comets={comets}
@@ -230,7 +248,12 @@ export function App() {
         lighting={lighting}
         visibleKinds={visibleKinds}
         labelElements={labelElements}
+        showDistanceRings={layers.distanceRings}
+        ringLabels={ringLabels}
+        scaleBar={scaleBar}
       />
+
+      {layers.distanceRings && layers.labels && uiVisible && <RingLabels elements={ringLabels} />}
 
       <LabelLayer
         store={store}
@@ -269,6 +292,9 @@ export function App() {
 
           <Toolbar />
 
+          {/* Bottom-right: how long a length on screen is, at the focus. */}
+          <ScaleBar elements={scaleBar} focusName={store.body(focus).name} />
+
           {/* Each panel stays mounted for its closing animation; see Presence.tsx. */}
           <Presence show={openPanel === 'body'}>
             <OnReadout signal={readout}>
@@ -278,6 +304,7 @@ export function App() {
                   jd={clock.tdbJulianDay}
                   distanceMode={distanceMode}
                   tick={tick}
+                  stars3d={stars3d}
                 />
               )}
             </OnReadout>
@@ -292,6 +319,8 @@ export function App() {
               comets={comets}
               satellites={satellites}
               satelliteNames={satelliteNames}
+              stars3d={stars3d}
+              starNames={starNames}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
@@ -318,7 +347,14 @@ export function App() {
       )}
 
       <Presence show={openPanel === 'about'}>
-        <AboutPanel store={store} stars={stars} belt={belt} comets={comets} satellites={satellites} />
+        <AboutPanel
+          store={store}
+          stars={stars}
+          belt={belt}
+          comets={comets}
+          satellites={satellites}
+          stars3d={stars3d}
+        />
       </Presence>
 
       {/* The only way back once the interface is switched off. */}
@@ -422,6 +458,29 @@ const LabelLayer = memo(function LabelLayer({
   );
 });
 
+/**
+ * The distance rings' names, laid over the canvas as the bodies' are; DistanceRings moves
+ * them. Quieter than a body's name, because a ring is a ruler and not a thing.
+ */
+function RingLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]> }) {
+  return (
+    <div style={LABEL_LAYER_STYLE}>
+      {DISTANCE_RINGS_LY.map((lightYears, index) => (
+        <span
+          key={lightYears}
+          className="tracks-scene"
+          ref={(element) => {
+            elements.current[index] = element;
+          }}
+          style={RING_LABEL_STYLE}
+        >
+          {ringLabel(lightYears)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const BodyLabel = memo(function BodyLabel({
   body,
   focused,
@@ -480,6 +539,19 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 const FOCUSED_LABEL_STYLE: React.CSSProperties = { ...LABEL_STYLE, color: '#ffffff' };
+
+const RING_LABEL_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  display: 'none',
+  color: '#8a96a3',
+  fontSize: '0.64rem',
+  letterSpacing: '0.12em',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+  textShadow: '0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1)',
+};
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (

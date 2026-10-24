@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { CAMERA_FAR_UNITS } from './logDepth.ts';
 import { SPHERE_RADIUS } from './starRendering.ts';
 
 import {
@@ -13,6 +14,7 @@ import {
   FOV_DEG,
   KM_PER_UNIT,
   kmToUnits,
+  LIGHT_YEAR_KM,
   markerOpacity,
   MAX_VIEW_DISTANCE_KM,
   MARKER_FADE_OUT_PX,
@@ -20,6 +22,7 @@ import {
   MESH_FADE_END_PX,
   MESH_FADE_START_PX,
   meshOpacity,
+  PARSEC_KM,
   pixelsToWorldSize,
   SATELLITE_HIDDEN_PX,
   SATELLITE_SHOWN_PX,
@@ -450,6 +453,21 @@ describe('how far the camera may pull back', () => {
   });
 
   it('stays inside the star sphere, so the Sun is never drawn behind the sky', () => {
-    expect(kmToUnits(MAX_VIEW_DISTANCE_KM)).toBeLessThan(SPHERE_RADIUS / 2);
+    expect(kmToUnits(MAX_VIEW_DISTANCE_KM)).toBeLessThan(SPHERE_RADIUS / 1.5);
+    // And the sphere inside the far plane, so its depth is a real one.
+    expect(SPHERE_RADIUS).toBeLessThan(CAMERA_FAR_UNITS);
+  });
+
+  it('sees the whole 100-parsec sphere, in the inner half of the frame', () => {
+    const sphereKm = 100 * PARSEC_KM;
+    const angularRadiusDeg = (Math.asin(sphereKm / MAX_VIEW_DISTANCE_KM) * 180) / Math.PI;
+    expect(angularRadiusDeg).toBeLessThan(FOV_DEG / 4);
+    // From 1,000 ly it would overfill the frame's height.
+    expect((Math.asin(sphereKm / (1000 * LIGHT_YEAR_KM)) * 180) / Math.PI).toBeGreaterThan(FOV_DEG / 2);
+  });
+
+  it('defines the light year and the parsec as the IAU does', () => {
+    expect(LIGHT_YEAR_KM).toBeCloseTo(9_460_730_472_580.8, 1);
+    expect(PARSEC_KM / LIGHT_YEAR_KM).toBeCloseTo(3.26156, 5);
   });
 });

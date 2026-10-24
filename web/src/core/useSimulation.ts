@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { StarCatalog } from '@sss/tools/types';
 
@@ -16,6 +16,7 @@ import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from '.
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
+import { loadStarNames, Stars3dSource, type StarNameIndex } from './stars3d.ts';
 import { SimClock } from './time.ts';
 
 /**
@@ -51,6 +52,14 @@ export interface Simulation {
   readonly satellites: LazySource<Satellites>;
   /** The bulk satellites' names, fetched when search first opens. */
   readonly satelliteNames: LazySource<SatelliteNameIndex>;
+  /**
+   * The stars at their real distances, once the sky is in (it needs the sky's row count to
+   * check the pair): fetched when the camera leaves the planets, or search asks. See
+   * stars3d.ts.
+   */
+  readonly stars3d: Stars3dSource | null;
+  /** Their names, fetched when search first opens. */
+  readonly starNames: LazySource<StarNameIndex> | null;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -139,6 +148,21 @@ export function useSimulation(refreshHz = 10): Simulation {
     };
   }, []);
 
+  const stars3d = useMemo(
+    () => (stars === null ? null : new Stars3dSource(httpBeltFetchers, stars.count, import.meta.env.BASE_URL)),
+    [stars],
+  );
+  const starNames = useMemo(
+    () =>
+      stars3d === null
+        ? null
+        : new LazySource(
+            () => loadStarNames(stars3d, httpBeltFetchers, import.meta.env.BASE_URL),
+            'the star names',
+          ),
+    [stars3d],
+  );
+
   useEffect(() => {
     const clock = clockRef.current;
     const readout = readoutRef.current;
@@ -189,6 +213,8 @@ export function useSimulation(refreshHz = 10): Simulation {
     names: namesRef.current,
     satellites: satellitesRef.current,
     satelliteNames: satelliteNamesRef.current,
+    stars3d,
+    starNames,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

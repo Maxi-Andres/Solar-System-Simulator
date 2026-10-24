@@ -67,11 +67,13 @@ export type LayerId =
   | 'smallMoons'
   | 'asteroids'
   | 'comets'
+  | 'starMap'
   | 'spacecraft'
   | 'satellites'
   | 'constellations'
   | 'trails'
   | 'orbits'
+  | 'distanceRings'
   | 'labels'
   | 'icons';
 
@@ -98,6 +100,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // SBDB's four thousand, each on its own conic -- a third of them open, on parabolas and
   // hyperbolas. Off by default, as the belt is.
   { id: 'comets', label: 'Comets', pending: null },
+  // Past the Solar System every star in the catalogue drawn at least as a dot, at its real
+  // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
+  // would see from where the camera is.
+  { id: 'starMap', label: 'Star Map', pending: null },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
@@ -110,6 +116,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // be its orbit drawn twice, so the layer is the craft's alone.
   { id: 'trails', label: 'Trails', pending: null, startsGroup: true },
   { id: 'orbits', label: 'Orbits', pending: null },
+  // Circles about the Sun at 1, 5, 10, 50 and 100 light years: a ruler, not a thing (see
+  // distanceRings.ts). On, because they draw nothing until the camera is out among the
+  // stars, where they are most of what says how far away anything is.
+  { id: 'distanceRings', label: 'Distance Rings', pending: null },
   { id: 'labels', label: 'Labels', pending: null },
   { id: 'icons', label: 'Icons', pending: null },
 ];
@@ -128,11 +138,13 @@ const DEFAULT_LAYERS: LayerState = {
   // are in this layer with it; a search for one turns it on.
   asteroids: false,
   comets: false,
+  starMap: true,
   spacecraft: true,
   satellites: false,
   constellations: false,
   trails: true,
   orbits: true,
+  distanceRings: true,
   labels: true,
   icons: true,
 };
@@ -152,6 +164,12 @@ export interface ViewState {
    * state change, which keeps zoom smooth and out of React's render path.
    */
   readonly zoomImpulse: number;
+  /**
+   * A distance to frame the focus at, km, waiting for the camera rig; null when none is.
+   * The breadcrumb's Solar Neighbourhood sets it: the Sun, framed from light years out,
+   * rather than from eight of its radii as any other focus is.
+   */
+  readonly framingRequestKm: number | null;
   /**
    * How many of the belt's magnitude tiers to load, brightest first: the Asteroids
    * layer's density. One by default -- 84,000 asteroids, 3 MB -- and kept for the viewer
@@ -181,6 +199,8 @@ export interface ViewState {
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
   readonly consumeZoomImpulse: () => number;
+  readonly requestFraming: (km: number) => void;
+  readonly consumeFramingRequest: () => number | null;
 }
 
 /** Where the belt's density is kept between visits; see `beltTiers`. */
@@ -198,6 +218,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   lighting: PHYSICAL_LIGHTING,
   openPanel: null,
   zoomImpulse: 1,
+  framingRequestKm: null,
   beltTiers: readStoredInteger(BELT_TIERS_KEY, 1, 1),
   // Masked to the families there are: bits a later version might add are not set by an
   // older stored value, and junk beyond them is dropped.
@@ -256,6 +277,18 @@ export const useViewStore = create<ViewState>((set, get) => ({
       set({ zoomImpulse: 1 });
     }
     return impulse;
+  },
+
+  requestFraming: (km) => {
+    set({ framingRequestKm: km });
+  },
+
+  consumeFramingRequest: () => {
+    const km = get().framingRequestKm;
+    if (km !== null) {
+      set({ framingRequestKm: null });
+    }
+    return km;
   },
 }));
 

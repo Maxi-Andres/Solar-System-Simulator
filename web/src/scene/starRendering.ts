@@ -151,15 +151,18 @@ export function starProfile(radiusPx: number, sigmaPx = PSF_SIGMA_PX): number {
 }
 
 /**
- * Distance to the star sphere, in scene units (1e9 units = 1e12 km).
+ * Distance to the star sphere, in scene units: 5e13, 5e16 km, 5,300 ly.
  *
- * Parked far enough that no body can be beyond it, and translated with the camera each
- * frame so it behaves as if infinitely distant. That is not a shortcut: the nearest
- * star in this catalogue has a parallax of 0.742 arcseconds, which at the scene's field
- * of view is under a hundredth of a pixel from one side of Earth's orbit to the other.
- * Real distances, and with them real parallax, belong to phase D.
+ * Where a star with no distance is drawn: translated with the camera each frame so it
+ * behaves as if infinitely distant. For a star whose parallax is too poor to place it
+ * that is not a shortcut but the honest statement -- its distance is unknown, and its
+ * direction is all there is.
+ *
+ * Parked past every body the camera can see -- the farthest zoom is 3,000 ly, 2.8e13
+ * units (scale.ts) -- and inside the far plane, 1e14, so its depth is a real one. It was
+ * 1e9 when the camera stopped at 2,000 AU; the light years moved it.
  */
-export const SPHERE_RADIUS = 1e9;
+export const SPHERE_RADIUS = 5e13;
 
 /** Milliarcseconds per year to radians per year, the units the shader wants. */
 export const MAS_PER_YEAR_TO_RAD = (1 / 3_600_000) * (Math.PI / 180);
@@ -329,6 +332,8 @@ uniform float uPixelRatio;
 attribute vec2 properMotion;
 attribute float magnitude;
 attribute vec3 starColor;
+// 1 for a star the 3D stars draw at its real distance (see Starfield.tsx), 0 otherwise.
+attribute float placed;
 
 varying vec3 vColor;
 varying float vPeakLinear;
@@ -339,6 +344,16 @@ float srgbToLinear(float value) {
 }
 
 void main() {
+  // Drawn at its distance instead, by the 3D stars: never twice. Outside the clip volume.
+  if (placed > 0.5) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    gl_PointSize = 1.0;
+    vColor = vec3(0.0);
+    vPeakLinear = 0.0;
+    vSizePx = 1.0;
+    return;
+  }
+
   vec3 direction = normalize(position);
 
   // East is the direction of increasing right ascension. The guard is for a star

@@ -74,6 +74,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
 export function layersFor(body: BodyDefinition): LayerId[] {
   switch (body.kind) {
     case 'star':
+      // The Sun rides with the Planets; any other star is in no layer.
+      return body.id === 'sun' ? ['planets'] : [];
     case 'planet':
       return ['planets'];
     case 'dwarf-planet':

@@ -2,11 +2,15 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { renderDemand } from '../core/renderDemand.ts';
+import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
 import { useSignal } from '../core/useSignal.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
+import { NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
+import { useViewStore } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
 /**
@@ -21,6 +25,14 @@ import { Presence, useClosing } from './Presence.tsx';
  *
  * Every tier of the breadcrumb is itself a way up: from Io, "Jupiter" goes to Jupiter,
  * "Solar System" to the Sun.
+ *
+ * Two levels sit above the Solar System since the light years (step D1). **Solar
+ * Neighbourhood** goes to the Sun and stands the camera fifty light years out, among the
+ * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** is a name and not a place: the
+ * outermost level, the galaxy all of this is inside, said so the hierarchy has a top.
+ * There is no model of the galaxy behind it -- its shape is a reconstruction this project
+ * has not taken on (see the plan's Phase D) -- so it cannot be clicked and its tooltip
+ * says why.
  *
  * The spacecraft come last, in a section of their own rather than folded under the
  * bodies they happen to be near. One that does not exist at the clock's instant -- not
@@ -62,6 +74,16 @@ export function BodyPicker({
 
   const focusBody = store.body(focus);
   const parent = focusBody.parent === null ? null : store.body(focusBody.parent);
+  // A star other than the Sun is in the neighbourhood, not in the Solar System.
+  const inSolarSystem = !isCatalogueStar(focusBody);
+  const requestFraming = useViewStore((state) => state.requestFraming);
+  const toNeighbourhood = (): void => {
+    // Asked for before the focus moves, so the camera rig takes it with the new focus.
+    requestFraming(NEIGHBOURHOOD_FRAMING_KM);
+    onFocus('sun');
+    // With the Sun already in focus nothing else changed, and nothing else asks for a frame.
+    renderDemand.request();
+  };
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
@@ -102,10 +124,26 @@ export function BodyPicker({
           letterSpacing: '0.22em',
           fontSize: '0.78rem',
           textTransform: 'uppercase',
+          flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={() => onFocus('sun')}>Solar System</Crumb>
+        <span
+          title="The galaxy everything here is inside. A name, not a place: no model of the Milky Way is drawn."
+          style={{ ...crumbStyle, color: OUTER_CRUMB, cursor: 'default' }}
+        >
+          Milky Way
+        </span>
         <Separator />
+        <Crumb onClick={toNeighbourhood} outer>
+          Solar Neighbourhood
+        </Crumb>
+        <Separator />
+        {inSolarSystem && (
+          <>
+            <Crumb onClick={() => onFocus('sun')}>Solar System</Crumb>
+            <Separator />
+          </>
+        )}
         {parent !== null && (
           <>
             <Crumb onClick={() => onFocus(parent.id)}>{parent.name}</Crumb>
@@ -157,9 +195,20 @@ const crumbStyle: React.CSSProperties = {
   borderRadius: '0.2rem',
 };
 
-function Crumb({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+/** The levels above the Solar System, a shade quieter than the ones you move between most. */
+const OUTER_CRUMB = '#8e8e8e';
+
+function Crumb({
+  children,
+  onClick,
+  outer = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  outer?: boolean;
+}) {
   return (
-    <button type="button" onClick={onClick} style={crumbStyle}>
+    <button type="button" onClick={onClick} style={outer ? { ...crumbStyle, color: OUTER_CRUMB } : crumbStyle}>
       {children}
     </button>
   );
@@ -288,8 +337,12 @@ function BodyList({
       body.kind !== 'spacecraft' &&
       body.kind !== 'asteroid' &&
       body.kind !== 'comet' &&
+      !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
+  // The catalogue stars gone to from search (starBodies.ts), listed apart: they are not
+  // in the Solar System.
+  const stars = store.bodies.filter(isCatalogueStar);
   // Listed apart: between the planets they would push Neptune off the bottom.
   const asteroids = visibleKinds.has('asteroid')
     ? store.bodies.filter((body) => body.kind === 'asteroid')
@@ -451,6 +504,21 @@ function BodyList({
         <>
           <div style={SECTION_HEADING}>Comets</div>
           {cometBodies.map((body) => (
+            <Row
+              key={body.id}
+              body={body}
+              active={body.id === focus}
+              inSystem={false}
+              onChoose={onChoose}
+              trailing={null}
+            />
+          ))}
+        </>
+      )}
+      {stars.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Stars</div>
+          {stars.map((body) => (
             <Row
               key={body.id}
               body={body}

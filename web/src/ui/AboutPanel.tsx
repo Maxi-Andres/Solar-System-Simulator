@@ -6,6 +6,7 @@ import { beltTiers, type BeltSource, type LoadedTier } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { BULK_WINDOW_DAYS, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
+import type { Stars3dSource } from '../core/stars3d.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
@@ -39,12 +40,14 @@ export function AboutPanel({
   belt,
   comets,
   satellites,
+  stars3d = null,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
   belt: BeltSource;
   comets: CometSource;
   satellites: SatelliteSource;
+  stars3d?: Stars3dSource | null;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -56,6 +59,11 @@ export function AboutPanel({
   const cometInfo = useSyncExternalStore(comets.subscribe, () => comets.comets)?.info ?? null;
   // And the satellites.
   const satelliteInfo = useSyncExternalStore(satellites.subscribe, () => satellites.value)?.info ?? null;
+  // And the 3D stars, once stars3d.json is in -- fetched past 50 AU, or by a search.
+  const stars3dInfo = useSyncExternalStore(
+    stars3d?.subscribe ?? noSubscribe,
+    () => stars3d?.view.info ?? null,
+  );
   const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -230,7 +238,9 @@ export function AboutPanel({
           <List
             items={[
               'Drag to rotate. There is no pole to get stuck at — in space there is no up, so the view tumbles freely in any direction.',
-              'Scroll to zoom. Each notch changes distance by a fixed ratio, so a few thousand km and hundreds of AU are equally easy to navigate. It pulls back to 2,000 AU — far enough to see the Voyagers and the Pioneers with the planets a dot between them.',
+              'Scroll to zoom. Each notch changes distance by a fixed ratio, so a few thousand km and hundreds of AU are equally easy to navigate, and a notch that keeps a scroll going goes further, up to eight times — from the Space Station to a thousand light years is a few seconds of scrolling. It pulls back to 3,000 light years, far enough to see the whole 100-parsec census of nearby stars from outside.',
+              'The scale bar, bottom right, measures at the distance of what you are focused on: a perspective picture has no single scale, and the focus is the one point whose distance is always known. It switches from metres to kilometres, astronomical units and light years as you zoom; hover it for the same length in parsecs.',
+              'The Distance Rings are circles about the Sun at 1, 5, 10, 50 and 100 light years, in the plane of the ecliptic, where every orbit here is drawn. They are a ruler, not a thing, and appear only once the camera is out among the stars. The breadcrumb’s Solar Neighbourhood takes you fifty light years out; Milky Way above it is a name for the level, not a place — no model of the galaxy is drawn.',
               'Click any body, label or table row to focus it. The camera reframes relative to that body’s own radius.',
               'Use the time controls to run fast, run backwards, or jump back to LIVE.',
             ]}
@@ -254,6 +264,27 @@ export function AboutPanel({
             brightest stars, whose light saturated its star mapper, and Hipparcos never completed
             the faint ones — so{' '}
             {stars.sources.map((source) => `${source.stars.toLocaleString('en-US')} from ${source.table}`).join(' and ')}.
+          </Prose>
+
+          <Prose>
+            Past the Solar System the stars are drawn at their real distances: every star with
+            a parallax measured well enough to place it, from <Strong>ESA Gaia</Strong> DR3 or
+            the <Strong>Hipparcos</Strong> new reduction (van Leeuwen 2007), and the{' '}
+            <Strong>Gaia Catalogue of Nearby Stars</Strong> (Gaia Collaboration, Smart et al.
+            2021), the census of everything within 100 parsecs. Each moves on its own measured
+            motion, in three dimensions where its radial velocity was measured and across the
+            sky only where it was not, and its brightness is worked out from wherever the camera
+            is — so from the Sun they are the same sky as above, and from Alpha Centauri the Sun
+            is a yellow star of magnitude 0.4. A star whose parallax is too poor stays at
+            infinity, its direction all that is known. No correction is made for interstellar
+            dust, which within 100 parsecs is small. The Sun becomes one of these stars once its
+            disc is smaller than a pixel: absolute magnitude 4.81 (Willmer 2018).
+            {stars3dInfo === null
+              ? ''
+              : ` ${stars3dInfo.count.toLocaleString('en-US')} stars in 3D, ${stars3dInfo.counts.withinTenParsecs.toLocaleString('en-US')} of them within ten parsecs; ${stars3dInfo.sky.atInfinity.toLocaleString('en-US')} of the sky’s stays at infinity. Read through ${stars3dInfo.sources.map((entry) => `${entry.via} (${entry.table})`).join(' and ')}, ${stars3dInfo.queriedAt.slice(0, 10)}.`}{' '}
+            With the Star Map layer on, past the Solar System every star is drawn at least as a
+            dot, however faint: a map, not a view, dimmed where the dots crowd. Off, the stars are
+            only what an eye would see from where the camera is.
           </Prose>
 
           {cometInfo !== null && (
@@ -755,3 +786,5 @@ function List({ items }: { items: readonly string[] }) {
     </ul>
   );
 }
+
+const noSubscribe = (): (() => void) => () => {};

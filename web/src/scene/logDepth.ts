@@ -7,7 +7,7 @@ import * as THREE from 'three';
  * units. That spreads precision evenly over orders of magnitude -- for w well above one.
  * Below one it does not: log2(1 + w) is nearly w / ln 2 there, a straight line, and the
  * 24-bit buffer's step becomes a fixed distance rather than a fraction of one. With this
- * scene's unit of 1000 km and far plane of 1e11 units, that step is
+ * scene's unit of 1000 km and the far plane it had then, 1e11 units, that step is
  *
  *   2^-24 * ln 2 * log2(1e11)  =  1.5e-6 units  =  1.5 metres,
  *
@@ -19,9 +19,37 @@ import * as THREE from 'three';
  *
  *   depth = log2(1 + w / near) / log2(1 + far / near)
  *
- * Now every distance gets the same relative step, 2^-24 * ln 2 * log2(1e17) = 2.3e-6
- * of itself -- 0.05 mm at 20 metres, 2 km at a light-hour -- and at the planets'
- * distances the buffer behaves exactly as before.
+ * Now every distance gets the same relative step, 2^-24 * ln 2 * log2(1 + far / near) of
+ * itself -- 2.7e-6 with the far plane below -- and at the planets' distances the buffer
+ * behaves as it did under three's own formula.
+ *
+ * ## The far plane moved for the light years (step D1), and what it cost
+ *
+ * It was 1e11 units, 1e14 km -- past the star sphere when the camera stopped at 2,000 AU.
+ * The camera now pulls back to 3,000 light years (scale.ts), so it is 1e14 units, 1e17 km
+ * or 10,570 ly: the farthest zoom with room for a focus a few hundred light years from
+ * the Sun. Three decades more range in the logarithm's denominator, log2(1e20) against
+ * log2(1e17), and every step grows by that ratio, 66.44 / 56.47 = 1.18:
+ *
+ *                     far 1e11 (2,000 AU)    far 1e14 (3,000 ly)
+ *   at 1 m              4.67 um                5.49 um
+ *   at 20 m (JWST)      0.049 mm               0.058 mm
+ *   at Earth's radius   14.9 m                 17.5 m
+ *   at 1 AU             349 km                 411 km
+ *
+ * The near plane stays at a metre. Eighteen percent coarser everywhere, and still a
+ * hundred times finer than the centimetres JWST's mirror needed.
+ *
+ * Two things that might have broken and did not, checked rather than assumed:
+ *
+ *  - **Float32 in the shader.** vFragDepth reaches 1 + 2.8e13 * 1e6 = 2.8e19, far inside
+ *    float32's range. log2 of it is at most 66.4, whose float32 step, 7.6e-6, is a
+ *    relative distance step of 5.3e-6 -- coarser than the buffer's own only beyond
+ *    2^64 metres, 1,950 ly, where everything drawn is a point.
+ *  - **Beyond the far plane.** Nothing is clipped there: with far / near = 1e20, three's
+ *    projection term (far + near) / (far - near) is exactly 1 in float64 and in float32,
+ *    so clip-space z never reaches w. A star past it writes a depth over 1, which a
+ *    fixed-point depth buffer clamps to 1 -- behind every body, which is where it is.
  *
  * Applied by replacing the two shader chunks that compute it, which every built-in
  * material and every custom shader here that includes them picks up. It must run before
@@ -31,8 +59,8 @@ import * as THREE from 'three';
 /** The camera's near plane, scene units: one metre. */
 export const CAMERA_NEAR_UNITS = 1e-6;
 
-/** The camera's far plane, scene units: 1e14 km, past the star sphere. */
-export const CAMERA_FAR_UNITS = 1e11;
+/** The camera's far plane, scene units: 1e17 km, 10,570 ly. See the header. */
+export const CAMERA_FAR_UNITS = 1e14;
 
 /** The 24-bit depth buffer's smallest step, as a fraction of the buffer's range. */
 const DEPTH_STEP = 2 ** -24;
@@ -41,11 +69,12 @@ const DEPTH_STEP = 2 ** -24;
  * The smallest depth difference the buffer resolves at distance `w`, scene units.
  *
  * `fromNear` chooses the formula: true for the one used here, false for three.js's own,
- * kept so the difference can be stated as a number rather than an adjective.
+ * kept so the difference can be stated as a number rather than an adjective. `far` lets
+ * the table above be checked against the far plane it replaced.
  */
-export function depthResolution(w: number, fromNear = true): number {
+export function depthResolution(w: number, fromNear = true, far = CAMERA_FAR_UNITS): number {
   const scale = fromNear ? 1 / CAMERA_NEAR_UNITS : 1;
-  const range = Math.log2(1 + CAMERA_FAR_UNITS * scale);
+  const range = Math.log2(1 + far * scale);
   // d(log2(1 + s w)) / dw = s / ((1 + s w) ln 2), inverted.
   return (DEPTH_STEP * range * Math.LN2 * (1 + scale * w)) / scale;
 }

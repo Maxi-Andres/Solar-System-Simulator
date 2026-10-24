@@ -688,7 +688,7 @@ export class EphemerisStore {
     // A body with no table at all (see addPropagatedBody): its state about the Sun, put
     // in the root frame as every body without a parent is -- by adding the Sun's own
     // place there, which is up to 1.5 million km off the barycentre with Jupiter's pull.
-    // Approximate always: two-body motion, not an ephemeris.
+    // Approximate unless added as exact: two-body motion is not an ephemeris.
     const propagated = this.#propagated.get(id);
     if (propagated !== undefined) {
       const options = this.#propagatedOptions.get(id) ?? {};
@@ -716,7 +716,9 @@ export class EphemerisStore {
           y: about.velocity.y + (sun?.velocity.y ?? 0),
           z: about.velocity.z + (sun?.velocity.z ?? 0),
         },
-        approximate: true,
+        // Two-body motion is approximate; a catalogue star's linear motion is the
+        // catalogue's own model, added as exact (see starBodies.ts).
+        approximate: options.exact !== true,
       };
     }
     if (this.surfaceInfo(id) !== null) {

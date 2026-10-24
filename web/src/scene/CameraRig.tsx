@@ -4,6 +4,8 @@ import * as THREE from 'three';
 
 import { renderDemand } from '../core/renderDemand.ts';
 import { useViewStore } from '../state/store.ts';
+import { kmToUnits } from './scale.ts';
+import { easeDistance, newStreak, wheelPixels, wheelZoomFactor } from './zoom.ts';
 
 /**
  * Free-rotation camera rig.
@@ -19,7 +21,8 @@ import { useViewStore } from '../state/store.ts';
  * is no pole to reach — you can tumble indefinitely in any direction.
  *
  * Zoom multiplies the distance rather than adding to it, which is what makes a range
- * from a few km to tens of AU navigable with the same wheel.
+ * from a few km to tens of AU navigable with the same wheel -- and, with a streak that
+ * speeds up and an easing in the logarithm, from the ISS to the light years. See zoom.ts.
  */
 
 export interface CameraRigProps {
@@ -35,9 +38,6 @@ export interface CameraRigProps {
 }
 
 const ROTATE_SPEED = 0.005;
-const ZOOM_PER_WHEEL_NOTCH = 0.0012;
-/** Fraction of the remaining delta applied per frame; higher is snappier. */
-const DAMPING = 0.18;
 
 /**
  * How close to its target distance the camera must be, as a fraction of it, before it
@@ -94,15 +94,24 @@ export function CameraRig({
   const targetDistance = useRef(1);
   const initialised = useRef(false);
 
-  // Reframe on focus change: keep the viewing direction, change only the distance.
+  // Reframe on focus change: keep the viewing direction, change only the distance -- to
+  // the one asked for with the focus, if any (the breadcrumb's Solar Neighbourhood),
+  // eased into from where the camera is; otherwise to the body's own framing, at once.
   useEffect(() => {
     if (!initialised.current) {
       offset.current.set(0.45, 0.35, 1).normalize();
       up.current.set(0, 1, 0);
       initialised.current = true;
     }
-    targetDistance.current = THREE.MathUtils.clamp(framingDistance, minDistance, maxDistance);
-    offset.current.normalize().multiplyScalar(targetDistance.current);
+    const requestedKm = useViewStore.getState().consumeFramingRequest();
+    targetDistance.current = THREE.MathUtils.clamp(
+      requestedKm === null ? framingDistance : kmToUnits(requestedKm),
+      minDistance,
+      maxDistance,
+    );
+    if (requestedKm === null) {
+      offset.current.normalize().multiplyScalar(targetDistance.current);
+    }
     renderDemand.request();
   }, [focusKey, framingDistance, minDistance, maxDistance]);
 
@@ -110,6 +119,7 @@ export function CameraRig({
     const element = gl.domElement;
     let dragging = false;
     let pointerId: number | null = null;
+    const streak = newStreak();
 
     const onPointerDown = (event: PointerEvent): void => {
       // Primary button only; leave the rest for future context menus.
@@ -168,8 +178,12 @@ export function CameraRig({
       }
       event.preventDefault();
       // Multiplicative: every notch is the same ratio, so 10 km and 10 AU feel the
-      // same to navigate.
-      const factor = Math.exp(event.deltaY * ZOOM_PER_WHEEL_NOTCH);
+      // same to navigate -- and a notch that is part of a streak a larger one. See zoom.ts.
+      const factor = wheelZoomFactor(
+        streak,
+        wheelPixels(event.deltaY, event.deltaMode, element.clientHeight),
+        event.timeStamp,
+      );
       targetDistance.current = THREE.MathUtils.clamp(
         targetDistance.current * factor,
         minDistance,
@@ -197,7 +211,15 @@ export function CameraRig({
   useFrame(() => {
     // Toolbar zoom buttons feed in here rather than through React state, so a click
     // eases in exactly like a wheel notch instead of jumping.
-    const impulse = useViewStore.getState().consumeZoomImpulse();
+    const view = useViewStore.getState();
+    const impulse = view.consumeZoomImpulse();
+    // A framing asked for while the focus stays the same: the Solar Neighbourhood with
+    // the Sun already in focus. With a new focus the effect above takes it, once React has
+    // caught up -- so it is left for the effect while the store's focus is not yet ours.
+    const requestedKm = view.focus === focusKey ? view.consumeFramingRequest() : null;
+    if (requestedKm !== null) {
+      targetDistance.current = THREE.MathUtils.clamp(kmToUnits(requestedKm), minDistance, maxDistance);
+    }
     if (impulse !== 1) {
       targetDistance.current = THREE.MathUtils.clamp(
         targetDistance.current * impulse,
@@ -206,9 +228,10 @@ export function CameraRig({
       );
     }
 
-    // Ease the distance; direction is applied immediately so dragging stays crisp.
+    // Ease the distance, in its logarithm (see zoom.ts); direction is applied immediately
+    // so dragging stays crisp.
     const current = offset.current.length();
-    const eased = current + (targetDistance.current - current) * DAMPING;
+    const eased = easeDistance(current, targetDistance.current);
     offset.current.setLength(eased);
     // Still on its way: the next frame is part of the motion, whatever else is idle. The
     // toolbar's impulse needs nothing here -- it changed the view store, which asked.
