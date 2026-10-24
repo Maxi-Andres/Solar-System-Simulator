@@ -8,12 +8,21 @@ import {
   POSITION_DECIMALS,
   SATELLITES_DIR,
   SATELLITES_INFO_FILE,
+  STARS3D_DIR,
+  STARS3D_INFO_FILE,
+  STARS3D_NAMES_FILE,
   TIME_DECIMALS,
   VELOCITY_DECIMALS,
 } from './config.ts';
 import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
 import type { CometBuild } from './belt/comets.ts';
 import type { SatelliteBuild } from './satellites/buildSatellites.ts';
+import {
+  namesEntry,
+  tierDetailsBytes,
+  tierRecordBytes,
+  type Stars3dBuild,
+} from './stars/build3d.ts';
 import type {
   BeltInfo,
   BodyDefinition,
@@ -24,6 +33,8 @@ import type {
   Seam,
   SmallMoonBundle,
   StarCatalog,
+  Stars3dInfo,
+  Stars3dNames,
   SurfaceTrack,
   VectorTable,
 } from './types.ts';
@@ -176,8 +187,39 @@ export async function writeSmallMoonBundle(planet: string, bundle: SmallMoonBund
  * Already rounded by `buildStarCatalog`, which does it against a pixel rather than
  * against a byte count -- so there is nothing left to trim here.
  */
-export async function writeStars(stars: StarCatalog): Promise<void> {
-  await writeCompactJson(join(OUTPUT_DIR, 'stars.json'), stars);
+export async function writeStars(stars: StarCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await writeCompactJson(join(outputDir, 'stars.json'), stars);
+}
+
+/**
+ * The stars in 3D, as stars3d/: the tier files of records and of details, the search
+ * index names.json, and stars3d.json describing them. See Stars3dInfo.
+ *
+ * Like the belt it takes the directory, because `pnpm fetch:stars` regenerates it on its
+ * own, and it replaces stars3d/ and nothing else. stars3d.json goes last, after every file
+ * it names, so an interrupted write leaves no stars3d.json -- which the app reads as no 3D
+ * stars -- never a description of files that are not all there. Write stars.json first:
+ * the records name its rows.
+ */
+export async function writeStars3d(
+  build: Stars3dBuild,
+  names: Stars3dNames,
+  outputDir = OUTPUT_DIR,
+): Promise<void> {
+  const directory = join(outputDir, STARS3D_DIR);
+  await rm(directory, { recursive: true, force: true });
+  await mkdir(directory, { recursive: true });
+  const { info, table, order, tierStarts } = build;
+  for (const [tier, entry] of info.tiers.entries()) {
+    const start = tierStarts[tier] ?? 0;
+    const indices = order.subarray(start, start + entry.count);
+    await writeFile(join(directory, entry.file), tierRecordBytes(table, indices));
+    await writeFile(join(directory, entry.details), tierDetailsBytes(table, indices));
+  }
+  const namesJson = `${JSON.stringify(names)}\n`;
+  await writeFile(join(directory, STARS3D_NAMES_FILE), namesJson, 'utf8');
+  const full: Stars3dInfo = { ...info, names: namesEntry(names, namesJson) };
+  await writeJson(join(directory, STARS3D_INFO_FILE), full);
 }
 
 /**

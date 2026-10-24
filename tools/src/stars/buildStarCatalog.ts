@@ -136,15 +136,30 @@ function round(value: number, decimals: number): number {
   return Math.round(value * factor) / factor;
 }
 
-/** A star that survived the drop rules, at the published epoch. */
-interface ResolvedStar {
+/**
+ * A star that survived the drop rules, at the published epoch, with the identity the 3D
+ * stars match it by (step D2). Unrounded: stars.json's rounding happens on the way out.
+ */
+export interface SkyStar {
   readonly raDeg: number;
   readonly decDeg: number;
   readonly vMag: number;
   readonly colorIndex: number;
   readonly pmRaMasPerYear: number;
   readonly pmDecMasPerYear: number;
+  readonly catalogue: 'hipparcos' | 'tycho2';
+  readonly hip: number | null;
+  readonly tyc: string | null;
+  readonly hd: number | null;
+  readonly spectralType: string | null;
+  readonly ccdm: string | null;
+  /** Hipparcos says its V is a system's combined light; see CatalogRow.combinedLight. */
+  readonly combinedLight: boolean;
+  /** Hipparcos resolved a companion under this number and gave V for one component. */
+  readonly componentLight: boolean;
 }
+
+type ResolvedStar = SkyStar;
 
 type Resolution = ResolvedStar | 'no-position' | 'no-color-index';
 
@@ -155,7 +170,21 @@ type Resolution = ResolvedStar | 'no-position' | 'no-color-index';
  * J1991.25 and needs 8.75 years of proper motion applied, Tycho-2 publishes at J2000
  * and needs none.
  */
-function resolve(row: CatalogRow, epochShiftYears: number): Resolution {
+function resolve(
+  row: CatalogRow,
+  epochShiftYears: number,
+  catalogue: SkyStar['catalogue'],
+): Resolution {
+  const identity = {
+    catalogue,
+    hip: row.hip,
+    tyc: row.tyc ?? null,
+    hd: row.hd ?? null,
+    spectralType: row.spectralType ?? null,
+    ccdm: row.ccdm ?? null,
+    combinedLight: row.combinedLight === true,
+    componentLight: row.combinedLight === false && (row.components ?? 1) >= 2,
+  };
   if (row.colorIndex === null || !Number.isFinite(row.colorIndex)) {
     return 'no-color-index';
   }
@@ -175,6 +204,7 @@ function resolve(row: CatalogRow, epochShiftYears: number): Resolution {
       colorIndex: row.colorIndex,
       pmRaMasPerYear: pmRa,
       pmDecMasPerYear: pmDec,
+      ...identity,
     };
   }
 
@@ -192,6 +222,7 @@ function resolve(row: CatalogRow, epochShiftYears: number): Resolution {
     colorIndex: row.colorIndex,
     pmRaMasPerYear: pmRa,
     pmDecMasPerYear: pmDec,
+    ...identity,
   };
 }
 
@@ -200,14 +231,37 @@ export interface BuildInput {
   readonly tycho2: readonly CatalogRow[];
   readonly queriedAt: string;
   readonly magnitudeLimit?: number;
+  /**
+   * Where each catalogue was actually read: VizieR's table and endpoint unless VizieR was
+   * down and the Gaia Archive's mirror answered instead (see vizier.ts).
+   */
+  readonly read?: {
+    readonly hipparcos: { readonly table: string; readonly via: string };
+    readonly tycho2: { readonly table: string; readonly via: string };
+  };
 }
 
-export function buildStarCatalog({
+/** The sky catalogue, and row for row the stars it holds, identity included. */
+export interface SkyBuild {
+  readonly catalog: StarCatalog;
+  /** `stars[k]` is stars.json row k. */
+  readonly stars: readonly SkyStar[];
+}
+
+export function buildStarCatalog(input: BuildInput): StarCatalog {
+  return buildSky(input).catalog;
+}
+
+export function buildSky({
   hipparcos,
   tycho2,
   queriedAt,
   magnitudeLimit = STAR_MAGNITUDE_LIMIT,
-}: BuildInput): StarCatalog {
+  read = {
+    hipparcos: { table: HIPPARCOS_TABLE, via: VIZIER_TAP_URL },
+    tycho2: { table: TYCHO2_TABLE, via: VIZIER_TAP_URL },
+  },
+}: BuildInput): SkyBuild {
   const stars: ResolvedStar[] = [];
   let noPosition = 0;
   let noColorIndex = 0;
@@ -220,7 +274,7 @@ export function buildStarCatalog({
     if (row.vMag > magnitudeLimit) {
       continue;
     }
-    const resolved = resolve(row, EPOCH_SHIFT_YEARS);
+    const resolved = resolve(row, EPOCH_SHIFT_YEARS, 'hipparcos');
     if (resolved === 'no-position') {
       noPosition += 1;
     } else if (resolved === 'no-color-index') {
@@ -244,7 +298,7 @@ export function buildStarCatalog({
     if (row.hip !== null && supplied.has(row.hip)) {
       continue;
     }
-    const resolved = resolve(row, 0);
+    const resolved = resolve(row, 0, 'tycho2');
     if (resolved === 'no-position') {
       noPosition += 1;
     } else if (resolved === 'no-color-index') {
@@ -268,22 +322,23 @@ export function buildStarCatalog({
   // catalogue in rungs the way the panorama did.
   stars.sort((a, b) => a.vMag - b.vMag);
 
-  return {
+  const via = [...new Set([read.hipparcos.via, read.tycho2.via])].join(' and ');
+  const catalog: StarCatalog = {
     sources: [
       {
         name: 'ESA Hipparcos catalogue (ESA 1997)',
-        table: HIPPARCOS_TABLE,
+        table: read.hipparcos.table,
         stars: fromHipparcos,
         note: 'Johnson V and B-V as measured. Positions at J1991.25, moved to J2000.',
       },
       {
         name: 'Tycho-2 (Hog et al. 2000)',
-        table: TYCHO2_TABLE,
+        table: read.tycho2.table,
         stars: fromTycho2,
         note: 'V and B-V transformed from BT and VT. Positions already at J2000.',
       },
     ],
-    via: VIZIER_TAP_URL,
+    via,
     queriedAt,
     epoch: `ICRS, J${STAR_EPOCH_JULIAN_YEAR.toFixed(1)}`,
     magnitudeLimit,
@@ -296,4 +351,5 @@ export function buildStarCatalog({
     pmRa: stars.map((star) => round(star.pmRaMasPerYear, STAR_PROPER_MOTION_DECIMALS)),
     pmDec: stars.map((star) => round(star.pmDecMasPerYear, STAR_PROPER_MOTION_DECIMALS)),
   };
+  return { catalog, stars };
 }

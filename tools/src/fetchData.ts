@@ -9,8 +9,10 @@
  *   JPL Horizons API -- https://ssd.jpl.nasa.gov/api/horizons.api
  *     Positions and velocities for every body. Courtesy of NASA/JPL-Caltech.
  *
- *   ESA Hipparcos and Tycho-2, via VizieR TAP at CDS Strasbourg
- *     Position, proper motion, magnitude and colour index for every star drawn.
+ *   ESA Hipparcos and Tycho-2, Gaia DR3 and the Gaia Catalogue of Nearby Stars, via
+ *   VizieR TAP at CDS Strasbourg and the ESA Gaia Archive's TAP at ESAC
+ *     Position, proper motion, magnitude and colour index for every star drawn, and the
+ *     distances and space motions that put them in 3D. See stars/.
  *
  *   JPL Small-Body Database Query API -- https://ssd-api.jpl.nasa.gov/sbdb_query.api
  *     Osculating elements for the asteroid belt and the comets. See belt/.
@@ -65,10 +67,9 @@ import {
   positionAt,
   simplifyPath,
 } from './paths.ts';
-import { buildStarCatalog } from './stars/buildStarCatalog.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
 import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
-import { fetchHipparcos, fetchTycho2 } from './stars/vizier.ts';
+import { describeSky, loadSky, loadStars3d } from './stars/fetchStars.ts';
 import type {
   BodyDefinition,
   BodyId,
@@ -94,6 +95,7 @@ import {
   serializeSeam,
   writePath,
   writeStars,
+  writeStars3d,
   writeSurface,
   writeVectorChunk,
   writeVectors,
@@ -589,6 +591,11 @@ async function main(): Promise<void> {
   // to nothing because the file states it as a TDB Julian day and every anomaly is
   // computed for exactly that number.
   //
+  // The stars are the sky and then the 3D stars built on it (stars/fetchStars.ts): thirty-odd
+  // TAP queries, about four minutes, each catalogue read from either of two services. The
+  // 3D stars share the sky's failure policy rather than the satellites': a record names
+  // its stars.json row, so the two are one product.
+  //
   // A failure of any of them fails the run, as the stars always have. The deploy publishes a
   // fresh data directory or nothing (deploy.yml: a half-published site is worse than a
   // late one), and a release that silently lost its belt would look like a release with
@@ -603,7 +610,7 @@ async function main(): Promise<void> {
   // update -- and a CI runner's address is shared, so that refusal can be caused by
   // someone else's download. Failing the deploy on it would be a lottery, and the fix,
   // tomorrow's run, comes by itself. See satellites/celestrak.ts.
-  const [natural, hipparcosRows, tycho2Rows, beltRead, cometRows, satellites] = await Promise.all([
+  const [natural, starsRead, beltRead, cometRows, satellites] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -613,8 +620,7 @@ async function main(): Promise<void> {
       MAX_CONCURRENT_REQUESTS,
       (body) => fetchBody(body, epoch),
     ),
-    fetchHipparcos(),
-    fetchTycho2(),
+    loadSky().then(async (sky) => ({ sky, ...(await loadStars3d(sky)) })),
     fetchBelt(
       () =>
         new BeltAccumulator({
@@ -721,24 +727,10 @@ async function main(): Promise<void> {
   );
   const catalog = CATALOG.filter((body) => published.has(body.id));
 
-  const stars = buildStarCatalog({
-    hipparcos: hipparcosRows,
-    tycho2: tycho2Rows,
-    queriedAt: new Date().toISOString(),
-  });
-  for (const source of stars.sources) {
-    console.log(
-      `[fetch-data] ${source.table.padEnd(14)} ${String(source.stars).padStart(6)} stars`,
-    );
+  const stars = starsRead.sky.catalog;
+  for (const line of describeSky(stars)) {
+    console.log(line.replace('[stars]', '[fetch-data]'));
   }
-  console.log(
-    `[fetch-data] stars   ${String(stars.count).padStart(7)} to magnitude ` +
-      `${stars.magnitudeLimit}` +
-      (stars.dropped.noColorIndex + stars.dropped.noPosition > 0
-        ? ` (${stars.dropped.noColorIndex} dropped for no B-V, ` +
-          `${stars.dropped.noPosition} for no position)`
-        : ''),
-  );
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
@@ -823,6 +815,7 @@ async function main(): Promise<void> {
 
   await writeCatalog(startupCatalog);
   await writeStars(stars);
+  await writeStars3d(starsRead.stars3d, starsRead.names.names);
   await writeBelt(belt, comets);
   if (satellites !== null) {
     await writeSatellites(satellites);
@@ -880,11 +873,14 @@ async function main(): Promise<void> {
   const samples = results.reduce((total, result) => total + result.vectors.count, 0);
   console.log(
     `[fetch-data] Wrote ${results.length} bodies (${samples} samples) and ` +
-      `${stars.count} stars, ${belt.info.count} asteroids and ${comets.info.count} comets ` +
+      `${stars.count} stars (${starsRead.stars3d.info.count} in 3D), ${belt.info.count} asteroids and ${comets.info.count} comets ` +
       `to ${OUTPUT_DIR}`,
   );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
-  console.log('[fetch-data] Star data from ESA Hipparcos and Tycho-2, via VizieR (CDS).');
+  console.log(
+    '[fetch-data] Star data from ESA Hipparcos and Tycho-2 and ESA/Gaia/DPAC (Gaia DR3, GCNS); ' +
+      'names from the IAU WGSN and the Yale Bright Star Catalogue; via CDS VizieR and the ESA Gaia Archive.',
+  );
   console.log("[fetch-data] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
   if (satellites !== null) {
     console.log(`[fetch-data] ${satellites.info.credit}`);

@@ -14,6 +14,7 @@
     "fetch:data": "node src/fetchData.ts",
     "fetch:belt": "node src/belt/fetchBelt.ts",
     "fetch:satellites": "node src/satellites/fetchSatellites.ts",
+    "fetch:stars": "node src/stars/fetchStars.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",

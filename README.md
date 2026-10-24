@@ -90,6 +90,7 @@ Other commands:
 ```bash
 pnpm fetch:belt      # regenerate only the belt and the comets, from JPL's SBDB (~5 minutes)
 pnpm fetch:satellites  # regenerate only the Earth satellites, from CelesTrak (~10 seconds)
+pnpm fetch:stars     # regenerate only the stars, sky and 3D, from the Gaia Archive and VizieR (~4 minutes)
 pnpm write:catalog   # publish catalog-only changes (a new map, a radius) into bodies.json, no fetch
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
@@ -185,6 +186,151 @@ produces numbers that look fine and are not:
 
 Positions come from vectors, so they are exact DE441 values regardless. The elements
 only shape the drawn orbit line and the out-of-window fallback.
+
+### The stars in 3D
+
+Leaving the Solar System, the stars stop being a sphere at infinity: `stars3d/` puts
+**every star with a usable distance** at its real position. `pnpm fetch:data` builds it
+right after the sky, and `pnpm fetch:stars` regenerates `stars.json` and `stars3d/`
+together and alone (`--out <dir>`, `--cache <dir>`). They come as a pair because each 3D
+record names its `stars.json` row. The format is `Stars3dInfo` in `tools/src/types.ts`.
+
+**Two kinds of star, each written once.**
+
+- **The sky's own stars.** Each one gets a distance where a parallax is good enough. It
+  keeps its direction, V, B−V and proper motion exactly as `stars.json` has them, so the
+  3D stars seen from the Sun *are* the sky (to 0.011″, float32). On 2026-10-24, 43,210 of
+  the 46,071 got a distance. The other 2,861 have no parallax at S/N ≥ 5 and stay at
+  infinity, drawn as before.
+- **The Gaia Catalogue of Nearby Stars** (GCNS; Gaia Collaboration, Smart et al. 2021,
+  A&A 649, A6). This is the census of everything with reliable Gaia EDR3 astrometry and
+  a non-zero chance of lying within 100 pc: 331,312 objects. It is taken whole, as the
+  authors selected it (their random-forest p ≥ 0.38, 1st-percentile distance inside
+  100 pc). About 9% are probably just beyond 100 pc. For a census that would be
+  contamination; for a map it is not, because each star is drawn where its own parallax
+  puts it. Their recommended clean sample, dist_50 < 100 pc, is a flag instead
+  (`GCNS_WITHIN_100PC`), so the 100-pc boundary can be drawn honestly.
+
+**Which parallax a sky star gets.** It must reach S/N 5: a 20% distance, the point below
+which 1/parallax stops being a usable estimate (Bailer-Jones 2015). Two can compete.
+**Gaia DR3** reaches it through the star's Gaia counterpart, and must also have RUWE
+≤ 1.4 (DPAC's threshold for a sound single-star solution) unless the star is in the GCNS,
+whose classifier already vetted it. **Hipparcos-2** is the van Leeuwen 2007 new reduction.
+When both qualify, the smaller error wins. That is Gaia for 350,740 stars and Hipparcos
+for 6,007, the brightest ones, which saturate Gaia: Sirius, Vega, Canopus, Rigel,
+Betelgeuse. Bright naked-eye stars beyond 100 pc therefore get Hipparcos distances too,
+so Orion is not left at infinity. Betelgeuse lands at 153 pc (6.55 ± 0.83 mas) and Rigel
+at 265 pc.
+
+One parallax comes from neither catalogue: **Alpha Centauri A and B**. Hipparcos gives
+them 754.81 and 796.92 mas, which would put B 14,000 AU in front of the star it orbits
+at 11–36 AU, and Gaia has neither. They take the system parallax of Kervella et al. 2016
+(A&A 594, A107), 747.17 ± 0.61 mas. Every star uses the same estimator, distance =
+1/parallax.
+
+**Cross-matching, so no star is counted twice.** A sky star is joined to its Gaia source:
+
+- **By HIP number**, through Gaia DR3's own Hipparcos best-neighbour table (34,467 stars).
+- **By position otherwise** (11,438 stars: every Tycho-2 star, and the Hipparcos stars
+  that table leaves out). The sky star is carried on its proper motion to J2016, Gaia's
+  epoch, and the nearest Gaia source within 2″ whose G is within 1.5 mag of its V is
+  taken.
+
+A Gaia source joined to a sky star is never added again from the GCNS.
+
+Gaia also resolves pairs that Hipparcos held as one entry with their combined light
+(Hipparcos field H48), 70 Ophiuchi for one. A Gaia star brighter than V 8 that close to
+such an entry is its component, and is not drawn a second time: 151 stars.
+
+What remains brighter than V 8 and not in the sky is 11 stars that the sky catalogue
+genuinely lacks. Mizar B, eta Cassiopeiae B and two more are companions that Hipparcos
+resolved but listed under their primary's number; seven others are stars that neither
+Hipparcos nor Tycho-2 has at V ≤ 8. They are kept, and counted in the output.
+
+**Frame and epoch.** Positions are heliocentric parsecs at **J2000.0** in the scene's
+frame. That frame is ICRS rotated by the IAU 1976 obliquity, 84381.448″: JPL's "Ecliptic
+of J2000.0", the same rotation the sky goes through. Gaia positions, published at
+J2016.0, are carried back along their proper motion with the same expression the sky
+uses. Velocities are km/s relative to the Sun and motion is linear.
+
+The radial part of a velocity comes from **Gaia DR3's radial velocities** (199,435
+stars). The rest have proper motion only, and their radial component is zero, flagged
+as unknown. The Sun's own neighbours come out as published: Barnard's Star at 142.5
+km/s, 110.5 of them towards us.
+
+**Photometry.** Sky stars keep the sky's Johnson V and B−V. For a Gaia-only star, V and
+B−V are interpolated in BP−RP along Mamajek's dwarf colour sequence (2022.04.16; Pecaut
+& Mamajek 2013), B9V to M8.5V. That fits the sample, which is mostly M dwarfs. It is a
+colour for a dot, not photometry for science, and the record says which stars carry
+it. Absolute magnitude is V + 5 log₁₀(ϖ / 100 mas), with no extinction correction, so
+from the Sun it gives back V exactly.
+
+**Dropped, and why** (2026-10-24):
+
+| Count | Reason |
+|---|---|
+| 1,141 | GCNS stars below S/N 5 |
+| 6,973 | GCNS stars with no BP or RP: no colour, and none invented |
+| 151 | Components of a combined-light sky entry |
+| 2,861 | Sky stars with no usable parallax, which stay at infinity |
+
+That leaves **356,749 stars**, 315 of them within 10 pc.
+
+**Layout.** Each star is 10 little-endian float32 values: position (pc), velocity
+(km/s), Mv, B−V, `stars.json` row (or −1), and flags. The stars are ordered by Mv and
+split into three tiers so the most luminous, the ones seen from farthest, load first.
+Each tier has a lazy `details-<k>.bin` holding the Gaia DR3 id, HIP number and parallax
+± error behind a star's info panel. `names.json` is a search index, also lazy.
+
+| File | Contents | Raw | gzip |
+|---|---|---|---|
+| `tier-0.bin` | 53,646 stars, Mv < 5 | 2.1 MB | 1.8 MB |
+| `tier-1.bin` | 68,468 stars, 5 ≤ Mv < 10 | 2.7 MB | 2.0 MB |
+| `tier-2.bin` | 234,635 stars, Mv ≥ 10 | 9.4 MB | 6.9 MB |
+| `details-*.bin` | ids and parallaxes, together | 7.1 MB | 5.1 MB |
+| `names.json` | the search index | 0.43 MB | 0.13 MB |
+
+**Names.** The search index holds 3,249 stars, from three sources in order of authority:
+
+- **The IAU's proper names.** All 652 approved by the WGSN as of 2026-10-15, vendored in
+  `tools/src/stars/wgsn.ts`. 560 of them find their star here; the other 92 lie
+  beyond 100 pc and outside the sky.
+- **The nearest systems, by the names people know them by.** Wolf 359, Lalande 21185,
+  Luyten's Star, Groombridge 34 and so on: 138 stars within 7.5 pc, with their systems
+  (Alpha Centauri is A, B and Proxima) and their distance rank. The list was compiled
+  from SIMBAD, in `tools/src/stars/nearbySystems.ts`.
+- **Bayer and Flamsteed designations** from the Yale Bright Star Catalogue: "Epsilon
+  Eridani", "61 Cygni".
+
+HD, HIP, HR and Gaia DR3 numbers are searchable too.
+
+**Two doors to every catalogue.** VizieR's TAP service was down for a whole day on
+2026-10-16 and again on 2026-10-22. Every table is therefore read from either the **ESA
+Gaia Archive** or VizieR, with the columns renamed in the query so that one parser reads
+both:
+
+- **The sky** asks VizieR first.
+- **The 3D stars** ask the Gaia Archive first. It is Gaia's home, and the only service
+  that joins DR3's radial velocities and cross-match into the GCNS query.
+
+A failure of both for the sky, the GCNS or Hipparcos-2 fails the run, as the sky always
+has.
+
+Two reads have no second door, and losing either does not fail the run:
+
+- **The bright Gaia set** (DR3 G < 9, the sky stars' counterparts) only comes from the
+  Gaia Archive: VizieR's copy has no index on G that its pages can use. Without it the
+  GCNS's own bright stars stand in, so the sky stars inside 100 pc keep their Gaia
+  parallaxes and the rest fall back to Hipparcos.
+- **The Bright Star Catalogue.** Without it there are no Bayer names.
+
+The output's `sources` says what came from where. Measured with the Gaia Archive made
+unreachable (2026-10-24), everything else came through VizieR: the same 331,312 GCNS
+stars, the same 174,196 radial velocities, 31,858 sky stars placed instead of 43,210.
+
+Gaia tables are read in twelve pages by source_id (each under the Gaia Archive's
+one-minute limit for synchronous queries) and held in typed columns. The whole step
+peaks at 350 to 420 MB RSS and takes about four minutes.
 
 ### Sample spacing
 
@@ -805,7 +951,12 @@ two, never drawn somewhere approximate and then moved.
 | [JPL Small-Body Database](https://ssd-api.jpl.nasa.gov/doc/sbdb.html) | Sizes, masses, spin periods and poles of the named small bodies, with the paper each comes from |
 | [JPL SBDB Query API](https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html) | Orbital elements and names of every asteroid and comet in the catalogue |
 | [CelesTrak GP](https://celestrak.org/NORAD/elements/) and [SATCAT](https://celestrak.org/satcat/) | SGP4 elements (OMM) of the Earth satellites, and their object types and launch dates |
-| [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3) | Nearby stars *(planned)* |
+| [Gaia Catalogue of Nearby Stars](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=J/A%2BA/649/A6), via the [ESA Gaia Archive](https://gea.esac.esa.int/archive/) or VizieR | The 331,312 stars within 100 pc: positions, parallaxes, proper motions, G/BP/RP |
+| [Gaia DR3](https://www.cosmos.esa.int/web/gaia/dr3), via the ESA Gaia Archive or VizieR | Radial velocities, and the parallaxes of the sky's stars through DR3's Hipparcos cross-match |
+| [Hipparcos, the new reduction](https://vizier.cds.unistra.fr/viz-bin/VizieR-3?-source=I/311/hip2), via the ESA Gaia Archive or VizieR | Parallaxes of the bright stars Gaia saturates on |
+| [IAU Catalog of Star Names (WGSN)](https://exopla.net/star-names/modern-iau-star-names/) | The IAU's proper star names, vendored |
+| [Yale Bright Star Catalogue](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50), via CDS | Bayer and Flamsteed designations |
+| [SIMBAD](https://simbad.cds.unistra.fr/) | Names, systems and spectral types of the nearest stars, compiled once and vendored |
 
 ## Roadmap
 
@@ -1039,6 +1190,20 @@ Stated plainly, since the point of the project is that everything else is not:
   catalogue** (ESA 1997, ESA SP-1200) and **Tycho-2** (Høg et al. 2000, A&A 355, L27),
   accessed through the **VizieR** service at CDS, Strasbourg (Ochsenbein, Bauer &
   Marcout 2000, A&AS 143, 23).
+- The stars in 3D: this work has made use of data from the European Space Agency (ESA)
+  mission **Gaia** (https://www.cosmos.esa.int/gaia), processed by the **Gaia Data
+  Processing and Analysis Consortium** (DPAC, https://www.cosmos.esa.int/web/gaia/dpac/consortium).
+  Funding for the DPAC has been provided by national institutions, in particular the
+  institutions participating in the Gaia Multilateral Agreement. Gaia DR3 (Gaia
+  Collaboration, Vallenari et al. 2023, A&A 674, A1); the **Gaia Catalogue of Nearby
+  Stars** (Gaia Collaboration, Smart et al. 2021, A&A 649, A6); **Hipparcos, the New
+  Reduction** (van Leeuwen 2007, A&A 474, 653); the Alpha Centauri parallax of Kervella
+  et al. 2016 (A&A 594, A107). Read through the **ESA Gaia Archive** and **VizieR**.
+- Star names: the **IAU Catalog of Star Names**, IAU Working Group on Star Names (WGSN),
+  CC BY 4.0; the **Yale Bright Star Catalogue** (Hoffleit & Warren 1991, CDS V/50); the
+  **SIMBAD** database, operated at CDS, Strasbourg (Wenger et al. 2000, A&AS 143, 9).
+- Gaia-to-Johnson colours: E. Mamajek's *Modern Mean Dwarf Stellar Color and Effective
+  Temperature Sequence* (2022.04.16; Pecaut & Mamajek 2013, ApJS 208, 9).
 - Satellite orbital data: **CelesTrak** (Dr. T.S. Kelso), relaying the US Space Force's
   public catalogue, published by the **18th and 19th Space Defense Squadrons** on
   Space-Track.org.

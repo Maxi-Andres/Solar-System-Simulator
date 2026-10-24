@@ -846,6 +846,220 @@ export interface StarCatalog {
 }
 
 /**
+ * Floats per star in a `stars3d/` tier file, little-endian float32, in this order:
+ *
+ *   0  x     position, parsecs  } heliocentric, at the Julian epoch J2000.0, in the scene's
+ *   1  y     position, parsecs  } frame: ICRS rotated about its x axis by the IAU 1976
+ *   2  z     position, parsecs  } obliquity, 84381.448" -- the very rotation the sky
+ *                                 (starGeometry.ts) puts stars.json through, so a star's
+ *                                 direction from the Sun is the sky's to float precision
+ *   3  vx    space velocity relative to the Sun, km/s, same frame
+ *   4  vy    "
+ *   5  vz    "
+ *   6  Mv    absolute V magnitude: V + 5 log10(parallax / 100 mas). No extinction
+ *            correction, so from the Sun it gives back the apparent V exactly
+ *   7  bv    Johnson B-V, as stars.json has it (see flag GAIA_PHOTOMETRY)
+ *   8  sky   the star's row in stars.json, or -1 for a star the sky catalogue does not
+ *            hold (fainter than its V 8, or missing from it). Exact in float32: < 2^24
+ *   9  flags STAR3D_FLAGS bits, an integer held exactly in float32
+ *
+ * Motion is linear: r(t) = r + v · (t − J2000.0) · STAR3D_KM_S_TO_PC_PER_YEAR, t in Julian
+ * years. A star without a measured radial velocity (no RADIAL_VELOCITY flag) has only the
+ * tangential part of its motion, from its proper motion and distance; its radial component
+ * is 0 -- unknown, not measured as zero.
+ *
+ * Parsecs and float32: the step at 100 pc is 7.6e-6 pc, 1.6 AU, and at 1.3 pc (Alpha
+ * Centauri) 1.2e-7 pc, 0.025 AU -- far inside every parallax's own error.
+ */
+export const STAR3D_RECORD_FLOATS = 10;
+
+/** km/s to pc per Julian year: 365.25 × 86,400 s / 3.0856775814913673e13 km. */
+export const STAR3D_KM_S_TO_PC_PER_YEAR = 1.0227121650537077e-6;
+
+/** The bits of a `stars3d/` record's `flags` float. */
+export const STAR3D_FLAGS = {
+  /** Gaia DR3 measured its radial velocity, so (vx, vy, vz) is the full space motion. */
+  RADIAL_VELOCITY: 1,
+  /** Distance from the Hipparcos new reduction (van Leeuwen 2007); else from Gaia DR3. */
+  HIPPARCOS_PARALLAX: 2,
+  /**
+   * Distance from a published system parallax rather than from either catalogue -- for
+   * the few stars whose catalogue parallaxes are known to be wrong; Stars3dInfo.overrides
+   * lists each, with its reference.
+   */
+  LITERATURE_PARALLAX: 4,
+  /**
+   * V and B-V transformed from Gaia's G and BP-RP (Stars3dInfo.photometry says how);
+   * else the sky catalogue's own Johnson values (Hipparcos measured, or Tycho-2
+   * transformed, as stars.json says per source).
+   */
+  GAIA_PHOTOMETRY: 8,
+  /** In the Gaia Catalogue of Nearby Stars: the volume-complete census within 100 pc. */
+  GCNS: 16,
+  /**
+   * In the GCNS's clean 100-pc sample: the median of its distance posterior, dist_50,
+   * inside 100 pc -- the selection the GCNS paper recommends when contamination matters
+   * more than completeness (Sect. 3). The catalogue as published also holds the stars
+   * that only *may* be inside (1st percentile within 100 pc); about 9% are probably
+   * just beyond, and they are drawn where their parallax puts them.
+   */
+  GCNS_WITHIN_100PC: 32,
+} as const;
+
+/** One absolute-magnitude tier of the 3D stars; see Stars3dInfo.tiers. */
+export interface Star3dTier {
+  /** The records, relative to `stars3d/`: STAR3D_RECORD_FLOATS float32s per star. */
+  readonly file: string;
+  readonly count: number;
+  readonly bytes: number;
+  /** Mv range of the tier: brighter limit inclusive, fainter exclusive; null = open. */
+  readonly brightestMv: number | null;
+  readonly faintestMv: number | null;
+  /**
+   * The tier's identifiers and parallaxes, relative to `stars3d/`, for an info panel and
+   * fetched only for one: `count` × BigUint64 Gaia DR3 source_id (0 = none), then
+   * `count` × Uint32 HIP number (0 = none), then `count` × Float32 parallax used, mas,
+   * then `count` × Float32 its standard error, mas. Little-endian, entry k for record k.
+   */
+  readonly details: string;
+  readonly detailsBytes: number;
+}
+
+/**
+ * The stars at their real distances (step D2), as `stars3d/stars3d.json`; the records in
+ * the tier files it lists, the search index in `names`. Optional: a data directory
+ * without it has a sky at infinity only, as before D2.
+ *
+ * **Every star with a usable distance, once.** That is the sky catalogue's stars that have
+ * a parallax of signal-to-noise `parallaxSnrLimit` or better, from Gaia DR3 or Hipparcos,
+ * plus every star of the Gaia Catalogue of Nearby Stars (100 pc) the sky does not already
+ * hold. A sky star in 3D carries its stars.json row (`sky`); a sky star without one stays
+ * at infinity, drawn as today. So the two files together hold every star exactly once:
+ * stars.json rows not named by any record's `sky` at infinity, every record here in 3D.
+ *
+ * A sky star keeps the sky's direction, V and B-V exactly -- only a distance and a radial
+ * velocity are added -- so from the Sun the 3D stars are the same sky. The GCNS stars the
+ * sky lacks are fainter than its V 8 from the Sun, which is why it lacks them -- all but
+ * a handful that the sky catalogue missed although they are brighter, counted in
+ * counts.gaiaOnlyBrighterThanSkyLimit (11 on 2026-10-24: Mizar B, eta Cassiopeiae B and
+ * other companions Hipparcos resolved but listed under its primary's number). They are
+ * real stars and are kept; seen from the Sun they are the only difference from the sky.
+ *
+ * Ordered by Mv, brightest (most luminous) first, and split into tiers like the belt, so
+ * the most luminous -- the ones seen from farthest -- come in the first file.
+ */
+export interface Stars3dInfo {
+  readonly sources: readonly {
+    readonly name: string;
+    /** The table as it was read: "J/A+A/649/A6/table1c", "gaiadr3.gaia_source". */
+    readonly table: string;
+    /** The TAP service it was read through: VizieR or the ESA Gaia Archive. */
+    readonly via: string;
+    /** Rows read. */
+    readonly rows: number;
+    readonly note: string;
+  }[];
+  readonly queriedAt: string;
+  /** Julian epoch of the positions: 2000.0. */
+  readonly epochJulianYear: number;
+  readonly frame: string;
+  /**
+   * The obliquity of `frame`, arcseconds: 84381.448, IAU 1976 -- JPL's "Ecliptic of
+   * J2000.0", the value orientation.ts has and every Horizons table here is rotated by.
+   */
+  readonly obliquityArcsec: number;
+  /** A parallax is used only when parallax / its standard error is at least this. */
+  readonly parallaxSnrLimit: number;
+  /** How a Gaia star's V and B-V were obtained from G and BP-RP. */
+  readonly photometry: string;
+  readonly count: number;
+  readonly recordFloats: typeof STAR3D_RECORD_FLOATS;
+  readonly kmPerSecondToParsecPerYear: number;
+  readonly tiers: readonly Star3dTier[];
+  /** The sky catalogue (stars.json) against this one. */
+  readonly sky: {
+    /** stars.json's own count, so a mismatched pair of files can be refused. */
+    readonly rows: number;
+    /** Rows with a record here, in 3D. */
+    readonly placed: number;
+    /** Rows left at infinity: no parallax at `parallaxSnrLimit`. */
+    readonly atInfinity: number;
+  };
+  /** Records by where their distance came from, and how many have a radial velocity. */
+  readonly counts: {
+    readonly gaiaParallax: number;
+    readonly hipparcosParallax: number;
+    readonly literatureParallax: number;
+    readonly radialVelocity: number;
+    readonly gcns: number;
+    readonly withinTenParsecs: number;
+    /**
+     * Gaia-only stars brighter than the sky's V 8 from the Sun, so drawn by a renderer
+     * that cuts at the sky's limit: stars the sky catalogue missed. Kept, being real; the
+     * components of sky entries are not (dropped.gcnsComponentOfSkyEntry).
+     */
+    readonly gaiaOnlyBrighterThanSkyLimit: number;
+  };
+  /**
+   * How sky stars were matched to Gaia, each star counted once by the first rule that
+   * matched it: by HIP number through Gaia DR3's own Hipparcos best-neighbour table, then
+   * by position (within `positionalRadiusArcsec` at J2016, with a magnitude check).
+   */
+  readonly crossMatch: {
+    readonly byId: number;
+    readonly byPosition: number;
+    readonly positionalRadiusArcsec: number;
+  };
+  /** Catalogue parallaxes replaced by a published one, and why. */
+  readonly overrides: readonly {
+    readonly star: string;
+    readonly parallaxMas: number;
+    readonly parallaxErrorMas: number;
+    readonly reference: string;
+  }[];
+  /** Rows read and not written, by reason. */
+  readonly dropped: Readonly<Record<string, number>>;
+  /** The search index, `stars3d/<file>`; see Stars3dNames. */
+  readonly names: {
+    readonly file: string;
+    readonly count: number;
+    readonly bytes: number;
+  };
+}
+
+/**
+ * The 3D stars a search can find by name, `stars3d/names.json`, fetched only when search
+ * is opened. Columnar: entry k is `display[k]`, `designations[k]`, ... Every star with an
+ * IAU proper name (the WGSN list), every star with a Bayer or Flamsteed designation, and
+ * every star of the nearest systems. Ordered by apparent V from the Sun, brightest first.
+ */
+export interface Stars3dNames {
+  readonly count: number;
+  /** How the app names it: "Sirius", "Proxima Centauri", "Wolf 359", "61 Cygni A". */
+  readonly display: readonly string[];
+  /** Whether `display` is an IAU-approved proper name (WGSN). */
+  readonly iau: readonly boolean[];
+  /**
+   * Its other designations, for search to match too: "alf CMa A", "HD 48915",
+   * "HIP 32349", "Gaia DR3 2947050466531873024". Never repeats `display`.
+   */
+  readonly designations: readonly (readonly string[])[];
+  /**
+   * The system it belongs to where the source says it is multiple ("Alpha Centauri" for
+   * A, B and Proxima); null for a star the sources give as single.
+   */
+  readonly system: readonly (string | null)[];
+  /** The system's rank by distance among the nearest systems, 1 the nearest; else null. */
+  readonly nearest: readonly (number | null)[];
+  /** Spectral type as the source gives it ("A1V", "M5.5Ve"); null where none does. */
+  readonly spectralType: readonly (string | null)[];
+  /** Which tier file its record is in: an index into Stars3dInfo.tiers. */
+  readonly tier: readonly number[];
+  /** Its record's index inside that tier's file, counted in records, not floats. */
+  readonly index: readonly number[];
+}
+
+/**
  * Orbit classes of the asteroid belt file, in the order their codes are written.
  *
  * SBDB's own `class` codes, so a filter can be checked against JPL's definitions

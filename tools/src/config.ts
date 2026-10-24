@@ -257,6 +257,21 @@ export const HIPPARCOS_TABLE = 'I/239/hip_main';
 export const TYCHO2_TABLE = 'I/259/tyc2';
 
 /**
+ * The ESA Gaia Archive's TAP endpoint, at ESAC, and its copies of the tables above.
+ *
+ * The second door to the same catalogues. VizieR's TAP service answered 503 for all of
+ * 2026-10-16 and again on 2026-10-22, while this one was up; it hosts the Hipparcos and
+ * Tycho-2 catalogues as ESA published them (`public.hipparcos` is the 1997 catalogue
+ * I/239/hip_main is, column for column: 41,411 rows to V 8 in both), so the sky falls
+ * back to it rather than failing the run. It is also the home of Gaia DR3 itself, and the
+ * only service with Gaia's own cross-match tables -- which is why it goes *first* for the
+ * 3D stars and VizieR second (see stars/sources3d.ts).
+ */
+export const GAIA_ARCHIVE_TAP_URL = 'https://gea.esac.esa.int/tap-server/tap/sync';
+export const GAIA_ARCHIVE_HIPPARCOS_TABLE = 'public.hipparcos';
+export const GAIA_ARCHIVE_TYCHO2_TABLE = 'public.tycho2';
+
+/**
  * Tycho photometry to the Johnson system, as published with the catalogue.
  *
  *     V   = VT - 0.090 (BT - VT)
@@ -327,6 +342,133 @@ export const STAR_ANGLE_DECIMALS = 3;
 export const STAR_MAGNITUDE_DECIMALS = 2;
 export const STAR_COLOR_INDEX_DECIMALS = 3;
 export const STAR_PROPER_MOTION_DECIMALS = 0;
+
+/**
+ * The stars in 3D (step D2): the tables, and the choices that decide which star gets a
+ * distance. Each is argued where it is used, in stars/sources3d.ts and stars/build3d.ts;
+ * the numbers live here so they can be read in one place.
+ *
+ * GCNS -- the Gaia Catalogue of Nearby Stars (Gaia Collaboration, Smart et al. 2021,
+ * A&A 649, A6): 331,312 objects with reliable Gaia EDR3 astrometry and a non-zero
+ * probability of lying within 100 pc. EDR3's astrometry is DR3's, source ids included.
+ * Hipparcos-2 -- the new reduction (van Leeuwen 2007, A&A 474, 653): 117,955 stars, the
+ * parallaxes for the bright stars Gaia saturates on.
+ */
+export const GCNS_VIZIER_TABLE = 'J/A+A/649/A6/table1c';
+export const GCNS_GAIA_ARCHIVE_TABLE = 'external.gaiaedr3_gcns_main_1';
+export const HIPPARCOS2_VIZIER_TABLE = 'I/311/hip2';
+export const HIPPARCOS2_GAIA_ARCHIVE_TABLE = 'public.hipparcos_newreduction';
+export const GAIA_DR3_VIZIER_TABLE = 'I/355/gaiadr3';
+export const GAIA_DR3_GAIA_ARCHIVE_TABLE = 'gaiadr3.gaia_source';
+export const GAIA_HIPPARCOS2_CROSSMATCH_TABLE = 'gaiadr3.hipparcos2_best_neighbour';
+
+/**
+ * Smallest parallax signal-to-noise a distance is taken from.
+ *
+ * At 5 the parallax's standard error is a fifth of it, and the distance 1/parallax is
+ * good to about 20% -- the threshold below which inverting a parallax stops being a
+ * reasonable distance estimate at all (Bailer-Jones 2015, PASP 127, 994, who puts the
+ * point where the inverse starts misbehaving at fractional errors of 0.1 to 0.2). Below
+ * it a star is left at infinity, as every star was before D2: a star without a distance
+ * is drawn where it is seen, never at a guessed depth.
+ *
+ * The same estimator for every star, 1/parallax, whichever catalogue the parallax came
+ * from. GCNS publishes Bayesian distances too (dist_50), but they exist only for its
+ * stars, and at its stars' typical signal-to-noise -- hundreds -- the two agree to far
+ * better than a pixel of any view the app has.
+ */
+export const STAR3D_PARALLAX_SNR = 5;
+
+/**
+ * Gaia's renormalised unit weight error above which its parallax is not used.
+ *
+ * 1.4 is DPAC's own threshold for a well-behaved single-star solution (Lindegren et al.
+ * 2021, A&A 649, A2; Lindegren 2018, GAIA-C3-TN-LU-LL-124). Above it the five-parameter
+ * model fitted the observations badly -- an unresolved binary, usually -- and the formal
+ * parallax error understates the real one. Such a star falls back to Hipparcos when
+ * Hipparcos measured it, and to infinity when not.
+ *
+ * Applied to the sky stars, where Gaia competes with Hipparcos. Not to the GCNS, whose
+ * own random-forest classifier already judged every astrometric solution in it (RUWE is
+ * one of its inputs) and kept those with p >= 0.38; second-guessing it with one of its
+ * own features would drop 56,093 real nearby stars, a sixth of the census.
+ */
+export const STAR3D_MAX_RUWE = 1.4;
+
+/**
+ * Faintest Gaia G read for matching the sky catalogue to Gaia.
+ *
+ * The sky stops at V 8 and G is brighter than V for every star but the bluest (G - V
+ * is +0.02 at B-V -0.1 and falls to -1.5 for an M dwarf; Mamajek's sequence), so G < 9
+ * holds every sky star with a margin for variables: 177,427 Gaia DR3 sources.
+ */
+export const STAR3D_BRIGHT_GAIA_LIMIT = 9;
+
+/**
+ * Radius of the positional match between a sky star and a Gaia source, arcseconds, at
+ * Gaia's epoch J2016.
+ *
+ * Used only where no identifier joins them (a Tycho-2 star, or any star when Gaia's own
+ * cross-match table cannot be read). Two arcseconds holds a Hipparcos or Tycho-2
+ * position carried 16 to 25 years on its proper motion, whose error is a few mas/yr, with
+ * an order of magnitude to spare; and Gaia resolves companions down to about 0.4", so a
+ * match is accepted only within STAR3D_MATCH_MAGNITUDE of the sky star's V as well.
+ */
+export const STAR3D_MATCH_RADIUS_ARCSEC = 2;
+export const STAR3D_MATCH_MAGNITUDE = 1.5;
+
+/**
+ * A Gaia-only star brighter than the sky's limit this close to a sky entry is taken to be
+ * a component of that entry, and not drawn again.
+ *
+ * Gaia resolves pairs Hipparcos and Tycho-2 held as one entry -- 70 Ophiuchi is one
+ * Hipparcos star at its photocentre with the pair's combined V 4.03, and two Gaia stars
+ * 1.6" apart -- and drawing those components as well would add their light to the sky a
+ * second time, a dot visibly brighter than the sky shows.
+ *
+ * Hipparcos says which entries those are (field H48, "CombMag"): combined light, and a
+ * Gaia star within 20" of one is its component. It also says the opposite (H48 blank, two
+ * components): V is one component's, the other was resolved but listed under the same
+ * number and is in no sky catalogue -- Mizar B, 14" from Mizar -- so a Gaia star there is
+ * kept, being a star the sky lacks. Anything else (single entries, Tycho-2 stars) absorbs
+ * a Gaia star within 10". Measured on 2026-10-24: of 162 GCNS stars brighter than V 8 the
+ * sky does not hold, 151 are components so dropped; of the 11 kept, 4 are such unlisted
+ * companions 11" to 15" away and 7 lie more than 600" from any sky star.
+ *
+ * Fainter companions are always kept: below the sky's limit they change nothing seen
+ * from the Sun, and they are real stars.
+ */
+export const STAR3D_COMPONENT_RADIUS_ARCSEC = 10;
+export const STAR3D_COMBINED_RADIUS_ARCSEC = 20;
+
+/**
+ * Absolute V magnitude limits between the 3D tiers, brightest first, like the belt's.
+ * See Stars3dInfo.tiers. Set from the measured distribution; see the README.
+ */
+export const STAR3D_TIER_LIMITS: readonly number[] = [5, 10];
+
+/**
+ * The obliquity the 3D stars are rotated by, ICRS equator to the scene's ecliptic,
+ * arcseconds: IAU 1976, the value JPL defines its "Ecliptic of J2000.0" with (every
+ * Horizons header quotes it) and the one web/src/scene/orientation.ts rotates stars.json
+ * by. It must be that one and no other: the contract is that a sky star's 3D direction
+ * from the Sun is the sky's own.
+ */
+export const STAR3D_OBLIQUITY_ARCSEC = 84381.448;
+
+/** The output directory and its files. */
+export const STARS3D_DIR = 'stars3d';
+export const STARS3D_INFO_FILE = 'stars3d.json';
+export const STARS3D_NAMES_FILE = 'names.json';
+
+/**
+ * The Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren 1991, CDS V/50),
+ * for Bayer and Flamsteed designations: neither Hipparcos nor Gaia carries them. Read as
+ * the fixed-width file CDS publishes, over plain HTTP from its archive rather than
+ * through TAP -- a third door, which stayed open on 2026-10-22 while VizieR's TAP did not.
+ * Optional: without it the search index keeps the IAU names and the nearest systems.
+ */
+export const BSC_CATALOG_URL = 'https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz';
 
 /**
  * JPL's Small-Body Database query endpoint, for the asteroid belt.

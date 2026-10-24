@@ -1,31 +1,45 @@
 import {
+  GAIA_ARCHIVE_HIPPARCOS_TABLE,
+  GAIA_ARCHIVE_TAP_URL,
+  GAIA_ARCHIVE_TYCHO2_TABLE,
   HIPPARCOS_TABLE,
-  MAX_RETRIES,
-  REQUEST_TIMEOUT_MS,
   STAR_MAGNITUDE_LIMIT,
   TYCHO2_TABLE,
   TYCHO_BV_FROM_BT_VT,
   TYCHO_V_FROM_VT,
   VIZIER_TAP_URL,
 } from '../config.ts';
-import { retryDelayMs } from '../horizons/client.ts';
+import {
+  optionalNumber,
+  optionalText,
+  parseCsvTable,
+  readWithFallback,
+  type TapRead,
+  type TapService,
+} from './tap.ts';
+
+export { splitCsvLine } from './tap.ts';
 
 /**
- * Reads the two star catalogues out of VizieR.
+ * Reads the two star catalogues of the sky.
  *
  * VizieR is the CDS Strasbourg mirror of the published astronomical catalogues, and it
  * speaks TAP -- the IVOA's query protocol -- so the requests below are ADQL over HTTP
- * and the answers are CSV. No key, no client library, no scraping.
+ * and the answers are CSV. No key, no client library, no scraping. The ESA Gaia Archive
+ * holds the same two catalogues as ESA published them and speaks the same protocol, so
+ * each catalogue is asked of VizieR first and of the Gaia Archive when VizieR is down
+ * (see tap.ts for why there are two doors). The Gaia Archive's columns are renamed in
+ * the query to VizieR's, so one parser reads either answer.
  *
  * **Two catalogues, because neither one is a sky on its own.** Hipparcos is complete at
  * the bright end and thins out past magnitude 7.5; Tycho-2 goes to magnitude 11 and is
  * *missing the brightest stars entirely* -- its star mapper saturated on them, so Sirius,
  * Vega and Betelgeuse are simply not in it. Both facts are measured rather than taken on
  * faith; see `config.ts` for the numbers. The union is what a sky needs.
- *
- * Retries follow the same backoff policy as the Horizons client, imported rather than
- * copied: the reasoning about jitter and shared CI outbound addresses applies unchanged.
  */
+
+export const VIZIER: TapService = { name: 'VizieR (CDS)', url: VIZIER_TAP_URL };
+export const GAIA_ARCHIVE: TapService = { name: 'ESA Gaia Archive', url: GAIA_ARCHIVE_TAP_URL };
 
 /** One star as read, before either catalogue's quirks are resolved. */
 export interface CatalogRow {
@@ -42,6 +56,24 @@ export interface CatalogRow {
   /** Proper motion in RA, already times cos(dec), mas/yr. */
   readonly pmRaMasPerYear: number | null;
   readonly pmDecMasPerYear: number | null;
+  /**
+   * Identity, carried for the 3D stars (step D2) and not written to stars.json: the
+   * Tycho-2 number "TYC1-TYC2-TYC3", the Henry Draper number, Hipparcos's spectral type
+   * and its CCDM multiple-system identifier. Null where the catalogue has none, or where
+   * a response predates these columns.
+   */
+  readonly tyc?: string | null;
+  readonly hd?: number | null;
+  readonly spectralType?: string | null;
+  readonly ccdm?: string | null;
+  /**
+   * Hipparcos field H48: true when Vmag is the combined light of a system's components
+   * (70 Ophiuchi), false when it is one component's (Mizar, whose companion Hipparcos
+   * resolved but listed under the same number). Null where the catalogue does not say.
+   */
+  readonly combinedLight?: boolean | null;
+  /** Hipparcos field H58: components in this entry, 2 for a resolved pair. */
+  readonly components?: number | null;
 }
 
 const HIPPARCOS_COLUMNS = [
@@ -55,28 +87,66 @@ const HIPPARCOS_COLUMNS = [
   'pmRA',
   'pmDE',
 ];
+/** Read when present: identity for the 3D stars, nothing the sky itself draws from. */
+const HIPPARCOS_IDENTITY_COLUMNS = ['HD', 'SpType', 'CCDM', 'CombMag', 'Ncomp'];
 
 const TYCHO2_COLUMNS = ['HIP', 'RAmdeg', 'DEmdeg', 'pmRA', 'pmDE', 'BTmag', 'VTmag'];
+const TYCHO2_IDENTITY_COLUMNS = ['TYC1', 'TYC2', 'TYC3'];
+
+/** The Gaia Archive's names for VizieR's columns, in the same order. */
+const GAIA_ARCHIVE_HIPPARCOS_COLUMNS: Readonly<Record<string, string>> = {
+  HIP: 'hip',
+  RAICRS: 'ra',
+  DEICRS: 'de',
+  RAhms: 'rahms',
+  DEdms: 'dedms',
+  Vmag: 'vmag',
+  'B-V': 'b_v',
+  pmRA: 'pmra',
+  pmDE: 'pmde',
+  HD: 'hd',
+  SpType: 'sptype',
+  CCDM: 'ccdm',
+  CombMag: 'combmag',
+  Ncomp: 'ncomp',
+};
+
+const GAIA_ARCHIVE_TYCHO2_COLUMNS: Readonly<Record<string, string>> = {
+  HIP: 'hip',
+  RAmdeg: 'ra_mdeg',
+  DEmdeg: 'de_mdeg',
+  pmRA: 'pm_ra',
+  pmDE: 'pm_de',
+  BTmag: 'bt_mag',
+  VTmag: 'vt_mag',
+  TYC1: 'tyc1',
+  TYC2: 'tyc2',
+  TYC3: 'tyc3',
+};
 
 const PLAIN_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]*$/;
-
-/**
- * Upper bound on rows, used to detect truncation rather than to limit the result.
- *
- * TAP services cut a result at their own default -- often 2,000 rows -- and say so only
- * in a header nobody reads. A silently short sky is the kind of failure that looks like
- * a rendering bug for a week, so we ask for far more than either catalogue returns and
- * then check we did not reach the ceiling.
- */
-const MAX_ROWS = 400_000;
 
 function quoted(column: string): string {
   return PLAIN_IDENTIFIER.test(column) ? column : `"${column}"`;
 }
 
+/** `native AS "VizieRName"`, so either service's answer has VizieR's header. */
+function aliased(columns: Readonly<Record<string, string>>): string {
+  return Object.entries(columns)
+    .map(([vizier, native]) => `${native} AS "${vizier}"`)
+    .join(', ');
+}
+
 export function hipparcosQuery(magnitudeLimit: number): string {
-  const selected = HIPPARCOS_COLUMNS.map(quoted).join(', ');
+  const selected = [...HIPPARCOS_COLUMNS, ...HIPPARCOS_IDENTITY_COLUMNS].map(quoted).join(', ');
   return `SELECT ${selected} FROM "${HIPPARCOS_TABLE}" WHERE Vmag <= ${magnitudeLimit}`;
+}
+
+export function gaiaArchiveHipparcosQuery(magnitudeLimit: number): string {
+  return (
+    `SELECT ${aliased(GAIA_ARCHIVE_HIPPARCOS_COLUMNS)} FROM ${GAIA_ARCHIVE_HIPPARCOS_TABLE} ` +
+    `WHERE vmag <= ${magnitudeLimit}`
+  );
 }
 
 /**
@@ -89,7 +159,7 @@ export function hipparcosQuery(magnitudeLimit: number): string {
  * sky is a visible number of stars.
  */
 export function tycho2Query(magnitudeLimit: number): string {
-  const selected = TYCHO2_COLUMNS.map(quoted).join(', ');
+  const selected = [...TYCHO2_COLUMNS, ...TYCHO2_IDENTITY_COLUMNS].map(quoted).join(', ');
   return (
     `SELECT ${selected} FROM "${TYCHO2_TABLE}" ` +
     'WHERE BTmag IS NOT NULL AND VTmag IS NOT NULL ' +
@@ -97,85 +167,12 @@ export function tycho2Query(magnitudeLimit: number): string {
   );
 }
 
-/**
- * Splits one CSV line, honouring the quotes VizieR puts around the sexagesimal columns.
- *
- * Small on purpose: this is CSV as the TAP standard emits it, not CSV in general, and a
- * dependency for nine columns would be the wrong trade.
- */
-export function splitCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let field = '';
-  let quoting = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (quoting) {
-      if (character === '"') {
-        if (line[index + 1] === '"') {
-          field += '"';
-          index += 1;
-        } else {
-          quoting = false;
-        }
-      } else {
-        field += character;
-      }
-    } else if (character === '"') {
-      quoting = true;
-    } else if (character === ',') {
-      fields.push(field.trim());
-      field = '';
-    } else {
-      field += character;
-    }
-  }
-
-  fields.push(field.trim());
-  return fields;
-}
-
-/** A CSV body as rows keyed by column name, with the header checked rather than trusted. */
-export interface CsvTable {
-  readonly columns: readonly string[];
-  readonly rows: readonly (readonly string[])[];
-  at(row: readonly string[], column: string): string | undefined;
-}
-
-export function parseCsvTable(csv: string, required: readonly string[]): CsvTable {
-  const lines = csv.split('\n').filter((line) => line.trim().length > 0);
-  const header = lines[0];
-  if (header === undefined) {
-    throw new Error('VizieR returned an empty response.');
-  }
-
-  const columns = splitCsvLine(header);
-  const index = new Map(columns.map((name, position) => [name, position]));
-  for (const column of required) {
-    if (!index.has(column)) {
-      throw new Error(
-        `VizieR response has no column "${column}". Got: ${columns.join(', ')}\n` +
-          `First line of the body: ${lines[1] ?? '(none)'}`,
-      );
-    }
-  }
-
-  return {
-    columns,
-    rows: lines.slice(1).map(splitCsvLine),
-    at: (row, column) => row[index.get(column) as number],
-  };
-}
-
-function optionalNumber(raw: string | undefined, column: string, label: string): number | null {
-  if (raw === undefined || raw === '') {
-    return null;
-  }
-  const value = Number(raw);
-  if (!Number.isFinite(value)) {
-    throw new Error(`${label}: column "${column}" is not a number: "${raw}"`);
-  }
-  return value;
+export function gaiaArchiveTycho2Query(magnitudeLimit: number): string {
+  return (
+    `SELECT ${aliased(GAIA_ARCHIVE_TYCHO2_COLUMNS)} FROM ${GAIA_ARCHIVE_TYCHO2_TABLE} ` +
+    'WHERE bt_mag IS NOT NULL AND vt_mag IS NOT NULL ' +
+    `AND vt_mag - ${TYCHO_V_FROM_VT} * (bt_mag - vt_mag) <= ${magnitudeLimit}`
+  );
 }
 
 export function parseHipparcosCsv(csv: string): CatalogRow[] {
@@ -186,18 +183,22 @@ export function parseHipparcosCsv(csv: string): CatalogRow[] {
     if (vMag === null) {
       throw new Error(`${label} has no V magnitude, which the query filtered on.`);
     }
-    const raHms = table.at(row, 'RAhms') ?? '';
-    const decDms = table.at(row, 'DEdms') ?? '';
     return {
       hip: optionalNumber(table.at(row, 'HIP'), 'HIP', label),
       raDeg: optionalNumber(table.at(row, 'RAICRS'), 'RAICRS', label),
       decDeg: optionalNumber(table.at(row, 'DEICRS'), 'DEICRS', label),
-      raHms: raHms === '' ? null : raHms,
-      decDms: decDms === '' ? null : decDms,
+      raHms: optionalText(table.at(row, 'RAhms')),
+      decDms: optionalText(table.at(row, 'DEdms')),
       vMag,
       colorIndex: optionalNumber(table.at(row, 'B-V'), 'B-V', label),
       pmRaMasPerYear: optionalNumber(table.at(row, 'pmRA'), 'pmRA', label),
       pmDecMasPerYear: optionalNumber(table.at(row, 'pmDE'), 'pmDE', label),
+      tyc: null,
+      hd: optionalNumber(table.at(row, 'HD'), 'HD', label),
+      spectralType: optionalText(table.at(row, 'SpType')),
+      ccdm: optionalText(table.at(row, 'CCDM')),
+      combinedLight: table.has('CombMag') ? table.at(row, 'CombMag') === '*' : null,
+      components: optionalNumber(table.at(row, 'Ncomp'), 'Ncomp', label),
     };
   });
 }
@@ -230,6 +231,7 @@ export function parseTycho2Csv(csv: string): CatalogRow[] {
       // Filtered out by the query; a row without both carries no colour.
       continue;
     }
+    const tycParts = TYCHO2_IDENTITY_COLUMNS.map((column) => optionalText(table.at(row, column)));
     rows.push({
       hip: optionalNumber(table.at(row, 'HIP'), 'HIP', label),
       raDeg: optionalNumber(table.at(row, 'RAmdeg'), 'RAmdeg', label),
@@ -240,101 +242,59 @@ export function parseTycho2Csv(csv: string): CatalogRow[] {
       colorIndex: TYCHO_BV_FROM_BT_VT * (bt - vt),
       pmRaMasPerYear: optionalNumber(table.at(row, 'pmRA'), 'pmRA', label),
       pmDecMasPerYear: optionalNumber(table.at(row, 'pmDE'), 'pmDE', label),
+      // Leading zeros dropped, as Tycho designations are written: "TYC 1-381-1".
+      tyc: tycParts.every((part) => part !== null)
+        ? tycParts.map((part) => String(Number(part))).join('-')
+        : null,
+      hd: null,
+      spectralType: null,
+      ccdm: null,
     });
   }
 
   return rows;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((done) => {
-    setTimeout(done, ms);
-  });
-}
-
-/** Statuses worth another attempt: rate limiting and transient server faults. */
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-
-/** Marks an error as not worth retrying, so a bad query fails in one round trip. */
-function permanent(message: string): Error {
-  return Object.assign(new Error(message), { permanent: true });
-}
-
-function isPermanent(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'permanent' in error &&
-    (error as { permanent: unknown }).permanent === true
+export async function fetchHipparcos(
+  magnitudeLimit = STAR_MAGNITUDE_LIMIT,
+): Promise<TapRead<CatalogRow>> {
+  return readWithFallback(
+    [
+      {
+        service: VIZIER,
+        table: HIPPARCOS_TABLE,
+        pages: [hipparcosQuery(magnitudeLimit)],
+        parse: parseHipparcosCsv,
+      },
+      {
+        service: GAIA_ARCHIVE,
+        table: GAIA_ARCHIVE_HIPPARCOS_TABLE,
+        pages: [gaiaArchiveHipparcosQuery(magnitudeLimit)],
+        parse: parseHipparcosCsv,
+      },
+    ],
+    'Hipparcos',
   );
 }
 
-/** Runs one ADQL query against VizieR and returns the CSV body. */
-export async function queryVizier(adql: string, label: string): Promise<string> {
-  const url = new URL(VIZIER_TAP_URL);
-  url.searchParams.set('REQUEST', 'doQuery');
-  url.searchParams.set('LANG', 'ADQL');
-  url.searchParams.set('FORMAT', 'csv');
-  url.searchParams.set('MAXREC', String(MAX_ROWS));
-  url.searchParams.set('QUERY', adql);
-
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        headers: { accept: 'text/csv' },
-      });
-
-      if (RETRYABLE_STATUSES.has(response.status)) {
-        throw new Error(`VizieR returned HTTP ${response.status}`);
-      }
-
-      const body = await response.text();
-
-      if (!response.ok) {
-        // A rejected ADQL query comes back as a VOTable error document, and its first
-        // few hundred characters are the actual explanation.
-        throw permanent(
-          `VizieR rejected the ${label} query (HTTP ${response.status}): ${body.slice(0, 400)}`,
-        );
-      }
-
-      const lines = body.split('\n').filter((line) => line.trim().length > 0);
-      if (lines.length <= 1) {
-        throw new Error(`VizieR returned no ${label} rows.`);
-      }
-      if (lines.length - 1 >= MAX_ROWS) {
-        throw permanent(
-          `The ${label} query returned ${lines.length - 1} rows, the requested maximum, so ` +
-            'the result was truncated. Raise MAX_ROWS in vizier.ts.',
-        );
-      }
-      return body;
-    } catch (error) {
-      lastError = error;
-      if (isPermanent(error) || attempt === MAX_RETRIES) {
-        break;
-      }
-      const wait = retryDelayMs(attempt, null);
-      console.warn(
-        `[stars] ${label}: attempt ${attempt}/${MAX_RETRIES} failed (${String(error)}). ` +
-          `Retrying in ${(wait / 1000).toFixed(1)} s.`,
-      );
-      await delay(wait);
-    }
-  }
-
-  throw new Error(`Could not read ${label} from VizieR: ${String(lastError)}`);
-}
-
-export async function fetchHipparcos(
+export async function fetchTycho2(
   magnitudeLimit = STAR_MAGNITUDE_LIMIT,
-): Promise<CatalogRow[]> {
-  return parseHipparcosCsv(await queryVizier(hipparcosQuery(magnitudeLimit), 'Hipparcos'));
-}
-
-export async function fetchTycho2(magnitudeLimit = STAR_MAGNITUDE_LIMIT): Promise<CatalogRow[]> {
-  return parseTycho2Csv(await queryVizier(tycho2Query(magnitudeLimit), 'Tycho-2'));
+): Promise<TapRead<CatalogRow>> {
+  return readWithFallback(
+    [
+      {
+        service: VIZIER,
+        table: TYCHO2_TABLE,
+        pages: [tycho2Query(magnitudeLimit)],
+        parse: parseTycho2Csv,
+      },
+      {
+        service: GAIA_ARCHIVE,
+        table: GAIA_ARCHIVE_TYCHO2_TABLE,
+        pages: [gaiaArchiveTycho2Query(magnitudeLimit)],
+        parse: parseTycho2Csv,
+      },
+    ],
+    'Tycho-2',
+  );
 }
