@@ -12,6 +12,7 @@ import {
 import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import { BULK_WINDOW_DAYS, chipCounts, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
 import { LAYERS, useViewStore, type LayerDefinition } from '../state/store.ts';
+import { CENSUS_EDGE_LY } from '../scene/distanceRings.ts';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -54,6 +55,7 @@ export function LayersPanel({
                 <BeltNote />
               </>
             )}
+            {layer.id === 'starMap' && layers.starMap && <StarMapNote />}
             {layer.id === 'satellites' && layers.satellites && (
               <>
                 <SatelliteChips satellites={satellites} />
@@ -368,6 +370,23 @@ function BeltNote() {
     >
       Not to scale: each dot marks where an asteroid is. Seen for real, almost none would be
       visible.
+    </p>
+  );
+}
+
+/**
+ * Where the star map stops, said where it is switched on. From outside, the 100-parsec
+ * census is a glowing ball with darkness round it, which reads as the Sun in a cluster at
+ * the edge of the stars. It is the edge of the catalogue: the galaxy's stars carry on at
+ * the same density for thousands of light years. See CENSUS_EDGE_LY.
+ */
+function StarMapNote() {
+  return (
+    <p style={{ margin: '0 0 0.4rem 1.65rem', fontSize: '0.64rem', lineHeight: 1.45, color: '#6a6a6a' }}>
+      Within {Math.round(CENSUS_EDGE_LY)} light years (100 parsecs), nearly every star is here,
+      from Gaia. Past that, only the brightest stars of our sky. The dark beyond the
+      dashed edge is where the catalogue stops, not the stars: the Milky Way has a few hundred
+      billion more.
     </p>
   );
 }

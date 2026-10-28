@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DISTANCE_RINGS_LY, RING_MAX_OPACITY, ringVisibility } from './distanceRings.ts';
-import { AU_KM, FOV_DEG, LIGHT_YEAR_KM, MAX_VIEW_DISTANCE_KM } from './scale.ts';
+import {
+  CENSUS_EDGE_LY,
+  censusEdgeVisibility,
+  DISTANCE_RINGS_LY,
+  RING_MAX_OPACITY,
+  ringVisibility,
+  sphereOutline,
+} from './distanceRings.ts';
+import { AU_KM, FOV_DEG, LIGHT_YEAR_KM, MAX_VIEW_DISTANCE_KM, PARSEC_KM } from './scale.ts';
 import { kmPerPixelAt, niceFloor, SCALE_BAR_MAX_PX, scaleBarReading } from './scaleBar.ts';
 
 const HEIGHT = 910;
@@ -84,5 +91,36 @@ describe('the distance rings', () => {
 
   it('stay under everything real', () => {
     expect(RING_MAX_OPACITY).toBeLessThanOrEqual(0.5);
+  });
+});
+
+describe('the edge of the star census', () => {
+  const R = CENSUS_EDGE_LY * LIGHT_YEAR_KM;
+
+  it('is 100 parsecs, 326.16 light years', () => {
+    expect(R).toBeCloseTo(100 * PARSEC_KM, 0);
+    expect(CENSUS_EDGE_LY).toBeCloseTo(326.156, 3);
+  });
+
+  it('is drawn as the sphere is seen: grazing lines of sight, not a circle of radius R', () => {
+    const D = 1000 * LIGHT_YEAR_KM;
+    const outline = sphereOutline(R, D)!;
+    // Every point of the outline is a tangent point: its line of sight is square to the
+    // radius there, so camera, outline point and centre make a right angle.
+    const along = D - outline.towardCameraKm;
+    expect(along * along + outline.radiusKm * outline.radiusKm).toBeCloseTo(D * D - R * R, -20);
+    // And it fills asin(R / D) of the view, a touch more than R / D would.
+    expect(Math.atan(outline.radiusKm / along)).toBeCloseTo(Math.asin(R / D), 12);
+  });
+
+  it('has no outline from inside', () => {
+    expect(sphereOutline(R, R * 0.5)).toBeNull();
+    expect(sphereOutline(R, R)).toBeNull();
+  });
+
+  it('shows from well outside, and not from inside or right at its surface', () => {
+    expect(censusEdgeVisibility(R, 50 * LIGHT_YEAR_KM, HEIGHT, FOV_DEG)).toBe(0);
+    expect(censusEdgeVisibility(R, R * 1.01, HEIGHT, FOV_DEG)).toBe(0);
+    expect(censusEdgeVisibility(R, MAX_VIEW_DISTANCE_KM, HEIGHT, FOV_DEG)).toBe(1);
   });
 });

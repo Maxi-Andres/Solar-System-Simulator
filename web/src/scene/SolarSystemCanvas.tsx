@@ -226,6 +226,7 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         visible={showDistanceRings}
+        censusVisible={showStarMap && stars3d !== null}
         labels={ringLabels}
       />
       <LabelProjector

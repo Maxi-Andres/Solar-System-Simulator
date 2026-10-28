@@ -15,7 +15,12 @@ import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
 import { BodyPicker } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
-import { DISTANCE_RINGS_LY, ringLabel } from './scene/distanceRings.ts';
+import {
+  CENSUS_EDGE_COLOR,
+  CENSUS_EDGE_LABEL,
+  DISTANCE_RINGS_LY,
+  ringLabel,
+} from './scene/distanceRings.ts';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
@@ -253,7 +258,9 @@ export function App() {
         scaleBar={scaleBar}
       />
 
-      {layers.distanceRings && layers.labels && uiVisible && <RingLabels elements={ringLabels} />}
+      {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
+        <RingLabels elements={ringLabels} />
+      )}
 
       <LabelLayer
         store={store}
@@ -477,6 +484,16 @@ function RingLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]> 
           {ringLabel(lightYears)}
         </span>
       ))}
+      {/* The census edge, last: see distanceRings.ts. Shown by the Star Map layer. */}
+      <span
+        className="tracks-scene"
+        ref={(element) => {
+          elements.current[DISTANCE_RINGS_LY.length] = element;
+        }}
+        style={CENSUS_LABEL_STYLE}
+      >
+        {CENSUS_EDGE_LABEL}
+      </span>
     </div>
   );
 }
@@ -552,6 +569,8 @@ const RING_LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
   textShadow: '0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1)',
 };
+
+const CENSUS_LABEL_STYLE: React.CSSProperties = { ...RING_LABEL_STYLE, color: CENSUS_EDGE_COLOR };
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
