@@ -16,6 +16,7 @@ import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
+import { MilkyWay } from './MilkyWay.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
@@ -99,6 +100,9 @@ export interface SolarSystemCanvasProps {
   readonly showDistanceRings: boolean;
   /** The distance rings' names, by ring, laid over the canvas like the bodies'. */
   readonly ringLabels: RefObject<(HTMLElement | null)[]>;
+  /** The Milky Way model: the Milky Way Model layer, and its names, in GALAXY_LABELS order. */
+  readonly showMilkyWay: boolean;
+  readonly galaxyLabels: RefObject<(HTMLElement | null)[]>;
   /** The scale bar's nodes, written by ScaleBarProbe. */
   readonly scaleBar: RefObject<ScaleBarElements | null>;
 }
@@ -124,6 +128,8 @@ export function SolarSystemCanvas({
   labelElements,
   showDistanceRings,
   ringLabels,
+  showMilkyWay,
+  galaxyLabels,
   scaleBar,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
@@ -229,6 +235,7 @@ export function SolarSystemCanvas({
         censusVisible={showStarMap && stars3d !== null}
         labels={ringLabels}
       />
+      <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
       <LabelProjector
         store={store}
         clock={clock}

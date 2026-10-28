@@ -68,6 +68,7 @@ export type LayerId =
   | 'asteroids'
   | 'comets'
   | 'starMap'
+  | 'milkyWay'
   | 'spacecraft'
   | 'satellites'
   | 'constellations'
@@ -104,6 +105,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
   // would see from where the camera is.
   { id: 'starMap', label: 'Star Map', pending: null },
+  // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
+  // a glow, never stars. On by default, so the dark past the census is not taken for the
+  // edge of the stars.
+  { id: 'milkyWay', label: 'Milky Way Model', pending: null },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
@@ -139,6 +144,7 @@ const DEFAULT_LAYERS: LayerState = {
   asteroids: false,
   comets: false,
   starMap: true,
+  milkyWay: true,
   spacecraft: true,
   satellites: false,
   constellations: false,
@@ -148,6 +154,18 @@ const DEFAULT_LAYERS: LayerState = {
   labels: true,
   icons: true,
 };
+
+/** A direction to look from, and the camera's up: unit vectors in the scene frame. */
+export interface FramingView {
+  readonly direction: readonly [number, number, number];
+  readonly up: readonly [number, number, number];
+}
+
+/** A framing the camera rig has yet to take. */
+export interface FramingRequest {
+  readonly km: number;
+  readonly view: FramingView | null;
+}
 
 /** Which slide-over panel is open, if any. */
 export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'readout';
@@ -170,6 +188,13 @@ export interface ViewState {
    * rather than from eight of its radii as any other focus is.
    */
   readonly framingRequestKm: number | null;
+  /**
+   * With a framing, optionally, where to look from: a unit direction from the focus to
+   * the camera, and the camera's up, both in the scene frame. The breadcrumb's Milky Way
+   * sets them to look down on the galaxy rather than along the ecliptic, from where its
+   * disc is a line.
+   */
+  readonly framingView: FramingView | null;
   /**
    * How many of the belt's magnitude tiers to load, brightest first: the Asteroids
    * layer's density. One by default -- 84,000 asteroids, 3 MB -- and kept for the viewer
@@ -199,8 +224,8 @@ export interface ViewState {
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
   readonly consumeZoomImpulse: () => number;
-  readonly requestFraming: (km: number) => void;
-  readonly consumeFramingRequest: () => number | null;
+  readonly requestFraming: (km: number, view?: FramingView) => void;
+  readonly consumeFramingRequest: () => FramingRequest | null;
 }
 
 /** Where the belt's density is kept between visits; see `beltTiers`. */
@@ -219,6 +244,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   openPanel: null,
   zoomImpulse: 1,
   framingRequestKm: null,
+  framingView: null,
   beltTiers: readStoredInteger(BELT_TIERS_KEY, 1, 1),
   // Masked to the families there are: bits a later version might add are not set by an
   // older stored value, and junk beyond them is dropped.
@@ -279,16 +305,17 @@ export const useViewStore = create<ViewState>((set, get) => ({
     return impulse;
   },
 
-  requestFraming: (km) => {
-    set({ framingRequestKm: km });
+  requestFraming: (km, view) => {
+    set({ framingRequestKm: km, framingView: view ?? null });
   },
 
   consumeFramingRequest: () => {
-    const km = get().framingRequestKm;
-    if (km !== null) {
-      set({ framingRequestKm: null });
+    const { framingRequestKm: km, framingView: view } = get();
+    if (km === null) {
+      return null;
     }
-    return km;
+    set({ framingRequestKm: null, framingView: null });
+    return { km, view };
   },
 }));
 

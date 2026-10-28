@@ -9,7 +9,8 @@ import type { SimClock } from '../core/time.ts';
 import { useSignal } from '../core/useSignal.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
-import { NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
+import { GALAXY_VIEW } from '../scene/MilkyWay.tsx';
+import { GALAXY_FRAMING_KM, NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
 import { useViewStore } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
@@ -28,11 +29,9 @@ import { Presence, useClosing } from './Presence.tsx';
  *
  * Two levels sit above the Solar System since the light years (step D1). **Solar
  * Neighbourhood** goes to the Sun and stands the camera fifty light years out, among the
- * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** is a name and not a place: the
- * outermost level, the galaxy all of this is inside, said so the hierarchy has a top.
- * There is no model of the galaxy behind it -- its shape is a reconstruction this project
- * has not taken on (see the plan's Phase D) -- so it cannot be clicked and its tooltip
- * says why.
+ * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** goes to the Sun and stands the
+ * camera 250,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
+ * seen whole. It was a name and not a place until that model existed.
  *
  * The spacecraft come last, in a section of their own rather than folded under the
  * bodies they happen to be near. One that does not exist at the clock's instant -- not
@@ -84,6 +83,11 @@ export function BodyPicker({
     // With the Sun already in focus nothing else changed, and nothing else asks for a frame.
     renderDemand.request();
   };
+  const toGalaxy = (): void => {
+    requestFraming(GALAXY_FRAMING_KM, GALAXY_VIEW);
+    onFocus('sun');
+    renderDemand.request();
+  };
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
@@ -127,12 +131,9 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <span
-          title="The galaxy everything here is inside. A name, not a place: no model of the Milky Way is drawn."
-          style={{ ...crumbStyle, color: OUTER_CRUMB, cursor: 'default' }}
-        >
+        <Crumb onClick={toGalaxy} outer>
           Milky Way
-        </span>
+        </Crumb>
         <Separator />
         <Crumb onClick={toNeighbourhood} outer>
           Solar Neighbourhood

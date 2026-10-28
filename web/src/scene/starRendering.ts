@@ -151,7 +151,12 @@ export function starProfile(radiusPx: number, sigmaPx = PSF_SIGMA_PX): number {
 }
 
 /**
- * Distance to the star sphere, in scene units: 5e13, 5e16 km, 5,300 ly.
+ * Distance to the star sphere, in scene units: 7e15, 7e18 km, 740,000 ly (since D2b; it
+ * was 5e13 below). Past the farthest zoom, 400,000 ly, by more than half again, so the
+ * Sun is never behind the sky from anywhere the camera goes, and inside the far plane,
+ * 1e16 (logDepth.ts). Float32 of a vertex there is 2^-24 of it, an angle of 6e-8 rad:
+ * still a hundredth of a pixel.
+ *
  *
  * Where a star with no distance is drawn: translated with the camera each frame so it
  * behaves as if infinitely distant. For a star whose parallax is too poor to place it
@@ -162,7 +167,7 @@ export function starProfile(radiusPx: number, sigmaPx = PSF_SIGMA_PX): number {
  * units (scale.ts) -- and inside the far plane, 1e14, so its depth is a real one. It was
  * 1e9 when the camera stopped at 2,000 AU; the light years moved it.
  */
-export const SPHERE_RADIUS = 5e13;
+export const SPHERE_RADIUS = 7e15;
 
 /** Milliarcseconds per year to radians per year, the units the shader wants. */
 export const MAS_PER_YEAR_TO_RAD = (1 / 3_600_000) * (Math.PI / 180);
@@ -328,6 +333,9 @@ uniform vec2 uMagnitudeToPeak;
 uniform float uSigmaPx;
 uniform float uDisplayFloor;
 uniform float uPixelRatio;
+// 1 near the Sun; down to 0 as the camera leaves for the galaxy, where a star with no
+// distance can no longer be drawn as if infinitely far (Starfield.tsx).
+uniform float uFade;
 
 attribute vec2 properMotion;
 attribute float magnitude;
@@ -372,7 +380,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(direction * uSphereRadius, 1.0);
 
   float peak = clamp(uMagnitudeToPeak.x + uMagnitudeToPeak.y * magnitude, uDisplayFloor, 1.0);
-  vPeakLinear = srgbToLinear(peak);
+  vPeakLinear = srgbToLinear(peak) * uFade;
 
   // How far the profile reaches, in units of the peak over the display floor. The two
   // terms are solved separately and the larger wins: for a faint star the core is the

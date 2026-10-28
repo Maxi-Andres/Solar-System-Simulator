@@ -33,6 +33,7 @@ import {
   STAR_VERTEX_SHADER,
 } from './starRendering.ts';
 import { mapDotPeak, splitHigh, splitLow, STAR3D_VERTEX_SHADER, UNITS_PER_PC } from './stars3dShader.ts';
+import { galaxyVisibility } from './MilkyWay.tsx';
 
 /**
  * The sky: every star in the catalogues, at its real distance where it has one and at
@@ -207,6 +208,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         uSigmaPx: { value: PSF_SIGMA_PX },
         uDisplayFloor: { value: DISPLAY_FLOOR },
         uPixelRatio: { value: 1 },
+        uFade: { value: 1 },
       },
       vertexShader: STAR_VERTEX_SHADER,
       fragmentShader: STAR_FRAGMENT_SHADER,
@@ -315,6 +317,13 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       camera.position.z * KM_PER_UNIT - sun.position.z,
     );
     const cameraFromSunKm = scratchCamera.length();
+
+    // The sky at infinity holds the stars with no distance, and before the 3D stars land,
+    // every star. Drawn as if infinitely far they are right anywhere near the Sun and
+    // wrong from across the galaxy, so they go as the galaxy comes (MilkyWay.tsx).
+    const skyFade = 1 - galaxyVisibility(cameraFromSunKm);
+    skyMaterial.uniforms['uFade']!.value = skyFade;
+    skyPoints.visible = skyFade > 0;
 
     // The 3D stars are asked for once they could make a difference: see STARS3D_FROM_KM.
     // A star in focus asks for itself, through search.

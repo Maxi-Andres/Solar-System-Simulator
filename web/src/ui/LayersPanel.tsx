@@ -56,6 +56,7 @@ export function LayersPanel({
               </>
             )}
             {layer.id === 'starMap' && layers.starMap && <StarMapNote />}
+            {layer.id === 'milkyWay' && layers.milkyWay && <MilkyWayNote />}
             {layer.id === 'satellites' && layers.satellites && (
               <>
                 <SatelliteChips satellites={satellites} />
@@ -387,6 +388,20 @@ function StarMapNote() {
       from Gaia. Past that, only the brightest stars of our sky. The dark beyond the
       dashed edge is where the catalogue stops, not the stars: the Milky Way has a few hundred
       billion more.
+    </p>
+  );
+}
+
+/**
+ * What the galaxy past the census is: a model of measured structure, not a map. See
+ * core/milkyWay.ts and the About panel, which names the papers.
+ */
+function MilkyWayNote() {
+  return (
+    <p style={{ margin: '0 0 0.4rem 1.65rem', fontSize: '0.64rem', lineHeight: 1.45, color: '#6a6a6a' }}>
+      A model, not a map: a glow sampled from the galaxy's measured shape — its discs, bar
+      and spiral arms (Reid et al. 2019; Bland-Hawthorn &amp; Gerhard 2016). Arms past where
+      parallaxes reach are extrapolated and drawn fainter.
     </p>
   );
 }

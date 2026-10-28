@@ -80,7 +80,17 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **3,000 light years.**
+ * The farthest the camera may pull back from its focus, km: **400,000 light years** since
+ * the Milky Way model (D2b), 3,000 before it.
+ *
+ * Now set by the galaxy, by the same rule as everything before it: the farthest thing
+ * worth seeing whole. Focused on the Sun, the disc runs out to about 76,000 ly on the far
+ * side of the centre (26,600 ly to the centre, 15 kpc of disc past it); in the inner half
+ * of the 27-degree frame's height, half-angle 6.75 degrees, that is 76,000 / tan(6.75 deg)
+ * = 643,000 ly for the full height, but the frame is wider than it is tall and the
+ * near side of the disc is short, so 400,000 frames it with room to turn it.
+ *
+ * What the 3,000 was, kept because its argument still holds at its own scale:
  *
  * Set, as it was at 2,000 AU, by the farthest thing worth seeing whole -- and by the same
  * rule. Then it was Voyager 1 at 207 AU, and 2,000 AU put every craft in the inner half of
@@ -98,7 +108,14 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 3000 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 400_000 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 250,000 ly, from
+ * where the disc, 100,000 ly across with the Sun 26,600 ly from its middle, fills most of
+ * the frame's width.
+ */
+export const GALAXY_FRAMING_KM = 250_000 * LIGHT_YEAR_KM;
 
 /**
  * Where the Solar System ends, for the breadcrumb and the scale's levels: the camera this

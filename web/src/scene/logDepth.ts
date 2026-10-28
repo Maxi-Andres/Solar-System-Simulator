@@ -20,7 +20,7 @@ import * as THREE from 'three';
  *   depth = log2(1 + w / near) / log2(1 + far / near)
  *
  * Now every distance gets the same relative step, 2^-24 * ln 2 * log2(1 + far / near) of
- * itself -- 2.7e-6 with the far plane below -- and at the planets' distances the buffer
+ * itself -- 3.0e-6 with the far plane below -- and at the planets' distances the buffer
  * behaves as it did under three's own formula.
  *
  * ## The far plane moved for the light years (step D1), and what it cost
@@ -39,6 +39,17 @@ import * as THREE from 'three';
  *
  * The near plane stays at a metre. Eighteen percent coarser everywhere, and still a
  * hundred times finer than the centimetres JWST's mirror needed.
+ *
+ * ## And again for the galaxy (step D2b)
+ *
+ * The camera now pulls back to 400,000 ly (scale.ts), so the far plane is 1e16 units, 1e19
+ * km, 1.06 million light years: the zoom, the far side of the disc behind it, and the sky
+ * sphere (starRendering.ts) all inside it. log2(1e22) against log2(1e20): another 10 %,
+ * 73.08 / 66.44, on every step -- 6.0 um at a metre, 19.2 m at Earth's radius, 452 km at
+ * an AU. Still a hundred times finer than JWST's mirror needs. vFragDepth reaches
+ * 1 + 5e21, inside float32, and log2 of it, 72.1, has a float32 step of 7.6e-6 -- a
+ * relative distance step of 5.3e-6, coarser than the buffer's own only past 2^64 metres
+ * as before. And the projection term is still exactly 1 (far / near = 1e22).
  *
  * Two things that might have broken and did not, checked rather than assumed:
  *
@@ -59,8 +70,8 @@ import * as THREE from 'three';
 /** The camera's near plane, scene units: one metre. */
 export const CAMERA_NEAR_UNITS = 1e-6;
 
-/** The camera's far plane, scene units: 1e17 km, 10,570 ly. See the header. */
-export const CAMERA_FAR_UNITS = 1e14;
+/** The camera's far plane, scene units: 1e19 km, 1.06 million ly. See the header. */
+export const CAMERA_FAR_UNITS = 1e16;
 
 /** The 24-bit depth buffer's smallest step, as a fraction of the buffer's range. */
 const DEPTH_STEP = 2 ** -24;

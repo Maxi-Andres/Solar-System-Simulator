@@ -21,6 +21,7 @@ import {
   DISTANCE_RINGS_LY,
   ringLabel,
 } from './scene/distanceRings.ts';
+import { GALAXY_LABELS } from './scene/MilkyWay.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
@@ -87,6 +88,7 @@ export function App() {
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
   const ringLabels = useRef<(HTMLElement | null)[]>([]);
+  const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
   const scaleBar = useRef<ScaleBarElements | null>(null);
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
@@ -255,12 +257,15 @@ export function App() {
         labelElements={labelElements}
         showDistanceRings={layers.distanceRings}
         ringLabels={ringLabels}
+        showMilkyWay={layers.milkyWay}
+        galaxyLabels={galaxyLabels}
         scaleBar={scaleBar}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
         <RingLabels elements={ringLabels} />
       )}
+      {layers.milkyWay && layers.labels && uiVisible && <GalaxyLabels elements={galaxyLabels} />}
 
       <LabelLayer
         store={store}
@@ -498,6 +503,30 @@ function RingLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]> 
   );
 }
 
+/**
+ * The Milky Way model's names -- the Galactic Centre and the arms -- laid over the canvas;
+ * MilkyWay moves them. In the rulers' quiet style, and in italics: they name parts of a
+ * model, not bodies.
+ */
+function GalaxyLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]> }) {
+  return (
+    <div style={LABEL_LAYER_STYLE}>
+      {GALAXY_LABELS.map((name, index) => (
+        <span
+          key={name}
+          className="tracks-scene"
+          ref={(element) => {
+            elements.current[index] = element;
+          }}
+          style={GALAXY_LABEL_STYLE}
+        >
+          {name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const BodyLabel = memo(function BodyLabel({
   body,
   focused,
@@ -571,6 +600,12 @@ const RING_LABEL_STYLE: React.CSSProperties = {
 };
 
 const CENSUS_LABEL_STYLE: React.CSSProperties = { ...RING_LABEL_STYLE, color: CENSUS_EDGE_COLOR };
+
+const GALAXY_LABEL_STYLE: React.CSSProperties = {
+  ...RING_LABEL_STYLE,
+  color: '#9aa4b4',
+  fontStyle: 'italic',
+};
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (

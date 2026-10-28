@@ -31,7 +31,9 @@ describe('the scale bar', () => {
     expect(barAt(50_000).unit).toBe('km'); // Earth, eight radii out
     expect(barAt(30 * AU_KM).unit).toBe('AU');
     expect(barAt(50 * LIGHT_YEAR_KM).unit).toBe('ly');
-    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('100 ly');
+    // The census seen whole, and the galaxy (D2b): light years all the way out.
+    expect(barAt(3000 * LIGHT_YEAR_KM).label).toBe('100 ly');
+    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('20,000 ly');
   });
 
   it('writes large kilometres as millions', () => {
@@ -84,7 +86,9 @@ describe('the distance rings', () => {
   });
 
   it('let the 1-ly ring shrink away from far out, keeping the 100-ly one', () => {
-    const at = MAX_VIEW_DISTANCE_KM;
+    // The census seen whole, 3,000 ly out; past it the rulers go one by one as the galaxy
+    // comes in, and from the farthest zoom every one is under a pixel.
+    const at = 3000 * LIGHT_YEAR_KM;
     expect(ringVisibility(1 * LIGHT_YEAR_KM, at, HEIGHT, FOV_DEG)).toBe(0);
     expect(ringVisibility(100 * LIGHT_YEAR_KM, at, HEIGHT, FOV_DEG)).toBe(1);
   });
@@ -121,6 +125,8 @@ describe('the edge of the star census', () => {
   it('shows from well outside, and not from inside or right at its surface', () => {
     expect(censusEdgeVisibility(R, 50 * LIGHT_YEAR_KM, HEIGHT, FOV_DEG)).toBe(0);
     expect(censusEdgeVisibility(R, R * 1.01, HEIGHT, FOV_DEG)).toBe(0);
-    expect(censusEdgeVisibility(R, MAX_VIEW_DISTANCE_KM, HEIGHT, FOV_DEG)).toBe(1);
+    expect(censusEdgeVisibility(R, 3000 * LIGHT_YEAR_KM, HEIGHT, FOV_DEG)).toBe(1);
+    // From across the galaxy the census is a dot, and its edge is not drawn.
+    expect(censusEdgeVisibility(R, MAX_VIEW_DISTANCE_KM, HEIGHT, FOV_DEG)).toBe(0);
   });
 });

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 import { renderDemand } from '../core/renderDemand.ts';
-import { useViewStore } from '../state/store.ts';
+import { useViewStore, type FramingView } from '../state/store.ts';
 import { kmToUnits } from './scale.ts';
 import { easeDistance, newStreak, wheelPixels, wheelZoomFactor } from './zoom.ts';
 
@@ -94,6 +94,20 @@ export function CameraRig({
   const targetDistance = useRef(1);
   const initialised = useRef(false);
 
+  /**
+   * A framing's own direction, if it brought one: turned to at once, at the distance the
+   * camera is at -- the distance then eases as any framing's does. A turn that big eased
+   * would sweep the whole sky past on the way.
+   */
+  const applyView = (view: FramingView | null): void => {
+    if (view === null) {
+      return;
+    }
+    const length = offset.current.length();
+    offset.current.set(...view.direction).normalize().multiplyScalar(length);
+    up.current.set(...view.up).normalize();
+  };
+
   // Reframe on focus change: keep the viewing direction, change only the distance -- to
   // the one asked for with the focus, if any (the breadcrumb's Solar Neighbourhood),
   // eased into from where the camera is; otherwise to the body's own framing, at once.
@@ -103,14 +117,16 @@ export function CameraRig({
       up.current.set(0, 1, 0);
       initialised.current = true;
     }
-    const requestedKm = useViewStore.getState().consumeFramingRequest();
+    const request = useViewStore.getState().consumeFramingRequest();
     targetDistance.current = THREE.MathUtils.clamp(
-      requestedKm === null ? framingDistance : kmToUnits(requestedKm),
+      request === null ? framingDistance : kmToUnits(request.km),
       minDistance,
       maxDistance,
     );
-    if (requestedKm === null) {
+    if (request === null) {
       offset.current.normalize().multiplyScalar(targetDistance.current);
+    } else {
+      applyView(request.view);
     }
     renderDemand.request();
   }, [focusKey, framingDistance, minDistance, maxDistance]);
@@ -216,9 +232,10 @@ export function CameraRig({
     // A framing asked for while the focus stays the same: the Solar Neighbourhood with
     // the Sun already in focus. With a new focus the effect above takes it, once React has
     // caught up -- so it is left for the effect while the store's focus is not yet ours.
-    const requestedKm = view.focus === focusKey ? view.consumeFramingRequest() : null;
-    if (requestedKm !== null) {
-      targetDistance.current = THREE.MathUtils.clamp(kmToUnits(requestedKm), minDistance, maxDistance);
+    const request = view.focus === focusKey ? view.consumeFramingRequest() : null;
+    if (request !== null) {
+      targetDistance.current = THREE.MathUtils.clamp(kmToUnits(request.km), minDistance, maxDistance);
+      applyView(request.view);
     }
     if (impulse !== 1) {
       targetDistance.current = THREE.MathUtils.clamp(
