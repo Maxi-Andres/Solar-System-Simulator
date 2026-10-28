@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { GALACTIC_BASIS } from './galactic.ts';
-import { GALAXY_FROM_LY, GALAXY_FULL_LY, GALAXY_LABELS, GALAXY_VIEW, galaxyVisibility } from './MilkyWay.tsx';
+import {
+  BALMER_HUE,
+  emissionHue,
+  GALAXY_FROM_LY,
+  GALAXY_FULL_LY,
+  GALAXY_LABELS,
+  GALAXY_VIEW,
+  galaxyVisibility,
+} from './MilkyWay.tsx';
 import { GALAXY_FRAMING_KM, LIGHT_YEAR_KM, MAX_VIEW_DISTANCE_KM } from './scale.ts';
 
 const dot = (a: readonly number[], b: { x: number; y: number; z: number }): number =>
@@ -36,5 +44,22 @@ describe('the Milky Way model on screen', () => {
   it('names the centre first, then the seven arms', () => {
     expect(GALAXY_LABELS[0]).toBe('Galactic Centre');
     expect(GALAXY_LABELS).toHaveLength(8);
+  });
+});
+
+describe('the HII regions’ colour', () => {
+  it('is hydrogen’s pink: red from H-alpha, blue from H-beta, little green', () => {
+    const [r, g, b] = BALMER_HUE;
+    expect(r).toBeCloseTo(1, 12);
+    expect(b).toBeGreaterThan(g);
+    expect(g).toBeLessThan(0.6);
+  });
+
+  it('is a single line’s own colour when there is one line', () => {
+    // H-alpha alone is a deep red.
+    const [r, g, b] = emissionHue([[656.28, 1]]);
+    expect(r).toBeCloseTo(1, 12);
+    expect(g).toBeLessThan(0.3);
+    expect(b).toBeLessThan(0.3);
   });
 });

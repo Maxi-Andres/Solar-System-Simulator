@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { directionToGalactic, GALACTIC_BASIS } from '../scene/galactic.ts';
 import {
   ARM_EXTENSION_DEG,
+  ARM_TAPER_DEG,
+  armTaper,
+  DUST_DISC,
+  sampleDust,
   armLabelPoints,
   armRadiusKpc,
   armWidthKpc,
@@ -181,5 +185,50 @@ describe('the labels', () => {
     const local = labels.find((label) => label.name === 'Local Arm')!;
     // The Local Arm's middle is a kiloparsec or so from the Sun.
     expect(Math.hypot(...local.position)).toBeLessThan(2500);
+  });
+});
+
+describe('the arms past their parallaxes', () => {
+  it('fade out rather than stop', () => {
+    const local = arm('Local Arm');
+    expect(armTaper(local, 10)).toBe(1);
+    expect(armTaper(local, local.betaMaxDeg)).toBe(1);
+    expect(armTaper(local, local.betaMaxDeg + ARM_TAPER_DEG)).toBeCloseTo(Math.exp(-0.5), 12);
+    expect(armTaper(local, local.betaMinDeg - 90)).toBeLessThan(0.05);
+  });
+});
+
+describe('the dust, Drimmel & Spergel 2001', () => {
+  const count = 30_000;
+  const dust = sampleDust(count);
+
+  it('carries their disc as published', () => {
+    expect(DUST_DISC).toEqual({ scaleLengthPc: 2260, scaleHeightPc: 134.4, flarePcPerKpc: 14.8, flareFromKpc: 4.4 });
+  });
+
+  it('is the same on every load, and stays out of the census', () => {
+    expect(sampleDust(count)).toEqual(dust);
+    for (let i = 0; i < count; i += 1) {
+      expect(Math.hypot(dust[i * 3]!, dust[i * 3 + 1]!, dust[i * 3 + 2]!)).toBeGreaterThanOrEqual(CENSUS_RADIUS_PC);
+    }
+  });
+
+  it('keeps to a thin layer and has their hole in the middle', () => {
+    let inHole = 0;
+    let nearHalf = 0;
+    let thin = 0;
+    for (let i = 0; i < count; i += 1) {
+      const x = dust[i * 3]!;
+      const y = dust[i * 3 + 1]!;
+      const z = dust[i * 3 + 2]! + SUN_ABOVE_PLANE_PC;
+      const radius = Math.hypot(R0_PC - x, y);
+      if (radius < 1000) inHole += 1;
+      if (radius > 3500 && radius < 4500) nearHalf += 1;
+      if (Math.abs(z) < 600) thin += 1;
+    }
+    // A sech^2 layer 134 pc thick, flaring outward: nearly all of it within 600 pc.
+    expect(thin / count).toBeGreaterThan(0.95);
+    // Within a kiloparsec of the centre the hole has taken almost everything.
+    expect(inHole).toBeLessThan(nearHalf / 20);
   });
 });

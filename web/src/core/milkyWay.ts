@@ -20,7 +20,7 @@
  *   beta the Galactocentric azimuth, zero toward the Sun and increasing in the direction
  *   of Galactic rotation, psi = psi< up to the kink and psi> past it, and a Gaussian
  *   width w(R_kink) + 42 pc/kpc (R - R_kink). The table's beta range is where parallaxes
- *   were measured. Past it the same spiral is carried on, fainter (ARM_EXTRAPOLATED), as
+ *   were measured. Past it the same spiral is carried on, fading (armTaper), as
  *   the paper's own figure carries its grey spirals: the far side of the galaxy has no
  *   parallaxes yet, and the picture should not pretend it does.
  * - **Discs, bulge and bar.** Bland-Hawthorn & Gerhard 2016, ARA&A 54, 529, the
@@ -28,6 +28,20 @@
  *   300 pc; thick disc 2.0 kpc and 900 pc; the box/peanut bulge at 27 degrees, 0.5 wide
  *   and 0.26 tall for its length, 180 pc thick; the long bar 5.0 kpc in half-length at
  *   28-33 degrees, 180 pc thick; the Sun 25 pc above the plane.
+ * - **Dust.** Drimmel & Spergel 2001, ApJ 556, 181, Table 1, the disc component of their
+ *   dust model fitted to COBE's far-infrared sky: exponential in radius with scale length
+ *   2.26 kpc, sech^2 in height with scale 134.4 pc out to 4.40 kpc and flaring by
+ *   14.8 pc per kpc beyond, and a hole inside half the Sun's radius. Their arms follow an
+ *   older geometry; here the dust of the arms lies along Reid's arms, on their inner
+ *   edges, where the dust lanes of trailing spirals are seen in every other galaxy.
+ *
+ * ## What is chosen, not measured
+ *
+ * How much light each population gives, the colours of the old ones, the clumping of the
+ * arms into star-forming knots, and how dark the dust is drawn. They are set by eye
+ * against photographs of barred spirals seen face-on and said to be so, here and in the
+ * About panel. The knots are real in kind -- the arms are strings of OB associations and
+ * HII regions, thousands of them -- but not in place: nothing here is a particular one.
  *
  * ## The centre's distance
  *
@@ -114,13 +128,32 @@ export const ARM_WIDTH_GROWTH = 0.042;
 
 /**
  * How far past its measured range an arm is carried on, degrees of azimuth each way, and
- * how much of its density it keeps there: the extrapolated spiral is drawn, at half
- * weight, out to where the disc itself fades -- between ARM_MIN_R_KPC and ARM_MAX_R_KPC.
+ * how it fades there: a Gaussian in the azimuth past the last parallax, ARM_TAPER_DEG
+ * wide, so an arm thins out into the disc rather than stopping at a cut -- a fifth of its
+ * density 60 degrees on, a twentieth at 90. Only between ARM_MIN_R_KPC and ARM_MAX_R_KPC.
  */
-export const ARM_EXTENSION_DEG = 60;
-export const ARM_EXTRAPOLATED = 0.5;
+export const ARM_EXTENSION_DEG = 90;
+export const ARM_TAPER_DEG = 35;
 export const ARM_MIN_R_KPC = 2.5;
 export const ARM_MAX_R_KPC = 16;
+
+/** The weight an arm keeps at an azimuth: 1 where it was measured, tapering past it. */
+export function armTaper(arm: SpiralArm, betaDeg: number): number {
+  const outside = Math.max(arm.betaMinDeg - betaDeg, betaDeg - arm.betaMaxDeg, 0);
+  return Math.exp(-0.5 * (outside / ARM_TAPER_DEG) ** 2);
+}
+
+/** The dust disc, Drimmel & Spergel 2001 Table 1. */
+export const DUST_DISC = {
+  scaleLengthPc: 2260,
+  scaleHeightPc: 134.4,
+  flarePcPerKpc: 14.8,
+  flareFromKpc: 4.4,
+} as const;
+
+/** Star-forming knots strung along the arms, and how far their light spreads, pc. */
+export const ARM_KNOTS = 2400;
+export const KNOT_RADIUS_PC = 70;
 
 const DEG = Math.PI / 180;
 
@@ -160,28 +193,49 @@ export function galacticCentrePc(): [number, number, number] {
 }
 
 /** What each sampled point stands for. */
-export const POPULATION = { thinDisc: 0, thickDisc: 1, arm: 2, bulge: 3, bar: 4 } as const;
+export const POPULATION = {
+  thinDisc: 0,
+  thickDisc: 1,
+  arm: 2,
+  bulge: 3,
+  bar: 4,
+  knot: 5,
+  hii: 6,
+} as const;
 
 /**
- * Each population's share of the points, and the colour it is drawn in.
+ * Each population's share of the points, the colour it is drawn in, and the size and light
+ * of each of its points.
  *
  * **The shares are of light, roughly, not of mass, and they are this model's choice.** The
  * papers give masses; what a picture shows is light, and young arm stars outshine their
- * mass many times over. So the arms get a third of the points against their few percent
- * of the mass -- which is why spiral galaxies photographed in visible light show their arms
- * at all -- and the bulge and bar a fifth, a little under their share of the stellar mass.
- * Set by eye against photographs of barred spirals seen face-on, and named as that.
+ * mass many times over -- which is why spiral galaxies photographed in visible light show
+ * their arms at all. Set by eye against photographs of barred spirals seen face-on, and
+ * named as that.
  *
- * The colours go through the same blackbody path as every star here, from a B-V typical
- * of each population: blue-white for the young arm stars, the warm white of an old disc,
- * the orange of the bulge's old giants.
+ * Colour comes from a B-V typical of each population, through the same blackbody path as
+ * every star here -- blue-white for the young arm stars, bluer still in the knots where
+ * the O and B stars are, the warm white of an old disc, the orange of the bulge's giants
+ * -- except for the HII regions, whose light is not a star's: it is hydrogen's emission
+ * lines, and `colorIndex` null says so (MilkyWay.tsx works out their colour from H-alpha
+ * and H-beta). The old populations are drawn as wide, faint points, so they read as the
+ * smooth light they are; the knots as small bright ones.
  */
-export const POPULATIONS: readonly { readonly share: number; readonly colorIndex: number }[] = [
-  { share: 0.38, colorIndex: 0.65 },
-  { share: 0.08, colorIndex: 0.9 },
-  { share: 0.34, colorIndex: 0.0 },
-  { share: 0.14, colorIndex: 1.1 },
-  { share: 0.06, colorIndex: 1.0 },
+export interface PopulationLook {
+  readonly share: number;
+  readonly colorIndex: number | null;
+  readonly radiusPc: number;
+  readonly gain: number;
+}
+
+export const POPULATIONS: readonly PopulationLook[] = [
+  { share: 0.4, colorIndex: 0.75, radiusPc: 260, gain: 0.35 },
+  { share: 0.07, colorIndex: 0.95, radiusPc: 360, gain: 0.25 },
+  { share: 0.17, colorIndex: -0.05, radiusPc: 130, gain: 1.3 },
+  { share: 0.12, colorIndex: 1.15, radiusPc: 180, gain: 1.0 },
+  { share: 0.06, colorIndex: 1.05, radiusPc: 170, gain: 0.8 },
+  { share: 0.14, colorIndex: -0.25, radiusPc: 55, gain: 2.5 },
+  { share: 0.04, colorIndex: null, radiusPc: 45, gain: 3.0 },
 ];
 
 /** A sample of the model: positions about the Sun, galactic frame, pc; and populations. */
@@ -254,7 +308,10 @@ export function sampleMilkyWay(count: number, seed = 20261028): MilkyWaySample {
     return barFrame(angleDeg, r * s * Math.cos(phi) * sx, r * s * Math.sin(phi) * sy, r * cz * sz);
   };
 
-  const arm = (): [number, number, number] | null => {
+  // An arm point: an azimuth along a chosen arm, weighted by the disc's density there and
+  // by how far past its parallaxes it is, scattered across the arm by its width times
+  // `spread`, moved `shift` widths outward, in a layer `heightPc` thick.
+  const arm = (spread = 1, shift = 0, heightPc = 100): [number, number, number] | null => {
     let pick = random() * armTotal;
     let index = 0;
     while (index < SPIRAL_ARMS.length - 1 && pick > armWeights[index]!) {
@@ -271,14 +328,48 @@ export function sampleMilkyWay(count: number, seed = 20261028): MilkyWaySample {
     // The arm's stars thin out with the disc's: R e^(-R/h) per unit azimuth, as a
     // rejection against its peak, at R = h.
     const scale = THIN_DISC.scaleLengthPc / 1000;
-    const weight = ((radiusKpc / scale) * Math.exp(1 - radiusKpc / scale)) *
-      (beta < spiral.betaMinDeg || beta > spiral.betaMaxDeg ? ARM_EXTRAPOLATED : 1);
+    const weight = (radiusKpc / scale) * Math.exp(1 - radiusKpc / scale) * armTaper(spiral, beta);
     if (random() > weight) {
       return null;
     }
     const width = armWidthKpc(spiral, radiusKpc) * 1000;
+    const radiusPc = radiusKpc * 1000 + (shift + gaussian() * spread) * width;
     // Young stars: a thin layer, a third of the old disc's.
-    return galactocentricToSun(radiusKpc * 1000 + gaussian() * width, beta + (gaussian() * width) / (radiusKpc * 1000) / DEG, signedExponential(100));
+    return galactocentricToSun(
+      radiusPc,
+      beta + (gaussian() * spread * width) / (radiusKpc * 1000) / DEG,
+      signedExponential(heightPc),
+    );
+  };
+
+  // The knots: places along the arms where the young stars bunch, each with a brightness
+  // drawn from a log-normal -- a few big complexes and many small ones, as the HII region
+  // catalogues have them. Points of the knot and HII populations gather round them.
+  const knots: [number, number, number][] = [];
+  const knotWeights: number[] = [];
+  while (knots.length < ARM_KNOTS) {
+    const point = arm(0.7, 0, 60);
+    if (point === null) continue;
+    knots.push(point);
+    knotWeights.push(Math.exp(1.1 * gaussian()));
+  }
+  const knotCumulative: number[] = [];
+  let knotSum = 0;
+  for (const weight of knotWeights) {
+    knotSum += weight;
+    knotCumulative.push(knotSum);
+  }
+  const knot = (radiusPc: number): [number, number, number] => {
+    const target = random() * knotSum;
+    let low = 0;
+    let high = knotCumulative.length - 1;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (knotCumulative[middle]! < target) low = middle + 1;
+      else high = middle;
+    }
+    const [x, y, z] = knots[low]!;
+    return [x + gaussian() * radiusPc, y + gaussian() * radiusPc, z + gaussian() * radiusPc * 0.4];
   };
 
   // One population drawn per point, and that population drawn again until it lands --
@@ -294,6 +385,10 @@ export function sampleMilkyWay(count: number, seed = 20261028): MilkyWaySample {
       case POPULATION.bulge:
         // An exponential ellipsoid, e^(-m): the radius m is a Gamma of shape 3.
         return ellipsoid(BULGE.angleDeg, BULGE.scaleXPc, BULGE.scaleYPc, BULGE.scaleZPc, () => exponential() + exponential() + exponential());
+      case POPULATION.knot:
+        return knot(KNOT_RADIUS_PC);
+      case POPULATION.hii:
+        return knot(KNOT_RADIUS_PC * 0.6);
       default:
         // Thinning toward its ends, as a bar's light does: a triangular profile along it.
         return barFrame(
@@ -319,6 +414,73 @@ export function sampleMilkyWay(count: number, seed = 20261028): MilkyWaySample {
     populations[written] = population;
   }
   return { positions, populations, count };
+}
+
+/**
+ * The dust, as points that darken rather than shine (MilkyWay.tsx): `count` of them,
+ * deterministic for a seed, about the Sun in the galactic frame, pc.
+ *
+ * Two thirds are the disc of Drimmel & Spergel 2001 -- exponential in radius, sech^2 in
+ * height with its flare, and their central hole, which below half the Sun's radius
+ * replaces the exponential with a Gaussian fall to the centre. The rest lies in the
+ * arms' dust lanes: along each arm, on its inner side, in a band half the arm's width,
+ * in a layer as thin as the disc's.
+ */
+export function sampleDust(count: number, seed = 20261029): Float32Array {
+  const random = generator(seed);
+  const positions = new Float32Array(count * 3);
+  const gaussian = (): number => {
+    const u = 1 - random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
+  };
+  const sech2 = (scale: number): number => scale * Math.atanh(Math.min(0.999999, Math.max(-0.999999, 2 * random() - 1)));
+  const armWeights = SPIRAL_ARMS.map((arm) => arm.betaMaxDeg - arm.betaMinDeg + 2 * ARM_EXTENSION_DEG);
+  const armTotal = armWeights.reduce((a, b) => a + b, 0);
+  const halfSun = 0.5 * R0_PC;
+
+  const disc = (): [number, number, number] | null => {
+    const radius = DUST_DISC.scaleLengthPc * (-Math.log(1 - random()) - Math.log(1 - random()));
+    if (radius < halfSun) {
+      // Their hole: rho(0.5 R0) exp(-((r/R0 - 0.5) / 0.25)^2) inside, against the
+      // exponential the draw above follows there.
+      const inside = Math.exp(-(((radius / R0_PC - 0.5) / 0.25) ** 2));
+      const exponential = Math.exp(-(radius - halfSun) / DUST_DISC.scaleLengthPc);
+      if (random() > inside / exponential) return null;
+    }
+    const flare = Math.max(0, radius / 1000 - DUST_DISC.flareFromKpc) * DUST_DISC.flarePcPerKpc;
+    return galactocentricToSun(radius, random() * 360, sech2(DUST_DISC.scaleHeightPc + flare));
+  };
+
+  const lane = (): [number, number, number] | null => {
+    let pick = random() * armTotal;
+    let index = 0;
+    while (index < SPIRAL_ARMS.length - 1 && pick > armWeights[index]!) {
+      pick -= armWeights[index]!;
+      index += 1;
+    }
+    const spiral = SPIRAL_ARMS[index]!;
+    const beta = spiral.betaMinDeg - ARM_EXTENSION_DEG + random() * (spiral.betaMaxDeg - spiral.betaMinDeg + 2 * ARM_EXTENSION_DEG);
+    const radiusKpc = armRadiusKpc(spiral, beta);
+    if (radiusKpc < ARM_MIN_R_KPC || radiusKpc > ARM_MAX_R_KPC) return null;
+    const scale = DUST_DISC.scaleLengthPc / 1000;
+    if (random() > (radiusKpc / scale) * Math.exp(1 - radiusKpc / scale) * armTaper(spiral, beta)) return null;
+    const width = armWidthKpc(spiral, radiusKpc) * 1000;
+    // Inside the arm: toward the centre by 0.7 of its width, half as wide.
+    const radiusPc = radiusKpc * 1000 + (-0.7 + 0.5 * gaussian()) * width;
+    return galactocentricToSun(radiusPc, beta + (gaussian() * width) / (radiusKpc * 1000) / DEG, sech2(DUST_DISC.scaleHeightPc * 0.7));
+  };
+
+  for (let written = 0; written < count; written += 1) {
+    const fromDisc = random() < 2 / 3;
+    let point = fromDisc ? disc() : lane();
+    while (point === null || Math.hypot(point[0], point[1], point[2]) < CENSUS_RADIUS_PC) {
+      point = fromDisc ? disc() : lane();
+    }
+    positions[written * 3] = point[0];
+    positions[written * 3 + 1] = point[1];
+    positions[written * 3 + 2] = point[2];
+  }
+  return positions;
 }
 
 /**

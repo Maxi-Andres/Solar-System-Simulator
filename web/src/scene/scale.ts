@@ -111,11 +111,12 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 export const MAX_VIEW_DISTANCE_KM = 400_000 * LIGHT_YEAR_KM;
 
 /**
- * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 250,000 ly, from
- * where the disc, 100,000 ly across with the Sun 26,600 ly from its middle, fills most of
- * the frame's width.
+ * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 180,000 ly. The view
+ * is centred on the Sun, with the centre across the frame (MilkyWay.tsx GALAXY_VIEW), so
+ * the disc runs from 23,000 ly on one side to 76,000 on the other; the frame's half-width,
+ * 23.5 degrees at 16:9, is 78,000 ly from here -- the whole disc, edge to edge.
  */
-export const GALAXY_FRAMING_KM = 250_000 * LIGHT_YEAR_KM;
+export const GALAXY_FRAMING_KM = 180_000 * LIGHT_YEAR_KM;
 
 /**
  * Where the Solar System ends, for the breadcrumb and the scale's levels: the camera this

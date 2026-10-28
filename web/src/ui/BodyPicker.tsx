@@ -30,7 +30,7 @@ import { Presence, useClosing } from './Presence.tsx';
  * Two levels sit above the Solar System since the light years (step D1). **Solar
  * Neighbourhood** goes to the Sun and stands the camera fifty light years out, among the
  * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** goes to the Sun and stands the
- * camera 250,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
+ * camera 180,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
  * seen whole. It was a name and not a place until that model existed.
  *
  * The spacecraft come last, in a section of their own rather than folded under the

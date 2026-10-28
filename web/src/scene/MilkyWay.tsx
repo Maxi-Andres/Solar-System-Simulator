@@ -12,7 +12,7 @@ import {
 } from '../core/milkyWay.ts';
 import type { SimClock } from '../core/time.ts';
 import type { FramingView } from '../state/store.ts';
-import { starColor } from './blackbody.ts';
+import { cieX, cieY, cieZ, starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
@@ -39,6 +39,16 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * everything else, with a soft shoulder (1 - e^-x) instead of a hard clip where the bulge
  * piles up. A quarter of the fragments, and the upsampling's filtering smooths the grain.
  *
+ * ## Dust, drawn as what it does
+ *
+ * The dust (sampleDust) is a second set of points drawn into the same buffer after the
+ * light, and they do not add: each multiplies what is there by (1 - its opacity), so a
+ * line of sight through many of them keeps e^-(their sum), which is extinction. That is
+ * what lays the dark lanes along the inner edges of the arms, and the dark band along the
+ * plane seen edge-on. One liberty, and it is a real one: the buffer has no depth, so dust
+ * dims the light in front of it as well as behind. Seen from outside the galaxy the
+ * difference is small; it is named in the About panel all the same.
+ *
  * It fades in as the camera leaves the star catalogue behind, from GALAXY_FROM_LY to
  * GALAXY_FULL_LY from the Sun, and stays out of the neighbourhood of the camera, where a
  * sprite standing for a cloud of a million stars would be a blot rather than a glow.
@@ -47,14 +57,24 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * Sun, the group sits at the camera, and the camera about the Sun comes as a float32 pair.
  */
 
-/** The radius each point is drawn with, pc: a little more than the points' spacing in the disc. */
-export const POINT_RADIUS_PC = 140;
-
-/** How many points the model is drawn with. */
+/** How many points the model's light is drawn with; each population's size is its own. */
 export const GALAXY_POINTS = 200_000;
 
-/** Light each sprite adds at its centre, before the fade and the shoulder. */
-export const GALAXY_POINT_PEAK = 0.035;
+/** Light each sprite adds at its centre, times its population's gain, before the shoulder. */
+export const GALAXY_POINT_PEAK = 0.04;
+
+/** The dust: how many points, how wide each, and how much each dims at its centre. */
+export const DUST_POINTS = 80_000;
+export const DUST_RADIUS_PC = 200;
+export const DUST_OPACITY = 0.022;
+
+/**
+ * The HII regions' colour: hydrogen's two brightest visible lines, H-alpha at 656.28 nm
+ * and H-beta at 486.13 nm, at the Balmer decrement of 2.86 that recombination gives at
+ * 10,000 K (Osterbrock & Ferland 2006, Case B) -- through the CIE observer to sRGB, as
+ * the stars' blackbodies go. The pink every photograph of a nebula has, worked out.
+ */
+export const BALMER_DECREMENT = 2.86;
 
 /** The glow buffer's size against the canvas's device pixels, each way. */
 export const GLOW_SCALE = 0.5;
@@ -62,7 +82,7 @@ export const GLOW_SCALE = 0.5;
 /** Smallest sprite, glow-buffer pixels; below the size its parsecs would give, light goes instead. */
 const MIN_SPRITE_PX = 1.5;
 /** Largest sprite, glow-buffer pixels: the near fade has taken a point long before it gets here. */
-const MAX_SPRITE_PX = 24;
+const MAX_SPRITE_PX = 16;
 
 /** The model fades in between these camera distances from the Sun, light years. */
 export const GALAXY_FROM_LY = 1000;
@@ -116,12 +136,12 @@ const VERTEX_SHADER = /* glsl */ `
 uniform vec3 uCameraHigh;
 uniform vec3 uCameraLow;
 uniform float uUnitsPerPc;
-uniform float uPointRadiusPc;
 uniform float uPixelsPerRadian;
 uniform float uPeak;
 uniform float uNearFadePc;
 
 attribute vec3 color;
+attribute float radiusPc;
 
 varying vec3 vColor;
 varying float vPeak;
@@ -131,7 +151,7 @@ void main() {
   float distancePc = length(rel);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
 
-  float diameterPx = 2.0 * uPointRadiusPc / max(distancePc, 1e-3) * uPixelsPerRadian;
+  float diameterPx = 2.0 * radiusPc / max(distancePc, 1e-3) * uPixelsPerRadian;
   float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, ${MAX_SPRITE_PX.toFixed(1)});
   // Below the floor the light goes, not the size: constant flux per point.
   float coverage = min(1.0, (diameterPx * diameterPx) / (drawnPx * drawnPx));
@@ -192,20 +212,66 @@ function displayHue(colorIndex: number): [number, number, number] {
   return [encode(r / peak), encode(g / peak), encode(b / peak)];
 }
 
+/** An emission spectrum of lines as a display hue: CIE 1931, then sRGB, brightest channel 1. */
+export function emissionHue(lines: readonly (readonly [number, number])[]): [number, number, number] {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const [wavelengthNm, power] of lines) {
+    x += power * cieX(wavelengthNm);
+    y += power * cieY(wavelengthNm);
+    z += power * cieZ(wavelengthNm);
+  }
+  const linear = [
+    Math.max(0, 3.2406 * x - 1.5372 * y - 0.4986 * z),
+    Math.max(0, -0.9689 * x + 1.8758 * y + 0.0415 * z),
+    Math.max(0, 0.0557 * x - 0.204 * y + 1.057 * z),
+  ];
+  const peak = Math.max(...linear);
+  const encode = (v: number): number => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+  return [encode(linear[0]! / peak), encode(linear[1]! / peak), encode(linear[2]! / peak)];
+}
+
+/** Hydrogen's visible recombination light: H-alpha to H-beta at the Balmer decrement. */
+export const BALMER_HUE = emissionHue([
+  [656.28, BALMER_DECREMENT],
+  [486.13, 1],
+]);
+
 function buildGeometry(sample: MilkyWaySample): THREE.BufferGeometry {
   const positions = new Float32Array(sample.count * 3);
   const colors = new Float32Array(sample.count * 3);
-  const hues = POPULATIONS.map((population) => displayHue(population.colorIndex));
+  const radii = new Float32Array(sample.count);
+  const looks = POPULATIONS.map((population) => {
+    const hue = population.colorIndex === null ? BALMER_HUE : displayHue(population.colorIndex);
+    return { color: hue.map((channel) => channel * population.gain), radius: population.radiusPc };
+  });
   for (let i = 0; i < sample.count; i += 1) {
     toEcliptic(sample.positions[i * 3]!, sample.positions[i * 3 + 1]!, sample.positions[i * 3 + 2]!, positions, i * 3);
-    const hue = hues[sample.populations[i]!]!;
-    colors[i * 3] = hue[0];
-    colors[i * 3 + 1] = hue[1];
-    colors[i * 3 + 2] = hue[2];
+    const look = looks[sample.populations[i]!]!;
+    colors[i * 3] = look.color[0]!;
+    colors[i * 3 + 1] = look.color[1]!;
+    colors[i * 3 + 2] = look.color[2]!;
+    radii[i] = look.radius;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('radiusPc', new THREE.BufferAttribute(radii, 1));
+  return geometry;
+}
+
+/** The dust's points: grey, so the multiply darkens every channel alike. */
+function buildDustGeometry(dust: Float32Array): THREE.BufferGeometry {
+  const count = dust.length / 3;
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i += 1) {
+    toEcliptic(dust[i * 3]!, dust[i * 3 + 1]!, dust[i * 3 + 2]!, positions, i * 3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+  geometry.setAttribute('radiusPc', new THREE.BufferAttribute(new Float32Array(count).fill(DUST_RADIUS_PC), 1));
   return geometry;
 }
 
@@ -234,6 +300,7 @@ export interface MilkyWayProps {
 export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps) {
   const { camera, size, gl } = useThree();
   const points = useRef<THREE.Points | null>(null);
+  const dustPoints = useRef<THREE.Points | null>(null);
   const sampleAsked = useRef(false);
   const worker = useRef<Worker | null>(null);
 
@@ -271,27 +338,39 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     return quad;
   }, [target]);
 
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        uniforms: {
-          uCameraHigh: { value: new THREE.Vector3() },
-          uCameraLow: { value: new THREE.Vector3() },
-          uUnitsPerPc: { value: PARSEC_KM / KM_PER_UNIT },
-          uPointRadiusPc: { value: POINT_RADIUS_PC },
-          uPixelsPerRadian: { value: 1 },
-          uPeak: { value: 0 },
-          uNearFadePc: { value: 0 },
-        },
-        vertexShader: VERTEX_SHADER,
-        fragmentShader: FRAGMENT_SHADER,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        transparent: true,
-        toneMapped: false,
-      }),
-    [],
-  );
+  // The light and the dust share every uniform but their peak.
+  const [material, dustMaterial] = useMemo(() => {
+    const shared = {
+      uCameraHigh: { value: new THREE.Vector3() },
+      uCameraLow: { value: new THREE.Vector3() },
+      uUnitsPerPc: { value: PARSEC_KM / KM_PER_UNIT },
+      uPixelsPerRadian: { value: 1 },
+      uNearFadePc: { value: 0 },
+    };
+    const light = new THREE.ShaderMaterial({
+      uniforms: { ...shared, uPeak: { value: 0 } },
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+      toneMapped: false,
+    });
+    // dst = dst (1 - src): each dust point keeps (1 - its opacity) of the light there.
+    const dust = new THREE.ShaderMaterial({
+      uniforms: { ...shared, uPeak: { value: 0 } },
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.ZeroFactor,
+      blendDst: THREE.OneMinusSrcColorFactor,
+      depthWrite: false,
+      transparent: true,
+      toneMapped: false,
+    });
+    return [light, dust] as const;
+  }, []);
 
   const group = useMemo(() => {
     const made = new THREE.Group();
@@ -303,12 +382,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     () => () => {
       worker.current?.terminate();
       points.current?.geometry.dispose();
+      dustPoints.current?.geometry.dispose();
       material.dispose();
+      dustMaterial.dispose();
       target.dispose();
       composite.geometry.dispose();
       (composite.material as THREE.Material).dispose();
     },
-    [material, target, composite],
+    [material, dustMaterial, target, composite],
   );
 
   useFrame(() => {
@@ -329,16 +410,22 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       sampleAsked.current = true;
       const made = new Worker(new URL('../core/milkyWay.worker.ts', import.meta.url), { type: 'module' });
       worker.current = made;
-      made.onmessage = (event: MessageEvent<MilkyWaySample>) => {
-        const cloud = new THREE.Points(buildGeometry(event.data), material);
+      made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; dust: Float32Array }>) => {
+        const cloud = new THREE.Points(buildGeometry(event.data.light), material);
         cloud.frustumCulled = false;
         group.add(cloud);
         points.current = cloud;
+        // After the light, so it has something to dim.
+        const dust = new THREE.Points(buildDustGeometry(event.data.dust), dustMaterial);
+        dust.frustumCulled = false;
+        dust.renderOrder = 1;
+        group.add(dust);
+        dustPoints.current = dust;
         made.terminate();
         worker.current = null;
         renderDemand.request();
       };
-      made.postMessage({ count: GALAXY_POINTS });
+      made.postMessage({ count: GALAXY_POINTS, dust: DUST_POINTS });
     }
 
     const visibility = sun === null || points.current === null ? 0 : galaxyVisibility(cameraFromSunKm);
@@ -364,6 +451,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     }
     uniforms['uPixelsPerRadian']!.value = height / (2 * Math.tan((fov * Math.PI) / 360));
     uniforms['uPeak']!.value = GALAXY_POINT_PEAK * visibility;
+    dustMaterial.uniforms['uPeak']!.value = DUST_OPACITY * visibility;
     uniforms['uNearFadePc']!.value = NEAR_FADE_SHARE * cameraPc.length();
 
     // The glow, into its buffer, through this frame's camera (CameraRig ran first).

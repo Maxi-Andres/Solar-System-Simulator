@@ -399,9 +399,10 @@ function StarMapNote() {
 function MilkyWayNote() {
   return (
     <p style={{ margin: '0 0 0.4rem 1.65rem', fontSize: '0.64rem', lineHeight: 1.45, color: '#6a6a6a' }}>
-      A model, not a map: a glow sampled from the galaxy's measured shape — its discs, bar
-      and spiral arms (Reid et al. 2019; Bland-Hawthorn &amp; Gerhard 2016). Arms past where
-      parallaxes reach are extrapolated and drawn fainter.
+      A model, not a map: a glow sampled from the galaxy's measured shape — its discs, bar,
+      spiral arms and dust (Reid et al. 2019; Bland-Hawthorn &amp; Gerhard 2016; Drimmel
+      &amp; Spergel 2001). Past where parallaxes reach, the arms fade out. The clusters
+      along them are real in kind, not in place.
     </p>
   );
 }
