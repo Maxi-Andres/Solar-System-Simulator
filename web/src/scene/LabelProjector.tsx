@@ -9,6 +9,7 @@ import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
+import { projectToScreen } from './screenProjection.ts';
 
 /** Scratch for the frame loop, which must not allocate. */
 const scratch = new THREE.Vector3();
@@ -262,10 +263,8 @@ export function LabelProjector({
       );
 
       const distanceUnits = scratch.distanceTo(camera.position);
-      scratch.project(camera);
-
-      // z outside [-1, 1] means behind the camera or past the far plane.
-      if (scratch.z < -1 || scratch.z > 1) {
+      // Behind the camera, read off its depth: see screenProjection.ts.
+      if (!projectToScreen(scratch, camera, scratch)) {
         continue;
       }
 

@@ -11,6 +11,7 @@ import {
   ringVisibility,
 } from './distanceRings.ts';
 import { KM_PER_UNIT, kmToUnits, LIGHT_YEAR_KM } from './scale.ts';
+import { projectToScreen } from './screenProjection.ts';
 
 /**
  * The reference rings about the Sun, and their names. See distanceRings.ts.
@@ -138,10 +139,8 @@ export function DistanceRings({ store, clock, focus, visible, labels }: Distance
         return;
       }
       scratchPoint.copy(scratchSide).multiplyScalar(kmToUnits(radiusKm)).add(scratchSun);
-      scratchPoint.project(camera);
       const onScreen =
-        scratchPoint.z > -1 &&
-        scratchPoint.z < 1 &&
+        projectToScreen(scratchPoint, camera, scratchPoint) &&
         Math.abs(scratchPoint.x) <= 1 &&
         Math.abs(scratchPoint.y) <= 1;
       if (!onScreen) {

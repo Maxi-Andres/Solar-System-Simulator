@@ -57,6 +57,7 @@ import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
 import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeModels.ts';
 import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
+import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
 import {
   countTriangles,
@@ -1077,8 +1078,7 @@ export function SolarSystem({
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         handle.marker.scale.setScalar(worldSize);
 
-        scratchScreen.copy(handle.group.position).project(camera);
-        if (scratchScreen.z >= -1 && scratchScreen.z <= 1) {
+        if (projectToScreen(handle.group.position, camera, scratchScreen)) {
           markerCandidates.push({
             id: handle.definition.id,
             x: (scratchScreen.x * 0.5 + 0.5) * size.width,

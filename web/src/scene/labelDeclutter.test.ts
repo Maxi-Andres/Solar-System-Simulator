@@ -91,7 +91,9 @@ describe('frame order', () => {
     const projector = await readFile(join(import.meta.dirname, 'LabelProjector.tsx'), 'utf8');
     const update = projector.indexOf('camera.updateMatrixWorld()');
     expect(update).toBeGreaterThan(0);
-    expect(update).toBeLessThan(projector.indexOf('scratch.project(camera)'));
+    const project = projector.indexOf('projectToScreen(scratch, camera, scratch)');
+    expect(project).toBeGreaterThan(0);
+    expect(update).toBeLessThan(project);
   });
 
   it('moves the camera before the sky and the labels read it', async () => {
