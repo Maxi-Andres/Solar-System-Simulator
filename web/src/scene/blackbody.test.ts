@@ -123,5 +123,33 @@ describe('the colour itself', () => {
   it('caches by the published measurement, so it is a cache and not an approximation', () => {
     expect(starColor(0.65)).toBe(starColor(0.65));
     expect(starColor(0.65)).not.toBe(starColor(0.66));
+    // A published value read back from a float32 file is still that value.
+    expect(starColor(Math.fround(0.65))).toBe(starColor(0.65));
+    expect(starColor(0.65)).toEqual(blackbodyLinearSrgb(colorIndexToTemperature(0.65)));
+  });
+
+  it('interpolates between published steps to well under a millionth of a channel', () => {
+    // The 3D stars' derived B-V has no fixed decimals; see starColor.
+    for (const colorIndex of [-0.3995, 0.0123456, 0.6505, 1.2345678, 3.9999]) {
+      const exact = blackbodyLinearSrgb(colorIndexToTemperature(colorIndex));
+      const looked = starColor(colorIndex);
+      for (let channel = 0; channel < 3; channel += 1) {
+        expect(Math.abs(looked[channel]! - exact[channel]!)).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it('colours a few hundred thousand distinct stars in a blink', () => {
+    // 356,749 distinct values took 14 s before the table; this is the regression guard.
+    const start = performance.now();
+    for (let index = 0; index < 300_000; index += 1) {
+      starColor(-0.4 + (index / 300_000) * 4.4 + 1e-7);
+    }
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
+
+  it('gives every colour index past the clamp the clamp\'s colour', () => {
+    expect(starColor(-3)).toBe(starColor(-0.4));
+    expect(starColor(9)).toBe(starColor(4));
   });
 });

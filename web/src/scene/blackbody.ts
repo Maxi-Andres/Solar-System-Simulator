@@ -160,18 +160,49 @@ export function colorIndexToTemperature(colorIndex: number): number {
 /**
  * Colour of a star from its colour index, at unit luminance.
  *
- * Memoised, because the integral is 470 samples and a catalogue is 25,000 stars. The
- * key is the colour index as published -- three decimals -- so this is a cache and not
- * an approximation: two stars share an entry only when they share a measurement.
+ * The integral is 471 samples, so it is worked out once per thousandth of a magnitude
+ * of B-V -- the resolution the catalogues publish it at -- and kept: a colour index
+ * that is a published three-decimal value gets its own integral, exactly, and the same
+ * object every time.
+ *
+ * **Between those steps it interpolates, and that is new with the 3D stars.** The sky's
+ * 25,000 Hipparcos values come in thousandths, and keying the cache on the value itself
+ * cost 25,000 integrals at most. The 3D tiers' B-V is derived for the Gaia stars, a
+ * float with no fixed decimals: nearly every one of their 356,749 stars was its own key,
+ * so loading them ran the integral 356,749 times -- 14 seconds with the page frozen,
+ * measured on 2026-10-28, as the camera pulled out of the Solar System. Linear between
+ * neighbours 0.001 apart, the colour is off by the curvature over that step, under a
+ * millionth of a channel against a B-V uncertainty of hundredths: nothing a screen or
+ * an eye could tell, and 4,401 integrals at the very most.
  */
-const colorCache = new Map<number, Rgb>();
+const COLOR_INDEX_STEP = 0.001;
+const COLOR_STEPS = Math.round((MAX_COLOR_INDEX - MIN_COLOR_INDEX) / COLOR_INDEX_STEP);
+const colorTable: (Rgb | undefined)[] = [];
+
+/** How close to a step, in steps, counts as on it: float32's rounding of a published value. */
+const ON_STEP = 1e-3;
+
+function colorAtStep(step: number): Rgb {
+  let color = colorTable[step];
+  if (color === undefined) {
+    const colorIndex = MIN_COLOR_INDEX + step * COLOR_INDEX_STEP;
+    color = blackbodyLinearSrgb(colorIndexToTemperature(colorIndex));
+    colorTable[step] = color;
+  }
+  return color;
+}
 
 export function starColor(colorIndex: number): Rgb {
-  const cached = colorCache.get(colorIndex);
-  if (cached !== undefined) {
-    return cached;
+  // Past the clamp every colour index is the same colour (colorIndexToTemperature).
+  const clamped = Math.min(MAX_COLOR_INDEX, Math.max(MIN_COLOR_INDEX, colorIndex));
+  const position = (clamped - MIN_COLOR_INDEX) / COLOR_INDEX_STEP;
+  const nearest = Math.round(position);
+  if (Math.abs(position - nearest) < ON_STEP) {
+    return colorAtStep(nearest);
   }
-  const color = blackbodyLinearSrgb(colorIndexToTemperature(colorIndex));
-  colorCache.set(colorIndex, color);
-  return color;
+  const below = Math.min(Math.floor(position), COLOR_STEPS - 1);
+  const t = position - below;
+  const [r0, g0, b0] = colorAtStep(below);
+  const [r1, g1, b1] = colorAtStep(below + 1);
+  return [r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t];
 }
