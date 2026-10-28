@@ -41,26 +41,25 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  *
  * ## Dust, drawn as what it does
  *
- * The dust (sampleDust) is a second set of points, and what they add up is not light but
- * optical depth: each puts its share of tau into the buffer's fourth channel, so every
- * pixel ends up holding the light along its line of sight in rgb and the dust along it in
- * alpha. The composite then lets out what a line of sight through stars and dust mixed
- * together lets out:
+ * The dust (sampleDust) is a second set of points that darken instead of shine: each keeps
+ * e^-tau of the light already in the buffer where it falls. Dust only dims what is behind
+ * it, so the order matters, and a buffer of added light has none. So the galaxy is drawn
+ * in DEPTH_SLICES slabs of distance from the camera, far to near, each in its own pass:
+ * first that slab's dust, dimming everything already drawn -- the slabs behind it -- and
+ * then that slab's light, added on top. The dust on the far side of the galaxy then
+ * leaves the bulge alone, and the dust between the camera and the bulge crosses it, as a
+ * lane does in every photograph of an edge-on spiral.
  *
- *     escaping = light (1 - e^-tau) / tau
+ * Two attempts came before, both order-free and both wrong in the same way. A straight
+ * multiply dimmed the stars in front of the dust as hard as those behind, and seen edge-on
+ * turned the plane to a black bar ("se ve full negro"); the mixed-slab escape fraction,
+ * (1 - e^-tau)/tau, fixed the black but still let dust behind the centre darken it, so the
+ * bulge looked to sit behind the disc from every side ("la luz del centro se pone atrás
+ * de todo") -- Maxi, both 2026-10-28.
  *
- * the uniformly mixed slab of radiative transfer (Disney, Davies & Phillipps 1989, MNRAS
- * 239, 939): the stars at the near edge come through whole, those at the far edge behind
- * all of tau, and the average of e^-t over the depth is that. It is 1 with no dust and
- * falls as 1/tau with a great deal, so a line of sight along the plane is dark -- the
- * Milky Way's own plane is, in visible light -- but never black, because the stars in
- * front of the dust are still in front of it.
- *
- * It was a straight multiply at first, e^-tau on all the light, and seen edge-on that
- * turned the whole plane to a black bar: it dimmed the stars in front of the dust as hard
- * as those behind (Maxi, 2026-10-28: "se ve full negro"). The slab is still a
- * simplification -- the dust is thinner than the stars, so along the plane the truth is
- * darker than mixed and above it lighter -- and the About panel says so.
+ * Inside a slab the light is drawn after its own dust, so it is never dimmed by the dust
+ * it is mixed with: an error of half a slab's depth, a few kiloparsecs, where the slabs
+ * are thinnest -- across the disc.
  *
  * It fades in as the camera leaves the star catalogue behind, from GALAXY_FROM_LY to
  * GALAXY_FULL_LY from the Sun, and stays out of the neighbourhood of the camera, where a
@@ -76,10 +75,17 @@ export const GALAXY_POINTS = 200_000;
 /** Light each sprite adds at its centre, times its population's gain, before the shoulder. */
 export const GALAXY_POINT_PEAK = 0.04;
 
+/**
+ * How many slabs of depth the galaxy is drawn in, and how far either side of its centre
+ * they reach, pc: the disc's radius and some.
+ */
+export const DEPTH_SLICES = 6;
+export const GALAXY_DEPTH_PC = 20_000;
+
 /** The dust: how many points, how wide each, and the optical depth each adds at its centre. */
 export const DUST_POINTS = 80_000;
 export const DUST_RADIUS_PC = 200;
-export const DUST_TAU = 0.18;
+export const DUST_TAU = 0.08;
 
 /**
  * The HII regions' colour: hydrogen's two brightest visible lines, H-alpha at 656.28 nm
@@ -152,6 +158,8 @@ uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uPeak;
 uniform float uNearFadePc;
+// This pass's slab of distance from the camera, pc: points outside it wait for theirs.
+uniform vec2 uSlice;
 
 attribute vec3 color;
 attribute float radiusPc;
@@ -162,6 +170,13 @@ varying float vPeak;
 void main() {
   vec3 rel = (position - uCameraHigh) - uCameraLow;
   float distancePc = length(rel);
+  if (distancePc < uSlice.x || distancePc >= uSlice.y) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    vPeak = 0.0;
+    vColor = vec3(0.0);
+    return;
+  }
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
 
   float diameterPx = 2.0 * radiusPc / max(distancePc, 1e-3) * uPixelsPerRadian;
@@ -175,7 +190,7 @@ void main() {
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
-// 0 for light, added in rgb; 1 for dust, its optical depth added in alpha.
+// 0 for light, added; 1 for dust, which keeps e^-tau of what is behind it.
 uniform float uDust;
 
 varying vec3 vColor;
@@ -188,7 +203,7 @@ void main() {
   float profile = exp(-0.5 * r2);
   if (vPeak * profile < 1.0 / 1024.0) discard;
   float amount = vPeak * profile;
-  gl_FragColor = uDust > 0.5 ? vec4(0.0, 0.0, 0.0, amount) : vec4(vColor * amount, 0.0);
+  gl_FragColor = uDust > 0.5 ? vec4(vec3(1.0 - exp(-amount)), 1.0) : vec4(vColor * amount, 1.0);
 }
 `;
 
@@ -205,11 +220,7 @@ const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler2D uGlow;
 varying vec2 vUv;
 void main() {
-  vec4 sum = texture2D(uGlow, vUv);
-  float tau = sum.a;
-  // Stars and dust mixed along the line of sight; see the header. 1 - tau / 2 near zero.
-  float escaping = tau < 1e-3 ? 1.0 - 0.5 * tau : (1.0 - exp(-tau)) / tau;
-  vec3 light = sum.rgb * escaping;
+  vec3 light = texture2D(uGlow, vUv).rgb;
   gl_FragColor = vec4(vec3(1.0) - exp(-light), 1.0);
 }
 `;
@@ -368,31 +379,27 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       uUnitsPerPc: { value: PARSEC_KM / KM_PER_UNIT },
       uPixelsPerRadian: { value: 1 },
       uNearFadePc: { value: 0 },
+      uSlice: { value: new THREE.Vector2(0, 1e30) },
     };
-    // Both add, every channel as it is: light into rgb, dust's optical depth into alpha.
-    const adding = {
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.OneFactor,
-      blendDst: THREE.OneFactor,
-      blendEquationAlpha: THREE.AddEquation,
-      blendSrcAlpha: THREE.OneFactor,
-      blendDstAlpha: THREE.OneFactor,
-      depthWrite: false,
-      transparent: true,
-      toneMapped: false,
-    } as const;
+    const common = { depthWrite: false, transparent: true, toneMapped: false } as const;
+    // Light adds.
     const light = new THREE.ShaderMaterial({
       uniforms: { ...shared, uPeak: { value: 0 }, uDust: { value: 0 } },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
-      ...adding,
+      blending: THREE.AdditiveBlending,
+      ...common,
     });
+    // dst = dst (1 - src) with src = 1 - e^-tau: dust keeps e^-tau of what is behind it.
     const dust = new THREE.ShaderMaterial({
       uniforms: { ...shared, uPeak: { value: 0 }, uDust: { value: 1 } },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
-      ...adding,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.ZeroFactor,
+      blendDst: THREE.OneMinusSrcColorFactor,
+      ...common,
     });
     return [light, dust] as const;
   }, []);
@@ -438,12 +445,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; dust: Float32Array }>) => {
         const cloud = new THREE.Points(buildGeometry(event.data.light), material);
         cloud.frustumCulled = false;
+        // In each slab, after its dust: see the header.
+        cloud.renderOrder = 1;
         group.add(cloud);
         points.current = cloud;
-        // After the light, so it has something to dim.
+        // Before its slab's light, after every slab behind.
         const dust = new THREE.Points(buildDustGeometry(event.data.dust), dustMaterial);
         dust.frustumCulled = false;
-        dust.renderOrder = 1;
+        dust.renderOrder = 0;
         group.add(dust);
         dustPoints.current = dust;
         made.terminate();
@@ -481,13 +490,27 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
 
     // The glow, into its buffer, through this frame's camera (CameraRig ran first).
     const previous = gl.getRenderTarget();
-    // Cleared to nothing in all four channels, alpha included: it holds the dust.
     gl.getClearColor(scratchClear);
     const clearAlpha = gl.getClearAlpha();
     gl.setRenderTarget(target);
     gl.setClearColor(0x000000, 0);
     gl.clear(true, false, false);
-    gl.render(glowScene, camera);
+    // Far to near, slab by slab: see the header. The slabs span the galaxy as seen from
+    // here, GALAXY_DEPTH_PC either side of its centre; the first and last run on to
+    // nothing and to everything, so no point is left out.
+    const centre = LABEL_POINTS[0]!;
+    const toCentre = Math.hypot(centre[0]! - cameraPc.x, centre[1]! - cameraPc.y, centre[2]! - cameraPc.z);
+    const nearest = Math.max(0, toCentre - GALAXY_DEPTH_PC);
+    const step = (toCentre + GALAXY_DEPTH_PC - nearest) / DEPTH_SLICES;
+    const slice = uniforms['uSlice']!.value as THREE.Vector2;
+    // Each pass draws over the last: the renderer must not clear between them.
+    const autoClear = gl.autoClear;
+    gl.autoClear = false;
+    for (let index = DEPTH_SLICES - 1; index >= 0; index -= 1) {
+      slice.set(index === 0 ? 0 : nearest + index * step, index === DEPTH_SLICES - 1 ? 1e30 : nearest + (index + 1) * step);
+      gl.render(glowScene, camera);
+    }
+    gl.autoClear = autoClear;
     gl.setRenderTarget(previous);
     gl.setClearColor(scratchClear, clearAlpha);
 
