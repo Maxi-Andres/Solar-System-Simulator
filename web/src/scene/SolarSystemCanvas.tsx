@@ -17,6 +17,7 @@ import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
+import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
@@ -236,6 +237,7 @@ export function SolarSystemCanvas({
         labels={ringLabels}
       />
       <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
+      <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <LabelProjector
         store={store}
         clock={clock}

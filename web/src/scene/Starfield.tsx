@@ -34,6 +34,7 @@ import {
 } from './starRendering.ts';
 import { mapDotPeak, splitHigh, splitLow, STAR3D_VERTEX_SHADER, UNITS_PER_PC } from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
+import { componentState, matchComponent, type AlphaCenComponent } from '../core/alphaCentauri.ts';
 
 /**
  * The sky: every star in the catalogues, at its real distance where it has one and at
@@ -136,11 +137,18 @@ function star3dMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderM
  * B-V, through the same Planck-and-CIE path the sky uses (and its cache: the 3D stars
  * repeat the sky's values, so most are already worked out).
  */
-export function buildTierGeometry(records: Float32Array): THREE.BufferGeometry {
+export function buildTierGeometry(
+  records: Float32Array,
+  hidden: readonly number[] = [],
+): THREE.BufferGeometry {
   const count = records.length / STAR3D_FLOATS;
   const interleaved = new THREE.InterleavedBuffer(records, STAR3D_FLOATS);
   const colors = new Float32Array(count * 3);
   for (let i = 0; i < count; i += 1) {
+    // A star drawn elsewhere (Alpha Centauri A and B, on their orbit) adds no light here.
+    if (hidden.includes(i)) {
+      continue;
+    }
     const [red, green, blue] = starColor(records[i * STAR3D_FLOATS + STAR3D.bv]!);
     colors[i * 3] = red;
     colors[i * 3 + 1] = green;
@@ -151,6 +159,19 @@ export function buildTierGeometry(records: Float32Array): THREE.BufferGeometry {
   geometry.setAttribute('velocity', new THREE.InterleavedBufferAttribute(interleaved, 3, STAR3D.vx));
   geometry.setAttribute('absMag', new THREE.InterleavedBufferAttribute(interleaved, 1, STAR3D.Mv));
   geometry.setAttribute('starColor', new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/**
+ * One star at the origin of its own Points, not moving: Alpha Centauri A or B, whose
+ * place comes through the camera uniforms instead (see pairPoints in Starfield).
+ */
+function pairGeometry(absoluteMagnitude: number, colorIndex: number): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+  geometry.setAttribute('velocity', new THREE.BufferAttribute(new Float32Array(3), 3));
+  geometry.setAttribute('absMag', new THREE.BufferAttribute(new Float32Array([absoluteMagnitude]), 1));
+  geometry.setAttribute('starColor', new THREE.BufferAttribute(new Float32Array(starColor(colorIndex)), 3));
   return geometry;
 }
 
@@ -239,6 +260,12 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
   // A Points per tier, made once each as it lands, and every sky row it places taken off
   // the sphere in the same step.
   const tierPoints = useMemo(() => new Map<number, THREE.Points>(), [tierMaterial]);
+
+  // Alpha Centauri A and B, on their orbit rather than their records' straight lines
+  // (alphaCentauri.ts): one Points each, with the tier material's uniforms but a camera
+  // of its own, so the star is placed by the camera's offset from it in float64 -- the
+  // orbit's position, to the kilometre, not a float32 one 0.025 AU off it.
+  const pairPoints = useMemo(() => new Map<AlphaCenComponent, THREE.Points>(), [tierMaterial]);
   const starCount = useRef(0);
   useEffect(() => {
     const group = tiersRef.current;
@@ -250,7 +277,34 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       if (tierPoints.has(tier.index)) {
         continue;
       }
-      const points = new THREE.Points(buildTierGeometry(tier.records), tierMaterial);
+      // Alpha Centauri A or B in this tier: taken out of it and drawn on its orbit.
+      const hidden: number[] = [];
+      for (let i = 0; i < tier.tier.count; i += 1) {
+        const base = i * STAR3D_FLOATS;
+        const component = matchComponent({
+          x: tier.records[base + STAR3D.x]!,
+          y: tier.records[base + STAR3D.y]!,
+          z: tier.records[base + STAR3D.z]!,
+        });
+        if (component === null || pairPoints.has(component)) {
+          continue;
+        }
+        hidden.push(i);
+        const own = {
+          ...tierUniforms,
+          uCameraHigh: { value: new THREE.Vector3() },
+          uCameraLow: { value: new THREE.Vector3() },
+        };
+        const single = new THREE.Points(
+          pairGeometry(tier.records[base + STAR3D.Mv]!, tier.records[base + STAR3D.bv]!),
+          star3dMaterial(own),
+        );
+        single.frustumCulled = false;
+        single.renderOrder = -1;
+        pairPoints.set(component, single);
+        group.add(single);
+      }
+      const points = new THREE.Points(buildTierGeometry(tier.records, hidden), tierMaterial);
       points.frustumCulled = false;
       points.renderOrder = -1;
       tierPoints.set(tier.index, points);
@@ -268,7 +322,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (changed) {
       sky.placed.needsUpdate = true;
     }
-  }, [view, tierPoints, tierMaterial, sky]);
+  }, [view, tierPoints, pairPoints, tierMaterial, tierUniforms, sky]);
 
   // Everything made here goes with the component.
   useEffect(
@@ -277,10 +331,15 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         points.geometry.dispose();
       }
       tierPoints.clear();
+      for (const points of pairPoints.values()) {
+        points.geometry.dispose();
+        (points.material as THREE.Material).dispose();
+      }
+      pairPoints.clear();
       starCount.current = 0;
       tierMaterial.dispose();
     },
-    [tierPoints, tierMaterial],
+    [tierPoints, pairPoints, tierMaterial],
   );
   useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
   useEffect(() => () => sky.buffer.dispose(), [sky]);
@@ -359,6 +418,17 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       uniforms['uMotion']!.value = motion;
       uniforms['uPixelRatio']!.value = pixelRatio;
     }
+    // A and B: the camera as seen from each, high and low, from float64 -- see pairPoints.
+    for (const [component, points] of pairPoints) {
+      const star = componentState(component, jd).position;
+      const uniforms = (points.material as THREE.ShaderMaterial).uniforms;
+      const x = (camera.position.x * KM_PER_UNIT - sun.position.x - star.x) / PARSEC_KM;
+      const y = (camera.position.y * KM_PER_UNIT - sun.position.y - star.y) / PARSEC_KM;
+      const z = (camera.position.z * KM_PER_UNIT - sun.position.z - star.z) / PARSEC_KM;
+      (uniforms['uCameraHigh']!.value as THREE.Vector3).set(splitHigh(x), splitHigh(y), splitHigh(z));
+      (uniforms['uCameraLow']!.value as THREE.Vector3).set(splitLow(x), splitLow(y), splitLow(z));
+    }
+
     // The Sun is a star of the map like any other: past 30 pc it is fainter than V 8.
     tierUniforms['uMapDotPeak']!.value = dotPeak;
     sunUniforms['uMapDotPeak']!.value = dotPeak;

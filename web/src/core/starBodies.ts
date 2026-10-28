@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { starColor } from '../scene/blackbody.ts';
+import { componentState, matchComponent } from './alphaCentauri.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
 
@@ -139,11 +140,18 @@ export async function addStarBody(
       spectralType: columns.spectralType[k] ?? null,
     });
     // Exact: the linear motion is how the catalogue is meant to be read, not a fallback
-    // from something better, so the interface does not call it APPROXIMATE.
+    // from something better, so the interface does not call it APPROXIMATE. Alpha
+    // Centauri A and B are the exception: they follow their measured orbit instead
+    // (alphaCentauri.ts), which a straight line from 1991 has long since left.
+    const component = matchComponent({
+      x: record[STAR3D.x]!,
+      y: record[STAR3D.y]!,
+      z: record[STAR3D.z]!,
+    });
     store.addPropagatedBody(
       starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!),
       null,
-      (jd) => starState(record, 0, jd),
+      component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
       { exact: true },
     );
   }
