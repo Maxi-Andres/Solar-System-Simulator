@@ -41,13 +41,26 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  *
  * ## Dust, drawn as what it does
  *
- * The dust (sampleDust) is a second set of points drawn into the same buffer after the
- * light, and they do not add: each multiplies what is there by (1 - its opacity), so a
- * line of sight through many of them keeps e^-(their sum), which is extinction. That is
- * what lays the dark lanes along the inner edges of the arms, and the dark band along the
- * plane seen edge-on. One liberty, and it is a real one: the buffer has no depth, so dust
- * dims the light in front of it as well as behind. Seen from outside the galaxy the
- * difference is small; it is named in the About panel all the same.
+ * The dust (sampleDust) is a second set of points, and what they add up is not light but
+ * optical depth: each puts its share of tau into the buffer's fourth channel, so every
+ * pixel ends up holding the light along its line of sight in rgb and the dust along it in
+ * alpha. The composite then lets out what a line of sight through stars and dust mixed
+ * together lets out:
+ *
+ *     escaping = light (1 - e^-tau) / tau
+ *
+ * the uniformly mixed slab of radiative transfer (Disney, Davies & Phillipps 1989, MNRAS
+ * 239, 939): the stars at the near edge come through whole, those at the far edge behind
+ * all of tau, and the average of e^-t over the depth is that. It is 1 with no dust and
+ * falls as 1/tau with a great deal, so a line of sight along the plane is dark -- the
+ * Milky Way's own plane is, in visible light -- but never black, because the stars in
+ * front of the dust are still in front of it.
+ *
+ * It was a straight multiply at first, e^-tau on all the light, and seen edge-on that
+ * turned the whole plane to a black bar: it dimmed the stars in front of the dust as hard
+ * as those behind (Maxi, 2026-10-28: "se ve full negro"). The slab is still a
+ * simplification -- the dust is thinner than the stars, so along the plane the truth is
+ * darker than mixed and above it lighter -- and the About panel says so.
  *
  * It fades in as the camera leaves the star catalogue behind, from GALAXY_FROM_LY to
  * GALAXY_FULL_LY from the Sun, and stays out of the neighbourhood of the camera, where a
@@ -63,10 +76,10 @@ export const GALAXY_POINTS = 200_000;
 /** Light each sprite adds at its centre, times its population's gain, before the shoulder. */
 export const GALAXY_POINT_PEAK = 0.04;
 
-/** The dust: how many points, how wide each, and how much each dims at its centre. */
+/** The dust: how many points, how wide each, and the optical depth each adds at its centre. */
 export const DUST_POINTS = 80_000;
 export const DUST_RADIUS_PC = 200;
-export const DUST_OPACITY = 0.022;
+export const DUST_TAU = 0.18;
 
 /**
  * The HII regions' colour: hydrogen's two brightest visible lines, H-alpha at 656.28 nm
@@ -162,6 +175,9 @@ void main() {
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
+// 0 for light, added in rgb; 1 for dust, its optical depth added in alpha.
+uniform float uDust;
+
 varying vec3 vColor;
 varying float vPeak;
 
@@ -171,7 +187,8 @@ void main() {
   float r2 = dot(offset, offset) * 25.0;
   float profile = exp(-0.5 * r2);
   if (vPeak * profile < 1.0 / 1024.0) discard;
-  gl_FragColor = vec4(vColor * (vPeak * profile), 1.0);
+  float amount = vPeak * profile;
+  gl_FragColor = uDust > 0.5 ? vec4(0.0, 0.0, 0.0, amount) : vec4(vColor * amount, 0.0);
 }
 `;
 
@@ -188,12 +205,17 @@ const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler2D uGlow;
 varying vec2 vUv;
 void main() {
-  vec3 light = texture2D(uGlow, vUv).rgb;
+  vec4 sum = texture2D(uGlow, vUv);
+  float tau = sum.a;
+  // Stars and dust mixed along the line of sight; see the header. 1 - tau / 2 near zero.
+  float escaping = tau < 1e-3 ? 1.0 - 0.5 * tau : (1.0 - exp(-tau)) / tau;
+  vec3 light = sum.rgb * escaping;
   gl_FragColor = vec4(vec3(1.0) - exp(-light), 1.0);
 }
 `;
 
 const scratchCamera = new THREE.Vector3();
+const scratchClear = new THREE.Color();
 const scratchPoint = new THREE.Vector3();
 
 /** Galactic-frame parsecs about the Sun to the scene's ecliptic frame. */
@@ -347,27 +369,30 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       uPixelsPerRadian: { value: 1 },
       uNearFadePc: { value: 0 },
     };
-    const light = new THREE.ShaderMaterial({
-      uniforms: { ...shared, uPeak: { value: 0 } },
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-      toneMapped: false,
-    });
-    // dst = dst (1 - src): each dust point keeps (1 - its opacity) of the light there.
-    const dust = new THREE.ShaderMaterial({
-      uniforms: { ...shared, uPeak: { value: 0 } },
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
+    // Both add, every channel as it is: light into rgb, dust's optical depth into alpha.
+    const adding = {
       blending: THREE.CustomBlending,
       blendEquation: THREE.AddEquation,
-      blendSrc: THREE.ZeroFactor,
-      blendDst: THREE.OneMinusSrcColorFactor,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.OneFactor,
+      blendDstAlpha: THREE.OneFactor,
       depthWrite: false,
       transparent: true,
       toneMapped: false,
+    } as const;
+    const light = new THREE.ShaderMaterial({
+      uniforms: { ...shared, uPeak: { value: 0 }, uDust: { value: 0 } },
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+      ...adding,
+    });
+    const dust = new THREE.ShaderMaterial({
+      uniforms: { ...shared, uPeak: { value: 0 }, uDust: { value: 1 } },
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+      ...adding,
     });
     return [light, dust] as const;
   }, []);
@@ -451,15 +476,20 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     }
     uniforms['uPixelsPerRadian']!.value = height / (2 * Math.tan((fov * Math.PI) / 360));
     uniforms['uPeak']!.value = GALAXY_POINT_PEAK * visibility;
-    dustMaterial.uniforms['uPeak']!.value = DUST_OPACITY * visibility;
+    dustMaterial.uniforms['uPeak']!.value = DUST_TAU * visibility;
     uniforms['uNearFadePc']!.value = NEAR_FADE_SHARE * cameraPc.length();
 
     // The glow, into its buffer, through this frame's camera (CameraRig ran first).
     const previous = gl.getRenderTarget();
+    // Cleared to nothing in all four channels, alpha included: it holds the dust.
+    gl.getClearColor(scratchClear);
+    const clearAlpha = gl.getClearAlpha();
     gl.setRenderTarget(target);
+    gl.setClearColor(0x000000, 0);
     gl.clear(true, false, false);
     gl.render(glowScene, camera);
     gl.setRenderTarget(previous);
+    gl.setClearColor(scratchClear, clearAlpha);
 
     // The names: the Sun's place plus each label's parsecs, in scene units.
     camera.updateMatrixWorld();
