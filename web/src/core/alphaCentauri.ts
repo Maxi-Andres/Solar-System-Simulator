@@ -385,3 +385,42 @@ export function relativeOrbitPolylineKm(segments = 512): Vec3[] {
   }
   return points;
 }
+
+/**
+ * The three stars' measured radii, in solar radii, and the nominal solar radius they are
+ * counted in (IAU 2015 B3, 695,700 km). A and B by interferometry with VLTI/PIONIER,
+ * Kervella et al. 2017, A&A 597, A137: 1.2234 +- 0.0053 and 0.8632 +- 0.0037. Proxima
+ * 0.1542 +- 0.0045, the value Kervella et al. 2017 (A&A 598, L7) adopt in their Table 1,
+ * from Mann et al. 2015's relations for M dwarfs.
+ */
+export const RADIUS_A_SUN = 1.2234;
+export const RADIUS_B_SUN = 0.8632;
+export const RADIUS_PROXIMA_SUN = 0.1542;
+const SOLAR_RADIUS_KM = 695_700;
+
+/** A catalogue record's measured radius in km if it is one of the three, else null. */
+export function measuredRadiusKm(positionPcAtJ2000: Vec3): number | null {
+  const component = matchComponent(positionPcAtJ2000);
+  if (component !== null) {
+    return (component === 'A' ? RADIUS_A_SUN : RADIUS_B_SUN) * SOLAR_RADIUS_KM;
+  }
+  return isProximaRecord(positionPcAtJ2000) ? RADIUS_PROXIMA_SUN * SOLAR_RADIUS_KM : null;
+}
+
+/**
+ * The unit normal of the pair's orbital plane in the scene frame, on the side B's orbit
+ * turns counter-clockwise about: what to look down along to see the orbit as it is,
+ * rather than at its 79 degrees to the sky as we see it from here.
+ */
+export function abOrbitNormal(): Vec3 {
+  const year = AB_ORBIT.periastronYear;
+  const r = relativeKm(year);
+  const later = relativeKm(year + AB_ORBIT.periodYears / 8);
+  const n = {
+    x: r.y * later.z - r.z * later.y,
+    y: r.z * later.x - r.x * later.z,
+    z: r.x * later.y - r.y * later.x,
+  };
+  const length = Math.hypot(n.x, n.y, n.z);
+  return { x: n.x / length, y: n.y / length, z: n.z / length };
+}

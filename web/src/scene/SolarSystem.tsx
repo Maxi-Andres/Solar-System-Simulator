@@ -59,6 +59,8 @@ import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
+import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
+import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import {
   countTriangles,
   craftBox,
@@ -107,6 +109,7 @@ const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
 const BODY_LOCAL_POLE = new THREE.Vector3(0, 1, 0);
 const scratchPole = new THREE.Vector3();
 const scratchScreen = new THREE.Vector3();
+
 
 /** The south ecliptic pole, as a direction in the scene's frame. */
 const ECLIPTIC_SOUTH = { x: 0, y: 0, z: -1 } as const;
@@ -496,7 +499,10 @@ export function SolarSystem({
       const sharedSphere =
         smallMoon ||
         definition.kind === 'satellite' ||
-        (definition.kind === 'star' && definition.id !== 'sun');
+        (definition.kind === 'star' && definition.id !== 'sun' && definition.radiusPublished === false);
+      // Another star with a measured radius gets a disc of its own (starDisc.ts): its
+      // blackbody colour at full brightness, limb-darkened.
+      const otherStar = definition.kind === 'star' && definition.id !== 'sun';
       const geometry = sharedSphere
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
@@ -509,9 +515,13 @@ export function SolarSystem({
       // worth paying for.
       const material =
         definition.kind === 'star'
-          ? new THREE.MeshBasicMaterial({
-              color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
-            })
+          ? otherStar
+            ? starDiscMaterial(
+                starDiscColor(starDiscColorIndex(definition.id), SUN_OVEREXPOSURE * starDiscExposure(definition.id)),
+              )
+            : new THREE.MeshBasicMaterial({
+                color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
+              })
           : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
                 color: definition.color,

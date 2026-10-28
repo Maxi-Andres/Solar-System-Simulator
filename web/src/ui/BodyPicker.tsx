@@ -3,6 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { renderDemand } from '../core/renderDemand.ts';
+import {
+  ALPHA_CEN_FRAMING_KM,
+  ALPHA_CEN_MEMBERS,
+  ALPHA_CEN_SYSTEM,
+  alphaCenMember,
+  type AlphaCenKey,
+} from '../core/alphaCenBodies.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
@@ -58,6 +65,18 @@ export interface BodyPickerProps {
    * with the clock; the breadcrumb has nothing on it that moves with time.
    */
   readonly readout: Signal;
+  /**
+   * Alpha Centauri as a place to go (D3b): its three stars by name, and how to go to one
+   * -- made a body first if it is not one yet -- optionally framed from farther out.
+   * Null while the 3D stars are not part of the published data.
+   */
+  readonly alphaCen: AlphaCenNavigator | null;
+}
+
+/** Going to Alpha Centauri's stars from the breadcrumb. */
+export interface AlphaCenNavigator {
+  readonly names: Readonly<Record<AlphaCenKey, string>>;
+  readonly go: (key: AlphaCenKey, framingKm?: number) => void;
 }
 
 export function BodyPicker({
@@ -67,6 +86,7 @@ export function BodyPicker({
   visibleKinds,
   clock,
   readout,
+  alphaCen,
 }: BodyPickerProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -75,6 +95,8 @@ export function BodyPicker({
   const parent = focusBody.parent === null ? null : store.body(focusBody.parent);
   // A star other than the Sun is in the neighbourhood, not in the Solar System.
   const inSolarSystem = !isCatalogueStar(focusBody);
+  // Alpha Centauri's own level, when one of its stars is in focus.
+  const inAlphaCen = alphaCenMember(focus) !== null;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -116,6 +138,10 @@ export function BodyPicker({
     onFocus(id);
     setOpen(false);
   };
+  const chooseMember = (key: AlphaCenKey): void => {
+    alphaCen?.go(key);
+    setOpen(false);
+  };
 
   return (
     <div ref={root} style={{ position: 'absolute', top: '1rem', left: '1.25rem' }}>
@@ -142,6 +168,12 @@ export function BodyPicker({
         {inSolarSystem && (
           <>
             <Crumb onClick={() => onFocus('sun')}>Solar System</Crumb>
+            <Separator />
+          </>
+        )}
+        {inAlphaCen && alphaCen !== null && (
+          <>
+            <Crumb onClick={() => alphaCen.go('A', ALPHA_CEN_FRAMING_KM)}>{ALPHA_CEN_SYSTEM}</Crumb>
             <Separator />
           </>
         )}
@@ -177,6 +209,8 @@ export function BodyPicker({
           clock={clock}
           readout={readout}
           onChoose={choose}
+          alphaCen={alphaCen}
+          onChooseMember={chooseMember}
         />
       </Presence>
     </div>
@@ -304,6 +338,8 @@ function BodyList({
   clock,
   readout,
   onChoose,
+  alphaCen,
+  onChooseMember,
 }: {
   store: EphemerisStore;
   focus: BodyId;
@@ -311,6 +347,8 @@ function BodyList({
   clock: SimClock;
   readout: Signal;
   onChoose: (id: BodyId) => void;
+  alphaCen: AlphaCenNavigator | null;
+  onChooseMember: (key: AlphaCenKey) => void;
 }) {
   const closing = useClosing();
   // Redrawn when a planet's small moons arrive.
@@ -342,8 +380,9 @@ function BodyList({
       visibleKinds.has(body.kind),
   );
   // The catalogue stars gone to from search (starBodies.ts), listed apart: they are not
-  // in the Solar System.
-  const stars = store.bodies.filter(isCatalogueStar);
+  // in the Solar System. Alpha Centauri's have a section of their own, below.
+  const stars = store.bodies.filter((body) => isCatalogueStar(body) && alphaCenMember(body.id) === null);
+  const focusMember = alphaCenMember(focus);
   // Listed apart: between the planets they would push Neptune off the bottom.
   const asteroids = visibleKinds.has('asteroid')
     ? store.bodies.filter((body) => body.kind === 'asteroid')
@@ -512,6 +551,19 @@ function BodyList({
               inSystem={false}
               onChoose={onChoose}
               trailing={null}
+            />
+          ))}
+        </>
+      )}
+      {alphaCen !== null && (
+        <>
+          <div style={SECTION_HEADING}>{ALPHA_CEN_SYSTEM}</div>
+          {ALPHA_CEN_MEMBERS.map(({ key }) => (
+            <MemberRow
+              key={key}
+              name={alphaCen.names[key]}
+              active={focusMember === key}
+              onChoose={() => onChooseMember(key)}
             />
           ))}
         </>
@@ -756,6 +808,41 @@ function SmallMoons({
           />
         ))}
     </>
+  );
+}
+
+/**
+ * A star of Alpha Centauri in the list: a row like any body's, but for a star that may not
+ * be a body yet -- choosing it makes it one (App.tsx) -- so it carries a name, not a body.
+ */
+function MemberRow({ name, active, onChoose }: { name: string; active: boolean; onChoose: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      <button
+        type="button"
+        role="option"
+        aria-selected={active}
+        onClick={onChoose}
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          textAlign: 'left',
+          background: active ? '#1e2a24' : 'transparent',
+          border: 'none',
+          borderRadius: '0.25rem',
+          padding: '0.3rem 0.45rem',
+          color: active ? ACCENT : '#a8a8a8',
+          fontFamily: 'inherit',
+          fontSize: '0.78rem',
+          letterSpacing: '0.03em',
+          cursor: 'pointer',
+        }}
+      >
+        {name}
+      </button>
+    </div>
   );
 }
 

@@ -13,7 +13,10 @@ import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
-import { BodyPicker } from './ui/BodyPicker.tsx';
+import { ALPHA_CEN_MEMBERS, alphaCenEntries, alphaCenView, type AlphaCenKey } from './core/alphaCenBodies.ts';
+import { addStarBody } from './core/starBodies.ts';
+import { renderDemand } from './core/renderDemand.ts';
+import { BodyPicker, type AlphaCenNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
 import {
   CENSUS_EDGE_COLOR,
@@ -78,6 +81,7 @@ export function App() {
 
   const focus = useViewStore((state) => state.focus);
   const setFocus = useViewStore((state) => state.setFocus);
+  const requestFraming = useViewStore((state) => state.requestFraming);
   const layers = useViewStore((state) => state.layers);
   const lighting = useViewStore((state) => state.lighting);
   const openPanel = useViewStore((state) => state.openPanel);
@@ -88,6 +92,44 @@ export function App() {
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
   const ringLabels = useRef<(HTMLElement | null)[]>([]);
+
+  // Alpha Centauri on the breadcrumb (D3b): a star of it made a body when chosen, from the
+  // star names, then focused -- framed from farther out when the system itself is asked for.
+  const alphaCen = useMemo<AlphaCenNavigator | null>(() => {
+    if (store === null || stars3d === null || starNames === null) {
+      return null;
+    }
+    const names = Object.fromEntries(ALPHA_CEN_MEMBERS.map((member) => [member.key, member.name])) as Record<
+      AlphaCenKey,
+      string
+    >;
+    return {
+      names,
+      go: (key, framingKm) => {
+        // Its light is drawn by the 3D stars: asked for now, as search does.
+        void stars3d.request();
+        starNames
+          .request()
+          .then(async () => {
+            const index = starNames.value;
+            const entries = index === null ? null : alphaCenEntries(index.names);
+            if (index === null || entries === null) {
+              return;
+            }
+            const id = await addStarBody(store, stars3d, index, entries[key], useViewStore.getState().focus);
+            // The system, not one star: framed from out of the pair's orbital plane.
+            if (framingKm !== undefined) {
+              requestFraming(framingKm, alphaCenView());
+            }
+            setFocus(id);
+            renderDemand.request();
+          })
+          .catch((error: unknown) => {
+            console.error(`Could not go to ${names[key]}`, error);
+          });
+      },
+    };
+  }, [stars3d, starNames, store, requestFraming, setFocus]);
   const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
   const scaleBar = useRef<ScaleBarElements | null>(null);
 
@@ -285,6 +327,7 @@ export function App() {
             visibleKinds={visibleKinds}
             clock={clock}
             readout={readout}
+            alphaCen={alphaCen}
           />
 
           {/* Bottom-left: time. */}

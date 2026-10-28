@@ -93,6 +93,8 @@ export function CameraRig({
   const up = useRef(new THREE.Vector3(0, 1, 0));
   const targetDistance = useRef(1);
   const initialised = useRef(false);
+  /** The focus the camera was last framed for. */
+  const framedFocus = useRef<string | null>(null);
 
   /**
    * A framing's own direction, if it brought one: turned to at once, at the distance the
@@ -118,6 +120,17 @@ export function CameraRig({
       initialised.current = true;
     }
     const request = useViewStore.getState().consumeFramingRequest();
+    // The same focus, only its size or the limits changed -- a star becoming a sphere of
+    // its measured radius as it is made a body: keep the distance the camera is at (and
+    // any framing asked for with the focus, which the earlier run already took), clamped.
+    // Reframing here undid the breadcrumb's framing of Alpha Centauri, whose stars differ
+    // in size, the moment the focus moved between them (D3b).
+    if (request === null && framedFocus.current === focusKey) {
+      targetDistance.current = THREE.MathUtils.clamp(targetDistance.current, minDistance, maxDistance);
+      renderDemand.request();
+      return;
+    }
+    framedFocus.current = focusKey;
     targetDistance.current = THREE.MathUtils.clamp(
       request === null ? framingDistance : kmToUnits(request.km),
       minDistance,
@@ -236,6 +249,11 @@ export function CameraRig({
     if (request !== null) {
       targetDistance.current = THREE.MathUtils.clamp(kmToUnits(request.km), minDistance, maxDistance);
       applyView(request.view);
+      // Framed for this focus now: the focus-change effect, if it runs after this frame,
+      // must not reframe by the body's size over it. Without this the breadcrumb's Alpha
+      // Centauri framing was lost one time in three -- whenever a frame ran between the new
+      // focus reaching the rig and its effect running.
+      framedFocus.current = focusKey;
     }
     if (impulse !== 1) {
       targetDistance.current = THREE.MathUtils.clamp(

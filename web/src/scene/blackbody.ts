@@ -206,3 +206,22 @@ export function starColor(colorIndex: number): Rgb {
   const [r1, g1, b1] = colorAtStep(below + 1);
   return [r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t];
 }
+
+/**
+ * How bright a blackbody's surface looks against the Sun's, per unit area: the luminance
+ * of Planck's law through the CIE observer at one temperature over the same at the Sun's
+ * 5,772 K. What sets a star's disc against the Sun's on screen -- the same radiance per
+ * square metre at the same temperature, less at a cooler one: an M dwarf at 3,000 K about
+ * a fiftieth of the Sun's, which is why Proxima's disc is a dull red where the Sun's is
+ * white.
+ */
+export function surfaceLuminanceRelativeToSun(kelvin: number): number {
+  const luminance = (t: number): number => {
+    let y = 0;
+    for (let wavelength = WAVELENGTH_MIN_NM; wavelength <= WAVELENGTH_MAX_NM; wavelength += WAVELENGTH_STEP_NM) {
+      y += planckSpectralRadiance(wavelength, t) * cieY(wavelength);
+    }
+    return y;
+  };
+  return luminance(kelvin) / luminance(5772);
+}

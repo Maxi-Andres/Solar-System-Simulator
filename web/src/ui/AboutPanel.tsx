@@ -202,7 +202,8 @@ export function AboutPanel({
           <List
             items={[
               `How bright a star is drawn is compressed, and that is this picture’s exposure. The sky spans about thirteen orders of magnitude and a screen has three, so every image of space chooses which three to show; here the brightest star in the catalogue is white, the faintest at magnitude ${stars.magnitudeLimit} is at 2% of it — five code values out of 255, which is what a limiting magnitude already means — and the response between them is linear in magnitude — the eye’s own scale, which is what the magnitude system was built from. Sirius outshines a magnitude ${stars.magnitudeLimit} star by nearly six thousand to one in the sky and by fifty to one here. Size is not a separate setting: it is where a star’s point spread falls below the darkest step a display can show. That spread is a Gaussian core 0.54 pixels wide plus a power-law tail carrying a tenth of the light — the same shape as the Sun’s glare, because every real optical system scatters a few percent of a source into a halo and a Gaussian alone cannot. Both are measured against NASA’s render: the core reproduces its median star at 2.26 pixels, and the tail was solved from its brightest, 13.5 pixels across, which a Gaussian could not have taken past 4.2. Solving the two frames against each other — the brightest stars all falling under one transform — also says that render was at a 30.6° field where this is at 27°, which is why its sky reads a little tighter than this one at the same number of stars.`,
-              'Stars sit on a sphere rather than at their real distances, so there is no parallax. The nearest star drawn would move 0.742 arcseconds from one side of Earth’s orbit to the other, which is under a hundredth of a pixel. Real distances come with the nearby-star work, not here.',
+              'A star whose parallax is too poor to place it stays on the sky at infinity, its direction all that is known, and fades out as the camera leaves for the galaxy, from where a star drawn as infinitely far would be wrong. Every other star is at its real distance. The catalogue carries each on a straight line from one position and one velocity, and it places a star at J2000 by its proper motion only: the tens of AU a nearby star moves along the line of sight between its parallax and 2000 are left out, which no map of the stars can see but the inside of a star system can. So Alpha Centauri’s stars are not read from it.',
+              'Alpha Centauri’s three stars are spheres of their measured radii, drawn in their own blackbody colours at full brightness — at this picture’s exposure every star’s surface is overexposed, even Proxima’s, a thirtieth of the Sun’s per square metre — and darker toward the edge, by the Sun’s own visible limb darkening taken as theirs. Proxima’s orbit about the pair takes 547,000 years, and its elements are uncertain by a tenth; the ellipse drawn is the measured one, through where Proxima is.',
               'A photographic Milky Way panorama was tried behind the stars and taken out again. It was correctly placed — on the galactic frame, checked against Sagittarius A*, Andromeda and both Magellanic Clouds — and still wrong: a photograph’s stars arrive already blurred by an atmosphere and a lens, so no resolution turns them back into points. It lit 31.8% of the sky where the reference lights 0.9%.',
               'The Sun’s glare has no brightness setting at all: the veil is the illuminance the disc delivers, E = L·π·sin²θ, so it is tied to whatever exposure the disc is drawn at and cannot drift from it. What still differs from NASA’s render is how fast it falls — theirs goes as θ⁻³·⁵ where the eye’s equation is between θ⁻³ and θ⁻², so their glow ends at 1.72° from Earth’s distance and this one reaches 3.6°. An optical instrument is tighter than an eye: most of the eye’s veil is scattered inside the eye itself, and a lens has no retina.',
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
@@ -286,6 +287,19 @@ export function AboutPanel({
             With the Star Map layer on, past the Solar System every star is drawn at least as a
             dot, however faint: a map, not a view, dimmed where the dots crowd. Off, the stars are
             only what an eye would see from where the camera is.
+          </Prose>
+
+          <Prose>
+            Alpha Centauri moves as measured. A and B follow the orbit of{' '}
+            <Strong>Kervella et al. 2016</Strong> (A&amp;A 594, A107), checked against the
+            positions Hipparcos measured in 1991 and the NTT in 2009, about the barycentre
+            whose position and motion <Strong>Kervella, Thévenin &amp; Lovis 2017</Strong>{' '}
+            (A&amp;A 598, L7) give; their radii are the interferometric ones of{' '}
+            <Strong>Kervella et al. 2017</Strong> (A&amp;A 597, A137). Proxima’s orbit about the
+            pair is worked out as Kervella, Thévenin &amp; Lovis worked it out, from its position
+            and its velocity relative to the barycentre — their velocity, corrected for
+            gravitational redshift and convective shift, because at 273 m/s those corrections
+            are most of the answer — and it gives back their 8,700 AU and 547,000 years.
           </Prose>
 
           <Prose>

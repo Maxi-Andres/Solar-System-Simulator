@@ -1,7 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
-import { starColor } from '../scene/blackbody.ts';
-import { componentState, matchComponent } from './alphaCentauri.ts';
+import { colorIndexToTemperature, starColor, surfaceLuminanceRelativeToSun } from '../scene/blackbody.ts';
+import { componentState, matchComponent, measuredRadiusKm } from './alphaCentauri.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
 
@@ -13,10 +13,11 @@ import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSourc
  * its light. As a body it gains what a point lacks: a marker, a name on screen, a place
  * in the breadcrumb and the info panel.
  *
- * Kind 'star', the Sun's kind. Never a sphere: none of the catalogues it comes from
- * publishes a radius, so it is a marker at any range (`radiusPublished: false`), framed by
- * a nominal radius that is the Sun's -- a number for the camera to stand off by, and said
- * to be one.
+ * Kind 'star', the Sun's kind. A sphere only where a radius has been measured -- Alpha
+ * Centauri's three so far (D3b) -- since none of the catalogues it comes from publishes
+ * one; every other star is a marker at any range (`radiusPublished: false`), framed by a
+ * nominal radius that is the Sun's -- a number for the camera to stand off by, and said to
+ * be one.
  */
 
 export function starBodyId(tier: number, index: number): BodyId {
@@ -72,8 +73,18 @@ export function colorHex(linear: readonly [number, number, number]): string {
   return `#${encode(linear[0])}${encode(linear[1])}${encode(linear[2])}`;
 }
 
-/** The body a star record becomes: a marker in the star's own colour, and its name. */
-export function starBodyDefinition(id: BodyId, name: string, bv: number): BodyDefinition {
+/**
+ * The body a star record becomes: a marker in the star's own colour, and its name -- and,
+ * for a star whose radius has been measured (Alpha Centauri's three, alphaCentauri.ts), a
+ * sphere of that radius, drawn as the Sun's is (SolarSystem.tsx, starDiscExposure).
+ */
+export function starBodyDefinition(
+  id: BodyId,
+  name: string,
+  bv: number,
+  measuredRadiusKm: number | null = null,
+): BodyDefinition {
+  const radius = measuredRadiusKm ?? STAR_FRAMING_RADIUS_KM;
   return {
     id,
     name,
@@ -84,8 +95,8 @@ export function starBodyDefinition(id: BodyId, name: string, bv: number): BodyDe
     vectorWindow: 'full',
     parent: null,
     kind: 'star',
-    radiusEquatorialKm: STAR_FRAMING_RADIUS_KM,
-    radiusPolarKm: STAR_FRAMING_RADIUS_KM,
+    radiusEquatorialKm: radius,
+    radiusPolarKm: radius,
     gmKm3S2: 0,
     gmBodyOnlyKm3S2: 0,
     rotationPeriodHours: null,
@@ -97,9 +108,27 @@ export function starBodyDefinition(id: BodyId, name: string, bv: number): BodyDe
     textures: null,
     rings: null,
     mission: null,
-    radiusPublished: false,
-    shapeDrawn: false,
+    radiusPublished: measuredRadiusKm !== null,
+    shapeDrawn: measuredRadiusKm !== null,
   };
+}
+
+/** Each star body's disc exposure against the Sun's, and its colour index, where it has a disc. */
+const discExposures = new Map<BodyId, number>();
+const discColorIndices = new Map<BodyId, number>();
+
+/** A star body's colour index, for its disc's colour: the Sun's 0.65 for any other body. */
+export function starDiscColorIndex(id: BodyId): number {
+  return discColorIndices.get(id) ?? 0.65;
+}
+
+/**
+ * How bright a star body's disc is drawn against the Sun's: its surface luminance over
+ * the Sun's, at the temperature its colour index gives (blackbody.ts) -- the same path its
+ * colour takes, so the two cannot disagree. 1 for any other body.
+ */
+export function starDiscExposure(id: BodyId): number {
+  return discExposures.get(id) ?? 1;
 }
 
 /** How many star bodies are kept once made: the stars of a short tour, with their names. */
@@ -143,13 +172,15 @@ export async function addStarBody(
     // from something better, so the interface does not call it APPROXIMATE. Alpha
     // Centauri A and B are the exception: they follow their measured orbit instead
     // (alphaCentauri.ts), which a straight line from 1991 has long since left.
-    const component = matchComponent({
-      x: record[STAR3D.x]!,
-      y: record[STAR3D.y]!,
-      z: record[STAR3D.z]!,
-    });
+    const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
+    const component = matchComponent(at);
+    const radiusKm = measuredRadiusKm(at);
+    if (radiusKm !== null) {
+      discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(record[STAR3D.bv]!)));
+      discColorIndices.set(id, record[STAR3D.bv]!);
+    }
     store.addPropagatedBody(
-      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!),
+      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm),
       null,
       component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
       { exact: true },
@@ -168,6 +199,8 @@ export async function addStarBody(
     const [gone] = added.splice(oldest, 1);
     store.removePropagatedBody(gone!);
     facts.delete(gone!);
+    discExposures.delete(gone!);
+    discColorIndices.delete(gone!);
   }
   return id;
 }
