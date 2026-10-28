@@ -54,12 +54,20 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * multiply dimmed the stars in front of the dust as hard as those behind, and seen edge-on
  * turned the plane to a black bar ("se ve full negro"); the mixed-slab escape fraction,
  * (1 - e^-tau)/tau, fixed the black but still let dust behind the centre darken it, so the
- * bulge looked to sit behind the disc from every side ("la luz del centro se pone atrás
+ * bulge looked to sit behind the disc from every side ("la luz del centro se pone atrÃ¡s
  * de todo") -- Maxi, both 2026-10-28.
  *
  * Inside a slab the light is drawn after its own dust, so it is never dimmed by the dust
  * it is mixed with: an error of half a slab's depth, a few kiloparsecs, where the slabs
  * are thinnest -- across the disc.
+ *
+ * **The slabs' edges are soft.** With hard ones the light just behind an edge took all
+ * the dust of the slab in front and the light just in front of it took none, and that
+ * step showed: a dark line across the disc where the edge -- a sphere about the camera --
+ * cut it, moving as the camera moved (Maxi, 2026-10-28: "siempre sigue a la cÃ¡mara").
+ * So a point within SLAB_BLEND of an edge goes into both slabs, its light and its tau
+ * shared between them in proportion -- the two shares adding to the whole, and e^-tau
+ * multiplying to the whole -- and the step becomes a ramp a slab wide.
  *
  * It fades in as the camera leaves the star catalogue behind, from GALAXY_FROM_LY to
  * GALAXY_FULL_LY from the Sun, and stays out of the neighbourhood of the camera, where a
@@ -81,6 +89,12 @@ export const GALAXY_POINT_PEAK = 0.04;
  */
 export const DEPTH_SLICES = 6;
 export const GALAXY_DEPTH_PC = 20_000;
+
+/**
+ * Half the width of the ramp across a slab's edge, in slabs: a point this close to an
+ * edge is shared between the slabs either side of it.
+ */
+export const SLAB_BLEND = 0.35;
 
 /** The dust: how many points, how wide each, and the optical depth each adds at its centre. */
 export const DUST_POINTS = 80_000;
@@ -158,8 +172,9 @@ uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uPeak;
 uniform float uNearFadePc;
-// This pass's slab of distance from the camera, pc: points outside it wait for theirs.
-uniform vec2 uSlice;
+// This pass's slab: nearest edge and depth of a slab, pc; its index; how many there are.
+// Points outside it wait for theirs; points near an edge go into both (see the header).
+uniform vec4 uSlab;
 
 attribute vec3 color;
 attribute float radiusPc;
@@ -170,7 +185,12 @@ varying float vPeak;
 void main() {
   vec3 rel = (position - uCameraHigh) - uCameraLow;
   float distancePc = length(rel);
-  if (distancePc < uSlice.x || distancePc >= uSlice.y) {
+  float u = (distancePc - uSlab.x) / uSlab.y;
+  float halfBlend = ${SLAB_BLEND.toFixed(3)};
+  float below = uSlab.z < 0.5 ? 1.0 : clamp((u - uSlab.z + halfBlend) / (2.0 * halfBlend), 0.0, 1.0);
+  float above = uSlab.z > uSlab.w - 1.5 ? 0.0 : clamp((u - uSlab.z - 1.0 + halfBlend) / (2.0 * halfBlend), 0.0, 1.0);
+  float share = below - above;
+  if (share <= 0.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     vPeak = 0.0;
@@ -183,7 +203,7 @@ void main() {
   float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, ${MAX_SPRITE_PX.toFixed(1)});
   // Below the floor the light goes, not the size: constant flux per point.
   float coverage = min(1.0, (diameterPx * diameterPx) / (drawnPx * drawnPx));
-  vPeak = uPeak * coverage * smoothstep(0.5 * uNearFadePc, uNearFadePc, distancePc);
+  vPeak = uPeak * share * coverage * smoothstep(0.5 * uNearFadePc, uNearFadePc, distancePc);
   gl_PointSize = drawnPx;
   vColor = color;
 }
@@ -379,7 +399,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       uUnitsPerPc: { value: PARSEC_KM / KM_PER_UNIT },
       uPixelsPerRadian: { value: 1 },
       uNearFadePc: { value: 0 },
-      uSlice: { value: new THREE.Vector2(0, 1e30) },
+      uSlab: { value: new THREE.Vector4(0, 1e30, 0, 1) },
     };
     const common = { depthWrite: false, transparent: true, toneMapped: false } as const;
     // Light adds.
@@ -502,12 +522,12 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     const toCentre = Math.hypot(centre[0]! - cameraPc.x, centre[1]! - cameraPc.y, centre[2]! - cameraPc.z);
     const nearest = Math.max(0, toCentre - GALAXY_DEPTH_PC);
     const step = (toCentre + GALAXY_DEPTH_PC - nearest) / DEPTH_SLICES;
-    const slice = uniforms['uSlice']!.value as THREE.Vector2;
+    const slab = uniforms['uSlab']!.value as THREE.Vector4;
     // Each pass draws over the last: the renderer must not clear between them.
     const autoClear = gl.autoClear;
     gl.autoClear = false;
     for (let index = DEPTH_SLICES - 1; index >= 0; index -= 1) {
-      slice.set(index === 0 ? 0 : nearest + index * step, index === DEPTH_SLICES - 1 ? 1e30 : nearest + (index + 1) * step);
+      slab.set(nearest, step, index, DEPTH_SLICES);
       gl.render(glowScene, camera);
     }
     gl.autoClear = autoClear;
