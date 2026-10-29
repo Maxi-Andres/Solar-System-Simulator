@@ -622,7 +622,10 @@ const BodyLabel = memo(function BodyLabel({
       onClick={() => onFocus(body.id)}
       style={focused ? FOCUSED_LABEL_STYLE : LABEL_STYLE}
     >
-      {body.name}
+      <span data-label-name="">{body.name}</span>
+      {/* Shown instead of the name when the label stands for more than its body: a whole
+          star system seen from afar, or Alpha Centauri's pair (LabelProjector). */}
+      <span data-label-alt="" style={{ display: 'none' }} />
     </button>
   );
 });

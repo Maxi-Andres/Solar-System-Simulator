@@ -8,6 +8,8 @@ import type { SimClock } from '../core/time.ts';
 import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
+import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
+import { isCatalogueStar } from '../core/starBodies.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
 
@@ -154,6 +156,18 @@ export function declutterLabels(
  * Label precedence: the Sun, planets and dwarf planets first, then moons and asteroids,
  * then spacecraft and Earth satellites. Depth only decides between bodies of the same rank.
  */
+/** Alpha Centauri A and B are named as a pair when their markers are this close, pixels. */
+const PAIR_MERGE_PX = 14;
+
+/** A system's names fold into one when its extent is under this many pixels. */
+const SYSTEM_FOLD_PX = 24;
+/** Or, with the focus elsewhere, when the camera is this many extents from it. */
+const SYSTEM_OUTSIDE_EXTENTS = 3;
+/** The Solar System's extent for that, km: 50 AU, the Kuiper belt's edge. */
+const SOLAR_SYSTEM_EXTENT_KM = 50 * 149_597_870.7;
+/** Alpha Centauri's: Proxima's distance from the pair, 13,000 AU. */
+const ALPHA_CEN_EXTENT_KM = 13_000 * 149_597_870.7;
+
 export function labelRank(kind: string, parent: BodyId | null): number {
   if (kind === 'spacecraft' || kind === 'satellite') {
     return 2;
@@ -184,6 +198,25 @@ export function LabelProjector({
     () => (void version, bodiesToResolve(store, visibleKinds, focus)),
     [store, visibleKinds, focus, version],
   );
+  // The star systems the names fold into from afar: see foldSystems below.
+  const systems = useMemo(() => {
+    void version;
+    const member = (id: BodyId | null) => (id === null ? null : alphaCenMember(id));
+    const a = store.bodies.find((body) => member(body.id) === 'A');
+    const b = store.bodies.find((body) => member(body.id) === 'B');
+    const alphaCen = new Set<BodyId>();
+    const solar = new Set<BodyId>();
+    for (const body of store.bodies) {
+      if (member(body.id) !== null || member(body.parent) !== null) {
+        alphaCen.add(body.id);
+      } else if (!isCatalogueStar(body)) {
+        solar.add(body.id);
+      }
+    }
+    return { a: a?.id ?? null, b: b?.id ?? null, bName: b?.name ?? '', alphaCen, solar };
+  }, [store, version]);
+  // The labels showing another text than their own name this frame, and which.
+  const altShown = useMemo(() => new Map<BodyId, string>(), []);
 
   useFrame(() => {
     const map = elements.current;
@@ -229,6 +262,7 @@ export function LabelProjector({
         : rebaseVisibleFrame(store, focus, jd, wanted, camera.position, size.height, fov);
 
     const projected: LabelCandidate[] = [];
+    const unmarked = new Set<BodyId>();
 
     for (const body of store.bodies) {
       // A kind that is switched off has nothing on screen to be labelled.
@@ -242,9 +276,16 @@ export function LabelProjector({
       }
 
       // Its marker is hidden behind another's: a name with nothing beside it would be
-      // naming nothing. See markerDeclutter.ts.
-      if (hiddenMarkers.has(body.id)) {
+      // naming nothing. See markerDeclutter.ts. Except the bodies a system's name goes on
+      // (the Sun, Alpha Centauri A) and A's partner: they are projected all the same, for
+      // the folding below to place a system's name and see the pair meet, and dropped
+      // after it unless they carry one.
+      const markerHidden = hiddenMarkers.has(body.id);
+      if (markerHidden && body.id !== 'sun' && body.id !== systems.a && body.id !== systems.b) {
         continue;
+      }
+      if (markerHidden) {
+        unmarked.add(body.id);
       }
 
       // The same rule the marker follows, so a name never floats where no marker is.
@@ -289,6 +330,75 @@ export function LabelProjector({
       });
     }
 
+    // Systems seen from afar, named as systems. From light years out the Solar System is a
+    // point, and one of its bodies' names -- Haumea, whichever won the spot -- stood for it;
+    // so did Rigil Kentaurus for Alpha Centauri. Once a system's extent is a few pixels its
+    // names fold into one, on the body it centres on: "Solar System" on the Sun, "Alpha
+    // Centauri" on its A. Nearer, Alpha Centauri opens into Proxima and the pair, and the
+    // pair -- A and B, 11 to 36 AU apart -- stays "Rigil Kentaurus + Toliman" until its two
+    // markers part. Nearer still, every star is its own name.
+    const alt = new Map<BodyId, string>();
+    const fold = (members: ReadonlySet<BodyId>, keep: BodyId, extentKm: number, name: string): boolean => {
+      const kept = projected.find((entry) => entry.id === keep);
+      if (kept === undefined) {
+        return false;
+      }
+      // Folded when it is a few pixels across, from anywhere; and when the focus is in
+      // another system and the camera stands outside this one, since then it is a place
+      // being looked across at, not one being visited. From the Sun, Proxima is two
+      // degrees from Rigil Kentaurus: far apart on screen, and still one place, there.
+      const extentPx = angularRadiusPixels(extentKm, kept.depth * 1000, size.height, fov);
+      const visiting = members.has(focus);
+      const outside = kept.depth * 1000 > SYSTEM_OUTSIDE_EXTENTS * extentKm;
+      if (extentPx >= SYSTEM_FOLD_PX && (visiting || !outside)) {
+        return false;
+      }
+      for (let i = projected.length - 1; i >= 0; i -= 1) {
+        if (members.has(projected[i]!.id) && projected[i]!.id !== keep) {
+          projected.splice(i, 1);
+        }
+      }
+      alt.set(keep, name);
+      return true;
+    };
+    fold(systems.solar, 'sun', SOLAR_SYSTEM_EXTENT_KM, 'Solar System');
+    if (systems.a !== null && !fold(systems.alphaCen, systems.a, ALPHA_CEN_EXTENT_KM, ALPHA_CEN_SYSTEM) && systems.b !== null) {
+      const a = projected.find((entry) => entry.id === systems.a);
+      const b = projected.find((entry) => entry.id === systems.b);
+      if (a !== undefined && b !== undefined && Math.hypot(a.x - b.x, a.y - b.y) < PAIR_MERGE_PX) {
+        projected.splice(projected.indexOf(b), 1);
+        alt.set(a.id, `${store.body(a.id).name} + ${systems.bName}`);
+      }
+    }
+    // The representatives whose own marker is hidden, and which carry no system's name.
+    for (let i = projected.length - 1; i >= 0; i -= 1) {
+      if (unmarked.has(projected[i]!.id) && !alt.has(projected[i]!.id)) {
+        projected.splice(i, 1);
+      }
+    }
+
+    // Written into the labels, and their widths taken for the declutter: estimated the
+    // frame the text changes, measured from the next.
+    for (const [id, element] of map) {
+      const text = alt.get(id) ?? null;
+      if ((altShown.get(id) ?? null) === text) {
+        continue;
+      }
+      setAltText(element, text);
+      widths.delete(id);
+      if (text === null) {
+        altShown.delete(id);
+      } else {
+        altShown.set(id, text);
+      }
+    }
+    for (let i = 0; i < projected.length; i += 1) {
+      const text = alt.get(projected[i]!.id);
+      if (text !== undefined && !widths.has(projected[i]!.id)) {
+        projected[i] = { ...projected[i]!, width: text.length * LABEL_CHAR_PX };
+      }
+    }
+
     // Declutter: nearest body wins a contested spot. Sorting by depth means the
     // thing you are looking at keeps its name when a distant body drifts behind it.
     //
@@ -327,6 +437,24 @@ export function LabelProjector({
   });
 
   return null;
+}
+
+/**
+ * Shows a label's alternative text in place of its name, or its name again (null). The
+ * label holds both (App.tsx BodyLabel), so React's own text is never written over.
+ */
+function setAltText(element: HTMLElement | null, text: string | null): void {
+  if (element === null) {
+    return;
+  }
+  const name = element.querySelector<HTMLElement>('[data-label-name]');
+  const alt = element.querySelector<HTMLElement>('[data-label-alt]');
+  if (name === null || alt === null) {
+    return;
+  }
+  alt.textContent = text ?? '';
+  alt.style.display = text === null ? 'none' : 'inline';
+  name.style.display = text === null ? 'inline' : 'none';
 }
 
 /**
