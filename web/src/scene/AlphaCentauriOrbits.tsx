@@ -33,6 +33,10 @@ import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
 
 const SEGMENTS = 512;
 
+/** Camera distances, in the orbit's own radii, past which it fades out and is gone. */
+const FAR_FULL_RADII = 6;
+const FAR_GONE_RADII = 12;
+
 /** On-screen radius, pixels, below which an orbit is gone and from which it is whole. */
 const HIDDEN_PX = 6;
 const SHOWN_PX = 18;
@@ -150,8 +154,13 @@ export function AlphaCentauriOrbits({ store, clock, focus, stars3d, visible }: A
     const show = (line: THREE.Line | null, radiusKm: number): void => {
       if (line === null) return;
       const px = angularRadiusPixels(radiusKm, fromCameraKm, size.height, fov);
-      // Gone below a few pixels, and once the camera is well inside it.
-      const visibility = ramp(px, HIDDEN_PX, SHOWN_PX) * ramp(fromCameraKm / radiusKm, 0.02, 0.06);
+      // Gone below a few pixels, once the camera is well inside it, and from far away:
+      // from the Solar System, Proxima's orbit is still five degrees across in Centaurus,
+      // a yellow ellipse hanging beside the planets that says nothing there. It shows as
+      // the camera comes within a dozen of the orbit's own radii of it.
+      const ratio = fromCameraKm / radiusKm;
+      const visibility =
+        ramp(px, HIDDEN_PX, SHOWN_PX) * ramp(ratio, 0.02, 0.06) * ramp(-ratio, -FAR_GONE_RADII, -FAR_FULL_RADII);
       line.visible = visibility > 0;
       (line.material as THREE.LineBasicMaterial).opacity = ORBIT_OPACITY * visibility;
     };

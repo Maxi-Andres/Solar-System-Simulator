@@ -40,6 +40,13 @@ const RING_COLOR = '#8a96a3';
 const CENSUS_DASHES = 180;
 const CENSUS_DASH_FILL = 0.55;
 
+/**
+ * The camera's distance from its focus, light years, below which the rulers are gone and
+ * from which they are whole: zoomed in on a body, they are not what is being looked at.
+ */
+const RULERS_GONE_LY = 0.02;
+const RULERS_FULL_LY = 0.1;
+
 /** Gap between the ring and its name, pixels. */
 const LABEL_GAP_PX = 6;
 
@@ -198,6 +205,12 @@ export function DistanceRings({
     }
     scratchSide.normalize();
 
+    // The rulers measure the neighbourhood, and go when the camera is close in on
+    // something: at Alpha Centauri, 4.4 ly out, the 5-ly ring passes within half a light
+    // year and crossed every view of the system as two long arcs, saying nothing there.
+    const zoomLy = (camera.position.length() * KM_PER_UNIT) / LIGHT_YEAR_KM;
+    const rulerZoom = Math.min(1, Math.max(0, (zoomLy - RULERS_GONE_LY) / (RULERS_FULL_LY - RULERS_GONE_LY)));
+
     rings.forEach((ring, index) => {
       const element = elements[index] ?? null;
       const shown = ring.census ? censusVisible : visible;
@@ -205,7 +218,7 @@ export function DistanceRings({
         ? 0
         : ring.census
           ? censusEdgeVisibility(ring.radiusKm, cameraFromSunKm, size.height, fov)
-          : ringVisibility(ring.radiusKm, cameraFromSunKm, size.height, fov);
+          : ringVisibility(ring.radiusKm, cameraFromSunKm, size.height, fov) * rulerZoom;
       ring.line.visible = visibility > 0;
       ring.material.opacity = RING_MAX_OPACITY * visibility;
       if (visibility === 0) {

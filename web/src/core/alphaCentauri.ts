@@ -424,3 +424,12 @@ export function abOrbitNormal(): Vec3 {
   const length = Math.hypot(n.x, n.y, n.z);
   return { x: n.x / length, y: n.y / length, z: n.z / length };
 }
+
+/** A catalogue record's measured mass in solar masses if it is one of the three, else null. */
+export function measuredMassSun(positionPcAtJ2000: Vec3): number | null {
+  const component = matchComponent(positionPcAtJ2000);
+  if (component !== null) {
+    return component === 'A' ? MASS_A_SUN : MASS_B_SUN;
+  }
+  return isProximaRecord(positionPcAtJ2000) ? MASS_PROXIMA_SUN : null;
+}

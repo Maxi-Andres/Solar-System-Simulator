@@ -13,7 +13,13 @@ import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
-import { ALPHA_CEN_MEMBERS, alphaCenEntries, alphaCenView, type AlphaCenKey } from './core/alphaCenBodies.ts';
+import {
+  ALPHA_CEN_MEMBERS,
+  alphaCenEntries,
+  alphaCenView,
+  ensureAlphaCenBodies,
+  type AlphaCenKey,
+} from './core/alphaCenBodies.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator } from './ui/BodyPicker.tsx';
@@ -116,7 +122,7 @@ export function App() {
             if (index === null || entries === null) {
               return;
             }
-            const id = await addStarBody(store, stars3d, index, entries[key], useViewStore.getState().focus);
+            const id = await addStarBody(store, stars3d, index, entries[key], useViewStore.getState().focus, true);
             // The system, not one star: framed from out of the pair's orbital plane.
             if (framingKm !== undefined) {
               requestFraming(framingKm, alphaCenView());
@@ -130,6 +136,31 @@ export function App() {
       },
     };
   }, [stars3d, starNames, store, requestFraming, setFocus]);
+
+  // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
+  // anywhere, and a click on a name goes there, as for the planets (alphaCenBodies.ts).
+  useEffect(() => {
+    if (store === null || stars3d === null || starNames === null) {
+      return;
+    }
+    let cancelled = false;
+    starNames
+      .request()
+      .then(async () => {
+        const index = starNames.value;
+        if (cancelled || index === null) {
+          return;
+        }
+        await ensureAlphaCenBodies(store, stars3d, index, useViewStore.getState().focus);
+        renderDemand.request();
+      })
+      .catch((error: unknown) => {
+        console.error('Could not place Alpha Centauri', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, stars3d, starNames]);
   const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
   const scaleBar = useRef<ScaleBarElements | null>(null);
 

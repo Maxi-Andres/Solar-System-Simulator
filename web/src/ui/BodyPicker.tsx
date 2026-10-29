@@ -93,10 +93,11 @@ export function BodyPicker({
 
   const focusBody = store.body(focus);
   const parent = focusBody.parent === null ? null : store.body(focusBody.parent);
-  // A star other than the Sun is in the neighbourhood, not in the Solar System.
-  const inSolarSystem = !isCatalogueStar(focusBody);
-  // Alpha Centauri's own level, when one of its stars is in focus.
-  const inAlphaCen = alphaCenMember(focus) !== null;
+  // Alpha Centauri's own level, when one of its stars or their planets is in focus.
+  const inAlphaCen = alphaCenMember(focus) !== null || (parent !== null && alphaCenMember(parent.id) !== null);
+  // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
+  // anything of Alpha Centauri's.
+  const inSolarSystem = !isCatalogueStar(focusBody) && !inAlphaCen;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -111,19 +112,24 @@ export function BodyPicker({
     renderDemand.request();
   };
 
+  // The star systems one can go to, under Solar Neighbourhood's own caret.
+  const [systemsOpen, setSystemsOpen] = useState(false);
+
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open) {
+    if (!open && !systemsOpen) {
       return;
     }
     const onPointerDown = (event: PointerEvent): void => {
       if (root.current !== null && !root.current.contains(event.target as Node)) {
         setOpen(false);
+        setSystemsOpen(false);
       }
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setOpen(false);
+        setSystemsOpen(false);
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -132,7 +138,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, systemsOpen]);
 
   const choose = (id: BodyId): void => {
     onFocus(id);
@@ -164,6 +170,20 @@ export function BodyPicker({
         <Crumb onClick={toNeighbourhood} outer>
           Solar Neighbourhood
         </Crumb>
+        <button
+          type="button"
+          aria-label="Star systems"
+          aria-haspopup="listbox"
+          aria-expanded={systemsOpen}
+          title="Go to a star system"
+          onClick={() => {
+            setSystemsOpen((value) => !value);
+            setOpen(false);
+          }}
+          style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+        >
+          <Caret open={systemsOpen} />
+        </button>
         <Separator />
         {inSolarSystem && (
           <>
@@ -187,7 +207,10 @@ export function BodyPicker({
           type="button"
           aria-haspopup="listbox"
           aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => {
+            setOpen((value) => !value);
+            setSystemsOpen(false);
+          }}
           style={{
             ...crumbStyle,
             color: '#fff',
@@ -200,6 +223,25 @@ export function BodyPicker({
           <Caret open={open} />
         </button>
       </nav>
+
+      <Presence show={systemsOpen}>
+        <SystemList
+          inSolarSystem={inSolarSystem}
+          inAlphaCen={inAlphaCen}
+          onSolarSystem={() => {
+            onFocus('sun');
+            setSystemsOpen(false);
+          }}
+          onAlphaCen={
+            alphaCen === null
+              ? null
+              : () => {
+                  alphaCen.go('A', ALPHA_CEN_FRAMING_KM);
+                  setSystemsOpen(false);
+                }
+          }
+        />
+      </Presence>
 
       <Presence show={open}>
         <BodyList
@@ -558,14 +600,27 @@ function BodyList({
       {alphaCen !== null && (
         <>
           <div style={SECTION_HEADING}>{ALPHA_CEN_SYSTEM}</div>
-          {ALPHA_CEN_MEMBERS.map(({ key }) => (
-            <MemberRow
-              key={key}
-              name={alphaCen.names[key]}
-              active={focusMember === key}
-              onChoose={() => onChooseMember(key)}
-            />
-          ))}
+          {ALPHA_CEN_MEMBERS.map(({ key }) => {
+            // The star's planets, once it is a body with planets: Proxima's (D3c).
+            const star = store.bodies.find((body) => alphaCenMember(body.id) === key);
+            const planets = star === undefined ? [] : store.bodies.filter((body) => body.parent === star.id);
+            return (
+              <div key={key}>
+                <MemberRow name={alphaCen.names[key]} active={focusMember === key} onChoose={() => onChooseMember(key)} />
+                {planets.map((planet) => (
+                  <Row
+                    key={planet.id}
+                    body={planet}
+                    active={planet.id === focus}
+                    inSystem={false}
+                    indent
+                    onChoose={onChoose}
+                    trailing={null}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </>
       )}
       {stars.length > 0 && (
@@ -808,6 +863,44 @@ function SmallMoons({
           />
         ))}
     </>
+  );
+}
+
+/**
+ * The star systems under Solar Neighbourhood: where the camera can go as a whole. The
+ * Solar System, and Alpha Centauri (D3) -- framed as a system, from out of the pair's
+ * orbital plane.
+ */
+function SystemList({
+  inSolarSystem,
+  inAlphaCen,
+  onSolarSystem,
+  onAlphaCen,
+}: {
+  inSolarSystem: boolean;
+  inAlphaCen: boolean;
+  onSolarSystem: () => void;
+  onAlphaCen: (() => void) | null;
+}) {
+  const closing = useClosing();
+  return (
+    <div
+      role="listbox"
+      aria-label="Star systems"
+      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
+      style={{
+        marginTop: '0.55rem',
+        width: '13.5rem',
+        background: 'rgba(14,14,17,0.97)',
+        border: '1px solid #262626',
+        borderRadius: '0.4rem',
+        padding: '0.35rem',
+      }}
+    >
+      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Star systems</div>
+      <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
+      {onAlphaCen !== null && <MemberRow name={ALPHA_CEN_SYSTEM} active={inAlphaCen} onChoose={onAlphaCen} />}
+    </div>
   );
 }
 

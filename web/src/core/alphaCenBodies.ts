@@ -1,7 +1,16 @@
 import type { BodyId, Stars3dNames } from '@sss/tools/types';
 
 import { abOrbitNormal } from './alphaCentauri.ts';
-import { starBodyFacts } from './starBodies.ts';
+import type { EphemerisStore } from './ephemerisStore.ts';
+import { addStarBody, starBodyFacts } from './starBodies.ts';
+import { stateToOsculatingElements } from './kepler.ts';
+import {
+  PROXIMA_PLANETS,
+  planetBodyDefinition,
+  planetStateAboutStar,
+  proximaPlanetId,
+} from './proximaPlanets.ts';
+import { STAR3D, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
 
 /**
  * Alpha Centauri as a place to go (D3b): its three stars, found in the star names and
@@ -93,4 +102,64 @@ export function alphaCenMember(id: BodyId): AlphaCenKey | null {
     }
   }
   return null;
+}
+
+/**
+ * Makes Alpha Centauri's three stars bodies, pinned, and returns their ids: done once at
+ * start (App.tsx), so they are named on the sky from anywhere, as the planets are, and can
+ * be gone to by a click on the name as well as from the breadcrumb. Each is three small
+ * reads from its tier file; the tiers themselves need not be in.
+ */
+export async function ensureAlphaCenBodies(
+  store: EphemerisStore,
+  stars3d: Stars3dSource,
+  names: StarNameIndex,
+  keep: BodyId,
+): Promise<Record<AlphaCenKey, BodyId> | null> {
+  const entries = alphaCenEntries(names.names);
+  if (entries === null) {
+    return null;
+  }
+  const ids: Partial<Record<AlphaCenKey, BodyId>> = {};
+  for (const member of ALPHA_CEN_MEMBERS) {
+    ids[member.key] = await addStarBody(store, stars3d, names, entries[member.key], keep, true);
+  }
+  addProximaPlanets(store, ids.Proxima!);
+  return ids as Record<AlphaCenKey, BodyId>;
+}
+
+/**
+ * Proxima's planets as bodies about it (proximaPlanets.ts): their states about Proxima, so
+ * the frame tree carries them with it, and their orbits drawn about it with its measured
+ * mass. The line of sight they are drawn edge-on to is fixed at J2000 -- Proxima's
+ * direction moves 3.9 arcseconds a year, nothing to an orbit's tilt.
+ */
+function addProximaPlanets(store: EphemerisStore, proxima: BodyId): void {
+  const record = starBodyFacts(proxima)?.record;
+  if (record === undefined) {
+    return;
+  }
+  const x = record[STAR3D.x]!;
+  const y = record[STAR3D.y]!;
+  const z = record[STAR3D.z]!;
+  const length = Math.hypot(x, y, z);
+  const toward = { x: x / length, y: y / length, z: z / length };
+  const gmStar = store.body(proxima).gmBodyOnlyKm3S2;
+  store.addPropagatedBodies(
+    PROXIMA_PLANETS.map((planet) => ({
+      body: planetBodyDefinition(planet, proxima),
+      // Elements too, which is what the orbit line is first drawn from; it is redrawn
+      // from the state as the planet moves (SolarSystem.tsx).
+      elements: stateToOsculatingElements(
+        planetStateAboutStar(planet, planet.epochJd, toward),
+        gmStar + planet.minimumMassEarth * 398_600.4,
+        planet.epochJd,
+        proximaPlanetId(planet.key),
+        proxima,
+      ),
+      state: (jd: number) => planetStateAboutStar(planet, jd, toward),
+      // As published, not a fallback from something better: the conventions are stated.
+      options: { aboutParent: true, exact: true },
+    })),
+  );
 }

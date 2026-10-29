@@ -1,7 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { colorIndexToTemperature, starColor, surfaceLuminanceRelativeToSun } from '../scene/blackbody.ts';
-import { componentState, matchComponent, measuredRadiusKm } from './alphaCentauri.ts';
+import { componentState, matchComponent, measuredMassSun, measuredRadiusKm } from './alphaCentauri.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
 
@@ -83,7 +83,10 @@ export function starBodyDefinition(
   name: string,
   bv: number,
   measuredRadiusKm: number | null = null,
+  measuredMassSun: number | null = null,
 ): BodyDefinition {
+  // A measured mass is what a planet's orbit about the star is drawn with (proximaPlanets.ts).
+  const gm = measuredMassSun === null ? 0 : measuredMassSun * 1.3271244e11;
   const radius = measuredRadiusKm ?? STAR_FRAMING_RADIUS_KM;
   return {
     id,
@@ -97,8 +100,8 @@ export function starBodyDefinition(
     kind: 'star',
     radiusEquatorialKm: radius,
     radiusPolarKm: radius,
-    gmKm3S2: 0,
-    gmBodyOnlyKm3S2: 0,
+    gmKm3S2: gm,
+    gmBodyOnlyKm3S2: gm,
     rotationPeriodHours: null,
     axialTiltDeg: null,
     rotation: null,
@@ -138,6 +141,12 @@ export const STAR_BODIES_KEPT = 12;
 const added: BodyId[] = [];
 
 /**
+ * Star bodies that stay whatever else is gone to: Alpha Centauri's three, made bodies at
+ * start so they are named on the sky and can be gone to from it (alphaCenBodies.ts).
+ */
+const pinned = new Set<BodyId>();
+
+/**
  * Makes entry `k` of the star names a body in `store` and returns its id, reading its
  * record from its tier -- or on its own, if the tier is not in yet. The oldest go once
  * there are more than STAR_BODIES_KEPT, unless it is `keep`, the body the camera is on.
@@ -148,6 +157,7 @@ export async function addStarBody(
   names: StarNameIndex,
   k: number,
   keep: BodyId,
+  pin = false,
 ): Promise<BodyId> {
   const { names: columns } = names;
   const tier = columns.tier[k]!;
@@ -180,7 +190,7 @@ export async function addStarBody(
       discColorIndices.set(id, record[STAR3D.bv]!);
     }
     store.addPropagatedBody(
-      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm),
+      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm, measuredMassSun(at)),
       null,
       component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
       { exact: true },
@@ -191,8 +201,13 @@ export async function addStarBody(
     added.splice(at, 1);
   }
   added.push(id);
-  while (added.length > STAR_BODIES_KEPT) {
-    const oldest = added.findIndex((candidate) => candidate !== keep && candidate !== id);
+  if (pin) {
+    pinned.add(id);
+  }
+  while (added.filter((candidate) => !pinned.has(candidate)).length > STAR_BODIES_KEPT) {
+    const oldest = added.findIndex(
+      (candidate) => candidate !== keep && candidate !== id && !pinned.has(candidate),
+    );
     if (oldest < 0) {
       break;
     }
