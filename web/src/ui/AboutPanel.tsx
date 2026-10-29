@@ -260,7 +260,17 @@ export function AboutPanel({
 
           <Prose>
             Stars from <Strong>ESA Hipparcos</Strong> (1997) and <Strong>Tycho-2</Strong> (2000),
-            read through the <Strong>VizieR</Strong> service at CDS Strasbourg:{' '}
+            read through{' '}
+            {stars.via.includes('gea.esac.esa.int') ? (
+              <>
+                the <Strong>Gaia archive</Strong> at ESA, its mirror of both, VizieR at CDS
+                Strasbourg not answering when the sky was built:
+              </>
+            ) : (
+              <>
+                the <Strong>VizieR</Strong> service at CDS Strasbourg:
+              </>
+            )}{' '}
             {stars.count.toLocaleString('en-US')} stars complete to magnitude{' '}
             {stars.magnitudeLimit}, positions at J2000 and carried to the date on screen by their
             own proper motions. Neither catalogue is a sky on its own — Tycho-2 is missing the

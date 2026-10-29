@@ -105,8 +105,11 @@ describeWithData('what is in the file', () => {
     // stars, so Sirius, Vega and Betelgeuse exist only in the Hipparcos half.
     expect(sky.sources).toHaveLength(2);
     const [hipparcos, tycho] = sky.sources;
-    expect(hipparcos!.table).toBe('I/239/hip_main');
-    expect(tycho!.table).toBe('I/259/tyc2');
+    // Read from VizieR, or -- when VizieR is down -- from the Gaia archive's copies of the
+    // same two catalogues, column for column (tools config.ts). CI's fetch of 2026-10-28
+    // took the Gaia archive's, and a test that knew only VizieR's names failed on it.
+    expect(['I/239/hip_main', 'public.hipparcos']).toContain(hipparcos!.table);
+    expect(['I/259/tyc2', 'public.tycho2']).toContain(tycho!.table);
     expect(hipparcos!.stars).toBeGreaterThan(tycho!.stars);
     expect(hipparcos!.stars + tycho!.stars).toBe(sky.count);
   });
