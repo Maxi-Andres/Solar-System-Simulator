@@ -47,8 +47,9 @@
  *
  * R0 is Reid's 8.15 kpc, because the arms were fitted with it: the masers' parallaxes are
  * distances from the Sun, and changing R0 under the fitted spirals would move the arms
- * off the stars that define them. GRAVITY's 8.275 kpc (2021) puts the centre 125 pc
- * farther; the black hole at it is D5's to place.
+ * off the stars that define them. GRAVITY's 8,275.9 pc (2024) puts the centre 126 pc
+ * farther -- within Reid's own +-0.15 kpc -- and Sgr A* is placed there, where it is
+ * measured (blackHoles.ts): the model's centre is drawn 1.5% short of the black hole.
  *
  * ## Frame and units
  *

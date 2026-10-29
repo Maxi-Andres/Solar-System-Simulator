@@ -115,7 +115,7 @@ function skyBasis(raDeg: number, decDeg: number): { away: Vec3; east: Vec3; nort
 }
 
 /** An astrometric entry -- position, parallax, proper motion, radial velocity -- as a state. */
-interface Astrometry {
+export interface Astrometry {
   readonly raDeg: number;
   readonly decDeg: number;
   readonly parallaxMas: number;
@@ -124,8 +124,11 @@ interface Astrometry {
   readonly radialVelocityKmS: number;
 }
 
-/** About the Sun, scene frame, km and km/s, at the entry's own epoch. */
-function astrometricState(entry: Astrometry): StateVector {
+/**
+ * About the Sun, scene frame, km and km/s, at the entry's own epoch. Shared with the black
+ * holes' systems (blackHoles.ts).
+ */
+export function astrometricState(entry: Astrometry): StateVector {
   const axes = skyBasis(entry.raDeg, entry.decDeg);
   const distance = (1000 / entry.parallaxMas) * PARSEC_KM;
   const east = (AU_PER_YEAR_KM_S * entry.pmRaMasPerYear) / entry.parallaxMas;

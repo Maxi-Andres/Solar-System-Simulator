@@ -27,6 +27,7 @@ import {
   systemView,
 } from './core/planetarySystems.ts';
 import { addStarBody } from './core/starBodies.ts';
+import { ensureBlackHoles } from './core/blackHoles.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -37,6 +38,7 @@ import {
   ringLabel,
 } from './scene/distanceRings.ts';
 import { GALAXY_LABELS } from './scene/MilkyWay.tsx';
+import { HORIZON_SCALE_RINGS } from './scene/HorizonScale.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
@@ -61,7 +63,8 @@ import { Toolbar } from './ui/Toolbar.tsx';
 
 /** Which catalog `kind` values each layer switch controls. */
 const LAYER_KINDS: Record<string, readonly string[]> = {
-  planets: ['planet', 'star'],
+  // The black holes are always drawn, as another star is; their names go with the stars'.
+  planets: ['planet', 'star', 'black-hole'],
   dwarfPlanets: ['dwarf-planet'],
   asteroids: ['asteroid'],
   // The comet dots (see CometField), and a comet made a body from search (cometBodies.ts).
@@ -178,6 +181,15 @@ export function App() {
     };
   }, [stars3d, starNames, store, requestFraming, setFocus]);
 
+  // The black holes, and the stars about them, are bodies from the start: nothing to fetch,
+  // every number is in blackHoles.ts.
+  useEffect(() => {
+    if (store !== null) {
+      ensureBlackHoles(store);
+      renderDemand.request();
+    }
+  }, [store]);
+
   // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
   // anywhere, and a click on a name goes there, as for the planets (alphaCenBodies.ts).
   // So are the planetary systems' stars, with their planets (planetarySystems.ts).
@@ -205,6 +217,7 @@ export function App() {
     };
   }, [store, stars3d, starNames]);
   const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
+  const horizonScaleLabels = useRef<(HTMLElement | null)[]>([]);
   const scaleBar = useRef<ScaleBarElements | null>(null);
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
@@ -375,6 +388,7 @@ export function App() {
         ringLabels={ringLabels}
         showMilkyWay={layers.milkyWay}
         galaxyLabels={galaxyLabels}
+        horizonScaleLabels={horizonScaleLabels}
         scaleBar={scaleBar}
       />
 
@@ -382,6 +396,7 @@ export function App() {
         <RingLabels elements={ringLabels} />
       )}
       {layers.milkyWay && layers.labels && uiVisible && <GalaxyLabels elements={galaxyLabels} />}
+      {layers.labels && uiVisible && <HorizonScaleLabels elements={horizonScaleLabels} />}
 
       <LabelLayer
         store={store}
@@ -639,6 +654,29 @@ function GalaxyLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]
           style={GALAXY_LABEL_STYLE}
         >
           {name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The names of the orbits laid over Sgr A* for scale (HorizonScale): in the rulers' quiet
+ * style, since they are rulers.
+ */
+function HorizonScaleLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]> }) {
+  return (
+    <div style={LABEL_LAYER_STYLE}>
+      {HORIZON_SCALE_RINGS.map((ring, index) => (
+        <span
+          key={ring.label}
+          className="tracks-scene"
+          ref={(element) => {
+            elements.current[index] = element;
+          }}
+          style={RING_LABEL_STYLE}
+        >
+          {ring.label}
         </span>
       ))}
     </div>

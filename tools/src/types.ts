@@ -8,8 +8,21 @@
 /** Stable slug for a body, used in file names and as a map key everywhere. */
 export type BodyId = string;
 
-/** 'satellite' is an Earth satellite from the satellites layer, placed by SGP4; never in bodies.json. */
-export type BodyKind = 'star' | 'planet' | 'dwarf-planet' | 'asteroid' | 'comet' | 'moon' | 'spacecraft' | 'satellite';
+/**
+ * 'satellite' is an Earth satellite from the satellites layer, placed by SGP4; never in bodies.json.
+ * 'black-hole' likewise: Sgr A*, Gaia BH1 and Gaia BH3, placed from their papers in the app
+ * (web/src/core/blackHoles.ts).
+ */
+export type BodyKind =
+  | 'star'
+  | 'planet'
+  | 'dwarf-planet'
+  | 'asteroid'
+  | 'comet'
+  | 'moon'
+  | 'spacecraft'
+  | 'satellite'
+  | 'black-hole';
 
 /**
  * Which surface-map set a body is being drawn with.

@@ -32,9 +32,13 @@ export function parseStarBodyId(id: BodyId): { readonly tier: number; readonly i
 /** The nominal solar radius stellar radii are counted in, km (IAU 2015 B3). */
 const SOLAR_RADIUS_KM = 695_700;
 
-/** True for a catalogue star made a body: a star that is not the Sun. */
+/**
+ * True for a catalogue star made a body: a star that is not the Sun, and not one of the
+ * stars about a black hole, which come from their papers and not from a catalogue
+ * (blackHoles.ts).
+ */
 export function isCatalogueStar(body: BodyDefinition): boolean {
-  return body.kind === 'star' && body.id !== 'sun';
+  return body.kind === 'star' && parseStarBodyId(body.id) !== null;
 }
 
 /**
@@ -135,6 +139,16 @@ export function starDiscColorIndex(id: BodyId): number {
  */
 export function starDiscExposure(id: BodyId): number {
   return discExposures.get(id) ?? 1;
+}
+
+/**
+ * Gives a star body that is not from the catalogue -- a star about a black hole
+ * (blackHoles.ts) -- its disc's colour and brightness, from a colour index, as a catalogue
+ * star's are given from its record.
+ */
+export function setStarDisc(id: BodyId, colorIndex: number): void {
+  discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(colorIndex)));
+  discColorIndices.set(id, colorIndex);
 }
 
 /** How many star bodies are kept once made: the stars of a short tour, with their names. */
