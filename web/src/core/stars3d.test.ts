@@ -206,3 +206,14 @@ describe('a star system as shown', () => {
     expect(systemDisplayName(null)).toBeNull();
   });
 });
+
+describe('a catalogue star made a body', () => {
+  const star = (id: string) => ({ id, kind: 'star' }) as unknown as Parameters<typeof isCatalogueStar>[0];
+  it("is a 3D star's record or an Archive-placed host, not the Sun nor a black hole's star", () => {
+    expect(isCatalogueStar(star('star-2-193889'))).toBe(true);
+    expect(isCatalogueStar(star('exo-host-412'))).toBe(true);
+    expect(isCatalogueStar(star('sun'))).toBe(false);
+    expect(isCatalogueStar(star('gaia-bh1-star'))).toBe(false);
+    expect(isCatalogueStar(star('s2'))).toBe(false);
+  });
+});

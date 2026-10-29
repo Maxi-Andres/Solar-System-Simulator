@@ -32,9 +32,14 @@ export function parseStarBodyId(id: BodyId): { readonly tier: number; readonly i
 /** The nominal solar radius stellar radii are counted in, km (IAU 2015 B3). */
 const SOLAR_RADIUS_KM = 695_700;
 
-/** True for a catalogue star made a body: a star that is not the Sun. */
+/**
+ * True for a catalogue star made a body: a 3D star's record (`star-<tier>-<index>`), or an
+ * Exoplanet Archive host placed from the Archive (`exo-host-<n>`, archiveSystems.ts
+ * archiveHostBodyId) -- not the Sun, and not one of the stars about a black hole, which
+ * come from their papers and not from a catalogue (blackHoles.ts).
+ */
 export function isCatalogueStar(body: BodyDefinition): boolean {
-  return body.kind === 'star' && body.id !== 'sun';
+  return body.kind === 'star' && (parseStarBodyId(body.id) !== null || /^exo-host-\d+$/.test(body.id));
 }
 
 /**
@@ -125,8 +130,8 @@ const discColorIndices = new Map<BodyId, number>();
 
 /**
  * Gives a star body that is not a 3D star's record -- an Exoplanet Archive host placed from
- * the Archive (archiveSystems.ts) -- its disc's colour index, and so its colour and
- * brightness, as addStarBody gives a record's.
+ * the Archive (archiveSystems.ts), a star about a black hole (blackHoles.ts) -- its disc's
+ * colour index, and so its colour and brightness, as addStarBody gives a record's.
  */
 export function setStarDisc(id: BodyId, colorIndex: number): void {
   discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(colorIndex)));

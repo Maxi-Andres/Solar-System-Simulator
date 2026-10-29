@@ -11,6 +11,7 @@ import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './sat
 import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
+import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
 
@@ -223,7 +224,7 @@ export function LabelProjector({
         if (isCatalogueStar(body)) {
           entry.host = body.id;
         }
-      } else if (!isCatalogueStar(body)) {
+      } else if (!isCatalogueStar(body) && blackHoleSystemOf(body.id) === null) {
         solar.add(body.id);
       }
     }
@@ -394,6 +395,10 @@ export function LabelProjector({
       if (entry.host !== null) {
         fold(entry.members, entry.host, entry.extentKm, entry.name);
       }
+    }
+    // A black hole and the star about it fold onto the black hole likewise (blackHoles.ts).
+    for (const system of BLACK_HOLE_SYSTEMS) {
+      fold(new Set([system.id, system.companion]), system.id, system.extentKm, system.name);
     }
     if (systems.a !== null && !fold(systems.alphaCen, systems.a, ALPHA_CEN_EXTENT_KM, ALPHA_CEN_SYSTEM) && systems.b !== null) {
       const a = projected.find((entry) => entry.id === systems.a);

@@ -123,8 +123,9 @@ export function isSmallMoon(body: BodyDefinition): boolean {
  */
 export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>): boolean {
   // A catalogue star made a body (starBodies.ts) is in no layer: the stars are always
-  // drawn, and so is the marker of one you went to. The Sun rides with the Planets.
-  if (body.kind === 'star' && body.id !== 'sun') {
+  // drawn, and so is the marker of one you went to. The Sun rides with the Planets. A
+  // black hole is in none either (blackHoles.ts), nor the stars about them.
+  if ((body.kind === 'star' && body.id !== 'sun') || body.kind === 'black-hole') {
     return true;
   }
   return (

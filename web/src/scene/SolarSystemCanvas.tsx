@@ -21,6 +21,7 @@ import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
+import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
@@ -109,6 +110,8 @@ export interface SolarSystemCanvasProps {
   /** The Milky Way model: the Milky Way Model layer, and its names, in GALAXY_LABELS order. */
   readonly showMilkyWay: boolean;
   readonly galaxyLabels: RefObject<(HTMLElement | null)[]>;
+  /** The names of the Solar System's orbits laid over Sgr A* for scale (HorizonScale). */
+  readonly horizonScaleLabels: RefObject<(HTMLElement | null)[]>;
   /** The scale bar's nodes, written by ScaleBarProbe. */
   readonly scaleBar: RefObject<ScaleBarElements | null>;
   /** The Exoplanet Archive, its hosts' rings, and what a click on one does. */
@@ -140,6 +143,7 @@ export function SolarSystemCanvas({
   ringLabels,
   showMilkyWay,
   galaxyLabels,
+  horizonScaleLabels,
   scaleBar,
   exoplanets,
   showExoplanetHosts,
@@ -262,6 +266,7 @@ export function SolarSystemCanvas({
         visible={showExoplanetHosts}
         onPick={onPickHost}
       />
+      <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <LabelProjector
         store={store}

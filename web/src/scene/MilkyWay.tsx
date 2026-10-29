@@ -130,6 +130,9 @@ export const GALAXY_SAMPLE_FROM_LY = 500;
  */
 const EDGE_ON_LABELS_DEG = 12;
 
+/** How far above its point the Galactic Centre's name stands, pixels. */
+const CENTRE_LABEL_GAP_PX = 8;
+
 /** Points nearer the camera than this share of its distance from the Sun fade out. */
 const NEAR_FADE_SHARE = 0.35;
 
@@ -380,7 +383,11 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         blending: THREE.AdditiveBlending,
         depthTest: false,
         depthWrite: false,
-        transparent: true,
+        // Drawn with the opaque things, not after them, though it adds: three draws every
+        // opaque mesh before anything transparent, so a see-through quad laid down last
+        // lit up the bodies in front of the galaxy -- a star's disc, a black hole's black
+        // (blackHoles.ts) -- with the glow behind them. Additive blending holds either way.
+        transparent: false,
         toneMapped: false,
       }),
     );
@@ -571,7 +578,13 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       }
       const x = (scratchPoint.x * 0.5 + 0.5) * size.width;
       const y = (-scratchPoint.y * 0.5 + 0.5) * size.height;
-      element.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+      // The Galactic Centre's name over its point, not on it: Sgr A*, a body with a name of
+      // its own, is drawn there too -- 126 pc beyond the model's centre, the same point from
+      // anywhere its name is shown (blackHoles.ts).
+      element.style.transform =
+        index === 0
+          ? `translate(${x}px, ${y - CENTRE_LABEL_GAP_PX}px) translate(-50%, -100%)`
+          : `translate(${x}px, ${y}px) translate(-50%, -50%)`;
       element.style.opacity = String(visibility);
     });
   });

@@ -61,6 +61,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       const tag = satelliteBodyTag(body.id);
       return tag?.operator == null ? 'Earth satellite' : `Earth satellite · ${tag.operator}`;
     }
+    case 'black-hole':
+      return 'Black hole';
   }
 }
 
@@ -90,6 +92,9 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['satellites'];
     case 'moon':
       return isSmallMoon(body) ? ['moons', 'smallMoons'] : ['moons'];
+    case 'black-hole':
+      // Always drawn, as another star is (floatingOrigin.ts isShown).
+      return [];
   }
 }
 
@@ -100,6 +105,7 @@ export function layersFor(body: BodyDefinition): LayerId[] {
 const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   star: 0,
   planet: 0,
+  'black-hole': 0,
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,

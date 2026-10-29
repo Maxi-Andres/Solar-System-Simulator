@@ -11,6 +11,7 @@ import {
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
 import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
+import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf, type BlackHoleSystem } from '../core/blackHoles.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
@@ -40,6 +41,11 @@ import { Presence, useClosing } from './Presence.tsx';
  * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** goes to the Sun and stands the
  * camera 180,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
  * seen whole. It was a name and not a place until that model existed.
+ *
+ * Milky Way has a list of its own beside it: the black holes (D5, blackHoles.ts) -- Sgr A*
+ * at the centre, Gaia BH1 and BH3 -- each framed with the star on its orbit. In one of
+ * their systems the breadcrumb is Milky Way and the black hole: none of them is in the
+ * neighbourhood the Solar Neighbourhood frames.
  *
  * The spacecraft come last, in a section of their own rather than folded under the
  * bodies they happen to be near. One that does not exist at the clock's instant -- not
@@ -109,9 +115,12 @@ export function BodyPicker({
   const inAlphaCen = alphaCenMember(focus) !== null || (parent !== null && alphaCenMember(parent.id) !== null);
   // Or a planetary system's, when its star or a planet of it is.
   const planetSystem = planetarySystemOf(focus);
+  // Or a black hole's, with the star about it.
+  const blackHoleSystem = blackHoleSystemOf(focus);
   // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
-  // anything of Alpha Centauri's or another star's.
-  const inSolarSystem = !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null;
+  // anything of Alpha Centauri's or another star's, nor a black hole's.
+  const inSolarSystem =
+    !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null && blackHoleSystem === null;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -128,22 +137,32 @@ export function BodyPicker({
 
   // The star systems one can go to, under Solar Neighbourhood's own caret.
   const [systemsOpen, setSystemsOpen] = useState(false);
+  // The black holes, under Milky Way's.
+  const [blackHolesOpen, setBlackHolesOpen] = useState(false);
+  const toBlackHole = (system: BlackHoleSystem): void => {
+    // Asked for before the focus moves, as the neighbourhood's is: the system whole.
+    requestFraming(system.framingKm, system.view);
+    onFocus(system.id);
+    renderDemand.request();
+  };
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open && !systemsOpen) {
+    if (!open && !systemsOpen && !blackHolesOpen) {
       return;
     }
     const onPointerDown = (event: PointerEvent): void => {
       if (root.current !== null && !root.current.contains(event.target as Node)) {
         setOpen(false);
         setSystemsOpen(false);
+        setBlackHolesOpen(false);
       }
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setOpen(false);
         setSystemsOpen(false);
+        setBlackHolesOpen(false);
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -152,7 +171,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, systemsOpen]);
+  }, [open, systemsOpen, blackHolesOpen]);
 
   const choose = (id: BodyId): void => {
     onFocus(id);
@@ -180,25 +199,45 @@ export function BodyPicker({
         <Crumb onClick={toGalaxy} outer>
           Milky Way
         </Crumb>
-        <Separator />
-        <Crumb onClick={toNeighbourhood} outer>
-          Solar Neighbourhood
-        </Crumb>
         <button
           type="button"
-          aria-label="Star systems"
+          aria-label="Black holes"
           aria-haspopup="listbox"
-          aria-expanded={systemsOpen}
-          title="Go to a star system"
+          aria-expanded={blackHolesOpen}
+          title="Go to a black hole"
           onClick={() => {
-            setSystemsOpen((value) => !value);
+            setBlackHolesOpen((value) => !value);
+            setSystemsOpen(false);
             setOpen(false);
           }}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
-          <Caret open={systemsOpen} />
+          <Caret open={blackHolesOpen} />
         </button>
         <Separator />
+        {blackHoleSystem === null && (
+          <>
+            <Crumb onClick={toNeighbourhood} outer>
+              Solar Neighbourhood
+            </Crumb>
+            <button
+              type="button"
+              aria-label="Star systems"
+              aria-haspopup="listbox"
+              aria-expanded={systemsOpen}
+              title="Go to a star system"
+              onClick={() => {
+                setSystemsOpen((value) => !value);
+                setBlackHolesOpen(false);
+                setOpen(false);
+              }}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+            >
+              <Caret open={systemsOpen} />
+            </button>
+            <Separator />
+          </>
+        )}
         {inSolarSystem && (
           <>
             <Crumb onClick={() => onFocus('sun')}>Solar System</Crumb>
@@ -232,6 +271,7 @@ export function BodyPicker({
           onClick={() => {
             setOpen((value) => !value);
             setSystemsOpen(false);
+            setBlackHolesOpen(false);
           }}
           style={{
             ...crumbStyle,
@@ -274,6 +314,16 @@ export function BodyPicker({
         />
       </Presence>
 
+      <Presence show={blackHolesOpen}>
+        <BlackHoleList
+          active={blackHoleSystem?.id ?? null}
+          onChoose={(system) => {
+            toBlackHole(system);
+            setBlackHolesOpen(false);
+          }}
+        />
+      </Presence>
+
       <Presence show={open}>
         <BodyList
           store={store}
@@ -286,6 +336,10 @@ export function BodyPicker({
           onChooseMember={chooseMember}
           onChooseSystem={(key) => {
             planetSystems?.go(key);
+            setOpen(false);
+          }}
+          onChooseBlackHole={(system) => {
+            toBlackHole(system);
             setOpen(false);
           }}
         />
@@ -418,6 +472,7 @@ function BodyList({
   alphaCen,
   onChooseMember,
   onChooseSystem,
+  onChooseBlackHole,
 }: {
   store: EphemerisStore;
   focus: BodyId;
@@ -428,6 +483,7 @@ function BodyList({
   alphaCen: AlphaCenNavigator | null;
   onChooseMember: (key: AlphaCenKey) => void;
   onChooseSystem: (key: string) => void;
+  onChooseBlackHole: (system: BlackHoleSystem) => void;
 }) {
   const closing = useClosing();
   // Redrawn when a planet's small moons arrive.
@@ -455,6 +511,7 @@ function BodyList({
       body.kind !== 'spacecraft' &&
       body.kind !== 'asteroid' &&
       body.kind !== 'comet' &&
+      body.kind !== 'black-hole' &&
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
@@ -695,6 +752,26 @@ function BodyList({
           </div>
         );
       })}
+      {BLACK_HOLE_SYSTEMS.some((system) => store.isPropagatedBody(system.id)) && (
+        <>
+          <div style={SECTION_HEADING}>Black holes</div>
+          {BLACK_HOLE_SYSTEMS.filter((system) => store.isPropagatedBody(system.id)).map((system) => (
+            <div key={system.id}>
+              <MemberRow name={system.name} active={system.id === focus} onChoose={() => onChooseBlackHole(system)} />
+              {store.isPropagatedBody(system.companion) && (
+                <Row
+                  body={store.body(system.companion)}
+                  active={system.companion === focus}
+                  inSystem={false}
+                  indent
+                  onChoose={onChoose}
+                  trailing={null}
+                />
+              )}
+            </div>
+          ))}
+        </>
+      )}
       {stars.length > 0 && (
         <>
           <div style={SECTION_HEADING}>Stars</div>
@@ -985,6 +1062,45 @@ function SystemList({
             onChoose={() => onPlanetSystem(system.key)}
           />
         ))}
+    </div>
+  );
+}
+
+/**
+ * The black holes under Milky Way (D5): each framed with the star on its orbit. Sgr A*
+ * first, at the centre of the Galaxy; then the two nearest known, by distance.
+ */
+function BlackHoleList({
+  active,
+  onChoose,
+}: {
+  active: BodyId | null;
+  onChoose: (system: BlackHoleSystem) => void;
+}) {
+  const closing = useClosing();
+  return (
+    <div
+      role="listbox"
+      aria-label="Black holes"
+      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
+      style={{
+        marginTop: '0.55rem',
+        width: '13.5rem',
+        background: 'rgba(14,14,17,0.97)',
+        border: '1px solid #262626',
+        borderRadius: '0.4rem',
+        padding: '0.35rem',
+      }}
+    >
+      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Black holes</div>
+      {BLACK_HOLE_SYSTEMS.map((system) => (
+        <MemberRow
+          key={system.id}
+          name={system.binary === null ? `${system.name} · Galactic Centre` : system.name}
+          active={active === system.id}
+          onChoose={() => onChoose(system)}
+        />
+      ))}
     </div>
   );
 }

@@ -13,6 +13,8 @@ import { estimatedRadiusEarth, type ExoPlanet } from '../core/exoplanets.ts';
 import { systemPlanetOf } from '../core/planetarySystems.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
+import { blackHoleSystemOf } from '../core/blackHoles.ts';
+import { BlackHolePanel } from './BlackHoleFacts.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -40,6 +42,10 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   void tick;
 
   const body = store.body(focus);
+  // A black hole, or the star about one: its own facts (blackHoles.ts).
+  if (blackHoleSystemOf(focus) !== null) {
+    return <BlackHolePanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
   // A star other than the Sun: its own facts, in place of an orbit about the Sun it does
   // not have. See StarFacts.
   if (isCatalogueStar(body)) {
