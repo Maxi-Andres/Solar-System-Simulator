@@ -26,9 +26,10 @@ import { mapStrength } from './Starfield.tsx';
  *
  * **A map, like the Star Map's dots**, and shown when the map is: from past the Solar
  * Neighbourhood's threshold, full by ten times it (mapStrength), so it never sits over a
- * planet being looked at. And quieter as the galaxy comes in (galaxyVisibility): from
+ * planet being looked at. And gone as the galaxy comes in (galaxyVisibility): from
  * across it four thousand rings are one teal smear along the Kepler field and toward the
- * bulge, where the microlensing planets are, and a smear names nothing. The Exoplanet
+ * bulge, where the microlensing planets are, and a smear names nothing -- even at a
+ * quarter strength it read as a structure of the galaxy, which it is not. The Exoplanet
  * Hosts layer switches it off.
  *
  * Pointing at a ring names its star and its count; clicking one goes there -- the star made
@@ -36,8 +37,8 @@ import { mapStrength } from './Starfield.tsx';
  * positions, in float64, on a click only: there is no raycast through 4,800 sprites.
  */
 
-/** How much of the rings is left with the whole galaxy in view. */
-const GALAXY_FLOOR = 0.25;
+/** How much of the rings is left with the whole galaxy in view: none (see the header). */
+const GALAXY_FLOOR = 0;
 
 /** The sprite's size, CSS pixels: the ring's radius and the planet dots'. */
 const SPRITE_PX = 15;
