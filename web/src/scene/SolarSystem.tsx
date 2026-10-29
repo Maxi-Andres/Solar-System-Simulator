@@ -523,7 +523,9 @@ export function SolarSystem({
             : new THREE.MeshBasicMaterial({
                 color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
               })
-          : definition.radiusEstimated === true
+          : // A planet of another star -- its parent a star, where the Sun's planets have
+            // none -- whether its size is measured or estimated: lit by its own star.
+            definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null)
             ? exoplanetMaterial(definition.color)
             : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({

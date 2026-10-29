@@ -4,8 +4,9 @@ import type { BeltClass, BeltInfo, CometInfo, SatelliteInfo, StarCatalog } from 
 
 import { beltTiers, type BeltSource, type LoadedTier } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
+import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { BULK_WINDOW_DAYS, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
+import { BULK_WINDOW_DAYS, NAMED_WINDOW_DAYS, type LazySource, type SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { ESA_MODEL_CREDIT } from '../scene/craftModels.ts';
 import { useViewStore } from '../state/store.ts';
@@ -41,6 +42,7 @@ export function AboutPanel({
   comets,
   satellites,
   stars3d = null,
+  exoplanets = null,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
@@ -48,6 +50,7 @@ export function AboutPanel({
   comets: CometSource;
   satellites: SatelliteSource;
   stars3d?: Stars3dSource | null;
+  exoplanets?: LazySource<ExoplanetArchive> | null;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -64,6 +67,11 @@ export function AboutPanel({
     stars3d?.subscribe ?? noSubscribe,
     () => stars3d?.view.info ?? null,
   );
+  // And the Exoplanet Archive, once exoplanets.json is in: its counts, as read.
+  const exoplanetCatalog = useSyncExternalStore(
+    exoplanets?.subscribe ?? noSubscribe,
+    () => exoplanets?.value ?? null,
+  )?.catalog;
   const closing = useClosing();
   const { window: windowInfo, source } = store.manifest;
   const scroller = useRef<HTMLDivElement>(null);
@@ -343,6 +351,35 @@ export function AboutPanel({
             suggests, by the mass-radius relation of <Strong>Chen &amp; Kipping 2017</Strong>{' '}
             (ApJ 834, 17) — the estimate the Exoplanet Archive itself gives — lit by its own
             star, and called an estimate wherever its size is shown.
+          </Prose>
+
+          <Prose>
+            Every other star with a confirmed planet is from the{' '}
+            <Strong>NASA Exoplanet Archive</Strong>’s Planetary Systems Composite Parameters
+            (pscomppars, DOI 10.26133/NEA13)
+            {exoplanetCatalog == null
+              ? ''
+              : `, queried ${exoplanetCatalog.source.queriedAt.slice(0, 10)}: ${exoplanetCatalog.counts.planets.toLocaleString('en-US')} planets about ${exoplanetCatalog.counts.hosts.toLocaleString('en-US')} stars. ${(exoplanetCatalog.counts.matchedByGaia + exoplanetCatalog.counts.matchedByHip).toLocaleString('en-US')} of the stars are among the 3D stars, found by their Gaia DR3 or Hipparcos number, and ride on them; the other ${exoplanetCatalog.counts.placedFromArchive.toLocaleString('en-US')} — most of the Kepler and TESS stars, past the census — stand where the Archive’s position, distance and motion put them${exoplanetCatalog.counts.unplaced > 0 ? `, and ${exoplanetCatalog.counts.unplaced} with no distance are not placed` : ''}`}
+            . The Exoplanet Hosts layer rings each on the map, with a dot on the ring for each of
+            its planets. Gone to, a star is a sphere of the Archive’s radius, and its planets are
+            on the Archive’s orbits: one seen to transit is a sphere of its measured radius, at its
+            measured tilt; any other is the size its mass suggests (Chen &amp; Kipping 2017),
+            edge-on to the Sun. No node is given for any: east-west. Where each is along its orbit
+            comes from its transit or conjunction time, else its periastron time, else it is at
+            periastron at J2000; an eccentricity missing, or given only as a limit, is drawn
+            circular. The Archive does not say whose argument of periastron it lists. It is read
+            as the star’s, as radial velocities are fitted (and, the same number, the planet’s as
+            transits are), so the planet’s own is half a turn on
+            {exoplanetCatalog == null
+              ? ''
+              : ` — where one paper gives a periastron time, a transit time and the angle, ${exoplanetCatalog.omegaCheck.star} of ${exoplanetCatalog.omegaCheck.star + exoplanetCatalog.omegaCheck.planet + exoplanetCatalog.omegaCheck.neither} agree with that reading, ${exoplanetCatalog.omegaCheck.planet} with the other`}
+            . The composite table takes each number from whichever paper the Archive judged best,
+            so one planet’s may come from several; each panel names its orbit’s. Planets the
+            Archive flags as controversial are grey and called disputed. Proxima’s and the four
+            systems above keep their papers’ orbits. This research has made use of the NASA
+            Exoplanet Archive, which is operated by the California Institute of Technology, under
+            contract with the National Aeronautics and Space Administration under the Exoplanet
+            Exploration Program.
           </Prose>
 
           <Prose>

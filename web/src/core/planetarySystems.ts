@@ -80,15 +80,40 @@ export interface PlanetarySystem {
   readonly key: string;
   /** On the breadcrumb, and on the sky from afar. */
   readonly name: string;
-  /** A designation names.json lists for the star, to find it by. */
+  /** A designation names.json lists for the star, to find it by; '' for the Archive's. */
   readonly hostDesignation: string;
   /** The star's mass, solar masses, for the orbits' speeds; and whose. */
   readonly hostMassSun: number;
   readonly hostMassReference: string;
-  /** The star's measured radius, solar radii, and whose (see the header). */
-  readonly hostRadiusSun: number;
-  readonly hostRadiusReference: string;
+  /** The star's radius, solar radii, and whose (see the header); null where none is published. */
+  readonly hostRadiusSun: number | null;
+  readonly hostRadiusReference: string | null;
   readonly planets: readonly ExoPlanet[];
+  /**
+   * A system from the NASA Exoplanet Archive (archiveSystems.ts), with what its panel says
+   * of the star; absent for the four above, read from their papers.
+   */
+  readonly archive?: ArchiveHostFacts;
+}
+
+/** What the Archive says of a host star, for its panel (archiveSystems.ts). */
+export interface ArchiveHostFacts {
+  /** Its index in exoplanets.json. */
+  readonly host: number;
+  readonly distancePc: number | null;
+  readonly teffK: number | null;
+  readonly spectralType: string | null;
+  readonly designations: readonly string[];
+  /** Stars in the system, as the Archive counts them. */
+  readonly stars: number;
+  /** Planets the Archive lists; `planets` above holds those it gives an orbit for. */
+  readonly listed: number;
+  /** True where its mass is not the Archive's but from its planets' orbits (Kepler's third law). */
+  readonly massFromOrbits: boolean;
+  /** Not among the 3D stars: placed from the Archive's position, distance and motion. */
+  readonly placedFromArchive: boolean;
+  /** For one placed from the Archive: whether it moves (a proper motion was given). */
+  readonly moving: boolean;
 }
 
 const TAU_CETI: PlanetarySystem = {
@@ -215,6 +240,41 @@ const PEGASI_51: PlanetarySystem = {
 
 export const PLANETARY_SYSTEMS: readonly PlanetarySystem[] = [TAU_CETI, EPSILON_ERIDANI, BARNARD, PEGASI_51];
 
+/**
+ * The systems made from the NASA Exoplanet Archive as they are gone to
+ * (archiveSystems.ts): each by its key, with its star's body and the direction to it.
+ */
+const registered = new Map<string, { readonly system: PlanetarySystem; readonly host: BodyId; readonly toward: Vec3 }>();
+/** Each registered system's star and planets, by body id. */
+const registeredByBody = new Map<BodyId, PlanetarySystem>();
+/** The direction from the Sun to each registered system's star, by its body id. */
+const registeredDirections = new Map<BodyId, Vec3>();
+
+/**
+ * Adds a system the curated four do not cover, its star already a body (`host`) and its
+ * planets about to be: so the breadcrumb, the labels and the panels find it as they find
+ * those. `toward` is the unit direction from the Sun to the star, which its planets'
+ * orbits are laid out against (exoplanets.ts).
+ */
+export function registerPlanetarySystem(system: PlanetarySystem, host: BodyId, toward: Vec3): void {
+  registered.set(system.key, { system, host, toward });
+  registeredByBody.set(host, system);
+  registeredDirections.set(host, toward);
+  for (const planet of system.planets) {
+    registeredByBody.set(planet.id, system);
+  }
+}
+
+/** A registered system by key, with its star's body id; null for none. */
+export function registeredSystem(key: string): { readonly system: PlanetarySystem; readonly host: BodyId } | null {
+  return registered.get(key) ?? null;
+}
+
+/** The curated systems, then those registered from the Archive in the order gone to. */
+export function allPlanetarySystems(): PlanetarySystem[] {
+  return [...PLANETARY_SYSTEMS, ...[...registered.values()].map((entry) => entry.system)];
+}
+
 /** A planet of these systems by its body id, with its system; null for any other body. */
 export function systemPlanetOf(id: BodyId): { system: PlanetarySystem; planet: ExoPlanet } | null {
   for (const system of PLANETARY_SYSTEMS) {
@@ -223,7 +283,9 @@ export function systemPlanetOf(id: BodyId): { system: PlanetarySystem; planet: E
       return { system, planet };
     }
   }
-  return null;
+  const system = registeredByBody.get(id);
+  const planet = system?.planets.find((candidate) => candidate.id === id);
+  return system === undefined || planet === undefined ? null : { system, planet };
 }
 
 /** Any star's planet by its body id -- Proxima's or these systems' -- or null. */
@@ -239,10 +301,8 @@ export function systemOfDesignations(designations: readonly string[]): Planetary
 /** The system a body is in -- its star, or a planet of it -- or null. */
 export function planetarySystemOf(id: BodyId): PlanetarySystem | null {
   const facts = starBodyFacts(id);
-  if (facts !== null) {
-    return systemOfDesignations(facts.designations);
-  }
-  return systemPlanetOf(id)?.system ?? null;
+  const curated = facts === null ? null : systemOfDesignations(facts.designations);
+  return curated ?? registeredByBody.get(id) ?? systemPlanetOf(id)?.system ?? null;
 }
 
 /** Each system's star's entry in the star names, by system key; missing where not found. */
@@ -259,8 +319,14 @@ export function systemEntries(names: Stars3dNames): Map<string, number> {
 
 const AU_KM = 149_597_870.7;
 
-/** How far out a system reaches, km: its outermost planet's farthest. */
+/**
+ * How far out a system reaches, km: its outermost planet's farthest -- or, for a star whose
+ * planets have no orbit to draw (archiveSystems.ts), an AU, a size to frame it by only.
+ */
 export function systemExtentKm(system: PlanetarySystem): number {
+  if (system.planets.length === 0) {
+    return AU_KM;
+  }
   return Math.max(...system.planets.map((p) => p.semiMajorAxisAu * (1 + p.eccentricity))) * AU_KM;
 }
 
@@ -269,11 +335,14 @@ export function systemFramingKm(system: PlanetarySystem): number {
   return 5 * systemExtentKm(system);
 }
 
-/** The unit direction from the Sun to a star body, from its catalogue position. */
+/**
+ * The unit direction from the Sun to a star body, from its catalogue position -- or, for an
+ * Archive host not among the 3D stars, the direction it was registered with.
+ */
 function towardStar(id: BodyId): Vec3 | null {
   const record = starBodyFacts(id)?.record;
   if (record === undefined) {
-    return null;
+    return registeredDirections.get(id) ?? null;
   }
   const x = record[STAR3D.x]!;
   const y = record[STAR3D.y]!;
@@ -292,7 +361,7 @@ export function systemView(
   host: BodyId,
 ): ReturnType<typeof viewOffPole> | undefined {
   const toward = towardStar(host);
-  if (toward === null) {
+  if (toward === null || system.planets.length === 0) {
     return undefined;
   }
   const outermost = system.planets.reduce((a, b) => (b.semiMajorAxisAu > a.semiMajorAxisAu ? b : a));
@@ -304,12 +373,18 @@ export function systemView(
  * carries them with it, and their orbits drawn about it with its mass. Shared with
  * Proxima's (alphaCenBodies.ts).
  */
-export function addPlanets(store: EphemerisStore, host: BodyId, planets: readonly ExoPlanet[]): void {
+export function addPlanets(
+  store: EphemerisStore,
+  host: BodyId,
+  planets: readonly ExoPlanet[],
+  /** The star's GM, km^3/s^2, where the body's may not carry it; the body's by default. */
+  gmStarKm3S2: number = store.body(host).gmBodyOnlyKm3S2,
+): void {
   const toward = towardStar(host);
   if (toward === null) {
     return;
   }
-  const gmStar = store.body(host).gmBodyOnlyKm3S2;
+  const gmStar = gmStarKm3S2;
   store.addPropagatedBodies(
     planets
       .filter((planet) => !store.isPropagatedBody(planet.id))

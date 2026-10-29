@@ -10,6 +10,7 @@ import { Panel } from './Panel.tsx';
 import { SatelliteFacts } from './SatelliteFacts.tsx';
 import { StarFacts } from './StarFacts.tsx';
 import { estimatedRadiusEarth, type ExoPlanet } from '../core/exoplanets.ts';
+import { systemPlanetOf } from '../core/planetarySystems.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
@@ -438,22 +439,50 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
         : 'Candidate: not confirmed';
   const days = planet.periodDays;
   const phase = planet.phase;
+  // One of the Exoplanet Archive's (exoplanetArchive.ts): its numbers rounded as read.
+  const fromArchive = systemPlanetOf(planet.id)?.system.archive !== undefined;
+  const mass = fromArchive ? Number(planet.massEarth.toPrecision(3)) : planet.massEarth;
+  const massNote = planet.massNote;
+  const measuredRadius = planet.radiusEarth ?? null;
   return (
     <>
       <Row label="Status">{status}</Row>
       <Row label="Year">{`${days.toFixed(days < 100 ? 3 : 1)} days`}</Row>
-      <Row label="Orbit radius">{`${planet.semiMajorAxisAu} AU`}</Row>
+      <Row label="Orbit radius">{`${fromArchive ? Number(planet.semiMajorAxisAu.toPrecision(4)) : planet.semiMajorAxisAu} AU`}</Row>
       {planet.eccentricity > 0 && <Row label="Eccentricity">{planet.eccentricity.toFixed(2)}</Row>}
       <Row label="Mass">
-        {planet.massIsMinimum ? `≥ ${planet.massEarth} Earths` : `${planet.massEarth} Earths`}
+        {massNote === 'unknown'
+          ? 'unknown'
+          : massNote === 'estimate'
+            ? `~${mass} Earths, from radius`
+            : massNote === 'upper limit'
+              ? `< ${mass} Earths`
+              : planet.massIsMinimum || massNote === 'lower limit'
+                ? `≥ ${mass} Earths`
+                : `${mass} Earths`}
       </Row>
-      <Row label="Radius">{`~${estimatedRadiusEarth(planet.massEarth).toFixed(2)} Earths, estimated`}</Row>
-      <Row label="Tilt">{planet.inclinationDeg === null ? 'unknown: edge-on' : `${planet.inclinationDeg}° measured`}</Row>
+      <Row label="Radius">
+        {measuredRadius !== null
+          ? `${Number(measuredRadius.toPrecision(3))} Earths, transit`
+          : `~${estimatedRadiusEarth(planet.massEarth).toFixed(2)} Earths, estimated`}
+      </Row>
+      <Row label="Tilt">
+        {planet.inclinationDeg === null
+          ? 'unknown: edge-on'
+          : `${Number(planet.inclinationDeg.toFixed(2))}° measured`}
+      </Row>
       <Row label="Node">{planet.nodeDeg === null ? 'unknown: east-west' : `${planet.nodeDeg}° measured`}</Row>
       <Row label="Along its orbit">
-        {phase.kind === 'conjunction' ? 'from its fit' : phase.kind === 'pastConjunction' ? 'loosely' : 'unknown'}
+        {phase.kind === 'conjunction'
+          ? 'from its fit'
+          : phase.kind === 'periastron'
+            ? 'from its periastron'
+            : phase.kind === 'pastConjunction'
+              ? 'loosely'
+              : 'unknown'}
       </Row>
       <Row label="Source">{planet.reference.split(';')[0]}</Row>
+      {fromArchive && <Row label="Listed by">NASA Exoplanet Archive</Row>}
     </>
   );
 }

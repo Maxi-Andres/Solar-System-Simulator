@@ -10,7 +10,7 @@ import {
   alphaCenMember,
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
-import { PLANETARY_SYSTEMS, planetarySystemOf } from '../core/planetarySystems.ts';
+import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
@@ -671,7 +671,7 @@ function BodyList({
           })}
         </>
       )}
-      {PLANETARY_SYSTEMS.map((system) => {
+      {allPlanetarySystems().map((system) => {
         const host = hosts.get(system.key);
         if (host === undefined) {
           return null;
@@ -977,7 +977,7 @@ function SystemList({
       <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
       {onAlphaCen !== null && <MemberRow name={ALPHA_CEN_SYSTEM} active={inAlphaCen} onChoose={onAlphaCen} />}
       {onPlanetSystem !== null &&
-        PLANETARY_SYSTEMS.map((system) => (
+        allPlanetarySystems().map((system) => (
           <MemberRow
             key={system.key}
             name={system.name}

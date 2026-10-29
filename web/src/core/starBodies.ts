@@ -123,6 +123,16 @@ export function starBodyDefinition(
 const discExposures = new Map<BodyId, number>();
 const discColorIndices = new Map<BodyId, number>();
 
+/**
+ * Gives a star body that is not a 3D star's record -- an Exoplanet Archive host placed from
+ * the Archive (archiveSystems.ts) -- its disc's colour index, and so its colour and
+ * brightness, as addStarBody gives a record's.
+ */
+export function setStarDisc(id: BodyId, colorIndex: number): void {
+  discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(colorIndex)));
+  discColorIndices.set(id, colorIndex);
+}
+
 /** A star body's colour index, for its disc's colour: the Sun's 0.65 for any other body. */
 export function starDiscColorIndex(id: BodyId): number {
   return discColorIndices.get(id) ?? 0.65;
@@ -169,8 +179,53 @@ export async function addStarBody(
   radiusSun: number | null = null,
 ): Promise<BodyId> {
   const { names: columns } = names;
-  const tier = columns.tier[k]!;
-  const index = columns.index[k]!;
+  return addStarRecordBody(
+    store,
+    source,
+    columns.tier[k]!,
+    columns.index[k]!,
+    {
+      display: columns.display[k]!,
+      iau: columns.iau[k] ?? false,
+      designations: columns.designations[k] ?? [],
+      system: columns.system[k] ?? null,
+      nearest: columns.nearest[k] ?? null,
+      spectralType: columns.spectralType[k] ?? null,
+    },
+    keep,
+    pin,
+    massSun,
+    radiusSun,
+  );
+}
+
+/** What names.json says of a star -- or, for one it does not name, what is known of it. */
+export interface StarEntry {
+  readonly display: string;
+  readonly iau: boolean;
+  readonly designations: readonly string[];
+  readonly system: string | null;
+  readonly nearest: number | null;
+  readonly spectralType: string | null;
+}
+
+/**
+ * Makes record `index` of tier `tier` a body, named by `entry`: addStarBody's work, for a
+ * star found by its record rather than by its name -- an Exoplanet Archive host, most of
+ * which names.json does not list (archiveSystems.ts). If the star is a body already it is
+ * kept as it is, and only moved to the front of the queue.
+ */
+export async function addStarRecordBody(
+  store: EphemerisStore,
+  source: Stars3dSource,
+  tier: number,
+  index: number,
+  entry: StarEntry,
+  keep: BodyId,
+  pin = false,
+  massSun: number | null = null,
+  radiusSun: number | null = null,
+): Promise<BodyId> {
   const id = starBodyId(tier, index);
   if (!store.isPropagatedBody(id)) {
     const record = new Float32Array(await source.record(tier, index));
@@ -181,11 +236,11 @@ export async function addStarBody(
       tier,
       index,
       record,
-      iau: columns.iau[k] ?? false,
-      designations: columns.designations[k] ?? [],
-      system: columns.system[k] ?? null,
-      nearest: columns.nearest[k] ?? null,
-      spectralType: columns.spectralType[k] ?? null,
+      iau: entry.iau,
+      designations: entry.designations,
+      system: entry.system,
+      nearest: entry.nearest,
+      spectralType: entry.spectralType,
     });
     // Exact: the linear motion is how the catalogue is meant to be read, not a fallback
     // from something better, so the interface does not call it APPROXIMATE. Alpha
@@ -199,7 +254,7 @@ export async function addStarBody(
       discColorIndices.set(id, record[STAR3D.bv]!);
     }
     store.addPropagatedBody(
-      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm, measuredMassSun(at) ?? massSun),
+      starBodyDefinition(id, entry.display, record[STAR3D.bv]!, radiusKm, measuredMassSun(at) ?? massSun),
       null,
       component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
       { exact: true },

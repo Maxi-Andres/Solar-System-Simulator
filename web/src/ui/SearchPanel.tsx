@@ -13,6 +13,8 @@ import {
 import { addCometBody, cometBodyId } from '../core/cometBodies.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { archivePlanetId, archiveSystemKey, searchEntry, type ExoplanetArchive } from '../core/exoplanetArchive.ts';
+import { registeredSystem } from '../core/planetarySystems.ts';
 import {
   addBulkSatelliteBody,
   addSgpSatelliteBody,
@@ -69,6 +71,12 @@ import { Panel } from './Panel.tsx';
  * 32349", "Gaia DR3 ..." -- from the 3D stars' name index, fetched when the panel opens.
  * Listed right after the bodies: a star is looked for by name. Choosing one makes it a
  * body (see starBodies.ts) and asks for the 3D stars, so its light is drawn where it is.
+ *
+ * And the NASA Exoplanet Archive (D4b): every host by its Archive name and its Gaia, HIP
+ * and HD designations, and every planet by its name, from exoplanets.json, fetched when the
+ * panel opens. Choosing either goes to the system, made bodies then (archiveSystems.ts);
+ * a planet, to that planet. A star found by its name that is a host goes to its system
+ * too, and is not listed twice.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -86,6 +94,12 @@ const SATELLITE_LIMIT = 12;
 /** And at most this many stars that are not bodies yet, right after the bodies. */
 const STAR_LIMIT = 12;
 
+/** And at most this many Exoplanet Archive hosts and planets, after the stars. */
+const EXO_LIMIT = 12;
+
+/** The hosts' rings' colour (scene/ExoplanetHosts.tsx). */
+const HOST_COLOR = '#7fc4c0';
+
 const ACCENT = '#3ddc84';
 
 /** A result: a body in the store, or entry `k` of the belt's name index. */
@@ -98,7 +112,9 @@ type Result =
   /** Bulk record `k`. */
   | { readonly kind: 'bulk'; readonly k: number }
   /** Entry `k` of the stars' name index. */
-  | { readonly kind: 'star'; readonly k: number };
+  | { readonly kind: 'star'; readonly k: number }
+  /** Entry `k` of the Exoplanet Archive's index: a host, or a planet (exoplanetArchive.ts). */
+  | { readonly kind: 'exo'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -111,6 +127,8 @@ export function SearchPanel({
   satelliteNames,
   stars3d,
   starNames,
+  exoplanets,
+  onArchive,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -122,6 +140,9 @@ export function SearchPanel({
   readonly satelliteNames: LazySource<SatelliteNameIndex>;
   readonly stars3d: Stars3dSource | null;
   readonly starNames: LazySource<StarNameIndex> | null;
+  readonly exoplanets: LazySource<ExoplanetArchive>;
+  /** Goes to an Archive host's system, or to one of its planets (App.tsx). */
+  readonly onArchive: (host: number, planet: number | null) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -144,6 +165,20 @@ export function SearchPanel({
     starNames?.subscribe ?? noSubscribe,
     () => starNames?.value ?? null,
   );
+  const archive = useSyncExternalStore(exoplanets.subscribe, () => exoplanets.value);
+  // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
+  const hostOfStar = useMemo(() => {
+    const map = new Map<string, number>();
+    if (archive !== null) {
+      const { hosts } = archive.catalog;
+      for (let h = 0; h < hosts.count; h += 1) {
+        if (hosts.tier[h]! >= 0) {
+          map.set(`${hosts.tier[h]}:${hosts.index[h]}`, h);
+        }
+      }
+    }
+    return map;
+  }, [archive]);
   // The SGP4 tier's names, made comparable once, when the satellites arrive.
   const sgpIndex = useMemo(() => (satelliteData === null ? null : sgpSearchIndex(satelliteData)), [satelliteData]);
   // Four thousand names made comparable once, when the comets arrive.
@@ -162,7 +197,8 @@ export function SearchPanel({
     // The names wait on the satellites themselves, so this asks for both.
     void satelliteNames.request();
     void starNames?.request();
-  }, [store, names, comets, satelliteNames, starNames]);
+    void exoplanets.request();
+  }, [store, names, comets, satelliteNames, starNames, exoplanets]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -190,8 +226,36 @@ export function SearchPanel({
         : searchNames(starIndex, query, STAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(starBodyId(starIndex.names.tier[k]!, starIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'star', k }));
-    return [...bodies, ...fromStars, ...fromComets, ...fromSatellites, ...fromNames].slice(0, RESULT_LIMIT);
-  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames, starIndex]);
+    // The stars listed already, so a host found by both its names is listed once.
+    const starsListed = new Set(
+      fromStars.map((result) =>
+        starIndex === null || result.kind !== 'star'
+          ? ''
+          : `${starIndex.names.tier[result.k]}:${starIndex.names.index[result.k]}`,
+      ),
+    );
+    const fromArchive: Result[] =
+      archive === null
+        ? []
+        : searchNames(archive.search, query, EXO_LIMIT)
+            .filter(({ k }) => {
+              const { host, planet } = searchEntry(archive.catalog, k);
+              const { hosts } = archive.catalog;
+              if (planet !== null) {
+                return !store.isPropagatedBody(archivePlanetId(planet));
+              }
+              const made = registeredSystem(archiveSystemKey(host));
+              return (
+                !(made !== null && store.isPropagatedBody(made.host)) &&
+                !starsListed.has(`${hosts.tier[host]}:${hosts.index[host]}`)
+              );
+            })
+            .map(({ k }) => ({ kind: 'exo', k }));
+    return [...bodies, ...fromStars, ...fromArchive, ...fromComets, ...fromSatellites, ...fromNames].slice(
+      0,
+      RESULT_LIMIT,
+    );
+  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames, starIndex, archive]);
 
   // A new query starts at the top.
   useEffect(() => {
@@ -244,7 +308,27 @@ export function SearchPanel({
       go(result.id);
       return;
     }
+    if (result.kind === 'exo') {
+      if (archive !== null) {
+        const { host, planet } = searchEntry(archive.catalog, result.k);
+        setLayer('planets', true);
+        onArchive(host, planet);
+        closePanel();
+      }
+      return;
+    }
     if (result.kind === 'star') {
+      // A star with planets in the Archive: its system, planets and all.
+      const host =
+        starIndex === null
+          ? undefined
+          : hostOfStar.get(`${starIndex.names.tier[result.k]}:${starIndex.names.index[result.k]}`);
+      if (host !== undefined) {
+        setLayer('planets', true);
+        onArchive(host, null);
+        closePanel();
+        return;
+      }
       if (stars3d !== null && starIndex !== null) {
         // Its light is drawn by the 3D stars: asked for now, not when the camera leaves.
         void stars3d.request();
@@ -354,6 +438,8 @@ export function SearchPanel({
             satelliteData,
             bulkNames,
             starIndex,
+            archive,
+            hostOfStar,
           );
           return (
             <li
@@ -412,11 +498,48 @@ function describeResult(
   satellites: Satellites | null,
   bulkNames: SatelliteNameIndex | null,
   starIndex: StarNameIndex | null,
+  archive: ExoplanetArchive | null,
+  hostOfStar: ReadonlyMap<string, number>,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'exo') {
+    const { hosts, planets } = archive!.catalog;
+    const { host, planet } = searchEntry(archive!.catalog, result.k);
+    if (planet === null) {
+      const count = hosts.planetCount[host]!;
+      const distance = hosts.distancePc[host];
+      return {
+        glyph: '◌',
+        color: HOST_COLOR,
+        name: hosts.name[host]!,
+        detail: [
+          'Star',
+          `${count} planet${count === 1 ? '' : 's'}`,
+          distance == null ? undefined : `${Math.round(distance * LY_PER_PC).toLocaleString('en-US')} ly`,
+        ]
+          .filter((part) => part !== undefined)
+          .join(' · '),
+      };
+    }
+    return {
+      glyph: '·',
+      color: planets.controversial[planet] ? '#7c7c7c' : '#d8c7a8',
+      name: planets.name[planet]!,
+      detail: [
+        `Planet of ${hosts.name[host]}`,
+        planets.controversial[planet] ? 'disputed' : undefined,
+        planets.method[planet] || undefined,
+        planets.year[planet] ?? undefined,
+      ]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'star') {
     const names = starIndex!.names;
     const k = result.k;
     const nearest = names.nearest[k];
+    const host = hostOfStar.get(`${names.tier[k]}:${names.index[k]}`);
+    const planetCount = host === undefined ? undefined : archive!.catalog.hosts.planetCount[host];
     return {
       glyph: '·',
       color: '#f4ecd2',
@@ -428,6 +551,7 @@ function describeResult(
           ? (systemDisplayName(names.system[k] ?? null) ?? undefined)
           : undefined,
         nearest == null ? undefined : `nearest system no. ${nearest}`,
+        planetCount === undefined ? undefined : `${planetCount} planet${planetCount === 1 ? '' : 's'}`,
       ]
         .filter((part) => part !== undefined)
         .join(' · '),
@@ -477,6 +601,9 @@ function describeResult(
 }
 
 const noSubscribe = (): (() => void) => () => {};
+
+/** Light years in a parsec (IAU 2015: 648,000/pi AU; the Julian light year). */
+const LY_PER_PC = 3.261563777;
 
 /** The SGP4 tier, searchable: CelesTrak's name, and the COSPAR id as a second. */
 function sgpSearchIndex(satellites: Satellites): Searchable & { readonly byNorad: ReadonlyMap<number, number> } {

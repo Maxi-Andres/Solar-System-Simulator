@@ -158,6 +158,26 @@ export function colorIndexToTemperature(colorIndex: number): number {
 }
 
 /**
+ * The colour index Ballesteros's relation gives a temperature: its inverse, by bisection
+ * -- the relation falls monotonically from MIN_COLOR_INDEX to MAX_COLOR_INDEX. For a star
+ * known by its effective temperature and not its B-V (an Exoplanet Archive host placed from
+ * the Archive), so its colour takes the same path every other star's does.
+ */
+export function temperatureToColorIndex(kelvin: number): number {
+  let low = MIN_COLOR_INDEX;
+  let high = MAX_COLOR_INDEX;
+  for (let step = 0; step < 50; step += 1) {
+    const middle = (low + high) / 2;
+    if (colorIndexToTemperature(middle) > kelvin) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return (low + high) / 2;
+}
+
+/**
  * Colour of a star from its colour index, at unit luminance.
  *
  * The integral is 471 samples, so it is worked out once per thousandth of a magnitude

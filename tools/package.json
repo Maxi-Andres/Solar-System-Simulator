@@ -7,7 +7,9 @@
     "./types": "./src/types.ts",
     "./catalog": "./src/catalog.ts",
     "./config": "./src/config.ts",
-    "./satellites/named": "./src/satellites/named.ts"
+    "./satellites/named": "./src/satellites/named.ts",
+    "./exoplanets": "./src/exoplanets/buildExoplanets.ts",
+    "./exoplanets/archive": "./src/exoplanets/archive.ts"
   },
   "description": "Static ephemeris generator backed by the JPL Horizons API",
   "scripts": {
@@ -15,6 +17,7 @@
     "fetch:belt": "node src/belt/fetchBelt.ts",
     "fetch:satellites": "node src/satellites/fetchSatellites.ts",
     "fetch:stars": "node src/stars/fetchStars.ts",
+    "fetch:exoplanets": "node src/exoplanets/fetchExoplanets.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",

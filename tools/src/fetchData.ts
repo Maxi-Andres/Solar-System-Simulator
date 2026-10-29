@@ -20,6 +20,9 @@
  *   CelesTrak GP data -- https://celestrak.org/NORAD/elements/
  *     SGP4 mean elements for the Earth satellites, from the US Space Force's catalogue.
  *     See satellites/.
+ *
+ *   NASA Exoplanet Archive TAP -- https://exoplanetarchive.ipac.caltech.edu/TAP/sync
+ *     Every confirmed planet of another star, and its host. See exoplanets/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -67,6 +70,8 @@ import {
   positionAt,
   simplifyPath,
 } from './paths.ts';
+import { ARCHIVE_ACKNOWLEDGEMENT, fetchArchive } from './exoplanets/archive.ts';
+import { buildExoplanets, describeExoplanets, starIdsFromBuild } from './exoplanets/buildExoplanets.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
 import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
 import { describeSky, loadSky, loadStars3d } from './stars/fetchStars.ts';
@@ -90,6 +95,7 @@ import {
   writeCatalog,
   writeSatellites,
   writeElements,
+  writeExoplanets,
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
@@ -610,7 +616,15 @@ async function main(): Promise<void> {
   // update -- and a CI runner's address is shared, so that refusal can be caused by
   // someone else's download. Failing the deploy on it would be a lottery, and the fix,
   // tomorrow's run, comes by itself. See satellites/celestrak.ts.
-  const [natural, starsRead, beltRead, cometRows, satellites] = await Promise.all([
+  //
+  // The Exoplanet Archive, a fifth, follows the stars' policy and not the satellites':
+  // one query, four seconds, with tap.ts's retries, and nothing in its terms that makes a
+  // retry a lottery. A run that cannot read it fails, and the previous deploy -- with its
+  // planets -- stays up. Without it the release would not say "no exoplanets"; it would
+  // just show a neighbourhood with only its few hand-read systems in it, the silent
+  // shrinking the policy above exists to prevent. Read here, matched against the 3D stars
+  // below, once they are built.
+  const [natural, starsRead, beltRead, cometRows, satellites, archive] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -635,6 +649,7 @@ async function main(): Promise<void> {
       console.error(`[fetch-data] satellites: FAILED, left out of this run (${String(error).slice(0, 300)})`);
       return null;
     }),
+    fetchArchive(),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -732,6 +747,12 @@ async function main(): Promise<void> {
     console.log(line.replace('[stars]', '[fetch-data]'));
   }
 
+  // The planets' hosts found among the 3D stars just built, by Gaia id or HIP number.
+  const exoplanets = buildExoplanets({ ...archive, stars: starIdsFromBuild(starsRead.stars3d) });
+  for (const line of describeExoplanets(exoplanets)) {
+    console.log(line.replace('[exoplanets]', '[fetch-data] exoplanets'));
+  }
+
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
   const belt = beltRead.sink.finish({
@@ -817,6 +838,7 @@ async function main(): Promise<void> {
   await writeStars(stars);
   await writeStars3d(starsRead.stars3d, starsRead.names.names);
   await writeBelt(belt, comets);
+  await writeExoplanets(exoplanets);
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {
@@ -882,6 +904,7 @@ async function main(): Promise<void> {
       'names from the IAU WGSN and the Yale Bright Star Catalogue; via CDS VizieR and the ESA Gaia Archive.',
   );
   console.log("[fetch-data] Asteroid orbits from JPL's Small-Body Database (NASA/JPL-Caltech).");
+  console.log(`[fetch-data] ${ARCHIVE_ACKNOWLEDGEMENT}`);
   if (satellites !== null) {
     console.log(`[fetch-data] ${satellites.info.credit}`);
   }

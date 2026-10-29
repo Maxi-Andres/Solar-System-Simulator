@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   BELT_NAMES_FILE,
   COMETS_INFO_FILE,
+  EXOPLANETS_FILE,
   OUTPUT_DIR,
   POSITION_DECIMALS,
   SATELLITES_DIR,
@@ -24,6 +25,7 @@ import {
   type Stars3dBuild,
 } from './stars/build3d.ts';
 import type {
+  ExoplanetCatalog,
   BeltInfo,
   BodyDefinition,
   ChunkInfo,
@@ -280,4 +282,14 @@ export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<v
 
 export async function writeManifest(manifest: Manifest): Promise<void> {
   await writeJson(join(OUTPUT_DIR, 'manifest.json'), manifest);
+}
+
+/**
+ * The Exoplanet Archive's planets and their hosts, as exoplanets.json (ExoplanetCatalog).
+ * One compact file, 1.9 MB (0.5 MB gzipped) on 2026-10-29: the app fetches it only once the
+ * camera leaves the planets with the Exoplanet Hosts layer on, or search opens. Takes the directory, because `pnpm fetch:exoplanets`
+ * regenerates it alone.
+ */
+export async function writeExoplanets(catalog: ExoplanetCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await writeCompactJson(join(outputDir, EXOPLANETS_FILE), catalog);
 }

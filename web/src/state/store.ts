@@ -68,6 +68,7 @@ export type LayerId =
   | 'asteroids'
   | 'comets'
   | 'starMap'
+  | 'exoplanetHosts'
   | 'milkyWay'
   | 'spacecraft'
   | 'satellites'
@@ -105,6 +106,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
   // would see from where the camera is.
   { id: 'starMap', label: 'Star Map', pending: null },
+  // Every star the NASA Exoplanet Archive lists a planet for, ringed on the map with a dot
+  // per planet (scene/ExoplanetHosts.tsx); shown where the map is, past the planets.
+  { id: 'exoplanetHosts', label: 'Exoplanet Hosts', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -144,6 +148,7 @@ const DEFAULT_LAYERS: LayerState = {
   asteroids: false,
   comets: false,
   starMap: true,
+  exoplanetHosts: true,
   milkyWay: true,
   spacecraft: true,
   satellites: false,

@@ -91,6 +91,7 @@ Other commands:
 pnpm fetch:belt      # regenerate only the belt and the comets, from JPL's SBDB (~5 minutes)
 pnpm fetch:satellites  # regenerate only the Earth satellites, from CelesTrak (~10 seconds)
 pnpm fetch:stars     # regenerate only the stars, sky and 3D, from the Gaia Archive and VizieR (~4 minutes)
+pnpm fetch:exoplanets  # regenerate only exoplanets.json, from the NASA Exoplanet Archive (~5 seconds; after the stars)
 pnpm write:catalog   # publish catalog-only changes (a new map, a radius) into bodies.json, no fetch
 pnpm test            # 426 tests across both workspaces
 pnpm typecheck       # type-check both workspaces
@@ -696,6 +697,38 @@ Sizes: `bulk.bin` 0.91 MB (0.74 MB gzipped), `bulk-names.json` 0.78 MB (0.17 MB)
 `sgp4.json` 191 KB (26 KB), `named.json` 42 KB (6 KB). Building it from the downloads
 takes two seconds of SGP4.
 
+### Exoplanets
+
+**Every confirmed planet of another star**, from the NASA Exoplanet Archive's Planetary
+Systems Composite Parameters (`pscomppars`), read through its TAP service in one query:
+6,451 planets about 4,847 stars on 2026-10-29. `exoplanets.json` keeps the Archive's numbers
+as served -- each with its paper -- and nothing derived; `pnpm fetch:exoplanets` regenerates
+it alone (`--out <dir>`), matching against the 3D stars already there.
+
+**The hosts on the map.** Each host is looked for among the 3D stars by Gaia DR3 source_id,
+then by Hipparcos number (never a component B's, never one whose Gaia id disagrees): 1,178
+found on 2026-10-29, TRAPPIST-1 among them. Those carry their star's own record, so the ring
+sits on the point and moves with it. The other 3,644 -- the Kepler and TESS stars past the
+census -- are placed from the Archive's position, distance, proper motion and radial
+velocity, carried from Gaia's J2016 back to J2000; 25 with no distance are not placed. The
+Exoplanet Hosts layer draws all of them as one Points object, a ring with a dot per planet.
+
+**A system gone to.** Clicking a ring, or finding a host or a planet by search, makes the star
+a body -- a sphere of the Archive's radius, with its mass -- and its planets bodies on their
+orbits (`web/src/core/archiveSystems.ts`). A transiting planet is a sphere of its measured
+radius at its measured tilt; any other is the size its mass suggests (Chen & Kipping 2017),
+edge-on to the Sun. The conventions for what the Archive leaves out are in
+`web/src/core/exoplanetArchive.ts`. The one that needed evidence is **whose argument of
+periastron** the Archive lists: read as the star's, the radial-velocity convention (the
+same number as the planet's in the transit convention). Of the 41 eccentric planets whose
+periastron time, transit time and omega all come from one paper, 35 agree with that reading
+and 1 with the other. The systems
+drawn from their papers -- Proxima's and the four in `planetarySystems.ts` -- are not drawn
+twice: their rings go to them.
+
+The file is 1.9 MB (0.5 MB gzipped), fetched only when the camera leaves the planets with
+the layer on, or search opens. The run fails without it, as it does without the stars.
+
 ### Spacecraft sampling
 
 A spacecraft is the case no single step can serve. Juice cruises for months on a curve
@@ -957,6 +990,7 @@ two, never drawn somewhere approximate and then moved.
 | [IAU Catalog of Star Names (WGSN)](https://exopla.net/star-names/modern-iau-star-names/) | The IAU's proper star names, vendored |
 | [Yale Bright Star Catalogue](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50), via CDS | Bayer and Flamsteed designations |
 | [SIMBAD](https://simbad.cds.unistra.fr/) | Names, systems and spectral types of the nearest stars, compiled once and vendored |
+| [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/) (`pscomppars`, DOI 10.26133/NEA13) | Every confirmed planet of another star, its orbit, mass and radius, and its host's position, radius and mass |
 
 ## Roadmap
 
@@ -1213,6 +1247,9 @@ Stated plainly, since the point of the project is that everything else is not:
   `web/public/textures/CREDITS.md`.
 - Rotational elements: **IAU Working Group on Cartographic Coordinates and Rotational
   Elements**, 2015 report (Archinal et al. 2018).
+- Planets of other stars: this research has made use of the **NASA Exoplanet Archive**,
+  which is operated by the California Institute of Technology, under contract with the
+  National Aeronautics and Space Administration under the Exoplanet Exploration Program.
 - Interface icons are hand-written inline SVG — no icon set, nothing to attribute.
 
 This project is not affiliated with or endorsed by NASA or JPL.

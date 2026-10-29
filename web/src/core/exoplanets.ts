@@ -5,9 +5,10 @@ import { J2000_JD } from './time.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
 
 /**
- * Planets of other stars (D3c, D4a): each on the orbit its discoverers fitted, and under
- * stated conventions for whatever the fit leaves open. The data are in proximaPlanets.ts
- * and planetarySystems.ts; this is what they have in common.
+ * Planets of other stars (D3c, D4a, D4b): each on the orbit its discoverers fitted, and
+ * under stated conventions for whatever the fit leaves open. The data are in
+ * proximaPlanets.ts and planetarySystems.ts, read from the papers, and in
+ * exoplanetArchive.ts, the NASA Exoplanet Archive's; this is what they have in common.
  *
  * ## What a fit gives, and what it does not
  *
@@ -54,6 +55,8 @@ export type PlanetPhase =
   | { readonly kind: 'conjunction'; readonly jd: number }
   /** At `jd`, `rad` of mean anomaly past inferior conjunction. */
   | { readonly kind: 'pastConjunction'; readonly jd: number; readonly rad: number }
+  /** At periastron at `jd`: an orbit fitted with a periastron time and no conjunction. */
+  | { readonly kind: 'periastron'; readonly jd: number }
   | { readonly kind: 'unknown' };
 
 export interface ExoPlanet {
@@ -68,6 +71,17 @@ export interface ExoPlanet {
   /** Earth masses: the minimum mass m sin i, unless the tilt is measured. */
   readonly massEarth: number;
   readonly massIsMinimum: boolean;
+  /**
+   * What else to say of the mass, where it is not plainly a measurement: an estimate from
+   * the radius (the Archive's "M-R relationship"), a limit, or not known at all (then
+   * `massEarth` is 0, and nothing is drawn from it). Absent for a measured mass.
+   */
+  readonly massNote?: 'estimate' | 'upper limit' | 'lower limit' | 'unknown';
+  /**
+   * The radius measured from its transits, Earth radii; absent or null where none was --
+   * then the sphere is the size its mass suggests (estimatedRadiusEarth), and called so.
+   */
+  readonly radiusEarth?: number | null;
   readonly phase: PlanetPhase;
   /** Measured tilt to the sky, degrees; null where it is not (drawn edge-on). */
   readonly inclinationDeg: number | null;
@@ -116,6 +130,9 @@ export function meanAnomalyOf(planet: ExoPlanet, jd: number): number {
   const phase = planet.phase;
   if (phase.kind === 'unknown') {
     return n * (jd - J2000_JD);
+  }
+  if (phase.kind === 'periastron') {
+    return n * (jd - phase.jd);
   }
   const atConjunction = conjunctionMeanAnomaly(planet);
   const past = phase.kind === 'pastConjunction' ? phase.rad : 0;
@@ -206,12 +223,19 @@ export function estimatedRadiusEarth(massEarth: number): number {
   return anchorRadius;
 }
 
+/** A planet's radius as drawn, Earth radii: its measured one, or the estimate from its mass. */
+export function drawnRadiusEarth(planet: ExoPlanet): number {
+  return planet.radiusEarth ?? estimatedRadiusEarth(planet.massEarth);
+}
+
 /**
- * The body a planet becomes: a sphere of its estimated radius (radiusEstimated, never
- * radiusPublished: none of these has a measured one), lit by its own star.
+ * The body a planet becomes: a sphere of its radius, lit by its own star -- the radius its
+ * transits measured where it has one (radiusPublished), and otherwise the estimate from
+ * its mass (radiusEstimated, never radiusPublished).
  */
 export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDefinition {
-  const radiusKm = estimatedRadiusEarth(planet.massEarth) * EARTH_RADIUS_KM;
+  const measured = planet.radiusEarth !== undefined && planet.radiusEarth !== null;
+  const radiusKm = drawnRadiusEarth(planet) * EARTH_RADIUS_KM;
   return {
     id: planet.id,
     name: planet.name,
@@ -237,8 +261,8 @@ export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDef
     textures: null,
     rings: null,
     mission: null,
-    radiusPublished: false,
-    radiusEstimated: true,
+    radiusPublished: measured,
+    ...(measured ? {} : { radiusEstimated: true }),
   };
 }
 

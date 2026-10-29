@@ -1,5 +1,5 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
-import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 import type { DistanceMode, EphemerisStore } from './core/ephemerisStore.ts';
 import { addNamedSatellites } from './core/satelliteBodies.ts';
@@ -23,9 +23,12 @@ import {
 import {
   ensurePlanetarySystems,
   PLANETARY_SYSTEMS,
+  registeredSystem,
   systemFramingKm,
   systemView,
 } from './core/planetarySystems.ts';
+import { ensureArchiveSystem } from './core/archiveSystems.ts';
+import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
@@ -85,6 +88,7 @@ export function App() {
     names,
     satellites,
     satelliteNames,
+    exoplanets,
     clock,
     error,
     readout,
@@ -151,6 +155,14 @@ export function App() {
     }
     return {
       go: (key) => {
+        // One of the Archive's, gone to before: its star is a body already.
+        const archived = registeredSystem(key);
+        if (archived !== null) {
+          requestFraming(systemFramingKm(archived.system), systemView(archived.system, archived.host));
+          setFocus(archived.host);
+          renderDemand.request();
+          return;
+        }
         const system = PLANETARY_SYSTEMS.find((candidate) => candidate.key === key);
         if (system === undefined) {
           return;
@@ -177,6 +189,53 @@ export function App() {
       },
     };
   }, [stars3d, starNames, store, requestFraming, setFocus]);
+
+  // The NASA Exoplanet Archive's systems (D4b): a host clicked on the map, or found by
+  // search, made a body with its planets about it (archiveSystems.ts) and framed as a
+  // system -- or, with `planet`, that planet gone to. A host whose system is drawn from its
+  // papers goes to that system instead (CURATED_HOSTS).
+  const goToArchive = useCallback(
+    (host: number, planet: number | null = null): void => {
+      if (store === null) {
+        return;
+      }
+      exoplanets
+        .request()
+        .then(async () => {
+          const archive = exoplanets.value;
+          if (archive === null) {
+            return;
+          }
+          const curated = CURATED_HOSTS[archive.catalog.hosts.name[host]!];
+          if (curated !== undefined) {
+            if (curated === 'alpha-centauri') {
+              alphaCen?.go('Proxima');
+            } else {
+              planetSystems?.go(curated);
+            }
+            return;
+          }
+          // Its light is drawn by the 3D stars, where it is one: asked for now.
+          void stars3d?.request();
+          const made = await ensureArchiveSystem(store, archive, host, stars3d, useViewStore.getState().focus);
+          if (made === null) {
+            return;
+          }
+          const planetId = planet === null ? null : archivePlanetId(planet);
+          if (planetId !== null && made.system.planets.some((candidate) => candidate.id === planetId)) {
+            setFocus(planetId);
+          } else {
+            requestFraming(systemFramingKm(made.system), systemView(made.system, made.host));
+            setFocus(made.host);
+          }
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that planetary system', error);
+        });
+    },
+    [store, exoplanets, stars3d, alphaCen, planetSystems, requestFraming, setFocus],
+  );
 
   // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
   // anywhere, and a click on a name goes there, as for the planets (alphaCenBodies.ts).
@@ -376,6 +435,9 @@ export function App() {
         showMilkyWay={layers.milkyWay}
         galaxyLabels={galaxyLabels}
         scaleBar={scaleBar}
+        exoplanets={exoplanets}
+        showExoplanetHosts={layers.exoplanetHosts}
+        onPickHost={goToArchive}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -451,6 +513,8 @@ export function App() {
               satelliteNames={satelliteNames}
               stars3d={stars3d}
               starNames={starNames}
+              exoplanets={exoplanets}
+              onArchive={goToArchive}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
@@ -484,6 +548,7 @@ export function App() {
           comets={comets}
           satellites={satellites}
           stars3d={stars3d}
+          exoplanets={exoplanets}
         />
       </Presence>
 

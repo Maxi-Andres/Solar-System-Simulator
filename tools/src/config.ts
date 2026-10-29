@@ -639,3 +639,17 @@ export const SATELLITES_SGP4_FILE = 'sgp4.json';
 export const SATELLITE_CREDIT =
   'Satellite orbits from CelesTrak (Dr. T.S. Kelso), relaying the US Space Force catalogue ' +
   '(18th and 19th Space Defense Squadrons, Space-Track.org).';
+
+/**
+ * The NASA Exoplanet Archive's TAP endpoint, at IPAC/Caltech, and the table every
+ * confirmed planet is read from: the Planetary Systems Composite Parameters, one row per
+ * planet, each column filled from whichever published solution the Archive judged best for
+ * it (https://exoplanetarchive.ipac.caltech.edu/docs/pscp_about.html). Answered in four
+ * seconds on 2026-10-29, 6,451 planets about 4,847 stars. One service, with no mirror: the
+ * Archive is the source, not a copy of one.
+ */
+export const EXOPLANET_ARCHIVE_TAP_URL = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync';
+export const EXOPLANET_ARCHIVE_TABLE = 'pscomppars';
+
+/** The output file. */
+export const EXOPLANETS_FILE = 'exoplanets.json';

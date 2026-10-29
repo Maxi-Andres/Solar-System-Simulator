@@ -5,6 +5,8 @@ import type { BeltSource } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
+import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
+import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -18,6 +20,7 @@ import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
+import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
@@ -108,6 +111,10 @@ export interface SolarSystemCanvasProps {
   readonly galaxyLabels: RefObject<(HTMLElement | null)[]>;
   /** The scale bar's nodes, written by ScaleBarProbe. */
   readonly scaleBar: RefObject<ScaleBarElements | null>;
+  /** The Exoplanet Archive, its hosts' rings, and what a click on one does. */
+  readonly exoplanets: LazySource<ExoplanetArchive>;
+  readonly showExoplanetHosts: boolean;
+  readonly onPickHost: (host: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -134,6 +141,9 @@ export function SolarSystemCanvas({
   showMilkyWay,
   galaxyLabels,
   scaleBar,
+  exoplanets,
+  showExoplanetHosts,
+  onPickHost,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -167,6 +177,7 @@ export function SolarSystemCanvas({
     satelliteChips,
     showDistanceRings,
     showStarMap,
+    showExoplanetHosts,
   ]);
 
   return (
@@ -243,6 +254,14 @@ export function SolarSystemCanvas({
         labels={ringLabels}
       />
       <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
+      <ExoplanetHosts
+        source={exoplanets}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showExoplanetHosts}
+        onPick={onPickHost}
+      />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <LabelProjector
         store={store}

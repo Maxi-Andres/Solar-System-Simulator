@@ -13,6 +13,7 @@ import {
   type Satellites,
 } from './satellites.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
+import { loadExoplanetArchive, type ExoplanetArchive } from './exoplanetArchive.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -60,6 +61,11 @@ export interface Simulation {
   readonly stars3d: Stars3dSource | null;
   /** Their names, fetched when search first opens. */
   readonly starNames: LazySource<StarNameIndex> | null;
+  /**
+   * The NASA Exoplanet Archive's planets and their hosts (exoplanetArchive.ts): fetched
+   * when the camera leaves the planets with the Exoplanet Hosts layer on, or search opens.
+   */
+  readonly exoplanets: LazySource<ExoplanetArchive>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -111,6 +117,12 @@ export function useSimulation(refreshHz = 10): Simulation {
       ? null
       : loadSatelliteNames(httpBeltFetchers, satellites.info, import.meta.env.BASE_URL);
   }, 'the satellite names');
+
+  const exoplanetsRef = useRef<LazySource<ExoplanetArchive>>(null);
+  exoplanetsRef.current ??= new LazySource(
+    () => loadExoplanetArchive(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the exoplanets',
+  );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);
@@ -215,6 +227,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     satelliteNames: satelliteNamesRef.current,
     stars3d,
     starNames,
+    exoplanets: exoplanetsRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

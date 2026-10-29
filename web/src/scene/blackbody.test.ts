@@ -8,6 +8,7 @@ import {
   MIN_COLOR_INDEX,
   planckSpectralRadiance,
   starColor,
+  temperatureToColorIndex,
 } from './blackbody.ts';
 
 /**
@@ -151,5 +152,15 @@ describe('the colour itself', () => {
   it('gives every colour index past the clamp the clamp\'s colour', () => {
     expect(starColor(-3)).toBe(starColor(-0.4));
     expect(starColor(9)).toBe(starColor(4));
+  });
+});
+
+describe('temperatureToColorIndex', () => {
+  it('inverts colorIndexToTemperature across the range', () => {
+    for (const bv of [-0.3, 0, 0.65, 1.5, 3]) {
+      expect(temperatureToColorIndex(colorIndexToTemperature(bv))).toBeCloseTo(bv, 6);
+    }
+    // TRAPPIST-1, 2,566 K (Agol et al. 2021): a red dwarf's colour index.
+    expect(temperatureToColorIndex(2566)).toBeGreaterThan(1.8);
   });
 });

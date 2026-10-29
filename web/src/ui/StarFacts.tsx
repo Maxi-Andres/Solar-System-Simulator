@@ -12,7 +12,7 @@ import {
   RADIUS_B_SUN,
   RADIUS_PROXIMA_SUN,
 } from '../core/alphaCentauri.ts';
-import { planetarySystemOf } from '../core/planetarySystems.ts';
+import { planetarySystemOf, type PlanetarySystem } from '../core/planetarySystems.ts';
 import { starBodyFacts } from '../core/starBodies.ts';
 import {
   apparentMagnitude,
@@ -125,17 +125,20 @@ export function StarFacts({
     };
   }, [id, facts, stars3d]);
 
+  // A host placed from the Exoplanet Archive, not one of the 3D stars: what the Archive says.
+  const system = planetarySystemOf(id);
   if (facts === null) {
-    return null;
+    return system?.archive === undefined ? null : <ArchiveHostFacts system={system} />;
   }
   const record = facts.record;
   const flags = record[STAR3D.flags]!;
   const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
   const component = matchComponent(at);
   const member: Member | null = component ?? (isProximaRecord(at) ? 'Proxima' : null);
-  // A planetary system's star: its measured radius and published mass (planetarySystems.ts).
-  const host = planetarySystemOf(id);
-  const measured =
+  // A planetary system's star: its measured radius and published mass (planetarySystems.ts),
+  // or the Exoplanet Archive's (archiveSystems.ts).
+  const host = system;
+  const measured: { readonly radius: number | null; readonly mass: number } | null =
     member !== null
       ? MEASURED[member]
       : host === null
@@ -166,14 +169,19 @@ export function StarFacts({
       <dd style={VALUE}>{`M_V ${record[STAR3D.Mv]!.toFixed(2)}`}</dd>
       <dt style={TERM}>Colour index</dt>
       <dd style={VALUE}>{`B−V ${record[STAR3D.bv]!.toFixed(2)}`}</dd>
-      {measured !== null && (
+      {measured?.radius != null && (
         <>
           <dt style={TERM}>Radius</dt>
-          <dd style={VALUE}>{`${measured.radius} R☉`}</dd>
-          <dt style={TERM}>Mass</dt>
-          <dd style={VALUE}>{`${measured.mass} M☉`}</dd>
+          <dd style={VALUE}>{`${formatSolar(measured.radius)} R☉`}</dd>
         </>
       )}
+      {measured !== null && measured.mass > 0 && (
+        <>
+          <dt style={TERM}>Mass</dt>
+          <dd style={VALUE}>{`${formatSolar(measured.mass)} M☉`}</dd>
+        </>
+      )}
+      {host?.archive !== undefined && <PlanetsRow system={host} />}
       {facts.spectralType !== null && (
         <>
           <dt style={TERM}>Spectral type</dt>
@@ -252,8 +260,106 @@ export function StarFacts({
             ? 'Motion across the sky'
             : 'Motion in 3D'}
       </dd>
+      {host?.archive !== undefined && <ArchiveSources system={host} />}
       <dt style={TERM}>Drawn as</dt>
-      <dd style={VALUE}>{measured !== null ? 'Disc, measured size' : 'Point'}</dd>
+      <dd style={VALUE}>
+        {measured?.radius == null ? 'Point' : host?.archive !== undefined ? 'Disc, Archive radius' : 'Disc, measured size'}
+      </dd>
+    </>
+  );
+}
+
+/** A stellar radius or mass as the Archive quotes it: three significant figures at most. */
+function formatSolar(value: number): string {
+  return Number(value.toPrecision(3)).toString();
+}
+
+/** How many planets the Archive lists, and how many have an orbit to draw. */
+function PlanetsRow({ system }: { readonly system: PlanetarySystem }) {
+  const listed = system.archive?.listed ?? system.planets.length;
+  const drawn = system.planets.length;
+  return (
+    <>
+      <dt style={TERM}>Planets</dt>
+      <dd style={VALUE}>{drawn === listed ? `${listed}` : `${listed}, ${drawn} with an orbit`}</dd>
+    </>
+  );
+}
+
+/** Where an Archive host's size and mass come from, a word or two each. */
+function ArchiveSources({ system }: { readonly system: PlanetarySystem }) {
+  return (
+    <>
+      {system.hostRadiusReference !== null && (
+        <>
+          <dt style={TERM}>Radius from</dt>
+          <dd style={VALUE}>{system.hostRadiusReference}</dd>
+        </>
+      )}
+      <dt style={TERM}>Mass from</dt>
+      <dd style={VALUE}>{system.hostMassReference}</dd>
+      <dt style={TERM}>Planets from</dt>
+      <dd style={VALUE}>NASA Exoplanet Archive</dd>
+    </>
+  );
+}
+
+/**
+ * A host placed from the Exoplanet Archive (archiveSystems.ts): none of the star catalogues
+ * here has it, so everything said of it is the Archive's.
+ */
+function ArchiveHostFacts({ system }: { readonly system: PlanetarySystem }) {
+  const archive = system.archive!;
+  return (
+    <>
+      {archive.distancePc !== null && (
+        <>
+          <dt style={TERM}>Distance</dt>
+          <dd style={VALUE}>{formatStarDistance(archive.distancePc)}</dd>
+        </>
+      )}
+      {system.hostRadiusSun !== null && (
+        <>
+          <dt style={TERM}>Radius</dt>
+          <dd style={VALUE}>{`${formatSolar(system.hostRadiusSun)} R☉`}</dd>
+        </>
+      )}
+      {system.hostMassSun > 0 && (
+        <>
+          <dt style={TERM}>Mass</dt>
+          <dd style={VALUE}>{`${formatSolar(system.hostMassSun)} M☉`}</dd>
+        </>
+      )}
+      <dt style={TERM}>Temperature</dt>
+      <dd style={VALUE}>{archive.teffK === null ? 'unknown: Sun-coloured' : `${Math.round(archive.teffK)} K`}</dd>
+      {archive.spectralType !== null && (
+        <>
+          <dt style={TERM}>Spectral type</dt>
+          <dd style={VALUE}>{archive.spectralType}</dd>
+        </>
+      )}
+      <PlanetsRow system={system} />
+      {archive.stars > 1 && (
+        <>
+          <dt style={TERM}>Stars</dt>
+          <dd style={VALUE}>{archive.stars}</dd>
+        </>
+      )}
+      {archive.designations.length > 0 && (
+        <>
+          <dt style={TERM}>Also</dt>
+          <dd style={VALUE}>{archive.designations.slice(0, 3).join(', ')}</dd>
+        </>
+      )}
+
+      <div style={DIVIDER} />
+      <dt style={TERM}>Distance from</dt>
+      <dd style={VALUE}>NASA Exoplanet Archive</dd>
+      <ArchiveSources system={system} />
+      <dt style={TERM}>Placed by</dt>
+      <dd style={VALUE}>{archive.moving ? 'Archive position and motion' : 'Archive position, no motion'}</dd>
+      <dt style={TERM}>Drawn as</dt>
+      <dd style={VALUE}>{system.hostRadiusSun === null ? 'Marker' : 'Disc, Archive radius'}</dd>
     </>
   );
 }

@@ -1634,3 +1634,140 @@ export interface SatelliteNames {
   /** Element epoch minus referenceJdUtc, days, to 0.01: negative, older than the reference. */
   readonly ageDays: readonly number[];
 }
+
+/**
+ * `exoplanets.json`: every confirmed planet in the NASA Exoplanet Archive's Planetary
+ * Systems Composite Parameters table (pscomppars), one row per planet, and their host
+ * stars -- see exoplanets/. Columnar, as the stars' names.json is: entry k of every host
+ * column is host k, and of every planet column planet k.
+ *
+ * The numbers are the Archive's as it serves them, nothing derived: where a value is
+ * missing it is null here, and what the app draws in its place is the app's convention
+ * (web/src/core/archiveSystems.ts), stated there and on screen.
+ */
+export interface ExoplanetCatalog {
+  readonly source: {
+    readonly name: string;
+    /** "pscomppars". */
+    readonly table: string;
+    /** The TAP endpoint it was read through. */
+    readonly via: string;
+    readonly queriedAt: string;
+  };
+  /**
+   * The 3D stars the hosts were matched against: their stars3d.json `queriedAt`, or null
+   * where there were none. A host's `tier` and `index` mean something only against those;
+   * the app checks, and places every host from `x`..`vz` when the two do not agree.
+   */
+  readonly stars3dQueriedAt: string | null;
+  /** The frame of `x`..`vz`: the 3D stars' (Stars3dInfo.frame), at J2000.0. */
+  readonly frame: string;
+  readonly counts: {
+    readonly planets: number;
+    readonly hosts: number;
+    /** Hosts found among the 3D stars, by Gaia DR3 source_id and by HIP number. */
+    readonly matchedByGaia: number;
+    readonly matchedByHip: number;
+    /** Hosts placed from the Archive's own position and distance. */
+    readonly placedFromArchive: number;
+    /** Hosts with no distance in the Archive and not among the 3D stars: not placed. */
+    readonly unplaced: number;
+    /** Planets seen to transit, with a radius from the transit (not the Archive's estimate). */
+    readonly transitRadius: number;
+    /** Planets with the Archive's controversy flag set. */
+    readonly controversial: number;
+  };
+  /**
+   * Which convention the Archive's argument of periastron is in, tested where it can be:
+   * planets with an eccentricity of at least 0.1 and a periastron time, a transit (or
+   * conjunction) time and an argument of periastron all from one paper. `star`: the
+   * conjunction falls at a true anomaly of 90 deg - omega -- omega the star's, the line of
+   * sight pointing away from us, as radial velocities are fitted (and, the same number, the
+   * planet's with the line of sight pointing toward us, as transits are; Winn 2010). `planet`:
+   * at -90 deg - omega, half a turn away. `neither`: the times agree with neither to 5% of a
+   * period. See exoplanets/buildExoplanets.ts omegaConvention.
+   */
+  readonly omegaCheck: { readonly star: number; readonly planet: number; readonly neither: number };
+  /** Every reference cited below, once: entries are indices into this. */
+  readonly references: readonly string[];
+  readonly hosts: ExoplanetHosts;
+  readonly planets: ExoplanetPlanets;
+}
+
+export interface ExoplanetHosts {
+  readonly count: number;
+  /** The Archive's hostname: "TRAPPIST-1", "HD 219134", "tau Cet". */
+  readonly name: readonly string[];
+  /** Other designations the Archive gives: "Gaia DR3 ...", "HIP 8102", "HD 10700". */
+  readonly designations: readonly (readonly string[])[];
+  /** Its 3D star (Stars3dNames.tier/index), or -1 for both where it is not one of them. */
+  readonly tier: readonly number[];
+  readonly index: readonly number[];
+  /**
+   * Scene frame, parsecs about the Sun at J2000.0, and km/s: a matched host's own 3D record,
+   * float for float, so its marker sits on its star; any other's from the Archive's
+   * position, distance, proper motion and radial velocity (none: zero), its position taken
+   * as Gaia DR3's epoch, J2016.0, and carried back to J2000.0 along that motion.
+   * Null for a host that could not be placed.
+   */
+  readonly x: readonly (number | null)[];
+  readonly y: readonly (number | null)[];
+  readonly z: readonly (number | null)[];
+  readonly vx: readonly (number | null)[];
+  readonly vy: readonly (number | null)[];
+  readonly vz: readonly (number | null)[];
+  /** The Archive's distance, pc (sy_dist). */
+  readonly distancePc: readonly (number | null)[];
+  /** Stellar radius and mass, solar units, and the reference each is from. */
+  readonly radiusSun: readonly (number | null)[];
+  readonly radiusRef: readonly (number | null)[];
+  readonly massSun: readonly (number | null)[];
+  readonly massRef: readonly (number | null)[];
+  readonly teffK: readonly (number | null)[];
+  readonly spectralType: readonly (string | null)[];
+  /** Stars in the system (sy_snum). */
+  readonly stars: readonly number[];
+  /** Its planets: `planetCount` of them from `firstPlanet`, by period. */
+  readonly firstPlanet: readonly number[];
+  readonly planetCount: readonly number[];
+}
+
+export interface ExoplanetPlanets {
+  readonly count: number;
+  readonly name: readonly string[];
+  readonly host: readonly number[];
+  /** The Archive's discovery method: "Transit", "Radial Velocity", "Microlensing", ... */
+  readonly method: readonly string[];
+  readonly year: readonly (number | null)[];
+  readonly discoveryRef: readonly (number | null)[];
+  /** pl_controv_flag: listed, and its existence argued over in the literature. */
+  readonly controversial: readonly boolean[];
+  /** tran_flag: seen to pass in front of its star. */
+  readonly transits: readonly boolean[];
+  /** Days and AU; null where missing or published only as a limit. */
+  readonly periodDays: readonly (number | null)[];
+  readonly orbitRef: readonly (number | null)[];
+  readonly semiMajorAxisAu: readonly (number | null)[];
+  /** Null where missing; an upper limit is null too, and `eccentricityLimit` set. */
+  readonly eccentricity: readonly (number | null)[];
+  readonly eccentricityLimit: readonly boolean[];
+  /** pl_orblper as the Archive gives it, degrees -- whose, see ExoplanetCatalog.omegaCheck. */
+  readonly omegaDeg: readonly (number | null)[];
+  readonly omegaRef: readonly (number | null)[];
+  /** Degrees; null where missing or a limit. */
+  readonly inclinationDeg: readonly (number | null)[];
+  /** Julian days as the Archive gives them (BJD-TDB mostly; see archive.ts). */
+  readonly transitJd: readonly (number | null)[];
+  readonly transitRef: readonly (number | null)[];
+  readonly periastronJd: readonly (number | null)[];
+  readonly periastronRef: readonly (number | null)[];
+  /** Earth masses (pl_bmasse), with what it is: "Mass", "Msini", "M-R relationship", ... */
+  readonly massEarth: readonly (number | null)[];
+  readonly massKind: readonly (string | null)[];
+  /** pl_bmasselim: 1 an upper limit, -1 a lower one, 0 a value. */
+  readonly massLimit: readonly number[];
+  readonly massRef: readonly (number | null)[];
+  /** Earth radii, only where measured: a transiting planet's, not the Archive's estimate. */
+  readonly radiusEarth: readonly (number | null)[];
+  readonly radiusRef: readonly (number | null)[];
+}
