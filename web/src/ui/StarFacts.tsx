@@ -12,6 +12,7 @@ import {
   RADIUS_B_SUN,
   RADIUS_PROXIMA_SUN,
 } from '../core/alphaCentauri.ts';
+import { planetarySystemOf } from '../core/planetarySystems.ts';
 import { starBodyFacts } from '../core/starBodies.ts';
 import {
   apparentMagnitude,
@@ -132,6 +133,14 @@ export function StarFacts({
   const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
   const component = matchComponent(at);
   const member: Member | null = component ?? (isProximaRecord(at) ? 'Proxima' : null);
+  // A planetary system's star: its measured radius and published mass (planetarySystems.ts).
+  const host = planetarySystemOf(id);
+  const measured =
+    member !== null
+      ? MEASURED[member]
+      : host === null
+        ? null
+        : { radius: host.hostRadiusSun, mass: host.hostMassSun };
   const now = component === null ? starNow(record, 0, jd) : componentNow(component, record[STAR3D.Mv]!, jd);
   const gaiaPhotometry = (flags & STAR3D_FLAG.GAIA_PHOTOMETRY) !== 0;
   const gcns = (flags & STAR3D_FLAG.GCNS) !== 0;
@@ -157,12 +166,12 @@ export function StarFacts({
       <dd style={VALUE}>{`M_V ${record[STAR3D.Mv]!.toFixed(2)}`}</dd>
       <dt style={TERM}>Colour index</dt>
       <dd style={VALUE}>{`B−V ${record[STAR3D.bv]!.toFixed(2)}`}</dd>
-      {member !== null && (
+      {measured !== null && (
         <>
           <dt style={TERM}>Radius</dt>
-          <dd style={VALUE}>{`${MEASURED[member].radius.toFixed(4)} R☉`}</dd>
+          <dd style={VALUE}>{`${measured.radius} R☉`}</dd>
           <dt style={TERM}>Mass</dt>
-          <dd style={VALUE}>{`${MEASURED[member].mass.toFixed(4)} M☉`}</dd>
+          <dd style={VALUE}>{`${measured.mass} M☉`}</dd>
         </>
       )}
       {facts.spectralType !== null && (
@@ -244,7 +253,7 @@ export function StarFacts({
             : 'Motion in 3D'}
       </dd>
       <dt style={TERM}>Drawn as</dt>
-      <dd style={VALUE}>{member !== null ? 'Disc, measured size' : 'Point'}</dd>
+      <dd style={VALUE}>{measured !== null ? 'Disc, measured size' : 'Point'}</dd>
     </>
   );
 }

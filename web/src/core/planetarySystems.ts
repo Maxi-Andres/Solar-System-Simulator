@@ -22,7 +22,17 @@ import type { Vec3 } from './vec3.ts';
  * their fitted orbits about it (exoplanets.ts), and the system on the breadcrumb.
  *
  * Every planet below was checked against the NASA Exoplanet Archive (queried 2026-10-29)
- * for whether it is counted confirmed, and its numbers read from the paper itself.
+ * for whether it is counted confirmed, and its numbers read from the paper itself. All the
+ * Archive lists for these four stars is here. None of them passes in front of its star, so
+ * none has a measured radius: the radii the Archive shows for them are its estimates from
+ * the mass, and each is drawn as a marker.
+ *
+ * Each star is a disc of its measured radius -- interferometry, the star's angular size
+ * times its distance -- as Alpha Centauri's are: Tau Ceti 0.793 +- 0.004 Rsun (Teixeira
+ * et al. 2009, A&A 494, 237, from Di Folco et al. 2004's VLTI diameter); Epsilon Eridani
+ * 0.74 +- 0.01 (Baines & Armstrong 2012, ApJ 744, 138, Navy Optical Interferometer);
+ * Barnard's Star 0.1869 +- 0.0012 (Boyajian et al. 2012, ApJ 757, 112, CHARA); 51 Pegasi
+ * 1.150 +- 0.020 (Boyajian et al. 2013, ApJ 771, 40, CHARA).
  *
  * ## Tau Ceti -- Feng et al. 2017, AJ 154, 135, Table 4 (MAP, C1AP1 data set)
  *
@@ -74,6 +84,9 @@ export interface PlanetarySystem {
   /** The star's mass, solar masses, for the orbits' speeds; and whose. */
   readonly hostMassSun: number;
   readonly hostMassReference: string;
+  /** The star's measured radius, solar radii, and whose (see the header). */
+  readonly hostRadiusSun: number;
+  readonly hostRadiusReference: string;
   readonly planets: readonly ExoPlanet[];
 }
 
@@ -83,6 +96,8 @@ const TAU_CETI: PlanetarySystem = {
   hostDesignation: 'tau Cet',
   hostMassSun: 0.783,
   hostMassReference: 'Teixeira et al. 2009, A&A 494, 237',
+  hostRadiusSun: 0.793,
+  hostRadiusReference: 'Teixeira et al. 2009, A&A 494, 237',
   planets: (
     [
       ['g', 'disputed', 20.0, 0.133, 0.06, 6.9, 1.75],
@@ -113,6 +128,8 @@ const EPSILON_ERIDANI: PlanetarySystem = {
   hostDesignation: 'eps Eri',
   hostMassSun: 0.82,
   hostMassReference: 'Thompson et al. 2025, AJ 170, 301',
+  hostRadiusSun: 0.74,
+  hostRadiusReference: 'Baines & Armstrong 2012, ApJ 744, 138',
   planets: [
     {
       id: 'epsilon-eridani-b',
@@ -139,6 +156,8 @@ const BARNARD: PlanetarySystem = {
   hostDesignation: 'GJ 699',
   hostMassSun: 0.162,
   hostMassReference: 'NASA Exoplanet Archive, for Basant et al. 2025',
+  hostRadiusSun: 0.1869,
+  hostRadiusReference: 'Boyajian et al. 2012, ApJ 757, 112',
   planets: (
     [
       ['d', 2.3402, 0.0188, 0.263, 2460243.7],
@@ -172,6 +191,8 @@ const PEGASI_51: PlanetarySystem = {
   hostDesignation: '51 Peg',
   hostMassSun: 1.07,
   hostMassReference: 'Cont et al. 2026, A&A 710, A345',
+  hostRadiusSun: 1.15,
+  hostRadiusReference: 'Boyajian et al. 2013, ApJ 771, 40',
   planets: [
     {
       id: '51-pegasi-b',
@@ -327,7 +348,7 @@ export async function ensurePlanetarySystems(
     if (k === undefined) {
       continue;
     }
-    const host = await addStarBody(store, stars3d, names, k, keep, true, system.hostMassSun);
+    const host = await addStarBody(store, stars3d, names, k, keep, true, system.hostMassSun, system.hostRadiusSun);
     hosts.set(system.key, host);
     addPlanets(store, host, system.planets);
   }

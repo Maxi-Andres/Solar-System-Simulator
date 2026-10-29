@@ -335,7 +335,11 @@ export function AboutPanel({
             982, L1), b first found by González Hernández et al. 2024 (A&amp;A 690, A79).{' '}
             <Strong>51 Pegasi b</Strong>, the first planet found about a Sun-like star (Mayor &amp;
             Queloz 1995, Nature 378, 355), tilted 49.8° as its own light gives it in{' '}
-            <Strong>Cont et al. 2026</Strong> (A&amp;A 710, A345).
+            <Strong>Cont et al. 2026</Strong> (A&amp;A 710, A345). The four stars are spheres of
+            their interferometric radii, as Alpha Centauri’s are: Tau Ceti 0.793 R☉ (Teixeira et
+            al. 2009), Epsilon Eridani 0.74 (Baines &amp; Armstrong 2012), Barnard’s Star 0.1869
+            and 51 Pegasi 1.15 (Boyajian et al. 2012, 2013). None of the planets passes in front
+            of its star, so none has a measured size: each is a marker.
           </Prose>
 
           <Prose>

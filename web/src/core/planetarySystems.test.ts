@@ -60,6 +60,14 @@ describe('the planetary systems', () => {
     }
   });
 
+  it('gives every star its measured radius, each with whose it is', () => {
+    const radii = Object.fromEntries(PLANETARY_SYSTEMS.map((s) => [s.key, s.hostRadiusSun]));
+    expect(radii).toEqual({ 'tau-ceti': 0.793, 'epsilon-eridani': 0.74, 'barnards-star': 0.1869, '51-pegasi': 1.15 });
+    for (const s of PLANETARY_SYSTEMS) {
+      expect(s.hostRadiusReference).toMatch(/\d{4}/);
+    }
+  });
+
   it("reaches as far as the outermost planet's apastron", () => {
     expect(systemExtentKm(system('tau-ceti')) / AU_KM).toBeCloseTo(1.334 * 1.16, 6);
     expect(systemExtentKm(system('epsilon-eridani')) / AU_KM).toBeCloseTo(3.53, 6);

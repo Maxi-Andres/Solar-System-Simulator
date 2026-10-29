@@ -29,6 +29,9 @@ export function parseStarBodyId(id: BodyId): { readonly tier: number; readonly i
   return match === null ? null : { tier: Number(match[1]), index: Number(match[2]) };
 }
 
+/** The nominal solar radius stellar radii are counted in, km (IAU 2015 B3). */
+const SOLAR_RADIUS_KM = 695_700;
+
 /** True for a catalogue star made a body: a star that is not the Sun. */
 export function isCatalogueStar(body: BodyDefinition): boolean {
   return body.kind === 'star' && body.id !== 'sun';
@@ -151,8 +154,9 @@ const pinned = new Set<BodyId>();
  * Makes entry `k` of the star names a body in `store` and returns its id, reading its
  * record from its tier -- or on its own, if the tier is not in yet. The oldest go once
  * there are more than STAR_BODIES_KEPT, unless it is `keep`, the body the camera is on.
- * `massSun`, a star's published mass, is what its planets' orbits are drawn with
- * (planetarySystems.ts); Alpha Centauri's three have theirs from alphaCentauri.ts.
+ * `massSun`, a star's published mass, is what its planets' orbits are drawn with, and
+ * `radiusSun`, its measured radius, makes it a disc (planetarySystems.ts); Alpha
+ * Centauri's three have theirs from alphaCentauri.ts.
  */
 export async function addStarBody(
   store: EphemerisStore,
@@ -162,6 +166,7 @@ export async function addStarBody(
   keep: BodyId,
   pin = false,
   massSun: number | null = null,
+  radiusSun: number | null = null,
 ): Promise<BodyId> {
   const { names: columns } = names;
   const tier = columns.tier[k]!;
@@ -188,7 +193,7 @@ export async function addStarBody(
     // (alphaCentauri.ts), which a straight line from 1991 has long since left.
     const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
     const component = matchComponent(at);
-    const radiusKm = measuredRadiusKm(at);
+    const radiusKm = measuredRadiusKm(at) ?? (radiusSun === null ? null : radiusSun * SOLAR_RADIUS_KM);
     if (radiusKm !== null) {
       discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(record[STAR3D.bv]!)));
       discColorIndices.set(id, record[STAR3D.bv]!);

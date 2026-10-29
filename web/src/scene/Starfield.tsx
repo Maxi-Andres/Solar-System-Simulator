@@ -36,10 +36,22 @@ import {
 import { mapDotPeak, splitHigh, splitLow, STAR3D_VERTEX_SHADER, UNITS_PER_PC } from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { componentState, isProximaRecord, matchComponent, type AlphaCenComponent } from '../core/alphaCentauri.ts';
-import { starBodyId } from '../core/starBodies.ts';
+import { isCatalogueStar, parseStarBodyId, starBodyId } from '../core/starBodies.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
 
-/** Alpha Centauri's three, as Starfield draws them apart from their tiers. */
-type AlphaCenMember = AlphaCenComponent | 'Proxima';
+/**
+ * A star Starfield draws apart from its tier, with a fade of its own: Alpha Centauri's
+ * three, and any other star with a measured radius (planetarySystems.ts) -- each has a
+ * disc, and its point gives way to it as the Sun's does. Keyed by tier and index.
+ */
+interface DiscStar {
+  readonly points: THREE.Points;
+  readonly tier: number;
+  readonly index: number;
+  readonly records: Float32Array;
+  /** A or B, placed on their orbit; null for a star on its record's straight line. */
+  readonly component: AlphaCenComponent | null;
+}
 
 /**
  * The sky: every star in the catalogues, at its real distance where it has one and at
@@ -271,14 +283,23 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
   // offset from the star in float64 -- to the kilometre, not to a float32 position 0.025
   // AU off -- and with a fade of their own, since each now has a disc (D3b) and its point
   // gives way to it as the Sun's does. The tier material's uniforms otherwise.
-  const pairPoints = useMemo(
-    () =>
-      new Map<
-        AlphaCenMember,
-        { readonly points: THREE.Points; readonly tier: number; readonly index: number; readonly records: Float32Array }
-      >(),
-    [tierMaterial],
-  );
+  const pairPoints = useMemo(() => new Map<string, DiscStar>(), [tierMaterial]);
+  // Which tier entries each built tier leaves out, to know when one must be rebuilt.
+  const hiddenByTier = useMemo(() => new Map<number, string>(), [tierMaterial]);
+  // The other stars with a measured radius, as "tier:index": made bodies at start
+  // (planetarySystems.ts), perhaps after their tier has landed -- then it is rebuilt.
+  const version = useStoreVersion(store);
+  const discStars = useMemo(() => {
+    void version;
+    const keys = new Set<string>();
+    for (const body of store.bodies) {
+      const at = isCatalogueStar(body) && body.radiusPublished !== false ? parseStarBodyId(body.id) : null;
+      if (at !== null) {
+        keys.add(`${at.tier}:${at.index}`);
+      }
+    }
+    return keys;
+  }, [store, version]);
   const starCount = useRef(0);
   useEffect(() => {
     const group = tiersRef.current;
@@ -287,11 +308,10 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     }
     let changed = false;
     for (const tier of view.tiers) {
-      if (tierPoints.has(tier.index)) {
-        continue;
-      }
-      // Alpha Centauri's three in this tier: taken out of it and drawn on their own.
+      // The stars in this tier drawn on their own: Alpha Centauri's three, by their
+      // positions, and the others with a disc.
       const hidden: number[] = [];
+      const apart: { i: number; key: string; component: AlphaCenComponent | null }[] = [];
       for (let i = 0; i < tier.tier.count; i += 1) {
         const base = i * STAR3D_FLOATS;
         const at = {
@@ -299,11 +319,24 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
           y: tier.records[base + STAR3D.y]!,
           z: tier.records[base + STAR3D.z]!,
         };
-        const member: AlphaCenMember | null = matchComponent(at) ?? (isProximaRecord(at) ? 'Proxima' : null);
-        if (member === null || pairPoints.has(member)) {
+        const component = matchComponent(at);
+        const key =
+          component ?? (isProximaRecord(at) ? 'Proxima' : discStars.has(`${tier.index}:${i}`) ? `${tier.index}:${i}` : null);
+        if (key !== null) {
+          hidden.push(i);
+          apart.push({ i, key, component });
+        }
+      }
+      const hiddenKey = hidden.join(',');
+      const built = tierPoints.get(tier.index);
+      if (built !== undefined && hiddenByTier.get(tier.index) === hiddenKey) {
+        continue;
+      }
+      for (const { i, key, component } of apart) {
+        if (pairPoints.has(key)) {
           continue;
         }
-        hidden.push(i);
+        const base = i * STAR3D_FLOATS;
         const own = {
           ...tierUniforms,
           uCameraHigh: { value: new THREE.Vector3() },
@@ -316,8 +349,15 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         );
         single.frustumCulled = false;
         single.renderOrder = -1;
-        pairPoints.set(member, { points: single, tier: tier.index, index: i, records: tier.records });
+        pairPoints.set(key, { points: single, tier: tier.index, index: i, records: tier.records, component });
         group.add(single);
+      }
+      hiddenByTier.set(tier.index, hiddenKey);
+      if (built !== undefined) {
+        // A star of it gained a disc after it landed: the same tier, less that star.
+        built.geometry.dispose();
+        built.geometry = buildTierGeometry(tier.records, hidden);
+        continue;
       }
       const points = new THREE.Points(buildTierGeometry(tier.records, hidden), tierMaterial);
       points.frustumCulled = false;
@@ -337,7 +377,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (changed) {
       sky.placed.needsUpdate = true;
     }
-  }, [view, tierPoints, pairPoints, tierMaterial, tierUniforms, sky]);
+  }, [view, tierPoints, pairPoints, hiddenByTier, discStars, tierMaterial, tierUniforms, sky]);
 
   // Everything made here goes with the component.
   useEffect(
@@ -351,10 +391,11 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         (points.material as THREE.Material).dispose();
       }
       pairPoints.clear();
+      hiddenByTier.clear();
       starCount.current = 0;
       tierMaterial.dispose();
     },
-    [tierPoints, pairPoints, tierMaterial],
+    [tierPoints, pairPoints, hiddenByTier, tierMaterial],
   );
   useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
   useEffect(() => () => sky.buffer.dispose(), [sky]);
@@ -433,11 +474,13 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       uniforms['uMotion']!.value = motion;
       uniforms['uPixelRatio']!.value = pixelRatio;
     }
-    // Alpha Centauri's three: the camera as seen from each, high and low, from float64,
-    // and each point fading as its disc comes in -- see pairPoints.
-    for (const [member, entry] of pairPoints) {
+    // The stars drawn on their own: the camera as seen from each, high and low, from
+    // float64, and each point fading as its disc comes in -- see pairPoints.
+    for (const entry of pairPoints.values()) {
       const star =
-        member === 'Proxima' ? starState(entry.records, entry.index, jd).position : componentState(member, jd).position;
+        entry.component === null
+          ? starState(entry.records, entry.index, jd).position
+          : componentState(entry.component, jd).position;
       const uniforms = (entry.points.material as THREE.ShaderMaterial).uniforms;
       const x = (camera.position.x * KM_PER_UNIT - sun.position.x - star.x) / PARSEC_KM;
       const y = (camera.position.y * KM_PER_UNIT - sun.position.y - star.y) / PARSEC_KM;
