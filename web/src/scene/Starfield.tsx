@@ -38,6 +38,7 @@ import { galaxyVisibility } from './MilkyWay.tsx';
 import { componentState, isProximaRecord, matchComponent, type AlphaCenComponent } from '../core/alphaCentauri.ts';
 import { isCatalogueStar, parseStarBodyId, starBodyId } from '../core/starBodies.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
+import { lensState, lensUniforms } from './lens.ts';
 
 /**
  * A star Starfield draws apart from its tier, with a fade of its own: Alpha Centauri's
@@ -46,6 +47,8 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
  */
 interface DiscStar {
   readonly points: THREE.Points;
+  /** Its far-side image, drawn while a black hole's lens is on (lens.ts). */
+  readonly twin: THREE.Points;
   readonly tier: number;
   readonly index: number;
   readonly records: Float32Array;
@@ -132,7 +135,13 @@ function star3dUniforms(coefficients: readonly [number, number], limit: number):
     uSigmaPx: { value: PSF_SIGMA_PX },
     uDisplayFloor: { value: DISPLAY_FLOOR },
     uPixelRatio: { value: 1 },
+    ...lensUniforms(0),
   };
+}
+
+/** The same uniforms, by reference, for the pass that draws the far-side images (lens.ts). */
+function secondImage(uniforms: Record<string, THREE.IUniform>): Record<string, THREE.IUniform> {
+  return { ...uniforms, uLensImage: { value: 1 } };
 }
 
 function star3dMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderMaterial {
@@ -210,6 +219,9 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
   const skyRef = useRef<THREE.Points>(null);
   const tiersRef = useRef<THREE.Group>(null);
   const sunRef = useRef<THREE.Points>(null);
+  // The far-side images of the sky and of the Sun, while a black hole's lens is on (lens.ts).
+  const skyTwinRef = useRef<THREE.Points>(null);
+  const sunTwinRef = useRef<THREE.Points>(null);
   const requested = useRef(false);
 
   const view = useSyncExternalStore(
@@ -235,31 +247,38 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     [catalog],
   );
 
-  const skyMaterial = useMemo(() => {
+  // The sky's material, and its twin for the far-side images a black hole makes (lens.ts):
+  // the same uniforms, by reference, but for which image it draws.
+  const [skyMaterial, skyMaterialTwin] = useMemo(() => {
     const pole = EQUATORIAL_POLE_IN_SCENE;
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        uSphereRadius: { value: SPHERE_RADIUS },
-        uYearsSinceEpoch: { value: 0 },
-        uEquatorialPole: { value: new THREE.Vector3(pole.x, pole.y, pole.z) },
-        uMagnitudeToPeak: { value: new THREE.Vector2(coefficients[0], coefficients[1]) },
-        uSigmaPx: { value: PSF_SIGMA_PX },
-        uDisplayFloor: { value: DISPLAY_FLOOR },
-        uPixelRatio: { value: 1 },
-        uFade: { value: 1 },
-      },
-      vertexShader: STAR_VERTEX_SHADER,
-      fragmentShader: STAR_FRAGMENT_SHADER,
-      // Stars add: two overlapping profiles are two sources of light, not one
-      // occluding the other. Depth is read so a planet can pass in front, and never
-      // written, since a point sprite has no depth worth handing to anything else.
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-      // The exposure has already been chosen and stated. See STAR_FRAGMENT_SHADER.
-      toneMapped: false,
-    });
-  }, [coefficients]);
+    const uniforms: Record<string, THREE.IUniform> = {
+      uSphereRadius: { value: SPHERE_RADIUS },
+      uYearsSinceEpoch: { value: 0 },
+      uEquatorialPole: { value: new THREE.Vector3(pole.x, pole.y, pole.z) },
+      uMagnitudeToPeak: { value: new THREE.Vector2(coefficients[0], coefficients[1]) },
+      uMagnitudeLimit: { value: catalog.magnitudeLimit },
+      uSigmaPx: { value: PSF_SIGMA_PX },
+      uDisplayFloor: { value: DISPLAY_FLOOR },
+      uPixelRatio: { value: 1 },
+      uFade: { value: 1 },
+      ...lensUniforms(0),
+    };
+    const make = (shared: Record<string, THREE.IUniform>): THREE.ShaderMaterial =>
+      new THREE.ShaderMaterial({
+        uniforms: shared,
+        vertexShader: STAR_VERTEX_SHADER,
+        fragmentShader: STAR_FRAGMENT_SHADER,
+        // Stars add: two overlapping profiles are two sources of light, not one
+        // occluding the other. Depth is read so a planet can pass in front, and never
+        // written, since a point sprite has no depth worth handing to anything else.
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        // The exposure has already been chosen and stated. See STAR_FRAGMENT_SHADER.
+        toneMapped: false,
+      });
+    return [make(uniforms), make(secondImage(uniforms))] as const;
+  }, [coefficients, catalog.magnitudeLimit]);
 
   // One set of uniforms for every tier; the Sun's point has its own, for its fade.
   const tierUniforms = useMemo(
@@ -267,16 +286,20 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     [coefficients, catalog.magnitudeLimit],
   );
   const tierMaterial = useMemo(() => star3dMaterial(tierUniforms), [tierUniforms]);
+  const tierMaterialTwin = useMemo(() => star3dMaterial(secondImage(tierUniforms)), [tierUniforms]);
   const sunUniforms = useMemo(
     () => star3dUniforms(coefficients, catalog.magnitudeLimit),
     [coefficients, catalog.magnitudeLimit],
   );
   const sunMaterial = useMemo(() => star3dMaterial(sunUniforms), [sunUniforms]);
+  const sunMaterialTwin = useMemo(() => star3dMaterial(secondImage(sunUniforms)), [sunUniforms]);
   const sunPoint = useMemo(() => sunGeometry(), []);
 
   // A Points per tier, made once each as it lands, and every sky row it places taken off
   // the sphere in the same step.
   const tierPoints = useMemo(() => new Map<number, THREE.Points>(), [tierMaterial]);
+  // And each tier's far-side images: the same geometry, drawn by the twin material.
+  const tierTwins = useMemo(() => new Map<number, THREE.Points>(), [tierMaterial]);
 
   // Alpha Centauri's three, each its own Points (alphaCentauri.ts): A and B on their orbit
   // rather than their records' straight lines, and all three placed by the camera's
@@ -343,20 +366,26 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
           uCameraLow: { value: new THREE.Vector3() },
           uFade: { value: 1 },
         };
-        const single = new THREE.Points(
-          pairGeometry(tier.records[base + STAR3D.Mv]!, tier.records[base + STAR3D.bv]!),
-          star3dMaterial(own),
-        );
+        const geometry = pairGeometry(tier.records[base + STAR3D.Mv]!, tier.records[base + STAR3D.bv]!);
+        const single = new THREE.Points(geometry, star3dMaterial(own));
         single.frustumCulled = false;
         single.renderOrder = -1;
-        pairPoints.set(key, { points: single, tier: tier.index, index: i, records: tier.records, component });
-        group.add(single);
+        const twin = new THREE.Points(geometry, star3dMaterial(secondImage(own)));
+        twin.frustumCulled = false;
+        twin.renderOrder = -1;
+        twin.visible = false;
+        pairPoints.set(key, { points: single, twin, tier: tier.index, index: i, records: tier.records, component });
+        group.add(single, twin);
       }
       hiddenByTier.set(tier.index, hiddenKey);
       if (built !== undefined) {
         // A star of it gained a disc after it landed: the same tier, less that star.
         built.geometry.dispose();
         built.geometry = buildTierGeometry(tier.records, hidden);
+        const builtTwin = tierTwins.get(tier.index);
+        if (builtTwin !== undefined) {
+          builtTwin.geometry = built.geometry;
+        }
         continue;
       }
       const points = new THREE.Points(buildTierGeometry(tier.records, hidden), tierMaterial);
@@ -364,6 +393,12 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       points.renderOrder = -1;
       tierPoints.set(tier.index, points);
       group.add(points);
+      const twin = new THREE.Points(points.geometry, tierMaterialTwin);
+      twin.frustumCulled = false;
+      twin.renderOrder = -1;
+      twin.visible = false;
+      tierTwins.set(tier.index, twin);
+      group.add(twin);
       starCount.current += tier.tier.count;
       const placed = sky.placed.array as Float32Array;
       for (let i = 0; i < tier.tier.count; i += 1) {
@@ -377,7 +412,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (changed) {
       sky.placed.needsUpdate = true;
     }
-  }, [view, tierPoints, pairPoints, hiddenByTier, discStars, tierMaterial, tierUniforms, sky]);
+  }, [view, tierPoints, tierTwins, pairPoints, hiddenByTier, discStars, tierMaterial, tierMaterialTwin, tierUniforms, sky]);
 
   // Everything made here goes with the component.
   useEffect(
@@ -386,34 +421,57 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         points.geometry.dispose();
       }
       tierPoints.clear();
-      for (const { points } of pairPoints.values()) {
+      tierTwins.clear();
+      for (const { points, twin } of pairPoints.values()) {
         points.geometry.dispose();
         (points.material as THREE.Material).dispose();
+        (twin.material as THREE.Material).dispose();
       }
       pairPoints.clear();
       hiddenByTier.clear();
       starCount.current = 0;
       tierMaterial.dispose();
+      tierMaterialTwin.dispose();
     },
-    [tierPoints, pairPoints, hiddenByTier, tierMaterial],
+    [tierPoints, tierTwins, pairPoints, hiddenByTier, tierMaterial, tierMaterialTwin],
   );
-  useEffect(() => () => skyMaterial.dispose(), [skyMaterial]);
+  useEffect(
+    () => () => {
+      skyMaterial.dispose();
+      skyMaterialTwin.dispose();
+    },
+    [skyMaterial, skyMaterialTwin],
+  );
   useEffect(() => () => sky.buffer.dispose(), [sky]);
-  useEffect(() => () => sunMaterial.dispose(), [sunMaterial]);
+  useEffect(
+    () => () => {
+      sunMaterial.dispose();
+      sunMaterialTwin.dispose();
+    },
+    [sunMaterial, sunMaterialTwin],
+  );
 
   useFrame(({ camera, gl, size }) => {
     const skyPoints = skyRef.current;
     const group = tiersRef.current;
     const sunPoints = sunRef.current;
-    if (skyPoints === null || group === null || sunPoints === null) {
+    const skyTwin = skyTwinRef.current;
+    const sunTwin = sunTwinRef.current;
+    if (skyPoints === null || group === null || sunPoints === null || skyTwin === null || sunTwin === null) {
       return;
     }
     const jd = clock.tdbJulianDay;
     const pixelRatio = gl.getPixelRatio();
+    // The far-side images are drawn while a black hole's lens is on (BlackHoleLens runs first).
+    const lensOn = lensState.on;
+    for (const twin of tierTwins.values()) {
+      twin.visible = lensOn;
+    }
 
     // The sky at infinity follows the camera, so its stars never leave the frustum and
     // never parallax.
     skyPoints.position.copy(camera.position);
+    skyTwin.position.copy(camera.position);
     skyMaterial.uniforms['uYearsSinceEpoch']!.value = yearsSinceEpoch(jd);
     // Read every frame rather than at build time: dragging the window to a display of
     // a different density changes this, and a star is sized in CSS pixels.
@@ -424,6 +482,8 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (sun === null) {
       group.visible = false;
       sunPoints.visible = false;
+      sunTwin.visible = false;
+      skyTwin.visible = false;
       return;
     }
     scratchCamera.set(
@@ -439,6 +499,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     const skyFade = 1 - galaxyVisibility(cameraFromSunKm);
     skyMaterial.uniforms['uFade']!.value = skyFade;
     skyPoints.visible = skyFade > 0;
+    skyTwin.visible = skyPoints.visible && lensOn;
 
     // The 3D stars are asked for once they could make a difference: see STARS3D_FROM_KM.
     // A star in focus asks for itself, through search.
@@ -451,6 +512,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     // float64 by putting the objects where the camera is.
     group.position.copy(camera.position);
     sunPoints.position.copy(camera.position);
+    sunTwin.position.copy(camera.position);
     const cameraPc = scratchCamera.multiplyScalar(1 / PARSEC_KM);
     const motion = julianYearsSinceJ2000(jd) * KM_S_TO_PC_PER_YEAR;
     const pixelsPerRadian =
@@ -498,6 +560,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       const fade = 1 - meshOpacity(pixelRadius);
       uniforms['uFade']!.value = fade;
       entry.points.visible = fade > 0;
+      entry.twin.visible = entry.points.visible && lensOn;
     }
 
     // The Sun is a star of the map like any other: past 30 pc it is fainter than V 8.
@@ -515,6 +578,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     const fade = sunShown ? 1 - meshOpacity(sunPixelRadius) : 1;
     sunUniforms['uFade']!.value = fade;
     sunPoints.visible = fade > 0;
+    sunTwin.visible = sunPoints.visible && lensOn;
   });
 
   return (
@@ -526,6 +590,14 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         frustumCulled={false}
         renderOrder={-1}
       />
+      <points
+        ref={skyTwinRef}
+        geometry={sky.buffer}
+        material={skyMaterialTwin}
+        frustumCulled={false}
+        renderOrder={-1}
+        visible={false}
+      />
       <group ref={tiersRef} />
       <points
         ref={sunRef}
@@ -533,6 +605,14 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         material={sunMaterial}
         frustumCulled={false}
         renderOrder={-1}
+      />
+      <points
+        ref={sunTwinRef}
+        geometry={sunPoint}
+        material={sunMaterialTwin}
+        frustumCulled={false}
+        renderOrder={-1}
+        visible={false}
       />
     </>
   );

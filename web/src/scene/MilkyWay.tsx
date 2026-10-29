@@ -16,6 +16,7 @@ import { cieX, cieY, cieZ, starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
+import { skyCapture } from './lens.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { splitHigh, splitLow } from './stars3dShader.ts';
 
@@ -231,7 +232,7 @@ void main() {
 `;
 
 /** The glow buffer over the frame: clip-space quad, soft shoulder, added under everything. */
-const COMPOSITE_VERTEX_SHADER = /* glsl */ `
+export const COMPOSITE_VERTEX_SHADER = /* glsl */ `
 varying vec2 vUv;
 void main() {
   vUv = uv;
@@ -239,7 +240,7 @@ void main() {
 }
 `;
 
-const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
+export const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler2D uGlow;
 varying vec2 vUv;
 void main() {
@@ -451,6 +452,49 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     [material, dustMaterial, target, composite],
   );
 
+  // This frame's slabs: worked out in the frame, read again by the lens's capture.
+  const slabs = useRef({ nearest: 0, step: 1 });
+
+  /** The glow into `into`, through `through`, with the uniforms as this frame set them. */
+  const drawGlow = (renderer: THREE.WebGLRenderer, through: THREE.Camera, into: THREE.WebGLRenderTarget): void => {
+    const previous = renderer.getRenderTarget();
+    renderer.getClearColor(scratchClear);
+    const clearAlpha = renderer.getClearAlpha();
+    renderer.setRenderTarget(into);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear(true, false, false);
+    const slab = material.uniforms['uSlab']!.value as THREE.Vector4;
+    // Each pass draws over the last: the renderer must not clear between them.
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    for (let index = DEPTH_SLICES - 1; index >= 0; index -= 1) {
+      slab.set(slabs.current.nearest, slabs.current.step, index, DEPTH_SLICES);
+      renderer.render(glowScene, through);
+    }
+    renderer.autoClear = autoClear;
+    renderer.setRenderTarget(previous);
+    renderer.setClearColor(scratchClear, clearAlpha);
+  };
+
+  // The lens's cube map draws the glow through each of its faces: the same points and
+  // slabs, the sprites sized for the face (lens.ts).
+  useEffect(() => {
+    skyCapture.paint = (renderer, through, into, pixelsPerRadian) => {
+      const uniform = material.uniforms['uPixelsPerRadian']!;
+      const kept = uniform.value as number;
+      uniform.value = pixelsPerRadian;
+      drawGlow(renderer, through, into);
+      uniform.value = kept;
+    };
+    skyCapture.screen = target.texture;
+    return () => {
+      skyCapture.paint = null;
+      skyCapture.screen = null;
+      skyCapture.visibility = 0;
+    };
+    // drawGlow reads only what these hold, and the slabs' ref.
+  }, [material, target, glowScene]);
+
   useFrame(() => {
     const elements = labels.current;
     const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
@@ -484,12 +528,15 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         dustPoints.current = dust;
         made.terminate();
         worker.current = null;
+        skyCapture.revision += 1;
         renderDemand.request();
       };
       made.postMessage({ count: GALAXY_POINTS, dust: DUST_POINTS });
     }
 
     const visibility = sun === null || points.current === null ? 0 : galaxyVisibility(cameraFromSunKm);
+    // For a black hole's lens, which draws this glow again into its own cube (lens.ts).
+    skyCapture.visibility = visibility;
     if (visibility === 0) {
       composite.visible = false;
       for (const element of elements) {
@@ -516,30 +563,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     uniforms['uNearFadePc']!.value = NEAR_FADE_SHARE * cameraPc.length();
 
     // The glow, into its buffer, through this frame's camera (CameraRig ran first).
-    const previous = gl.getRenderTarget();
-    gl.getClearColor(scratchClear);
-    const clearAlpha = gl.getClearAlpha();
-    gl.setRenderTarget(target);
-    gl.setClearColor(0x000000, 0);
-    gl.clear(true, false, false);
     // Far to near, slab by slab: see the header. The slabs span the galaxy as seen from
     // here, GALAXY_DEPTH_PC either side of its centre; the first and last run on to
     // nothing and to everything, so no point is left out.
     const centre = LABEL_POINTS[0]!;
     const toCentre = Math.hypot(centre[0]! - cameraPc.x, centre[1]! - cameraPc.y, centre[2]! - cameraPc.z);
-    const nearest = Math.max(0, toCentre - GALAXY_DEPTH_PC);
-    const step = (toCentre + GALAXY_DEPTH_PC - nearest) / DEPTH_SLICES;
-    const slab = uniforms['uSlab']!.value as THREE.Vector4;
-    // Each pass draws over the last: the renderer must not clear between them.
-    const autoClear = gl.autoClear;
-    gl.autoClear = false;
-    for (let index = DEPTH_SLICES - 1; index >= 0; index -= 1) {
-      slab.set(nearest, step, index, DEPTH_SLICES);
-      gl.render(glowScene, camera);
-    }
-    gl.autoClear = autoClear;
-    gl.setRenderTarget(previous);
-    gl.setClearColor(scratchClear, clearAlpha);
+    slabs.current.nearest = Math.max(0, toCentre - GALAXY_DEPTH_PC);
+    slabs.current.step = (toCentre + GALAXY_DEPTH_PC - slabs.current.nearest) / DEPTH_SLICES;
+    drawGlow(gl, camera, target);
 
     // The names: the Sun's place plus each label's parsecs, in scene units.
     camera.updateMatrixWorld();

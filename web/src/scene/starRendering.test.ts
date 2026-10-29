@@ -179,7 +179,9 @@ describe('the shaders say the same thing as the module', () => {
   });
 
   it('applies the response as one multiply-add, from the coefficients', () => {
-    expect(STAR_VERTEX_SHADER).toContain('uMagnitudeToPeak.x + uMagnitudeToPeak.y * magnitude');
+    // Of the magnitude as seen: the catalogue's, plus what a black hole's lens adds (0 without one).
+    expect(STAR_VERTEX_SHADER).toContain('float seen = magnitude + dm;');
+    expect(STAR_VERTEX_SHADER).toContain('uMagnitudeToPeak.x + uMagnitudeToPeak.y * seen');
   });
 
   it('moves stars by proper motion as a rotation, not by dividing by cos(dec)', () => {

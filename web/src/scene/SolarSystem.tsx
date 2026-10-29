@@ -58,6 +58,7 @@ import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeMode
 import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { sphereOutline } from './distanceRings.ts';
+import { shadowSphereRadius } from '../core/schwarzschildLens.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
 import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
@@ -126,7 +127,7 @@ const scratchToward = new THREE.Vector3();
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
 /**
- * A black hole's horizon is black, and black on black is nothing: so its edge is traced,
+ * A black hole's shadow is black, and black on black is nothing: so its edge is traced,
  * a thin line in the body's colour round the sphere's outline -- a guide to its size, not
  * light it gives. How strong, and in segments: a 256-gon sags 0.008% inside its circle.
  */
@@ -547,7 +548,8 @@ export function SolarSystem({
       // only exists there, and which is what stops its oceans reflecting twice as much
       // light as water does. Everything else is a rough diffuse surface with no specular
       // worth paying for.
-      // A black hole's horizon (blackHoles.ts) gives no light and takes none: black, unlit.
+      // A black hole (blackHoles.ts) gives no light and takes none: black, unlit -- a sphere
+      // of its horizon, scaled each frame to its shadow (see drawnRadiusKm below).
       const material =
         definition.kind === 'black-hole'
           ? new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -971,8 +973,20 @@ export function SolarSystem({
       const distanceUnits = handle.group.position.distanceTo(camera.position);
       const distanceKm = distanceUnits * 1000;
 
+      // A black hole is drawn as its shadow, not its horizon (schwarzschildLens.ts): a
+      // sphere that hides exactly what the shadow hides from here, b_c sqrt(1 - r_s/D) --
+      // 2.6 horizons from afar. Its radius is what the camera sees of it.
+      const horizonKm = handle.definition.radiusEquatorialKm;
+      const drawnRadiusKm =
+        handle.definition.kind === 'black-hole'
+          ? horizonKm * shadowSphereRadius(Math.max(distanceKm / horizonKm, 1))
+          : horizonKm;
+      if (handle.definition.kind === 'black-hole') {
+        handle.mesh.scale.setScalar(drawnRadiusKm / horizonKm);
+      }
+
       const pixelRadius = angularRadiusPixels(
-        handle.definition.radiusEquatorialKm,
+        drawnRadiusKm,
         distanceKm,
         size.height,
         fov,
@@ -1196,7 +1210,7 @@ export function SolarSystem({
         // The outline as the camera sees it: the circle where its lines of sight touch the
         // sphere, square to the line from the centre to the camera and a little toward it.
         // A hair outside, so the sphere's own surface does not hide it.
-        const outline = sphereOutline(handle.definition.radiusEquatorialKm, distanceKm);
+        const outline = sphereOutline(drawnRadiusKm, distanceKm);
         handle.horizonRim.visible = outline !== null && sphereOpacity > 0.005;
         if (outline !== null && handle.horizonRim.visible) {
           scratchToward.copy(camera.position).sub(handle.group.position).normalize();
