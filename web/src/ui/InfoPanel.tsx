@@ -427,7 +427,7 @@ export function shapeNote(shape: Pick<ShapeModel, 'product' | 'facets'>): string
 /**
  * A planet of another star: what its discoverers' fit gives, and which of what is drawn is
  * a convention instead -- its tilt, which way it runs across the sky, where along its
- * orbit it is -- said row by row, as exoplanets.ts draws it.
+ * orbit it is -- a word or two a row; the About says why.
  */
 function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
   const status =
@@ -452,29 +452,7 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
       <Row label="Along its orbit">
         {phase.kind === 'conjunction' ? 'from its fit' : phase.kind === 'pastConjunction' ? 'loosely' : 'unknown'}
       </Row>
-      <dd
-        style={{
-          gridColumn: '1 / -1',
-          color: '#6a6a6a',
-          fontSize: '0.64rem',
-          lineHeight: 1.45,
-          margin: '0.3rem 0 0',
-        }}
-      >
-        {`${planet.reference}. Found by the wobble it gives its star${
-          planet.massIsMinimum ? ', which gives its mass times the sine of its tilt: a minimum' : ''
-        }. ${
-          planet.inclinationDeg === null
-            ? 'Its tilt is not measured: drawn edge-on as seen from the Sun, the tilt at which that minimum is the mass. '
-            : ''
-        }${planet.nodeDeg === null ? 'Which way it runs across the sky is not measured: its orbit crosses the sky east-west. ' : ''}${
-          phase.kind === 'unknown'
-            ? 'Where it is along its orbit is not known: it is drawn at periastron at J2000, a stand-in. '
-            : phase.kind === 'pastConjunction'
-              ? 'Where it is along its orbit is known only loosely. '
-              : 'Where it is along its orbit is the fit’s: when it last passed in front of its star as seen from here. '
-        }No radius is measured: the marker is a marker.`}
-      </dd>
+      <Row label="Source">{planet.reference.split(';')[0]}</Row>
     </>
   );
 }

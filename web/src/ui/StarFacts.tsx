@@ -77,13 +77,13 @@ export function formatStarDistance(distancePc: number): string {
   return `${ly.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })} ly · ${distancePc.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })} pc`;
 }
 
-/** Where the distance came from, in a reader's words. */
+/** Whose parallax the distance is, in a word or two: the About has the sources in full. */
 export function parallaxSource(flags: number): string {
   if ((flags & STAR3D_FLAG.LITERATURE_PARALLAX) !== 0) {
-    return 'a published system parallax';
+    return 'Published, system';
   }
   if ((flags & STAR3D_FLAG.HIPPARCOS_PARALLAX) !== 0) {
-    return 'Hipparcos, new reduction (van Leeuwen 2007)';
+    return 'Hipparcos 2007';
   }
   return 'Gaia DR3';
 }
@@ -185,7 +185,7 @@ export function StarFacts({
       <dd style={VALUE}>{`${now.properMotionArcsecPerYear.toFixed(3)}″ a year`}</dd>
       <dt style={TERM}>Radial velocity</dt>
       <dd style={VALUE}>
-        {now.radialKmS === null ? 'not measured' : `${now.radialKmS > 0 ? '+' : ''}${now.radialKmS.toFixed(1)} km/s`}
+        {now.radialKmS === null ? 'not in the catalogue' : `${now.radialKmS > 0 ? '+' : ''}${now.radialKmS.toFixed(1)} km/s`}
       </dd>
       <dt style={TERM}>{now.radialKmS === null ? 'Speed across the sky' : 'Speed (Sun)'}</dt>
       <dd style={VALUE}>{`${now.speedKmS.toFixed(1)} km/s`}</dd>
@@ -210,27 +210,28 @@ export function StarFacts({
           <dd style={VALUE}>{facts.designations.slice(0, 4).join(', ')}</dd>
         </>
       )}
-      <dd style={NOTE}>
-        {`Distance from ${parallaxSource(flags)}; brightness and colour ${
-          gaiaPhotometry ? 'transformed from Gaia’s G and BP−RP' : 'from the sky catalogue’s own Johnson V and B−V'
-        }, with no correction for interstellar dust. ${
-          gcns
-            ? `In the Gaia Catalogue of Nearby Stars${within100 ? ', inside its clean 100-parsec sample' : ', though its distance estimate puts it just past 100 parsecs'}. `
-            : ''
-        }${
-          component !== null
-            ? `Placed on its measured orbit about the pair's barycentre (Kervella et al. 2016), which moves on a straight line in all three dimensions; distance, speed and radial velocity here are that orbit's, now. Radius measured by interferometry (Kervella et al. 2017), and drawn: the disc is the star at its size.`
-            : `Placed by its own straight-line motion from J2000, ${
-                now.radialKmS === null
-                  ? 'across the sky only: its motion along the line of sight was not measured, and is not invented'
-                  : 'in all three dimensions'
-              }. ${
-                member === 'Proxima'
-                  ? 'Radius from the relations for M dwarfs that Kervella et al. 2017 adopt (Mann et al. 2015), and drawn: the disc is the star at its size.'
-                  : 'No radius is published here: the marker is a marker, and the light is drawn as a point.'
-              }`
-        }`}
+      {/* Where each number comes from, a word or two each (the About has the long version). */}
+      <div style={DIVIDER} />
+      <dt style={TERM}>Distance from</dt>
+      <dd style={VALUE}>{parallaxSource(flags)}</dd>
+      <dt style={TERM}>Photometry</dt>
+      <dd style={VALUE}>{gaiaPhotometry ? 'Gaia, transformed' : 'Johnson V, B−V'}</dd>
+      {gcns && (
+        <>
+          <dt style={TERM}>Census</dt>
+          <dd style={VALUE}>{within100 ? 'Gaia nearby stars' : 'Gaia, just past 100 pc'}</dd>
+        </>
+      )}
+      <dt style={TERM}>Placed by</dt>
+      <dd style={VALUE}>
+        {component !== null
+          ? 'Its measured orbit'
+          : now.radialKmS === null
+            ? 'Motion across the sky'
+            : 'Motion in 3D'}
       </dd>
+      <dt style={TERM}>Drawn as</dt>
+      <dd style={VALUE}>{member !== null ? 'Disc, measured size' : 'Point'}</dd>
     </>
   );
 }
@@ -242,13 +243,6 @@ const VALUE: React.CSSProperties = {
   fontSize: '0.72rem',
   textAlign: 'right',
   fontVariantNumeric: 'tabular-nums',
-};
-const NOTE: React.CSSProperties = {
-  gridColumn: '1 / -1',
-  color: '#6a6a6a',
-  fontSize: '0.64rem',
-  lineHeight: 1.45,
-  margin: '0.3rem 0 0',
 };
 const DIVIDER: React.CSSProperties = {
   gridColumn: '1 / -1',
