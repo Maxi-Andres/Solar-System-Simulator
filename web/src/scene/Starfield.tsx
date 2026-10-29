@@ -82,9 +82,10 @@ interface DiscStar {
  * The Sun is a body, drawn as a sphere with its glare (SolarSystem.tsx). Once that sphere
  * drops below a pixel it is drawn here instead, as the star it then is: a point at the
  * Sun's own place, V = -26.76 from 1 AU, absolute magnitude 4.81 (Willmer 2018), B-V
- * 0.65, by the same arithmetic as every other star -- 0.5 from Alpha Centauri. The hand-
- * over is the body's own fade, run backwards: the point comes in exactly as the sphere
- * goes out (meshOpacity), so nothing is drawn twice and nothing goes missing.
+ * 0.65, by the same arithmetic as every other star -- 0.44 from Alpha Centauri, 4.81 + 5
+ * log10(1.338 pc / 10 pc). The hand-over is the body's own fade, run backwards: the point
+ * comes in exactly as the sphere goes out (meshOpacity), so nothing is drawn twice and
+ * nothing goes missing.
  */
 
 /** The Sun's absolute visual magnitude, M_V = 4.81, and its apparent one from 1 AU, -26.76. Willmer 2018, ApJS 236, 47. */
