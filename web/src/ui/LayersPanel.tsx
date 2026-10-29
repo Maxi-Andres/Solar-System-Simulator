@@ -10,9 +10,8 @@ import {
   type BeltSource,
 } from '../core/belt.ts';
 import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
-import { BULK_WINDOW_DAYS, chipCounts, NAMED_WINDOW_DAYS, type SatelliteSource } from '../core/satellites.ts';
+import { chipCounts, type SatelliteSource } from '../core/satellites.ts';
 import { LAYERS, useViewStore, type LayerDefinition } from '../state/store.ts';
-import { CENSUS_EDGE_LY } from '../scene/distanceRings.ts';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -24,8 +23,9 @@ import { Panel } from './Panel.tsx';
  *
  * Under Asteroids, while it is on, sits the belt's density -- how many of its magnitude
  * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
- * BeltFamilies. Under Satellites, the same chips for its groups, and the days it is drawn
- * for.
+ * BeltFamilies. Under Satellites, the same chips for its groups. Nothing else: a layer's
+ * explanation and sources are the About's, and here they buried the switches (Maxi: "tiene
+ * que ser corto, que solo tengas las check boxes").
  */
 export function LayersPanel({
   belt,
@@ -48,21 +48,14 @@ export function LayersPanel({
             checked={layers[layer.id]}
             onToggle={() => toggleLayer(layer.id)}
           >
+            {/* Controls only: what each layer is and where it comes from is the About's. */}
             {layer.id === 'asteroids' && layers.asteroids && (
               <>
                 <BeltDensityPicker belt={belt} />
                 <BeltFamilies belt={belt} />
-                <BeltNote />
               </>
             )}
-            {layer.id === 'starMap' && layers.starMap && <StarMapNote />}
-            {layer.id === 'milkyWay' && layers.milkyWay && <MilkyWayNote />}
-            {layer.id === 'satellites' && layers.satellites && (
-              <>
-                <SatelliteChips satellites={satellites} />
-                <SatelliteNote satellites={satellites} />
-              </>
-            )}
+            {layer.id === 'satellites' && layers.satellites && <SatelliteChips satellites={satellites} />}
           </LayerRow>
         ))}
       </div>
@@ -354,60 +347,6 @@ function BeltFamilies({ belt }: { readonly belt: BeltSource }) {
 }
 
 /**
- * What the belt's dots are, said where they are switched on: the cloud of a million
- * asteroids is a map of their positions, not a picture. At their real size and light
- * almost none would show from anywhere this view goes, so nobody should take the dots
- * for what the eye would see. The About panel has the long version.
- */
-function BeltNote() {
-  return (
-    <p
-      style={{
-        margin: '0 0 0.4rem 1.65rem',
-        fontSize: '0.64rem',
-        lineHeight: 1.45,
-        color: '#6a6a6a',
-      }}
-    >
-      Not to scale: each dot marks where an asteroid is. Seen for real, almost none would be
-      visible.
-    </p>
-  );
-}
-
-/**
- * Where the star map stops, said where it is switched on. From outside, the 100-parsec
- * census is a glowing ball with darkness round it, which reads as the Sun in a cluster at
- * the edge of the stars. It is the edge of the catalogue: the galaxy's stars carry on at
- * the same density for thousands of light years. See CENSUS_EDGE_LY.
- */
-function StarMapNote() {
-  return (
-    <p style={{ margin: '0 0 0.4rem 1.65rem', fontSize: '0.64rem', lineHeight: 1.45, color: '#6a6a6a' }}>
-      Within {Math.round(CENSUS_EDGE_LY)} light years (100 parsecs), nearly every star is here,
-      from Gaia. Past that, only the brightest stars of our sky. The dark beyond the
-      dashed edge is where the catalogue stops, not the stars: the Milky Way has a few hundred
-      billion more.
-    </p>
-  );
-}
-
-/**
- * What the galaxy past the census is: a model of measured structure, not a map. See
- * core/milkyWay.ts and the About panel, which names the papers.
- */
-function MilkyWayNote() {
-  return (
-    <p style={{ margin: '0 0 0.4rem 1.65rem', fontSize: '0.64rem', lineHeight: 1.45, color: '#6a6a6a' }}>
-      A model, not a map: a glow sampled from the galaxy's measured shape — its discs, bar,
-      spiral arms and dust (Reid et al. 2019; Bland-Hawthorn &amp; Gerhard 2016; Drimmel
-      &amp; Spergel 2001). Past where parallaxes reach, the arms fade out. The clusters
-      along them are real in kind, not in place.
-    </p>
-  );
-}
-
-/**
  * Which of the satellites' groups to draw: the chips of satelliteGroups.ts, in the belt's
  * chip style. Each count is the group's satellites in the data, named and dots together;
  * before the data arrives the chips are there without counts, so the panel does not jump.
@@ -457,33 +396,6 @@ function SatelliteChips({ satellites }: { readonly satellites: SatelliteSource }
         );
       })}
     </div>
-  );
-}
-
-/** A UTC Julian day as "21 Oct". */
-function shortDate(jdUtc: number): string {
-  return new Date((jdUtc - 2440587.5) * 86_400_000).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
-
-/**
- * The days the satellites are drawn for, said where they are switched on: element sets
- * are good for days, not years, and outside them nothing is drawn rather than something
- * wrong. And what the dots are, as the belt's note says it.
- */
-function SatelliteNote({ satellites }: { readonly satellites: SatelliteSource }) {
-  const data = useSyncExternalStore(satellites.subscribe, () => satellites.value);
-  if (data === null) {
-    return null;
-  }
-  const reference = data.info.referenceJdUtc;
-  return (
-    <p style={NOTE_STYLE}>
-      {`Drawn ${shortDate(reference - BULK_WINDOW_DAYS)} to ${shortDate(reference + BULK_WINDOW_DAYS)}; named satellites within ${NAMED_WINDOW_DAYS} days of their elements. Each dot marks where an object is, not its size.`}
-    </p>
   );
 }
 
