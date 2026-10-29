@@ -2,15 +2,11 @@ import type { BodyId, Stars3dNames } from '@sss/tools/types';
 
 import { abOrbitNormal } from './alphaCentauri.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
+import { viewOffPole } from './exoplanets.ts';
+import { addPlanets } from './planetarySystems.ts';
+import { PROXIMA_PLANETS } from './proximaPlanets.ts';
 import { addStarBody, starBodyFacts } from './starBodies.ts';
-import { stateToOsculatingElements } from './kepler.ts';
-import {
-  PROXIMA_PLANETS,
-  planetBodyDefinition,
-  planetStateAboutStar,
-  proximaPlanetId,
-} from './proximaPlanets.ts';
-import { STAR3D, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
+import type { StarNameIndex, Stars3dSource } from './stars3d.ts';
 
 /**
  * Alpha Centauri as a place to go (D3b): its three stars, found in the star names and
@@ -51,24 +47,8 @@ export const ALPHA_CEN_FRAMING_KM = 120 * 149_597_870.7;
  * edge-on, two lines -- with up chosen square to it. A direction from the focus to the
  * camera and an up, as the store's framing request takes them.
  */
-export function alphaCenView(): {
-  readonly direction: readonly [number, number, number];
-  readonly up: readonly [number, number, number];
-} {
-  const pole = abOrbitNormal();
-  // Any direction not along the pole, made square to it: the in-plane axis to tilt toward.
-  const seed = Math.abs(pole.z) < 0.9 ? { x: 0, y: 0, z: 1 } : { x: 1, y: 0, z: 0 };
-  const along = seed.x * pole.x + seed.y * pole.y + seed.z * pole.z;
-  const inPlaneRaw = { x: seed.x - along * pole.x, y: seed.y - along * pole.y, z: seed.z - along * pole.z };
-  const n = Math.hypot(inPlaneRaw.x, inPlaneRaw.y, inPlaneRaw.z);
-  const inPlane = { x: inPlaneRaw.x / n, y: inPlaneRaw.y / n, z: inPlaneRaw.z / n };
-  const tilt = (20 * Math.PI) / 180;
-  const c = Math.cos(tilt);
-  const s = Math.sin(tilt);
-  return {
-    direction: [pole.x * c - inPlane.x * s, pole.y * c - inPlane.y * s, pole.z * c - inPlane.z * s],
-    up: [inPlane.x * c + pole.x * s, inPlane.y * c + pole.y * s, inPlane.z * c + pole.z * s],
-  };
+export function alphaCenView(): ReturnType<typeof viewOffPole> {
+  return viewOffPole(abOrbitNormal(), 20);
 }
 
 /** Each member's entry in the star names, by its designation; null where one is missing. */
@@ -124,42 +104,7 @@ export async function ensureAlphaCenBodies(
   for (const member of ALPHA_CEN_MEMBERS) {
     ids[member.key] = await addStarBody(store, stars3d, names, entries[member.key], keep, true);
   }
-  addProximaPlanets(store, ids.Proxima!);
+  // Proxima's planets (proximaPlanets.ts), as any star's (planetarySystems.ts).
+  addPlanets(store, ids.Proxima!, PROXIMA_PLANETS);
   return ids as Record<AlphaCenKey, BodyId>;
-}
-
-/**
- * Proxima's planets as bodies about it (proximaPlanets.ts): their states about Proxima, so
- * the frame tree carries them with it, and their orbits drawn about it with its measured
- * mass. The line of sight they are drawn edge-on to is fixed at J2000 -- Proxima's
- * direction moves 3.9 arcseconds a year, nothing to an orbit's tilt.
- */
-function addProximaPlanets(store: EphemerisStore, proxima: BodyId): void {
-  const record = starBodyFacts(proxima)?.record;
-  if (record === undefined) {
-    return;
-  }
-  const x = record[STAR3D.x]!;
-  const y = record[STAR3D.y]!;
-  const z = record[STAR3D.z]!;
-  const length = Math.hypot(x, y, z);
-  const toward = { x: x / length, y: y / length, z: z / length };
-  const gmStar = store.body(proxima).gmBodyOnlyKm3S2;
-  store.addPropagatedBodies(
-    PROXIMA_PLANETS.map((planet) => ({
-      body: planetBodyDefinition(planet, proxima),
-      // Elements too, which is what the orbit line is first drawn from; it is redrawn
-      // from the state as the planet moves (SolarSystem.tsx).
-      elements: stateToOsculatingElements(
-        planetStateAboutStar(planet, planet.epochJd, toward),
-        gmStar + planet.minimumMassEarth * 398_600.4,
-        planet.epochJd,
-        proximaPlanetId(planet.key),
-        proxima,
-      ),
-      state: (jd: number) => planetStateAboutStar(planet, jd, toward),
-      // As published, not a fallback from something better: the conventions are stated.
-      options: { aboutParent: true, exact: true },
-    })),
-  );
 }

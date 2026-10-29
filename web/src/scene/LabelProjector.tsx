@@ -9,6 +9,7 @@ import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
+import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { angularRadiusPixels, kmToUnits } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
@@ -206,14 +207,33 @@ export function LabelProjector({
     const b = store.bodies.find((body) => member(body.id) === 'B');
     const alphaCen = new Set<BodyId>();
     const solar = new Set<BodyId>();
+    // The planetary systems': each folds onto its star, by system key.
+    const planetary = new Map<string, { host: BodyId | null; members: Set<BodyId>; extentKm: number; name: string }>();
     for (const body of store.bodies) {
+      const owner = planetarySystemOf(body.id);
       if (member(body.id) !== null || member(body.parent) !== null) {
         alphaCen.add(body.id);
+      } else if (owner !== null) {
+        let entry = planetary.get(owner.key);
+        if (entry === undefined) {
+          entry = { host: null, members: new Set(), extentKm: systemExtentKm(owner), name: owner.name };
+          planetary.set(owner.key, entry);
+        }
+        entry.members.add(body.id);
+        if (isCatalogueStar(body)) {
+          entry.host = body.id;
+        }
       } else if (!isCatalogueStar(body)) {
         solar.add(body.id);
       }
     }
-    return { a: a?.id ?? null, b: b?.id ?? null, bName: b?.name ?? '', alphaCen, solar };
+    const hosts = new Set<BodyId>();
+    for (const entry of planetary.values()) {
+      if (entry.host !== null) {
+        hosts.add(entry.host);
+      }
+    }
+    return { a: a?.id ?? null, b: b?.id ?? null, bName: b?.name ?? '', alphaCen, solar, planetary, hosts };
   }, [store, version]);
   // The labels showing another text than their own name this frame, and which.
   const altShown = useMemo(() => new Map<BodyId, string>(), []);
@@ -277,11 +297,17 @@ export function LabelProjector({
 
       // Its marker is hidden behind another's: a name with nothing beside it would be
       // naming nothing. See markerDeclutter.ts. Except the bodies a system's name goes on
-      // (the Sun, Alpha Centauri A) and A's partner: they are projected all the same, for
-      // the folding below to place a system's name and see the pair meet, and dropped
-      // after it unless they carry one.
+      // (the Sun, Alpha Centauri A, a planetary system's star) and A's partner: they are
+      // projected all the same, for the folding below to place a system's name and see the
+      // pair meet, and dropped after it unless they carry one.
       const markerHidden = hiddenMarkers.has(body.id);
-      if (markerHidden && body.id !== 'sun' && body.id !== systems.a && body.id !== systems.b) {
+      if (
+        markerHidden &&
+        body.id !== 'sun' &&
+        body.id !== systems.a &&
+        body.id !== systems.b &&
+        !systems.hosts.has(body.id)
+      ) {
         continue;
       }
       if (markerHidden) {
@@ -362,6 +388,13 @@ export function LabelProjector({
       return true;
     };
     fold(systems.solar, 'sun', SOLAR_SYSTEM_EXTENT_KM, 'Solar System');
+    // A planetary system folds onto its star when its planets' orbits are a few pixels
+    // across: from the Sun, Tau Ceti and not its four candidates.
+    for (const entry of systems.planetary.values()) {
+      if (entry.host !== null) {
+        fold(entry.members, entry.host, entry.extentKm, entry.name);
+      }
+    }
     if (systems.a !== null && !fold(systems.alphaCen, systems.a, ALPHA_CEN_EXTENT_KM, ALPHA_CEN_SYSTEM) && systems.b !== null) {
       const a = projected.find((entry) => entry.id === systems.a);
       const b = projected.find((entry) => entry.id === systems.b);

@@ -10,6 +10,7 @@ import {
   alphaCenMember,
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
+import { PLANETARY_SYSTEMS, planetarySystemOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
@@ -71,6 +72,16 @@ export interface BodyPickerProps {
    * Null while the 3D stars are not part of the published data.
    */
   readonly alphaCen: AlphaCenNavigator | null;
+  /**
+   * The nearby stars with planets (D4a, planetarySystems.ts), and how to go to one, framed
+   * as a system. Null while the 3D stars are not part of the published data.
+   */
+  readonly planetSystems: PlanetSystemsNavigator | null;
+}
+
+/** Going to a planetary system from the breadcrumb: its star, framed with its planets. */
+export interface PlanetSystemsNavigator {
+  readonly go: (key: string) => void;
 }
 
 /** Going to Alpha Centauri's stars from the breadcrumb. */
@@ -87,6 +98,7 @@ export function BodyPicker({
   clock,
   readout,
   alphaCen,
+  planetSystems,
 }: BodyPickerProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -95,9 +107,11 @@ export function BodyPicker({
   const parent = focusBody.parent === null ? null : store.body(focusBody.parent);
   // Alpha Centauri's own level, when one of its stars or their planets is in focus.
   const inAlphaCen = alphaCenMember(focus) !== null || (parent !== null && alphaCenMember(parent.id) !== null);
+  // Or a planetary system's, when its star or a planet of it is.
+  const planetSystem = planetarySystemOf(focus);
   // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
-  // anything of Alpha Centauri's.
-  const inSolarSystem = !isCatalogueStar(focusBody) && !inAlphaCen;
+  // anything of Alpha Centauri's or another star's.
+  const inSolarSystem = !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -197,7 +211,15 @@ export function BodyPicker({
             <Separator />
           </>
         )}
-        {parent !== null && (
+        {/* The system, unless it is called by the name of the star in focus. */}
+        {planetSystem !== null && planetSystems !== null && planetSystem.name !== focusBody.name && (
+          <>
+            <Crumb onClick={() => planetSystems.go(planetSystem.key)}>{planetSystem.name}</Crumb>
+            <Separator />
+          </>
+        )}
+        {/* A planet's star, unless the system is called by the star's own name. */}
+        {parent !== null && !(planetSystem !== null && parent.name === planetSystem.name) && (
           <>
             <Crumb onClick={() => onFocus(parent.id)}>{parent.name}</Crumb>
             <Separator />
@@ -228,6 +250,15 @@ export function BodyPicker({
         <SystemList
           inSolarSystem={inSolarSystem}
           inAlphaCen={inAlphaCen}
+          inPlanetSystem={planetSystem?.key ?? null}
+          onPlanetSystem={
+            planetSystems === null
+              ? null
+              : (key) => {
+                  planetSystems.go(key);
+                  setSystemsOpen(false);
+                }
+          }
           onSolarSystem={() => {
             onFocus('sun');
             setSystemsOpen(false);
@@ -253,6 +284,10 @@ export function BodyPicker({
           onChoose={choose}
           alphaCen={alphaCen}
           onChooseMember={chooseMember}
+          onChooseSystem={(key) => {
+            planetSystems?.go(key);
+            setOpen(false);
+          }}
         />
       </Presence>
     </div>
@@ -382,6 +417,7 @@ function BodyList({
   onChoose,
   alphaCen,
   onChooseMember,
+  onChooseSystem,
 }: {
   store: EphemerisStore;
   focus: BodyId;
@@ -391,6 +427,7 @@ function BodyList({
   onChoose: (id: BodyId) => void;
   alphaCen: AlphaCenNavigator | null;
   onChooseMember: (key: AlphaCenKey) => void;
+  onChooseSystem: (key: string) => void;
 }) {
   const closing = useClosing();
   // Redrawn when a planet's small moons arrive.
@@ -422,8 +459,19 @@ function BodyList({
       visibleKinds.has(body.kind),
   );
   // The catalogue stars gone to from search (starBodies.ts), listed apart: they are not
-  // in the Solar System. Alpha Centauri's have a section of their own, below.
-  const stars = store.bodies.filter((body) => isCatalogueStar(body) && alphaCenMember(body.id) === null);
+  // in the Solar System. Alpha Centauri's have a section of their own, below, and so does
+  // each planetary system's.
+  const stars = store.bodies.filter(
+    (body) => isCatalogueStar(body) && alphaCenMember(body.id) === null && planetarySystemOf(body.id) === null,
+  );
+  // The planetary systems' stars that are bodies, by system key.
+  const hosts = new Map<string, BodyDefinition>();
+  for (const body of store.bodies) {
+    const owner = isCatalogueStar(body) ? planetarySystemOf(body.id) : null;
+    if (owner !== null) {
+      hosts.set(owner.key, body);
+    }
+  }
   const focusMember = alphaCenMember(focus);
   // Listed apart: between the planets they would push Neptune off the bottom.
   const asteroids = visibleKinds.has('asteroid')
@@ -623,6 +671,30 @@ function BodyList({
           })}
         </>
       )}
+      {PLANETARY_SYSTEMS.map((system) => {
+        const host = hosts.get(system.key);
+        if (host === undefined) {
+          return null;
+        }
+        const planets = store.bodies.filter((body) => body.parent === host.id);
+        return (
+          <div key={system.key}>
+            <div style={SECTION_HEADING}>{system.name}</div>
+            <MemberRow name={host.name} active={host.id === focus} onChoose={() => onChooseSystem(system.key)} />
+            {planets.map((planet) => (
+              <Row
+                key={planet.id}
+                body={planet}
+                active={planet.id === focus}
+                inSystem={false}
+                indent
+                onChoose={onChoose}
+                trailing={null}
+              />
+            ))}
+          </div>
+        );
+      })}
       {stars.length > 0 && (
         <>
           <div style={SECTION_HEADING}>Stars</div>
@@ -868,19 +940,23 @@ function SmallMoons({
 
 /**
  * The star systems under Solar Neighbourhood: where the camera can go as a whole. The
- * Solar System, and Alpha Centauri (D3) -- framed as a system, from out of the pair's
- * orbital plane.
+ * Solar System, Alpha Centauri (D3) -- framed as a system, from out of the pair's orbital
+ * plane -- and the nearby stars with planets (D4a), each framed with its planets' orbits.
  */
 function SystemList({
   inSolarSystem,
   inAlphaCen,
+  inPlanetSystem,
   onSolarSystem,
   onAlphaCen,
+  onPlanetSystem,
 }: {
   inSolarSystem: boolean;
   inAlphaCen: boolean;
+  inPlanetSystem: string | null;
   onSolarSystem: () => void;
   onAlphaCen: (() => void) | null;
+  onPlanetSystem: ((key: string) => void) | null;
 }) {
   const closing = useClosing();
   return (
@@ -900,6 +976,15 @@ function SystemList({
       <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Star systems</div>
       <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
       {onAlphaCen !== null && <MemberRow name={ALPHA_CEN_SYSTEM} active={inAlphaCen} onChoose={onAlphaCen} />}
+      {onPlanetSystem !== null &&
+        PLANETARY_SYSTEMS.map((system) => (
+          <MemberRow
+            key={system.key}
+            name={system.name}
+            active={inPlanetSystem === system.key}
+            onChoose={() => onPlanetSystem(system.key)}
+          />
+        ))}
     </div>
   );
 }

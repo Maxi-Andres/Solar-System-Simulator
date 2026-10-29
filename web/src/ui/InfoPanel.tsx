@@ -9,8 +9,11 @@ import { facingRule } from './facing.ts';
 import { Panel } from './Panel.tsx';
 import { SatelliteFacts } from './SatelliteFacts.tsx';
 import { StarFacts } from './StarFacts.tsx';
+import type { ExoPlanet } from '../core/exoplanets.ts';
+import { exoPlanetOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
+import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
 /**
  * Facts about the focused body.
@@ -67,6 +70,8 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   const speed = store.speedRelativeTo(focus, primary.id, jd);
   const lightTime = store.lightTimeSeconds(focus, 'sun', jd, distanceMode);
   const fromEarth = focus === 'earth' ? null : store.distanceBetween(focus, 'earth', jd, distanceMode);
+  // A planet of another star: its fit, and which of it is measured (exoplanets.ts).
+  const exoPlanet = exoPlanetOf(focus);
 
   return (
     <Panel title={body.name} onClose={closePanel} width="17.5rem">
@@ -88,11 +93,14 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
 
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         <Row label="Distance from Sun">
-          {fromSun === null ? '--' : `${(fromSun / AU_KM).toFixed(4)} AU`}
+          {fromSun === null ? '--' : formatSunDistance(fromSun)}
         </Row>
-        <Row label="">
-          {fromSun === null ? '' : `${Math.round(fromSun).toLocaleString('en-US')} km`}
-        </Row>
+        {/* Kilometres say nothing more about a planet of another star: light years do. */}
+        {(fromSun === null || fromSun < INTERSTELLAR_KM) && (
+          <Row label="">
+            {fromSun === null ? '' : `${Math.round(fromSun).toLocaleString('en-US')} km`}
+          </Row>
+        )}
         {hasPrimary && (
           <Row label={`From ${primary.name}`}>
             {fromPrimary === null ? '--' : `${Math.round(fromPrimary).toLocaleString('en-US')} km`}
@@ -112,13 +120,15 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         <Row label="Light time">
           {lightTime === null || focus === 'sun' ? '--' : formatLightTime(lightTime)}
         </Row>
-        {fromEarth !== null && !(hasPrimary && primary.id === 'earth') && (
+        {fromEarth !== null && !(hasPrimary && primary.id === 'earth') && (fromSun ?? 0) < INTERSTELLAR_KM && (
           <Row label="From Earth">{`${(fromEarth / AU_KM).toFixed(4)} AU`}</Row>
         )}
 
         <Divider />
 
-        {body.kind === 'satellite' ? (
+        {exoPlanet !== null ? (
+          <ExoPlanetFacts planet={exoPlanet} />
+        ) : body.kind === 'satellite' ? (
           // An Earth satellite: its catalogue entry, its height now, and its elements' age.
           <SatelliteFacts id={focus} store={store} jd={jd} />
         ) : isCraft ? (
@@ -414,6 +424,61 @@ export function shapeNote(shape: Pick<ShapeModel, 'product' | 'facets'>): string
   return `${shape.product}, ${shape.facets.toLocaleString('en-US')} facets`;
 }
 
+/**
+ * A planet of another star: what its discoverers' fit gives, and which of what is drawn is
+ * a convention instead -- its tilt, which way it runs across the sky, where along its
+ * orbit it is -- said row by row, as exoplanets.ts draws it.
+ */
+function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
+  const status =
+    planet.status === 'confirmed'
+      ? 'Confirmed'
+      : planet.status === 'disputed'
+        ? 'Disputed: listed, and flagged'
+        : 'Candidate: not confirmed';
+  const days = planet.periodDays;
+  const phase = planet.phase;
+  return (
+    <>
+      <Row label="Status">{status}</Row>
+      <Row label="Year">{`${days.toFixed(days < 100 ? 3 : 1)} days`}</Row>
+      <Row label="Orbit radius">{`${planet.semiMajorAxisAu} AU`}</Row>
+      {planet.eccentricity > 0 && <Row label="Eccentricity">{planet.eccentricity.toFixed(2)}</Row>}
+      <Row label="Mass">
+        {planet.massIsMinimum ? `≥ ${planet.massEarth} Earths` : `${planet.massEarth} Earths`}
+      </Row>
+      <Row label="Tilt">{planet.inclinationDeg === null ? 'unknown: edge-on' : `${planet.inclinationDeg}° measured`}</Row>
+      <Row label="Node">{planet.nodeDeg === null ? 'unknown: east-west' : `${planet.nodeDeg}° measured`}</Row>
+      <Row label="Along its orbit">
+        {phase.kind === 'conjunction' ? 'from its fit' : phase.kind === 'pastConjunction' ? 'loosely' : 'unknown'}
+      </Row>
+      <dd
+        style={{
+          gridColumn: '1 / -1',
+          color: '#6a6a6a',
+          fontSize: '0.64rem',
+          lineHeight: 1.45,
+          margin: '0.3rem 0 0',
+        }}
+      >
+        {`${planet.reference}. Found by the wobble it gives its star${
+          planet.massIsMinimum ? ', which gives its mass times the sine of its tilt: a minimum' : ''
+        }. ${
+          planet.inclinationDeg === null
+            ? 'Its tilt is not measured: drawn edge-on as seen from the Sun, the tilt at which that minimum is the mass. '
+            : ''
+        }${planet.nodeDeg === null ? 'Which way it runs across the sky is not measured: its orbit crosses the sky east-west. ' : ''}${
+          phase.kind === 'unknown'
+            ? 'Where it is along its orbit is not known: it is drawn at periastron at J2000, a stand-in. '
+            : phase.kind === 'pastConjunction'
+              ? 'Where it is along its orbit is known only loosely. '
+              : 'Where it is along its orbit is the fit’s: when it last passed in front of its star as seen from here. '
+        }No radius is measured: the marker is a marker.`}
+      </dd>
+    </>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
@@ -453,7 +518,18 @@ function formatTdbDate(jd: number): string {
   return new Date((jd - 2440587.5) * 86_400_000).toISOString().slice(0, 10);
 }
 
+/** Past a tenth of a light year -- 6,300 AU, well beyond the Solar System -- light years. */
+const INTERSTELLAR_KM = 0.1 * LIGHT_YEAR_KM;
+
+function formatSunDistance(km: number): string {
+  return km < INTERSTELLAR_KM ? `${(km / AU_KM).toFixed(4)} AU` : `${(km / LIGHT_YEAR_KM).toFixed(3)} ly`;
+}
+
 function formatLightTime(seconds: number): string {
+  // Another star's: years, which is what its distance in light years already says.
+  if (seconds > 86_400 * 365.25) {
+    return `${(seconds / (86_400 * 365.25)).toFixed(2)} years`;
+  }
   if (seconds < 60) {
     return `${seconds.toFixed(1)} sec`;
   }

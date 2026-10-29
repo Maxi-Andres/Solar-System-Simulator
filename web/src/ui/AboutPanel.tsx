@@ -205,6 +205,7 @@ export function AboutPanel({
               'A star whose parallax is too poor to place it stays on the sky at infinity, its direction all that is known, and fades out as the camera leaves for the galaxy, from where a star drawn as infinitely far would be wrong. Every other star is at its real distance. The catalogue carries each on a straight line from one position and one velocity, and it places a star at J2000 by its proper motion only: the tens of AU a nearby star moves along the line of sight between its parallax and 2000 are left out, which no map of the stars can see but the inside of a star system can. So Alpha Centauri’s stars are not read from it.',
               'Alpha Centauri’s three stars are spheres of their measured radii, drawn in their own blackbody colours at full brightness — at this picture’s exposure every star’s surface is overexposed, even Proxima’s, a thirtieth of the Sun’s per square metre — and darker toward the edge, by the Sun’s own visible limb darkening taken as theirs. Proxima’s orbit about the pair takes 547,000 years, and its elements are uncertain by a tenth; the ellipse drawn is the measured one, through where Proxima is.',
               'Proxima’s planets are found by the wobble they give their star, and that wobble says how far out each is, how long its year is and how heavy it is at least — not how its orbit is tilted, since none passes in front of the star. So the orbits are drawn edge-on as seen from the Sun, the one tilt at which the minimum mass is the mass, and which way across the sky they run is a choice. Where each is along its orbit comes from the fits: for b to about a day, for d hardly at all. None has a measured size, so each is a marker. Proxima c is a candidate, drawn grey and named so: its discoverers themselves leave open that its signal is the star’s own activity.',
+              'The other stars’ planets are drawn the same way, under the same rules, except where more was measured: Epsilon Eridani b’s tilt and the way its orbit lies on the sky, and 51 Pegasi b’s tilt. Tau Ceti’s four are fitted with no epoch for where they are along their orbits, so each is drawn at periastron at J2000 — a stand-in, and the panel says so.',
               'A photographic Milky Way panorama was tried behind the stars and taken out again. It was correctly placed — on the galactic frame, checked against Sagittarius A*, Andromeda and both Magellanic Clouds — and still wrong: a photograph’s stars arrive already blurred by an atmosphere and a lens, so no resolution turns them back into points. It lit 31.8% of the sky where the reference lights 0.9%.',
               'The Sun’s glare has no brightness setting at all: the veil is the illuminance the disc delivers, E = L·π·sin²θ, so it is tied to whatever exposure the disc is drawn at and cannot drift from it. What still differs from NASA’s render is how fast it falls — theirs goes as θ⁻³·⁵ where the eye’s equation is between θ⁻³ and θ⁻², so their glow ends at 1.72° from Earth’s distance and this one reaches 3.6°. An optical instrument is tighter than an eye: most of the eye’s veil is scattered inside the eye itself, and a lens has no retina.',
               'Flood and Shadow lighting are legibility aids. Only Natural lighting is physical.',
@@ -317,6 +318,22 @@ export function AboutPanel({
             <Strong>d</Strong>, from Faria et al. 2022, confirmed by Suárez Mascareño et al. 2025
             (A&amp;A 700, A11); and the candidate <Strong>c</Strong>, from Damasso et al. 2020. Which
             are confirmed is the NASA Exoplanet Archive’s word.
+          </Prose>
+
+          <Prose>
+            Four more nearby stars have their planets, each read from the paper that fitted it.{' '}
+            <Strong>Tau Ceti</Strong>’s four from <Strong>Feng et al. 2017</Strong> (AJ 154, 135),
+            signals under 0.6 m/s that the Archive lists with its controversy flag — e not at
+            all — so all four are drawn grey and named disputed or candidate.{' '}
+            <Strong>Epsilon Eridani b</Strong> from <Strong>Thompson et al. 2025</Strong> (AJ 170,
+            301), the one orbit here oriented on the sky by measurement — Hipparcos, Hubble and
+            Gaia astrometry with the radial velocities, a Jupiter mass at 40° — with its
+            conjunction from <Strong>Harada et al. 2025</Strong> (AJ 170, 343).{' '}
+            <Strong>Barnard’s Star</Strong>’s four from <Strong>Basant et al. 2025</Strong> (ApJL
+            982, L1), b first found by González Hernández et al. 2024 (A&amp;A 690, A79).{' '}
+            <Strong>51 Pegasi b</Strong>, the first planet found about a Sun-like star (Mayor &amp;
+            Queloz 1995, Nature 378, 355), tilted 49.8° as its own light gives it in{' '}
+            <Strong>Cont et al. 2026</Strong> (A&amp;A 710, A345).
           </Prose>
 
           <Prose>

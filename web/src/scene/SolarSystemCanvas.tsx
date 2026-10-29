@@ -5,7 +5,8 @@ import type { BeltSource } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
-import { planetFramingKm, proximaPlanetOf } from '../core/proximaPlanets.ts';
+import { planetFramingKm } from '../core/exoplanets.ts';
+import { exoPlanetOf } from '../core/planetarySystems.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import type { LightingMode } from '../state/store.ts';
@@ -137,8 +138,8 @@ export function SolarSystemCanvas({
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
   // Eight radii, or for a planet of another star -- no disc, no radius -- its orbit about
-  // the star (proximaPlanets.ts planetFramingKm).
-  const otherPlanet = proximaPlanetOf(focus);
+  // the star (exoplanets.ts planetFramingKm).
+  const otherPlanet = exoPlanetOf(focus);
   const framingUnits = otherPlanet === null ? radiusUnits * 8 : kmToUnits(planetFramingKm(otherPlanet));
   // The scene writes it, the labels read it: which markers lost their spot this frame.
   // SolarSystem's frame runs before LabelProjector's, being declared first.

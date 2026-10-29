@@ -141,8 +141,9 @@ export const STAR_BODIES_KEPT = 12;
 const added: BodyId[] = [];
 
 /**
- * Star bodies that stay whatever else is gone to: Alpha Centauri's three, made bodies at
- * start so they are named on the sky and can be gone to from it (alphaCenBodies.ts).
+ * Star bodies that stay whatever else is gone to: Alpha Centauri's three and the stars of
+ * the planetary systems, made bodies at start so they are named on the sky and can be gone
+ * to from it (alphaCenBodies.ts, planetarySystems.ts).
  */
 const pinned = new Set<BodyId>();
 
@@ -150,6 +151,8 @@ const pinned = new Set<BodyId>();
  * Makes entry `k` of the star names a body in `store` and returns its id, reading its
  * record from its tier -- or on its own, if the tier is not in yet. The oldest go once
  * there are more than STAR_BODIES_KEPT, unless it is `keep`, the body the camera is on.
+ * `massSun`, a star's published mass, is what its planets' orbits are drawn with
+ * (planetarySystems.ts); Alpha Centauri's three have theirs from alphaCentauri.ts.
  */
 export async function addStarBody(
   store: EphemerisStore,
@@ -158,6 +161,7 @@ export async function addStarBody(
   k: number,
   keep: BodyId,
   pin = false,
+  massSun: number | null = null,
 ): Promise<BodyId> {
   const { names: columns } = names;
   const tier = columns.tier[k]!;
@@ -190,7 +194,7 @@ export async function addStarBody(
       discColorIndices.set(id, record[STAR3D.bv]!);
     }
     store.addPropagatedBody(
-      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm, measuredMassSun(at)),
+      starBodyDefinition(id, columns.display[k]!, record[STAR3D.bv]!, radiusKm, measuredMassSun(at) ?? massSun),
       null,
       component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
       { exact: true },

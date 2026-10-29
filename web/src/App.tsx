@@ -20,9 +20,15 @@ import {
   ensureAlphaCenBodies,
   type AlphaCenKey,
 } from './core/alphaCenBodies.ts';
+import {
+  ensurePlanetarySystems,
+  PLANETARY_SYSTEMS,
+  systemFramingKm,
+  systemView,
+} from './core/planetarySystems.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { renderDemand } from './core/renderDemand.ts';
-import { BodyPicker, type AlphaCenNavigator } from './ui/BodyPicker.tsx';
+import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
 import {
   CENSUS_EDGE_COLOR,
@@ -137,8 +143,44 @@ export function App() {
     };
   }, [stars3d, starNames, store, requestFraming, setFocus]);
 
+  // The planetary systems on the breadcrumb (D4a): a system's star -- a body from the start,
+  // made one now if it is not yet -- focused and framed with its planets' orbits.
+  const planetSystems = useMemo<PlanetSystemsNavigator | null>(() => {
+    if (store === null || stars3d === null || starNames === null) {
+      return null;
+    }
+    return {
+      go: (key) => {
+        const system = PLANETARY_SYSTEMS.find((candidate) => candidate.key === key);
+        if (system === undefined) {
+          return;
+        }
+        void stars3d.request();
+        starNames
+          .request()
+          .then(async () => {
+            const index = starNames.value;
+            if (index === null) {
+              return;
+            }
+            const host = (await ensurePlanetarySystems(store, stars3d, index, useViewStore.getState().focus)).get(key);
+            if (host === undefined) {
+              return;
+            }
+            requestFraming(systemFramingKm(system), systemView(system, host));
+            setFocus(host);
+            renderDemand.request();
+          })
+          .catch((error: unknown) => {
+            console.error(`Could not go to ${system.name}`, error);
+          });
+      },
+    };
+  }, [stars3d, starNames, store, requestFraming, setFocus]);
+
   // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
   // anywhere, and a click on a name goes there, as for the planets (alphaCenBodies.ts).
+  // So are the planetary systems' stars, with their planets (planetarySystems.ts).
   useEffect(() => {
     if (store === null || stars3d === null || starNames === null) {
       return;
@@ -152,6 +194,7 @@ export function App() {
           return;
         }
         await ensureAlphaCenBodies(store, stars3d, index, useViewStore.getState().focus);
+        await ensurePlanetarySystems(store, stars3d, index, useViewStore.getState().focus);
         renderDemand.request();
       })
       .catch((error: unknown) => {
@@ -359,6 +402,7 @@ export function App() {
             clock={clock}
             readout={readout}
             alphaCen={alphaCen}
+            planetSystems={planetSystems}
           />
 
           {/* Bottom-left: time. */}
