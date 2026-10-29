@@ -722,7 +722,8 @@ describe('ESA’s models, by its written permission', () => {
   it('carry the credit ESA asked for, word for word, wherever they are used', async () => {
     expect(ESA_MODEL_CREDIT).toBe('3D models © ESA (European Space Agency).');
     const info = await readFile(join(import.meta.dirname, '../ui/InfoPanel.tsx'), 'utf8');
-    const about = await readFile(join(import.meta.dirname, '../ui/AboutPanel.tsx'), 'utf8');
+    // The About's credit lines are its Sources section's.
+    const about = await readFile(join(import.meta.dirname, '../ui/about/SourcesSection.tsx'), 'utf8');
     // An Earth satellite's panel is its own: XMM-Newton, SMILE and CryoSat-2 are ESA's.
     const satellite = await readFile(join(import.meta.dirname, '../ui/SatelliteFacts.tsx'), 'utf8');
     expect(info).toContain('ESA_MODEL_CREDIT');

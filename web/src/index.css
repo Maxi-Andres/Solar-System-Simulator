@@ -254,3 +254,36 @@ canvas {
   display: block;
   touch-action: none;
 }
+
+/* The About's in-text links -- citations and cross-references -- are buttons, because each
+   switches the section before it scrolls; they read as links, so they answer as links. */
+#root .about-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* The entry a citation or cross-reference jumped to, picked out for a moment: a reference
+   in a list of fifty looks like any other. */
+.about-flash {
+  animation: about-flash 1.8s ease-out;
+}
+
+@keyframes about-flash {
+  from {
+    background: rgba(159, 195, 224, 0.16);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* The About's equations are MathML: a maths font where the system has one. */
+#root math {
+  font-family: 'Cambria Math', 'STIX Two Math', math;
+}
+
+/* A phone's column is narrow; the longer formulas fit at a size still easy to read. */
+@media (max-width: 600px) {
+  #root math[display='block'] {
+    font-size: 0.86em;
+  }
+}
