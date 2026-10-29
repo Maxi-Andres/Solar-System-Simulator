@@ -60,6 +60,7 @@ import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
 import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
+import { ambientShare, exoplanetMaterial } from './exoplanetSurface.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import {
   countTriangles,
@@ -522,7 +523,9 @@ export function SolarSystem({
             : new THREE.MeshBasicMaterial({
                 color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
               })
-          : definition.id === EARTH_ID
+          : definition.radiusEstimated === true
+            ? exoplanetMaterial(definition.color)
+            : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
                 color: definition.color,
                 roughness: 1,
@@ -972,10 +975,30 @@ export function SolarSystem({
       // A moon whose size JPL does not publish is a marker at any range, like a craft
       // with no shape: a sphere would claim a size nobody has measured. So is an
       // asteroid whose shape cannot be drawn yet: an ellipsoid would claim a shape.
+      // A planet of another star with its radius estimated from its mass is drawn as a
+      // sphere, and every panel says the size is an estimate (exoplanets.ts).
       const sized =
-        handle.definition.radiusPublished !== false &&
+        (handle.definition.radiusPublished !== false || handle.definition.radiusEstimated === true) &&
         handle.definition.shapeDrawn !== false &&
         shapeModel === null;
+      // Lit by its own star, not by the Sun light years away: see exoplanetMaterial.
+      const starDirection = (handle.mesh.material as THREE.Material).userData['starDirection'] as
+        | THREE.Vector3
+        | undefined;
+      const host = handle.definition.parent === null ? undefined : snapshot.bodies.get(handle.definition.parent);
+      const ambient = (handle.mesh.material as THREE.Material).userData['ambient'] as { value: number } | undefined;
+      if (ambient !== undefined) {
+        ambient.value = ambientShare(LIGHTING[lighting]);
+      }
+      if (starDirection !== undefined && host !== undefined) {
+        starDirection
+          .set(
+            host.positionKm.x - rebased.positionKm.x,
+            host.positionKm.y - rebased.positionKm.y,
+            host.positionKm.z - rebased.positionKm.z,
+          )
+          .normalize();
+      }
       const shaped =
         craft !== null
           ? handle.craftShape !== null

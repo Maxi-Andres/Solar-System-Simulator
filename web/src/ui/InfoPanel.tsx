@@ -9,7 +9,7 @@ import { facingRule } from './facing.ts';
 import { Panel } from './Panel.tsx';
 import { SatelliteFacts } from './SatelliteFacts.tsx';
 import { StarFacts } from './StarFacts.tsx';
-import type { ExoPlanet } from '../core/exoplanets.ts';
+import { estimatedRadiusEarth, type ExoPlanet } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
@@ -447,6 +447,7 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
       <Row label="Mass">
         {planet.massIsMinimum ? `≥ ${planet.massEarth} Earths` : `${planet.massEarth} Earths`}
       </Row>
+      <Row label="Radius">{`~${estimatedRadiusEarth(planet.massEarth).toFixed(2)} Earths, estimated`}</Row>
       <Row label="Tilt">{planet.inclinationDeg === null ? 'unknown: edge-on' : `${planet.inclinationDeg}° measured`}</Row>
       <Row label="Node">{planet.nodeDeg === null ? 'unknown: east-west' : `${planet.nodeDeg}° measured`}</Row>
       <Row label="Along its orbit">

@@ -168,11 +168,50 @@ export function planetStateAboutStar(planet: ExoPlanet, jd: number, towardStar: 
   };
 }
 
-/** The body a planet becomes: a marker, no sphere -- none of these has a measured radius. */
+/** Earth's mean radius, km (IUGG), the unit the relation below is in. */
+const EARTH_RADIUS_KM = 6371;
+/** Jupiter's and the Sun's masses in Earth's, for the relation's transition points. */
+const JUPITER_MASS_EARTH = 317.83;
+const SUN_MASS_EARTH = 332_946;
+
+/**
+ * A planet's radius estimated from its mass, Earth radii: the mean relation of Chen &
+ * Kipping 2017 (ApJ 834, 17; "Forecaster"), Table 1 -- R = 1.008 M^0.279 up to 2.04 Earth
+ * masses, M^0.589 to 0.414 Jupiter masses, M^-0.044 to 0.0800 solar masses, M^0.881 past
+ * that, each piece continuous with the last. It is what the NASA Exoplanet Archive fills
+ * in, as a "Calculated Value", for a planet with no measured radius; exoplanets.test.ts
+ * checks it gives back the Archive's numbers. **An estimate, not a measurement**: the
+ * paper's own scatter about it is 4% for rocky worlds, 15% for Neptunes, 7% for giants --
+ * and hot Jupiters, puffed up by their stars' heat, stray further. For a planet known only
+ * by its minimum mass it is the size at that minimum.
+ */
+export function estimatedRadiusEarth(massEarth: number): number {
+  // Each piece: its upper mass bound, Earth masses, and its power-law index.
+  const pieces: readonly (readonly [number, number])[] = [
+    [2.04, 0.279],
+    [0.414 * JUPITER_MASS_EARTH, 0.589],
+    [0.08 * SUN_MASS_EARTH, -0.044],
+    [Infinity, 0.881],
+  ];
+  // The first piece is anchored at one Earth mass; each next one starts where the last ends.
+  let anchorMass = 1;
+  let anchorRadius = 1.008;
+  for (const [upTo, index] of pieces) {
+    if (massEarth <= upTo) {
+      return anchorRadius * (massEarth / anchorMass) ** index;
+    }
+    anchorRadius *= (upTo / anchorMass) ** index;
+    anchorMass = upTo;
+  }
+  return anchorRadius;
+}
+
+/**
+ * The body a planet becomes: a sphere of its estimated radius (radiusEstimated, never
+ * radiusPublished: none of these has a measured one), lit by its own star.
+ */
 export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDefinition {
-  // A nominal radius, the Earth's, said to be one (radiusPublished false): it only sets
-  // how close the camera may come; the framing is planetFramingKm's.
-  const framingRadiusKm = 6371;
+  const radiusKm = estimatedRadiusEarth(planet.massEarth) * EARTH_RADIUS_KM;
   return {
     id: planet.id,
     name: planet.name,
@@ -183,8 +222,8 @@ export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDef
     vectorWindow: 'full',
     parent,
     kind: 'planet',
-    radiusEquatorialKm: framingRadiusKm,
-    radiusPolarKm: framingRadiusKm,
+    radiusEquatorialKm: radiusKm,
+    radiusPolarKm: radiusKm,
     gmKm3S2: planet.massEarth * GM_EARTH,
     gmBodyOnlyKm3S2: planet.massEarth * GM_EARTH,
     rotationPeriodHours: null,
@@ -199,7 +238,7 @@ export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDef
     rings: null,
     mission: null,
     radiusPublished: false,
-    shapeDrawn: false,
+    radiusEstimated: true,
   };
 }
 

@@ -25,7 +25,8 @@ import type { Vec3 } from './vec3.ts';
  * for whether it is counted confirmed, and its numbers read from the paper itself. All the
  * Archive lists for these four stars is here. None of them passes in front of its star, so
  * none has a measured radius: the radii the Archive shows for them are its estimates from
- * the mass, and each is drawn as a marker.
+ * the mass, and each is drawn at the same estimate (exoplanets.ts estimatedRadiusEarth),
+ * called one.
  *
  * Each star is a disc of its measured radius -- interferometry, the star's angular size
  * times its distance -- as Alpha Centauri's are: Tau Ceti 0.793 +- 0.004 Rsun (Teixeira

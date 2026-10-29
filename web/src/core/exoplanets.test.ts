@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MASS_PROXIMA_SUN } from './alphaCentauri.ts';
 import {
+  estimatedRadiusEarth,
   GM_EARTH,
   planetBodyDefinition,
   planetFramingKm,
@@ -116,11 +117,13 @@ describe('a planet on its orbit', () => {
 });
 
 describe('the body a planet becomes', () => {
-  it('is a marker with no measured radius, orbiting its star, its mass its own', () => {
+  it('is a sphere of its estimated radius, never called published, orbiting its star', () => {
     const body = planetBodyDefinition(proxima('b'), 'star-2-193889');
     expect(body.parent).toBe('star-2-193889');
     expect(body.radiusPublished).toBe(false);
-    expect(body.shapeDrawn).toBe(false);
+    expect(body.radiusEstimated).toBe(true);
+    expect(body.shapeDrawn).toBeUndefined();
+    expect(body.radiusEquatorialKm).toBeCloseTo(estimatedRadiusEarth(1.07) * 6371, 6);
     expect(body.drawOrbit).toBe(true);
     expect(body.gmKm3S2).toBeCloseTo(1.07 * GM_EARTH, 6);
   });
@@ -136,6 +139,34 @@ describe('the body a planet becomes', () => {
     for (const p of [...PROXIMA_PLANETS, eccentric]) {
       const halfHeight = planetFramingKm(p) * Math.tan((13.5 * Math.PI) / 180);
       expect(halfHeight).toBeGreaterThan(1.1 * p.semiMajorAxisAu * (1 + p.eccentricity) * AU_KM);
+    }
+  });
+});
+
+describe('the radius estimated from the mass (Chen & Kipping 2017)', () => {
+  it("gives back the NASA Exoplanet Archive's calculated radii (queried 2026-10-29)", () => {
+    // pscomppars pl_rade, flagged "Calculated Value", against the masses it was given.
+    const archive: readonly [string, number, number][] = [
+      ['Barnard b', 0.299, 0.72],
+      ['Barnard c', 0.335, 0.743],
+      ['Barnard d', 0.263, 0.694],
+      ['Barnard e', 0.193, 0.637],
+      ['Proxima Cen d', 0.26, 0.692],
+      ['tau Cet g', 1.75, 1.18],
+      ['tau Cet h', 1.83, 1.19],
+      ['tau Cet f', 3.93, 1.81],
+      ['51 Peg b', 193.9, 14.1],
+      ['eps Eri b', 317.83, 13.8],
+    ];
+    for (const [name, mass, radius] of archive) {
+      expect(Math.abs(estimatedRadiusEarth(mass) / radius - 1), name).toBeLessThan(0.005);
+    }
+  });
+
+  it('is continuous across its transitions, and Earth-sized at one Earth mass', () => {
+    expect(estimatedRadiusEarth(1)).toBeCloseTo(1.008, 9);
+    for (const at of [2.04, 0.414 * 317.83, 0.08 * 332_946]) {
+      expect(estimatedRadiusEarth(at * (1 + 1e-9)) / estimatedRadiusEarth(at * (1 - 1e-9))).toBeCloseTo(1, 6);
     }
   });
 });

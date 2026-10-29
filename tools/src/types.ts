@@ -290,6 +290,13 @@ export interface BodyDefinition {
    */
   readonly radiusPublished?: boolean;
   /**
+   * True for a body whose radius is not measured but estimated from its mass by a
+   * published relation -- a planet of another star that does not pass in front of it
+   * (exoplanets.ts). Drawn as a sphere all the same, and said to be an estimate wherever
+   * its size is shown. Goes with radiusPublished false. Absent means not estimated.
+   */
+  readonly radiusEstimated?: boolean;
+  /**
    * False for a body whose size is measured but whose shape cannot be drawn yet: an
    * irregular asteroid with no published orientation to hang its dimensions on, or a
    * contact binary no ellipsoid describes. Drawn as a marker only, as a body of unknown
