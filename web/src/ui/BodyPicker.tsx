@@ -42,10 +42,12 @@ import { Presence, useClosing } from './Presence.tsx';
  * camera 180,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
  * seen whole. It was a name and not a place until that model existed.
  *
- * Milky Way has a list of its own beside it: the black holes (D5, blackHoles.ts) -- Sgr A*
- * at the centre, Gaia BH1 and BH3 -- each framed with the star on its orbit. In one of
+ * Milky Way has a list of its own beside it: the places in the galaxy -- home first, the
+ * Solar System and the Solar Neighbourhood, then the black holes (D5, blackHoles.ts), Sgr
+ * A* at the centre, Gaia BH1 and BH3, each framed with the star on its orbit. In one of
  * their systems the breadcrumb is Milky Way and the black hole: none of them is in the
- * neighbourhood the Solar Neighbourhood frames.
+ * neighbourhood the Solar Neighbourhood frames -- so the way home is in this list, where
+ * the breadcrumb no longer shows it.
  *
  * The spacecraft come last, in a section of their own rather than folded under the
  * bodies they happen to be near. One that does not exist at the clock's instant -- not
@@ -201,10 +203,10 @@ export function BodyPicker({
         </Crumb>
         <button
           type="button"
-          aria-label="Black holes"
+          aria-label="Places in the Milky Way"
           aria-haspopup="listbox"
           aria-expanded={blackHolesOpen}
-          title="Go to a black hole"
+          title="Go to a place in the Milky Way"
           onClick={() => {
             setBlackHolesOpen((value) => !value);
             setSystemsOpen(false);
@@ -317,6 +319,16 @@ export function BodyPicker({
       <Presence show={blackHolesOpen}>
         <BlackHoleList
           active={blackHoleSystem?.id ?? null}
+          inSolarSystem={inSolarSystem}
+          onSolarSystem={() => {
+            onFocus('sun');
+            renderDemand.request();
+            setBlackHolesOpen(false);
+          }}
+          onNeighbourhood={() => {
+            toNeighbourhood();
+            setBlackHolesOpen(false);
+          }}
           onChoose={(system) => {
             toBlackHole(system);
             setBlackHolesOpen(false);
@@ -1067,21 +1079,28 @@ function SystemList({
 }
 
 /**
- * The black holes under Milky Way (D5): each framed with the star on its orbit. Sgr A*
- * first, at the centre of the Galaxy; then the two nearest known, by distance.
+ * The places under Milky Way: home -- the Solar System, the Solar Neighbourhood -- and the
+ * black holes (D5), each framed with the star on its orbit: Sgr A* first, at the centre of
+ * the Galaxy; then the two nearest known, by distance.
  */
 function BlackHoleList({
   active,
+  inSolarSystem,
+  onSolarSystem,
+  onNeighbourhood,
   onChoose,
 }: {
   active: BodyId | null;
+  inSolarSystem: boolean;
+  onSolarSystem: () => void;
+  onNeighbourhood: () => void;
   onChoose: (system: BlackHoleSystem) => void;
 }) {
   const closing = useClosing();
   return (
     <div
       role="listbox"
-      aria-label="Black holes"
+      aria-label="Places in the Milky Way"
       className={closing ? 'dropdown-exit' : 'dropdown-enter'}
       style={{
         marginTop: '0.55rem',
@@ -1092,7 +1111,10 @@ function BlackHoleList({
         padding: '0.35rem',
       }}
     >
-      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Black holes</div>
+      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Home</div>
+      <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
+      <MemberRow name="Solar Neighbourhood" active={false} onChoose={onNeighbourhood} />
+      <div style={SECTION_HEADING}>Black holes</div>
       {BLACK_HOLE_SYSTEMS.map((system) => (
         <MemberRow
           key={system.id}
