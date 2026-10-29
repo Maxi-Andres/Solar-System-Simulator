@@ -57,7 +57,20 @@ export const STAR3D_FLAG = {
   GCNS: 16,
   /** In GCNS with its distance estimate (dist_50) inside 100 pc: the census's clean sample. */
   GCNS_WITHIN_100PC: 32,
+  /** The radial velocity is the Pulkovo compilation's (Gontcharov 2006): Gaia DR3 gave none. */
+  LITERATURE_RADIAL_VELOCITY: 64,
 } as const;
+
+/**
+ * A star's system as a reader should see it, or null. names.json's `system` also holds
+ * double-star catalogue entries -- "WDS J03329-0927", "CCDM J01441-1557" -- which group a
+ * pair's stars (names3d.ts) but are not names, and do not even say the star has a
+ * companion: those catalogues list pairs that only line up on the sky as well. Tau Ceti,
+ * single, is in CCDM for faint stars that merely appear near it.
+ */
+export function systemDisplayName(system: string | null): string | null {
+  return system === null || /^(WDS|CCDM) J/.test(system) ? null : system;
+}
 
 /** One parsec, km (IAU 2015 B2: 648,000/pi AU). */
 export const PARSEC_KM = (149_597_870.7 * 648_000) / Math.PI;

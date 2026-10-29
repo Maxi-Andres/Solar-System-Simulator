@@ -25,6 +25,7 @@ import { build3d, skyCounterpartFilter, type SourceNote, type Stars3dBuild } fro
 import { buildSky, type SkyBuild } from './buildStarCatalog.ts';
 import { fetchBsc } from './bsc.ts';
 import { buildNames, type NamesBuild } from './names3d.ts';
+import { fetchPulkovo } from './pulkovo.ts';
 import { fetchBrightGaia, fetchGcns, fetchHipparcos2 } from './sources3d.ts';
 import { useTapCache, type TapRead } from './tap.ts';
 import { fetchHipparcos, fetchTycho2, type CatalogRow } from './vizier.ts';
@@ -80,11 +81,12 @@ export async function loadStars3d(sky: SkyBuild): Promise<{ stars3d: Stars3dBuil
   const hipparcos2 = await fetchHipparcos2();
   const bright = await fetchBrightGaia(skyCounterpartFilter(sky));
   const bsc = await fetchBsc();
+  const pulkovo = await fetchPulkovo();
   console.log(
     `[stars] read GCNS ${gcns.table.count} (${gcns.service.name}), ` +
       `Hipparcos-2 ${hipparcos2.rows.length} (${hipparcos2.service.name}), ` +
       `bright Gaia ${bright?.rows.length ?? 'NONE'}${bright !== null ? ` (${bright.service.name})` : ''}, ` +
-      `BSC ${bsc?.length ?? 'NONE'} in ${((performance.now() - started) / 1000).toFixed(1)} s`,
+      `BSC ${bsc?.length ?? 'NONE'}, Pulkovo RVs ${pulkovo?.rows.length ?? 'NONE'} in ${((performance.now() - started) / 1000).toFixed(1)} s`,
   );
 
   const sources: SourceNote[] = [
@@ -124,11 +126,22 @@ export async function loadStars3d(sky: SkyBuild): Promise<{ stars3d: Stars3dBuil
     });
   }
 
+  if (pulkovo !== null) {
+    sources.push({
+      name: 'Pulkovo Compilation of Radial Velocities (Gontcharov 2006, Astron. Lett. 32, 759)',
+      table: 'III/252/table8',
+      via: pulkovo.url,
+      rows: pulkovo.rows.length,
+      note: 'Weighted mean radial velocities of Hipparcos stars, by HIP: only where Gaia DR3 gave none.',
+    });
+  }
+
   const stars3d = build3d({
     sky,
     gcns: gcns.table,
     hipparcos2: hipparcos2.rows,
     brightGaia: bright?.rows ?? null,
+    literatureRv: pulkovo === null ? null : new Map(pulkovo.rows.map((row) => [row.hip, row.rvKmS])),
     sources,
     queriedAt: new Date().toISOString(),
   });
@@ -146,7 +159,8 @@ export function describeStars3d(build: Stars3dBuild, names: NamesBuild): string[
     `[stars] 3D ${info.count} stars: sky ${info.sky.placed} placed, ${info.sky.atInfinity} at infinity; ` +
       `GCNS ${info.counts.gcns}`,
     `[stars] parallaxes: Gaia ${info.counts.gaiaParallax}, Hipparcos ${info.counts.hipparcosParallax}, ` +
-      `published ${info.counts.literatureParallax}; radial velocity ${info.counts.radialVelocity}; ` +
+      `published ${info.counts.literatureParallax}; radial velocity ${info.counts.radialVelocity} ` +
+      `(Pulkovo ${info.counts.literatureRadialVelocity ?? 0}); ` +
       `within 10 pc ${info.counts.withinTenParsecs}`,
     `[stars] sky to Gaia: ${info.crossMatch.byId} by id, ${info.crossMatch.byPosition} by position`,
     `[stars] dropped ${JSON.stringify(info.dropped)}`,

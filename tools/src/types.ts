@@ -878,7 +878,10 @@ export const STAR3D_KM_S_TO_PC_PER_YEAR = 1.0227121650537077e-6;
 
 /** The bits of a `stars3d/` record's `flags` float. */
 export const STAR3D_FLAGS = {
-  /** Gaia DR3 measured its radial velocity, so (vx, vy, vz) is the full space motion. */
+  /**
+   * A radial velocity was measured, so (vx, vy, vz) is the full space motion: Gaia DR3's,
+   * or, where Gaia gave none, the Pulkovo compilation's (LITERATURE_RADIAL_VELOCITY).
+   */
   RADIAL_VELOCITY: 1,
   /** Distance from the Hipparcos new reduction (van Leeuwen 2007); else from Gaia DR3. */
   HIPPARCOS_PARALLAX: 2,
@@ -904,6 +907,11 @@ export const STAR3D_FLAGS = {
    * just beyond, and they are drawn where their parallax puts them.
    */
   GCNS_WITHIN_100PC: 32,
+  /**
+   * The radial velocity is the Pulkovo compilation's (Gontcharov 2006), not Gaia's: Gaia
+   * DR3 gave this star none. Set with RADIAL_VELOCITY.
+   */
+  LITERATURE_RADIAL_VELOCITY: 64,
 } as const;
 
 /** One absolute-magnitude tier of the 3D stars; see Stars3dInfo.tiers. */
@@ -991,6 +999,8 @@ export interface Stars3dInfo {
     readonly hipparcosParallax: number;
     readonly literatureParallax: number;
     readonly radialVelocity: number;
+    /** Of those, from the Pulkovo compilation; absent in files built before it was read. */
+    readonly literatureRadialVelocity?: number;
     readonly gcns: number;
     readonly withinTenParsecs: number;
     /**

@@ -20,6 +20,7 @@ import {
   STAR3D,
   STAR3D_FLAG,
   starNow,
+  systemDisplayName,
   type StarDetails,
   type StarNow,
   type Stars3dSource,
@@ -170,12 +171,16 @@ export function StarFacts({
           <dd style={VALUE}>{facts.spectralType}</dd>
         </>
       )}
-      {facts.system !== null && (
+      {systemDisplayName(facts.system) !== null && (
         <>
           <dt style={TERM}>System</dt>
-          <dd style={VALUE}>
-            {facts.nearest === null ? facts.system : `${facts.system} · nearest no. ${facts.nearest}`}
-          </dd>
+          <dd style={VALUE}>{systemDisplayName(facts.system)}</dd>
+        </>
+      )}
+      {facts.nearest !== null && (
+        <>
+          <dt style={TERM}>Nearest systems</dt>
+          <dd style={VALUE}>{`no. ${facts.nearest}`}</dd>
         </>
       )}
 
@@ -220,6 +225,14 @@ export function StarFacts({
         <>
           <dt style={TERM}>Census</dt>
           <dd style={VALUE}>{within100 ? 'Gaia nearby stars' : 'Gaia, just past 100 pc'}</dd>
+        </>
+      )}
+      {now.radialKmS !== null && component === null && (
+        <>
+          <dt style={TERM}>Radial velocity from</dt>
+          <dd style={VALUE}>
+            {(flags & STAR3D_FLAG.LITERATURE_RADIAL_VELOCITY) !== 0 ? 'Pulkovo 2006' : 'Gaia DR3'}
+          </dd>
         </>
       )}
       <dt style={TERM}>Placed by</dt>

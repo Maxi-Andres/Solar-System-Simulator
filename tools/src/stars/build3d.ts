@@ -323,6 +323,11 @@ export interface Build3dInput {
    * skyCounterpartFilter), or null when neither service delivered them.
    */
   readonly brightGaia: readonly BrightGaiaRow[] | null;
+  /**
+   * Radial velocities from the Pulkovo compilation by HIP (pulkovo.ts), for stars Gaia
+   * gave none; null when it could not be read.
+   */
+  readonly literatureRv?: ReadonlyMap<number, number> | null;
   readonly sources: readonly SourceNote[];
   readonly queriedAt: string;
   readonly tierLimits?: readonly number[];
@@ -361,10 +366,24 @@ export function build3d({
   gcns,
   hipparcos2,
   brightGaia,
+  literatureRv = null,
   sources,
   queriedAt,
   tierLimits = STAR3D_TIER_LIMITS,
 }: Build3dInput): Stars3dBuild {
+  /**
+   * A star's radial velocity and the flags saying whose: Gaia's where it has one, else the
+   * Pulkovo compilation's by HIP, else none (NaN) -- and the star moves across the sky only.
+   */
+  const radialVelocity = (gaiaRv: number, hip: number): { rv: number; flags: number } => {
+    if (Number.isFinite(gaiaRv)) {
+      return { rv: gaiaRv, flags: STAR3D_FLAGS.RADIAL_VELOCITY };
+    }
+    const literature = hip > 0 ? literatureRv?.get(hip) : undefined;
+    return literature === undefined
+      ? { rv: Number.NaN, flags: 0 }
+      : { rv: literature, flags: STAR3D_FLAGS.RADIAL_VELOCITY | STAR3D_FLAGS.LITERATURE_RADIAL_VELOCITY };
+  };
   const dropped: Record<string, number> = {
     skyNoParallax: 0,
     gcnsParallaxBelowSnr: 0,
@@ -519,7 +538,7 @@ export function build3d({
       continue;
     }
 
-    const rv = gaia?.rvKmS ?? Number.NaN;
+    const { rv, flags: rvFlags } = radialVelocity(gaia?.rvKmS ?? Number.NaN, star.hip ?? gaia?.hip ?? 0);
     const { position, velocity } = phaseSpace(
       raDeg,
       decDeg,
@@ -528,10 +547,7 @@ export function build3d({
       catalog.pmDec[row]!,
       rv,
     );
-    let flags = chosen.flags;
-    if (Number.isFinite(rv)) {
-      flags |= STAR3D_FLAGS.RADIAL_VELOCITY;
-    }
+    let flags = chosen.flags | rvFlags;
     if (census !== undefined) {
       flags |= STAR3D_FLAGS.GCNS;
       if (census < 100) {
@@ -606,12 +622,9 @@ export function build3d({
     const pmRa = gcns.pmRaMasPerYear[k]!;
     const pmDec = gcns.pmDecMasPerYear[k]!;
     const at2000 = applyProperMotion(gcns.raDeg[k]!, gcns.decDeg[k]!, pmRa, pmDec, GAIA_EPOCH_SHIFT_YEARS);
-    const rv = gcns.rvKmS[k]!;
+    const { rv, flags: rvFlags } = radialVelocity(gcns.rvKmS[k]!, gcns.hip[k]!);
     const { position, velocity } = phaseSpace(at2000.raDeg, at2000.decDeg, parallax, pmRa, pmDec, rv);
-    let flags = STAR3D_FLAGS.GCNS | STAR3D_FLAGS.GAIA_PHOTOMETRY;
-    if (Number.isFinite(rv)) {
-      flags |= STAR3D_FLAGS.RADIAL_VELOCITY;
-    }
+    let flags = STAR3D_FLAGS.GCNS | STAR3D_FLAGS.GAIA_PHOTOMETRY | rvFlags;
     if (gcns.dist50Pc[k]! < 100) {
       flags |= STAR3D_FLAGS.GCNS_WITHIN_100PC;
     }
@@ -671,7 +684,8 @@ export function build3d({
   let gaiaParallax = 0;
   let hipparcosParallax = 0;
   let literatureParallax = 0;
-  let radialVelocity = 0;
+  let withRadialVelocity = 0;
+  let literatureRadialVelocity = 0;
   let inGcns = 0;
   let withinTenParsecs = 0;
   for (let k = 0; k < table.count; k += 1) {
@@ -683,7 +697,8 @@ export function build3d({
     } else {
       gaiaParallax += 1;
     }
-    radialVelocity += (flags & STAR3D_FLAGS.RADIAL_VELOCITY) !== 0 ? 1 : 0;
+    withRadialVelocity += (flags & STAR3D_FLAGS.RADIAL_VELOCITY) !== 0 ? 1 : 0;
+    literatureRadialVelocity += (flags & STAR3D_FLAGS.LITERATURE_RADIAL_VELOCITY) !== 0 ? 1 : 0;
     inGcns += (flags & STAR3D_FLAGS.GCNS) !== 0 ? 1 : 0;
     withinTenParsecs += table.parallaxMas[k]! > 100 ? 1 : 0;
   }
@@ -711,7 +726,8 @@ export function build3d({
       gaiaParallax,
       hipparcosParallax,
       literatureParallax,
-      radialVelocity,
+      radialVelocity: withRadialVelocity,
+      literatureRadialVelocity,
       gcns: inGcns,
       withinTenParsecs,
       gaiaOnlyBrighterThanSkyLimit: brighterThanSky,

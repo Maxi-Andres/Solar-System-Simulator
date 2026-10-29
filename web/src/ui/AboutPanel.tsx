@@ -286,8 +286,10 @@ export function AboutPanel({
             the <Strong>Hipparcos</Strong> new reduction (van Leeuwen 2007), and the{' '}
             <Strong>Gaia Catalogue of Nearby Stars</Strong> (Gaia Collaboration, Smart et al.
             2021), the census of everything within 100 parsecs. Each moves on its own measured
-            motion, in three dimensions where its radial velocity was measured and across the
-            sky only where it was not, and its brightness is worked out from wherever the camera
+            motion, in three dimensions where its radial velocity was measured — Gaia DR3’s, or
+            where Gaia has none, as for the brightest stars its spectrometer saturates on, the{' '}
+            <Strong>Pulkovo Compilation of Radial Velocities</Strong> (Gontcharov 2006, Astron.
+            Lett. 32, 759) — and across the sky only where it was not, and its brightness is worked out from wherever the camera
             is — so from the Sun they are the same sky as above, and from Alpha Centauri the Sun
             is a yellow star of magnitude 0.4. A star whose parallax is too poor stays at
             infinity, its direction all that is known. No correction is made for interstellar

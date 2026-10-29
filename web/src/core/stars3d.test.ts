@@ -14,6 +14,7 @@ import {
   STAR3D_FLAG,
   STAR3D_FLOATS,
   Stars3dSource,
+  systemDisplayName,
 } from './stars3d.ts';
 import { searchNames } from './beltNames.ts';
 import { isShown } from '../scene/floatingOrigin.ts';
@@ -193,5 +194,15 @@ describe('a star made a body', () => {
     // Exact: the catalogue's own model, not flagged APPROXIMATE.
     expect(store.isExactAt(jd, [id])).toBe(true);
     expect(state.approximate).toBe(false);
+  });
+});
+
+describe('a star system as shown', () => {
+  it('is its name, and nothing for a double-star catalogue entry', () => {
+    expect(systemDisplayName('Alpha Centauri')).toBe('Alpha Centauri');
+    expect(systemDisplayName('61 Cygni')).toBe('61 Cygni');
+    expect(systemDisplayName('CCDM J01441-1557')).toBeNull();
+    expect(systemDisplayName('WDS J03329-0927')).toBeNull();
+    expect(systemDisplayName(null)).toBeNull();
   });
 });

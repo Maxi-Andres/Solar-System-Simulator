@@ -30,7 +30,7 @@ import {
 } from '../core/satellites.ts';
 import { describeBody, layersFor, normalizeName, parentNameOf, searchBodies } from '../core/search.ts';
 import { addStarBody, starBodyId } from '../core/starBodies.ts';
-import type { StarNameIndex, Stars3dSource } from '../core/stars3d.ts';
+import { systemDisplayName, type StarNameIndex, type Stars3dSource } from '../core/stars3d.ts';
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
@@ -424,7 +424,9 @@ function describeResult(
       detail: [
         'Star',
         names.spectralType[k] ?? undefined,
-        names.system[k] !== null && names.system[k] !== names.display[k] ? names.system[k]! : undefined,
+        systemDisplayName(names.system[k] ?? null) !== names.display[k]
+          ? (systemDisplayName(names.system[k] ?? null) ?? undefined)
+          : undefined,
         nearest == null ? undefined : `nearest system no. ${nearest}`,
       ]
         .filter((part) => part !== undefined)

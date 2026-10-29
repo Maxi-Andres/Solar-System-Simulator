@@ -471,6 +471,17 @@ export const STARS3D_NAMES_FILE = 'names.json';
 export const BSC_CATALOG_URL = 'https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz';
 
 /**
+ * The Pulkovo Compilation of Radial Velocities (Gontcharov 2006, CDS III/252), table8,
+ * for the stars Gaia DR3 gave none (stars/pulkovo.ts): CDS's archive, then the copy
+ * VizieR's mirror at the CfA serves -- which answered on 2026-10-29 while every service
+ * in Strasbourg timed out. Optional.
+ */
+export const PULKOVO_RV_URLS: readonly string[] = [
+  'https://cdsarc.cds.unistra.fr/ftp/III/252/table8.dat.gz',
+  'https://vizier.cfa.harvard.edu/ftp/cats/III/252/table8.dat.gz',
+];
+
+/**
  * JPL's Small-Body Database query endpoint, for the asteroid belt.
  *
  * The API is documented at https://ssd-api.jpl.nasa.gov/doc/sbdb_query.html and its
