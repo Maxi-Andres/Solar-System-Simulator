@@ -203,9 +203,10 @@ export const choicesSection: AboutSection = {
           Black holes
         </Sub>
         <Items>
-          <Item title="The shadow’s edge">
-            The shadow is black, with a thin line traced round its edge, just inside the photon ring.
-            <Why>so that its size can be read even where the sky behind it is dark: black on black is nothing.</Why>
+          <Item title="The shadow, unoutlined">
+            The shadow is black, and nothing is traced round it: its edge is where the photon ring is, the
+            sky’s light bent all the way round the hole.
+            <Why>a line drawn there was a guide, not light; the lensing draws the real edge.</Why>
           </Item>
           <Item title="No disc of glowing gas">
             No accretion disc is drawn round any of them.

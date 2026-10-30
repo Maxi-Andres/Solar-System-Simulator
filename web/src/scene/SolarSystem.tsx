@@ -57,7 +57,6 @@ import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
 import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeModels.ts';
 import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
-import { sphereOutline } from './distanceRings.ts';
 import { shadowSphereRadius } from '../core/schwarzschildLens.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
@@ -123,36 +122,6 @@ const scratchBody = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
 const scratchQuaternion = new THREE.Quaternion();
 const scratchDrift = new THREE.Quaternion();
-const scratchToward = new THREE.Vector3();
-const AXIS_Z = new THREE.Vector3(0, 0, 1);
-
-/**
- * A black hole's shadow is black, and black on black is nothing: so its edge is traced,
- * a thin line in the body's colour round the sphere's outline -- a guide to its size, not
- * light it gives. How strong, and in segments: a 256-gon sags 0.008% inside its circle.
- */
-const HORIZON_RIM_OPACITY = 0.55;
-const HORIZON_RIM_SEGMENTS = 256;
-
-function horizonRim(color: string): THREE.LineLoop {
-  const positions = new Float32Array(HORIZON_RIM_SEGMENTS * 3);
-  for (let index = 0; index < HORIZON_RIM_SEGMENTS; index += 1) {
-    const angle = (index / HORIZON_RIM_SEGMENTS) * 2 * Math.PI;
-    positions[index * 3] = Math.cos(angle);
-    positions[index * 3 + 1] = Math.sin(angle);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const rim = new THREE.LineLoop(
-    geometry,
-    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false }),
-  );
-  // After the sphere, under the markers; its bounds are the unit circle's, scaled per frame.
-  rim.renderOrder = 6;
-  rim.frustumCulled = false;
-  rim.visible = false;
-  return rim;
-}
 
 const DEG = Math.PI / 180;
 
@@ -312,8 +281,6 @@ interface BodyHandles {
    * See `solarGlare.ts`.
    */
   readonly glare: THREE.Mesh | null;
-  /** A black hole's traced outline (blackHoles.ts); null for every other body. */
-  readonly horizonRim: THREE.LineLoop | null;
   /**
    * A spacecraft's model or box, once it has been asked for; null for a natural body
    * and for a craft still too small to be worth fetching one. See craftModels.ts.
@@ -796,11 +763,6 @@ export function SolarSystem({
         group.add(glare);
       }
 
-      const rim = definition.kind === 'black-hole' ? horizonRim(definition.color) : null;
-      if (rim !== null) {
-        group.add(rim);
-      }
-
       return {
         definition,
         group,
@@ -816,7 +778,6 @@ export function SolarSystem({
         ringShadow,
         earth,
         glare,
-        horizonRim: rim,
         requestedFile: null,
         shownFile: null,
         shownOriginDeg: 0,
@@ -1203,21 +1164,6 @@ export function SolarSystem({
           // A billboard: the group carries position only, so the camera's own rotation
           // is the one that turns the quad to face it.
           handle.glare.quaternion.copy(camera.quaternion);
-        }
-      }
-
-      if (handle.horizonRim !== null) {
-        // The outline as the camera sees it: the circle where its lines of sight touch the
-        // sphere, square to the line from the centre to the camera and a little toward it.
-        // A hair outside, so the sphere's own surface does not hide it.
-        const outline = sphereOutline(drawnRadiusKm, distanceKm);
-        handle.horizonRim.visible = outline !== null && sphereOpacity > 0.005;
-        if (outline !== null && handle.horizonRim.visible) {
-          scratchToward.copy(camera.position).sub(handle.group.position).normalize();
-          handle.horizonRim.position.copy(scratchToward).multiplyScalar(kmToUnits(outline.towardCameraKm));
-          handle.horizonRim.quaternion.setFromUnitVectors(AXIS_Z, scratchToward);
-          handle.horizonRim.scale.setScalar(kmToUnits(outline.radiusKm) * 1.002);
-          (handle.horizonRim.material as THREE.LineBasicMaterial).opacity = HORIZON_RIM_OPACITY * sphereOpacity;
         }
       }
 
