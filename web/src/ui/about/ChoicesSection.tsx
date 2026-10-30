@@ -203,9 +203,24 @@ export const choicesSection: AboutSection = {
           Black holes
         </Sub>
         <Items>
-          <Item title="A black sphere with an edge">
-            Here the sphere is simply black, with a thin line traced round its edge.
-            <Why>so that it can be seen at all: black on black is nothing.</Why>
+          <Item title="The shadow’s edge">
+            The shadow is black, with a thin line traced round its edge, just inside the photon ring.
+            <Why>so that its size can be read even where the sky behind it is dark: black on black is nothing.</Why>
+          </Item>
+          <Item title="No disc of glowing gas">
+            No accretion disc is drawn round any of them.
+            <Why>
+              in visible light there is none to see: Sgr A* is quiescent, and hidden behind about 30 magnitudes
+              of dust <Cite k="genzel2010" />; Gaia BH1 and BH3 are dormant. The bright discs of films are of
+              holes that are feeding.
+            </Why>
+          </Item>
+          <Item title="Star images capped">
+            A star’s lensed image is drawn at most 100 times (5 magnitudes) brighter than the star.
+            <Why>
+              near the Einstein ring a real image is a thin arc, not a point; drawn as a point at the full
+              magnification it would be a blinding dot no camera would record.
+            </Why>
           </Item>
           <Item title="Orbits for scale">
             Around Sgr A* the orbits of Mercury and Earth are drawn for scale, as circles facing you; nothing

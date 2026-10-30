@@ -1,3 +1,4 @@
+import { LENS_VERTEX_GLSL } from './lens.ts';
 import { DISPLAY_FLOOR, linearToSrgb } from './shading.ts';
 
 /**
@@ -342,10 +343,14 @@ attribute float magnitude;
 attribute vec3 starColor;
 // 1 for a star the 3D stars draw at its real distance (see Starfield.tsx), 0 otherwise.
 attribute float placed;
+// The catalogue's limit: an image a black hole makes fainter than it is not drawn.
+uniform float uMagnitudeLimit;
 
 varying vec3 vColor;
 varying float vPeakLinear;
 varying float vSizePx;
+
+${LENS_VERTEX_GLSL}
 
 float srgbToLinear(float value) {
   return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4);
@@ -377,9 +382,22 @@ void main() {
     direction + (east * properMotion.x + north * properMotion.y) * uYearsSinceEpoch
   );
 
+  // Where a black hole near the camera shows it, and how much brighter (lens.ts). An image
+  // it makes fainter than the catalogue's limit is not drawn, as such a star is not.
+  float dm;
+  if (!lensStar(direction, dm) || (dm > 0.0 && magnitude + dm > uMagnitudeLimit)) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    gl_PointSize = 1.0;
+    vColor = vec3(0.0);
+    vPeakLinear = 0.0;
+    vSizePx = 1.0;
+    return;
+  }
+
   gl_Position = projectionMatrix * modelViewMatrix * vec4(direction * uSphereRadius, 1.0);
 
-  float peak = clamp(uMagnitudeToPeak.x + uMagnitudeToPeak.y * magnitude, uDisplayFloor, 1.0);
+  float seen = magnitude + dm;
+  float peak = clamp(uMagnitudeToPeak.x + uMagnitudeToPeak.y * seen, uDisplayFloor, 1.0);
   vPeakLinear = srgbToLinear(peak) * uFade;
 
   // How far the profile reaches, in units of the peak over the display floor. The two

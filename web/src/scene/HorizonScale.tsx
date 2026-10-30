@@ -13,7 +13,8 @@ import { projectToScreen } from './screenProjection.ts';
 /**
  * The Solar System laid over Sgr A* (D5), for scale: circles the size of Mercury's and
  * Earth's orbits, centred on the black hole, drawn while it or S2 is in focus. Its horizon
- * -- 0.085 AU, a fifth of Mercury's orbit -- sits well inside both.
+ * -- 0.085 AU, a fifth of Mercury's orbit -- sits well inside both, and so does its shadow,
+ * 0.22 AU. They are drawn flat over the lensed sky, as rulers: not bent by it.
  *
  * **A ruler, not a thing**, in the distance rings' grey and labelled "for scale": nothing
  * of the Solar System is there. Each circle faces the camera, so it is round from any side

@@ -791,18 +791,89 @@ export const physicsSection: AboutSection = {
             </>
           }
         >
-          What one would see is larger than the horizon — light passing within 2.6 times its radius falls in,
-          and the dark shadow the Event Horizon Telescope imaged is that, ringed by the glow of hot gas — and
-          none of it is drawn.
+          What one sees is larger than the horizon: light passing within 2.6 times its radius falls in, so the
+          black disc drawn is this shadow, not the horizon. For Sgr A* it is 0.22 AU in radius, and 53.3
+          microarcseconds across from Earth at GRAVITY’s mass and distance — the Event Horizon Telescope
+          measured a ring of 51.8 ± 2.3 <Cite k="eht2022" />. The horizon still sets how close the camera can
+          go.
         </Equation>
-        {/*
-          Gravitational lensing: the lensing work's equations and text go here, and replace the
-          "Not drawn: lensing" item below once lensing is drawn.
-        */}
+        <Equation
+          title="Light’s path past a black hole"
+          cite={['darwin1959', 'carlson1995']}
+          code="web/src/core/schwarzschildLens.ts"
+          math={math(
+            row(
+              sup(paren(frac(row(mi('d'), mi('u')), row(mi('d'), mi('φ')))), mn('2')),
+              mo('='),
+              frac(mn('1'), sup(mi('b'), mn('2'))),
+              mo('−'),
+              sup(mi('u'), mn('2')),
+              paren(row(mn('1'), mo('−'), sub(mi('r'), mi('s')), mi('u'))),
+              mtext('  '),
+              mi('u'),
+              mo('='),
+              frac(mn('1'), mi('r')),
+            ),
+          )}
+          symbols={
+            <>
+              r the distance from the centre, φ the angle round it, b the impact parameter: how far off centre
+              the ray is aimed.
+            </>
+          }
+        >
+          The photon’s orbit in the Schwarzschild metric, solved exactly with elliptic integrals rather than by
+          stepping it, so it holds right up to the shadow’s edge, where light circles the hole several times.
+          How much a ray is bent comes from it — far out it tends to 2r<sub>s</sub>/b, Einstein’s — and it is
+          checked against that weak-field series <Cite k="keetonPetters2005" />, against the strong-field limit
+          near the edge <Cite k="bozza2002" />, and against direct integration. Around the hole the sky is drawn
+          bent by it: each star twice, once outside the Einstein ring and once, fainter and flipped, between
+          the ring and the shadow, each brighter or fainter by the solid angle its image covers{' '}
+          <Cite k="paczynski1986" />; and the galaxy’s glow bent into the Einstein ring and the thinner rings
+          inside it.
+        </Equation>
+        <Equation
+          title="The shadow from where the camera stands"
+          cite={['synge1966', 'perlick2004']}
+          code="web/src/core/schwarzschildLens.ts"
+          math={math(
+            row(
+              fn('sin'),
+              sub(mi('θ'), up('sh')),
+              mo('='),
+              frac(sub(mi('b'), mi('c')), mi('r')),
+              sqrt(row(mn('1'), mo('−'), frac(sub(mi('r'), mi('s')), mi('r')))),
+            ),
+          )}
+          symbols={
+            <>
+              θ<sub>sh</sub> the shadow’s angular radius for a camera at rest at distance r from the centre.
+            </>
+          }
+        >
+          The lens is worked out for the camera where it really is, a few horizons out or tens of parsecs
+          away, not as if it were infinitely far: inside the photon sphere, at 1.5 r<sub>s</sub>, the shadow
+          fills more than half the sky.
+        </Equation>
         <Items>
-          <Item title="Not drawn: lensing">
-            Nor is gravitational lensing: a real black hole bends the light of everything behind it into rings
-            about itself.
+          <Item title="Spin: none">
+            The holes are lensed as non-spinning (Schwarzschild). A spinning hole’s shadow is slightly smaller
+            and flattened on one side, and the EHT’s models for Sgr A* disfavour no spin.{' '}
+            <Xref to="estimated" sub="black-holes">
+              Not known › Black holes
+            </Xref>
+          </Item>
+          <Item title="Only the sky is bent">
+            S2, the stars of BH1 and BH3, the scale rings and any body past the hole are drawn unbent; sources
+            are treated as infinitely far behind it, under 1% wrong where it shows.
+          </Item>
+          <Item title="A camera at rest">
+            No aberration or Doppler shift from the camera’s motion, and no blueshift for hovering near the
+            hole — 2% at 30 r<sub>s</sub>, 73% at the photon sphere.
+          </Item>
+          <Item title="Looping images">
+            Images of the sky that loop round the hole are drawn for the galaxy’s glow, not for single stars.
+            Close in, the glow is read from a 1024-pixel cube map and is softer than elsewhere.
           </Item>
           <Item title="Not drawn: S2’s precession">
             S2 follows its measured orbit as a Kepler ellipse, and the 12 arcminutes a turn it precesses —

@@ -17,6 +17,7 @@ import { useEffect, useMemo, type RefObject } from 'react';
 import { renderDemand } from '../core/renderDemand.ts';
 
 import { AsteroidBelt } from './AsteroidBelt.tsx';
+import { BlackHoleLens } from './BlackHoleLens.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
@@ -258,6 +259,8 @@ export function SolarSystemCanvas({
         labels={ringLabels}
       />
       <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
+      {/* After the glow: it draws the glow again, into its cube, with this frame's uniforms. */}
+      <BlackHoleLens store={store} clock={clock} focus={focus} />
       <ExoplanetHosts
         source={exoplanets}
         store={store}

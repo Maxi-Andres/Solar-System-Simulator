@@ -12,20 +12,24 @@ import type { StateVector, Vec3 } from './vec3.ts';
 /**
  * Black holes to scale (D5): Sagittarius A* at the centre of the Galaxy, with the star S2 on
  * its measured orbit about it; and the two nearest black holes known, Gaia BH1 and Gaia BH3,
- * each with the star that gave it away on the orbit measured for the pair. Each is a black
- * sphere of its event horizon's real size -- 12.7 million km for Sgr A*, 28 and 97 km for
- * the other two -- at its real place.
+ * each with the star that gave it away on the orbit measured for the pair. Each is a body of
+ * its event horizon's real size -- 12.7 million km for Sgr A*, 28 and 97 km for the other
+ * two -- at its real place, drawn as what it looks like: its shadow, and the sky bent
+ * round it.
  *
- * ## The horizon, and what is not drawn
+ * ## The horizon, the shadow and the lens
  *
- * The sphere is the **Schwarzschild radius, r_s = 2GM/c^2**: the horizon of a black hole
- * that does not spin. None of the three has a measured spin, so not spinning is a
+ * The body's radius is the **Schwarzschild radius, r_s = 2GM/c^2**: the horizon of a black
+ * hole that does not spin. None of the three has a measured spin, so not spinning is a
  * convention, and it is the largest a horizon of that mass can be -- a spinning one is
- * smaller, down to half at the maximum spin. What one would *see* is larger: light that
- * passes within sqrt(27)/2 = 2.6 r_s of the centre falls in, and the dark "shadow" the
- * Event Horizon Telescope imaged is that 2.6 r_s, not the horizon. **Gravitational lensing
- * is not drawn**: a real black hole bends the light of everything behind it into rings
- * about itself; here the sphere is simply black, and covers what lies behind it.
+ * smaller, down to half at the maximum spin. It sets how close the camera may come. What
+ * one would *see* is larger: light that passes within sqrt(27)/2 = 2.6 r_s of the centre
+ * falls in, and the dark **shadow** is that, not the horizon -- so the black sphere drawn
+ * is scaled to hide exactly the shadow from where the camera is (schwarzschildLens.ts,
+ * shadowSphereRadius). Round it the sky is **lensed**, by the exact Schwarzschild
+ * deflection for a camera at its real distance: stars moved to their two images, the
+ * galaxy's glow bent into its Einstein ring and the thinner rings within
+ * (BlackHoleLens.tsx).
  *
  * ## Sgr A*
  *
@@ -512,7 +516,10 @@ export function colorIndexForTemperature(kelvin: number): number {
   return (hot + cool) / 2;
 }
 
-/** A black hole as a body: a sphere of its Schwarzschild radius, unlit, black. */
+/**
+ * A black hole as a body: a sphere of its Schwarzschild radius, unlit, black -- the radius
+ * the camera keeps out of; what is drawn is scaled to the shadow (SolarSystem.tsx).
+ */
 export function blackHoleDefinition(id: BodyId, name: string, massSun: number): BodyDefinition {
   const radius = schwarzschildRadiusKm(massSun);
   const gm = massSun * GM_SUN_KM3_S2;

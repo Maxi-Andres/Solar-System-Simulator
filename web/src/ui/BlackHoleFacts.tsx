@@ -16,6 +16,7 @@ import {
   type SkyOrbit,
 } from '../core/blackHoles.ts';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
+import { CRITICAL_IMPACT, shadowAngle } from '../core/schwarzschildLens.ts';
 import { R0_PC } from '../core/milkyWay.ts';
 import { PARSEC_KM } from '../scene/scale.ts';
 import { Panel } from './Panel.tsx';
@@ -23,14 +24,28 @@ import { formatStarDistance } from './StarFacts.tsx';
 
 /**
  * The info panel for a black hole, or for the star on its orbit (blackHoles.ts): short rows,
- * a number and whose it is. Why the horizon is drawn as it is, and what is not drawn, is
- * the About's to say.
+ * a number and whose it is. Why the shadow and the lensing are drawn as they are, and what
+ * is not drawn, is the About's to say.
  */
 
 const AU_KM = 149_597_870.7;
 
 /** Pluto's aphelion, AU: what M87*'s horizon is held against. */
 const PLUTO_APHELION_AU = 49.3;
+
+/**
+ * The ring the EHT imaged about Sgr A*, microarcseconds across: EHT Collaboration 2022,
+ * ApJL 930, L12 -- light from gas just outside the photon sphere, at 1.3 mm, not the
+ * shadow's edge itself; the two agree within its error.
+ */
+const EHT_RING_MICROARCSEC = 51.8;
+const EHT_RING_ERROR_MICROARCSEC = 2.3;
+
+/** Sgr A*'s shadow from here, microarcseconds across, at GRAVITY's mass and distance. */
+function sgrAShadowMicroarcsec(): number {
+  const rs = schwarzschildRadiusKm(SGR_A_MASS_SUN);
+  return (2 * shadowAngle((SGR_A_DISTANCE_PC * PARSEC_KM) / rs) * 180 * 3600e6) / Math.PI;
+}
 
 export function BlackHolePanel({
   store,
@@ -77,6 +92,8 @@ function HoleFacts({ store, system }: { store: EphemerisStore; system: BlackHole
   const binary = system.binary;
   const massSun = binary === null ? SGR_A_MASS_SUN : binary.blackHoleMassSun;
   const rs = schwarzschildRadiusKm(massSun);
+  // Seen from afar: sqrt(27)/2 horizons (schwarzschildLens.ts).
+  const shadow = rs * CRITICAL_IMPACT;
   return (
     <>
       <Row label="Mass">
@@ -85,8 +102,18 @@ function HoleFacts({ store, system }: { store: EphemerisStore; system: BlackHole
       <Row label="Horizon radius">
         {rs > 1e6 ? `${(rs / 1e6).toFixed(1)} million km · ${(rs / AU_KM).toFixed(3)} AU` : `${rs.toFixed(1)} km`}
       </Row>
+      <Row label="Shadow radius">
+        {shadow > 1e6 ? `${(shadow / 1e6).toFixed(1)} million km · ${(shadow / AU_KM).toFixed(3)} AU` : `${shadow.toFixed(1)} km`}
+      </Row>
+      {binary === null && (
+        <>
+          <Row label="Shadow from Earth">{`${sgrAShadowMicroarcsec().toFixed(1)} µas across`}</Row>
+          <Row label="EHT ring (2022)">{`${EHT_RING_MICROARCSEC} ± ${EHT_RING_ERROR_MICROARCSEC} µas`}</Row>
+        </>
+      )}
       <Row label="Spin">Unmeasured: drawn as none</Row>
-      <Row label="Lensing">Not drawn</Row>
+      <Row label="Lensing">Drawn: Schwarzschild</Row>
+      <Row label="Disc">None in visible light</Row>
       {binary !== null && (
         <>
           <Divider />

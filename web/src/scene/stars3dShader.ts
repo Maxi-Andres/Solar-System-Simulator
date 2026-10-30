@@ -1,5 +1,6 @@
 import { KM_S_TO_PC_PER_YEAR, PARSEC_KM, STAR3D, STAR3D_FLOATS } from '../core/stars3d.ts';
 import { DISPLAY_FLOOR } from './shading.ts';
+import { LENS_VERTEX_GLSL } from './lens.ts';
 import { srgbToLinear, STAR_WING_FRACTION } from './starRendering.ts';
 
 /**
@@ -224,6 +225,8 @@ varying vec3 vColor;
 varying float vPeakLinear;
 varying float vSizePx;
 
+${LENS_VERTEX_GLSL}
+
 float srgbToLinear(float value) {
   return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4);
 }
@@ -235,14 +238,26 @@ void main() {
   float distancePc = max(length(rel), 1e-12);
   float m = absMag + 5.0 * (log2(distancePc) * ${LOG10_2.toFixed(12)} - 1.0);
 
+  // A black hole near the camera shows the star elsewhere, brighter or fainter, and twice:
+  // this pass's image (lens.ts). Its distance stays what it is.
+  float dm;
+  bool imaged = lensStar(rel, dm);
+  m += dm;
+
   // star3dPeak(), in TypeScript.
   float peak;
   // The limit at the catalogue's own precision: see LIMIT_SLACK.
-  if (m <= uMagnitudeLimit + ${LIMIT_SLACK.toFixed(4)}) {
+  if (!imaged) {
+    peak = -1.0;
+  } else if (m <= uMagnitudeLimit + ${LIMIT_SLACK.toFixed(4)}) {
     peak = max(max(uDisplayFloor, uMagnitudeToPeak.x + uMagnitudeToPeak.y * m), uMapDotPeak);
-  } else if (uMapDotPeak > 0.0) {
+  } else if (uMapDotPeak > 0.0 && uLensImage < 0.5) {
+    // The map's dot marks where the star is, it is not its light: no dot for a far-side image.
     peak = uMapDotPeak;
   } else {
+    peak = -1.0;
+  }
+  if (peak < 0.0) {
     // Fainter than the limit from here, and no map: outside the clip volume, no fragment.
     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
     gl_PointSize = 1.0;
