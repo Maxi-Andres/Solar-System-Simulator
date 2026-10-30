@@ -30,10 +30,12 @@ export const measuredSection: AboutSection = {
     { id: 'exoplanets', label: 'Planets of other stars' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'galactic-centre', label: 'The Galactic Centre’s stars' },
+    { id: 'pulsars', label: 'Pulsars and magnetars' },
     { id: 'galaxy', label: 'The Milky Way' },
   ],
   Body: ({ data }) => {
-    const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog } = data;
+    const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog, pulsarCatalog } = data;
+    const pulsarCounts = pulsarCatalog?.counts ?? null;
     const smallMoons = smallMoonSentence(store);
     return (
       <>
@@ -376,6 +378,51 @@ export const measuredSection: AboutSection = {
             Around them, the rest of the nuclear star cluster is a model:{' '}
             <Xref to="estimated" sub="nuclear-cluster">
               Not known › The nuclear star cluster
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="pulsars">
+          Pulsars and magnetars
+        </Sub>
+        <Items>
+          <Item title="Which">
+            Every pulsar in the <Strong>ATNF Pulsar Catalogue</Strong>
+            <Cite k="atnf" /> that can be placed, and the magnetars of the <Strong>McGill Magnetar Catalog</Strong>
+            <Cite k="mcgill" />, one entry per neutron star
+            {pulsarCatalog == null || pulsarCounts == null
+              ? '.'
+              : ` — ATNF version ${pulsarCatalog.sources.atnf.version}, read ${pulsarCatalog.sources.atnf.queriedAt.slice(0, 10)}: ${pulsarCounts.placed.toLocaleString('en-US')} placed of ${pulsarCounts.listed.toLocaleString('en-US')}, ${pulsarCounts.magnetars} of them magnetars, ${pulsarCounts.binaries} in binaries and ${pulsarCounts.inGlobularClusters} in globular clusters.`}{' '}
+            Where each is on the sky is its timing or X-ray position, moved along its proper motion where one is
+            measured.
+          </Item>
+          <Item title="How far">
+            By the catalogue’s own rule: a distance measured some other way where there is one — the
+            globular cluster or supernova remnant it is in, an absorption line, a companion’s parallax — else
+            its own parallax where that is more than three times its error, else its{' '}
+            <Strong>dispersion measure</Strong> through the YMW16 model of the Galaxy’s free electrons
+            <Cite k="ymw16" />, held between independent limits where it has them. A magnetar takes McGill’s
+            distance, each from a measurement its paper cites
+            {pulsarCounts == null
+              ? '.'
+              : `. Of those placed: ${pulsarCounts.byMethod.independent} measured another way, ${pulsarCounts.byMethod.parallax} by parallax, ${pulsarCounts.byMethod.bounded} by dispersion within limits, ${pulsarCounts.byMethod.dm.toLocaleString('en-US')} by dispersion alone and ${pulsarCounts.byMethod.magnetar} from McGill.`}{' '}
+            The panel says which, and whose.{' '}
+            <Xref to="estimated" sub="pulsars">
+              How rough the dispersion distances are
+            </Xref>
+            .
+          </Item>
+          <Item title="How big">
+            Three neutron stars have measured radii, from NICER’s X-ray pulses off their hot polar caps: PSR
+            J0030+0451, 12.71 km <Cite k="riley2019" />; PSR J0740+6620, 12.39 km <Cite k="riley2021" />; PSR
+            J0437−4715, 11.36 km <Cite k="choudhury2024" />. Each is drawn at its own.
+          </Item>
+          <Item title="Spin">
+            Each one’s period and how fast it lengthens, as timed; the panel gives the field and age that
+            spin-down implies.{' '}
+            <Xref to="physics" sub="pulsars">
+              The equations
             </Xref>
             .
           </Item>

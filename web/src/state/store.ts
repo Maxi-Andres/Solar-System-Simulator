@@ -69,6 +69,7 @@ export type LayerId =
   | 'comets'
   | 'starMap'
   | 'exoplanetHosts'
+  | 'pulsars'
   | 'milkyWay'
   | 'nuclearCluster'
   | 'spacecraft'
@@ -110,6 +111,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // Every star the NASA Exoplanet Archive lists a planet for, ringed on the map with a dot
   // per planet (scene/ExoplanetHosts.tsx); shown where the map is, past the planets.
   { id: 'exoplanetHosts', label: 'Exoplanet Hosts', pending: null },
+  // Every pulsar the ATNF catalogue can place and McGill's magnetars (core/pulsars.ts):
+  // marked across the map and the galaxy, as the hosts are on the map. On: they are what
+  // there is to find out there.
+  { id: 'pulsars', label: 'Pulsars', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -156,6 +161,7 @@ const DEFAULT_LAYERS: LayerState = {
   comets: false,
   starMap: true,
   exoplanetHosts: true,
+  pulsars: true,
   milkyWay: true,
   nuclearCluster: true,
   spacecraft: true,

@@ -7,6 +7,7 @@ import {
   EXOPLANETS_FILE,
   OUTPUT_DIR,
   POSITION_DECIMALS,
+  PULSARS_FILE,
   SATELLITES_DIR,
   SATELLITES_INFO_FILE,
   STARS3D_DIR,
@@ -32,6 +33,7 @@ import type {
   Manifest,
   OsculatingElements,
   PathTable,
+  PulsarCatalog,
   Seam,
   SmallMoonBundle,
   StarCatalog,
@@ -292,4 +294,14 @@ export async function writeManifest(manifest: Manifest): Promise<void> {
  */
 export async function writeExoplanets(catalog: ExoplanetCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await writeCompactJson(join(outputDir, EXOPLANETS_FILE), catalog);
+}
+
+/**
+ * The pulsars and magnetars, as pulsars.json (PulsarCatalog): one compact file, fetched by
+ * the app once the camera is out among the stars with the Pulsars layer on, or search
+ * opens. Takes the directory, because `pnpm fetch:pulsars` regenerates it alone.
+ */
+export async function writePulsars(catalog: PulsarCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  await writeCompactJson(join(outputDir, PULSARS_FILE), catalog);
 }

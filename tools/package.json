@@ -18,6 +18,7 @@
     "fetch:satellites": "node src/satellites/fetchSatellites.ts",
     "fetch:stars": "node src/stars/fetchStars.ts",
     "fetch:exoplanets": "node src/exoplanets/fetchExoplanets.ts",
+    "fetch:pulsars": "node src/pulsars/fetchPulsars.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",

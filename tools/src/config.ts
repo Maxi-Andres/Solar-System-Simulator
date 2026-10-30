@@ -653,3 +653,26 @@ export const EXOPLANET_ARCHIVE_TABLE = 'pscomppars';
 
 /** The output file. */
 export const EXOPLANETS_FILE = 'exoplanets.json';
+
+/**
+ * The ATNF Pulsar Catalogue (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993; arXiv
+ * astro-ph/0412641), as the
+ * package the ATNF publishes for its own `psrcat` program: the C sources and the public
+ * database, psrcat.db, one gzipped tar of 1.2 MB. Version 2.9.0 on 2026-10-30, 4,503
+ * pulsars. Read from the database itself, not the web form, so the distances are worked
+ * out here by psrcat's own rule (pulsars/atnf.ts) and each says which it is.
+ */
+export const ATNF_PACKAGE_URL = 'https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz';
+
+/**
+ * The McGill Online Magnetar Catalog (Olausen & Kaspi 2014, ApJS 212, 6; arXiv 1309.4167),
+ * the McGill Pulsar Group's update of that paper's tables, its page last modified 17
+ * November 2020: its Table 1 as the CSV it serves, 31 rows on 2026-10-30 --
+ * 24 magnetars, 6 candidates (marked "#") and PSR J1846-0258 ("##"), a rotation-powered
+ * pulsar seen to behave as one. Most magnetars are seen only in X-rays and have no
+ * dispersion measure, so no distance in the ATNF catalogue; this one gives each its own.
+ */
+export const MCGILL_MAGNETARS_URL = 'https://www.physics.mcgill.ca/~pulsar/magnetar/TabO1.csv';
+
+/** The output file. */
+export const PULSARS_FILE = 'pulsars.json';

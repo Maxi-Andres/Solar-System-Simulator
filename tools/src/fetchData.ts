@@ -23,6 +23,10 @@
  *
  *   NASA Exoplanet Archive TAP -- https://exoplanetarchive.ipac.caltech.edu/TAP/sync
  *     Every confirmed planet of another star, and its host. See exoplanets/.
+ *
+ *   ATNF Pulsar Catalogue -- https://www.atnf.csiro.au/research/pulsar/psrcat/
+ *   McGill Online Magnetar Catalog -- https://www.physics.mcgill.ca/~pulsar/magnetar/
+ *     The neutron stars seen as pulsars, and the magnetars. See pulsars/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -72,6 +76,8 @@ import {
 } from './paths.ts';
 import { ARCHIVE_ACKNOWLEDGEMENT, fetchArchive } from './exoplanets/archive.ts';
 import { buildExoplanets, describeExoplanets, starIdsFromBuild } from './exoplanets/buildExoplanets.ts';
+import { describePulsars } from './pulsars/buildPulsars.ts';
+import { loadPulsars } from './pulsars/fetchPulsars.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
 import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
 import { describeSky, loadSky, loadStars3d } from './stars/fetchStars.ts';
@@ -96,6 +102,7 @@ import {
   writeSatellites,
   writeElements,
   writeExoplanets,
+  writePulsars,
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
@@ -624,7 +631,11 @@ async function main(): Promise<void> {
   // just show a neighbourhood with only its few hand-read systems in it, the silent
   // shrinking the policy above exists to prevent. Read here, matched against the 3D stars
   // below, once they are built.
-  const [natural, starsRead, beltRead, cometRows, satellites, archive] = await Promise.all([
+  //
+  // The pulsars, two more (the ATNF's package and McGill's table), the same way: two
+  // downloads of a few seconds, retried, and a run that cannot read them fails rather than
+  // publish a galaxy that has quietly lost its neutron stars.
+  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -650,6 +661,7 @@ async function main(): Promise<void> {
       return null;
     }),
     fetchArchive(),
+    loadPulsars(),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -752,6 +764,9 @@ async function main(): Promise<void> {
   for (const line of describeExoplanets(exoplanets)) {
     console.log(line.replace('[exoplanets]', '[fetch-data] exoplanets'));
   }
+  for (const line of describePulsars(pulsars)) {
+    console.log(line.replace('[pulsars]', '[fetch-data] pulsars'));
+  }
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
@@ -839,6 +854,7 @@ async function main(): Promise<void> {
   await writeStars3d(starsRead.stars3d, starsRead.names.names);
   await writeBelt(belt, comets);
   await writeExoplanets(exoplanets);
+  await writePulsars(pulsars);
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {

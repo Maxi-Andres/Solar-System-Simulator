@@ -516,10 +516,13 @@ export function SolarSystem({
       // light as water does. Everything else is a rough diffuse surface with no specular
       // worth paying for.
       // A black hole (blackHoles.ts) gives no light and takes none: black, unlit -- a sphere
-      // of its horizon, scaled each frame to its shadow (see drawnRadiusKm below).
+      // of its horizon, scaled each frame to its shadow (see drawnRadiusKm below). A neutron
+      // star (pulsars.ts) gives its own: unlit, in its blackbody colour at full brightness.
       const material =
         definition.kind === 'black-hole'
           ? new THREE.MeshBasicMaterial({ color: 0x000000 })
+          : definition.kind === 'neutron-star'
+          ? new THREE.MeshBasicMaterial({ color: definition.color })
           : definition.kind === 'star'
           ? otherStar
             ? starDiscMaterial(

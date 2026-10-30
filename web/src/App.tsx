@@ -31,6 +31,7 @@ import { ensureArchiveSystem } from './core/archiveSystems.ts';
 import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
+import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -78,6 +79,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // The named satellites as bodies, the rest as dots (see SatelliteSwarm), each also
   // under its chip -- see visibleKinds.
   satellites: ['satellite'],
+  // A pulsar gone to (pulsars.ts): its name goes with the markers it was chosen from.
+  pulsars: ['neutron-star'],
 };
 
 export function App() {
@@ -92,6 +95,7 @@ export function App() {
     satellites,
     satelliteNames,
     exoplanets,
+    pulsars,
     clock,
     error,
     readout,
@@ -238,6 +242,32 @@ export function App() {
         });
     },
     [store, exoplanets, stars3d, alphaCen, planetSystems, requestFraming, setFocus],
+  );
+
+  // A pulsar clicked on the map or found by search (D6a): made a neutron star of its real
+  // size (pulsars.ts) and framed whole.
+  const goToPulsar = useCallback(
+    (k: number): void => {
+      if (store === null) {
+        return;
+      }
+      pulsars
+        .request()
+        .then(() => {
+          const archive = pulsars.value;
+          if (archive === null) {
+            return;
+          }
+          const id = ensurePulsarBody(store, archive, k);
+          requestFraming(pulsarFramingKm(store.body(id).radiusEquatorialKm));
+          setFocus(id);
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that pulsar', error);
+        });
+    },
+    [store, pulsars, requestFraming, setFocus],
   );
 
   // The black holes, and the stars about them, are bodies from the start: nothing to fetch,
@@ -453,6 +483,9 @@ export function App() {
         exoplanets={exoplanets}
         showExoplanetHosts={layers.exoplanetHosts}
         onPickHost={goToArchive}
+        pulsars={pulsars}
+        showPulsars={layers.pulsars}
+        onPickPulsar={goToPulsar}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -531,6 +564,8 @@ export function App() {
               starNames={starNames}
               exoplanets={exoplanets}
               onArchive={goToArchive}
+              pulsars={pulsars}
+              onPulsar={goToPulsar}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
@@ -565,6 +600,7 @@ export function App() {
           satellites={satellites}
           stars3d={stars3d}
           exoplanets={exoplanets}
+          pulsars={pulsars}
         />
       </Presence>
 

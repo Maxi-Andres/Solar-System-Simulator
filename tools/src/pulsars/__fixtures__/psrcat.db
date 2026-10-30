@@ -1,0 +1,438 @@
+#CATALOGUE 2.9.0
+#
+# Catalogue produced using psrcatV2_V1 from the version 2 database
+# Number of pulsars is 4503
+#
+PSRJ     J0007+7303                    aaa+09c 
+RAJ      00:07:01.7               2    awd+12
+DECJ     +73:03:07.4              8    awd+12
+F0       3.165827392              3    awd+12
+PEPOCH   54952                         awd+12
+F1       -3.6120E-12              5    awd+12
+F2       4.1E-23                  7    awd+12
+F3       5.4E-30                  9    awd+12
+NGLT 1
+DIST_AMN 1.1                           plmg93
+DIST_AMX 1.7                           plmg93
+TYPE     NRAD[aab+22]
+ASSOC    GRS:4FGL_J0007.0+7303[aab+22],XRS:RX_J0007.0+7303[cdm+10],SNR:CTA1[hgc+04]
+SURVEY   FermiBlind
+@-----------------------------------------------------------------
+PSRJ     J0021-0909                    clh+20 
+RAJ      00:21:51.47              3    clh+20
+DECJ     -09:09:58.7              11    clh+20
+DM       25.2                     10   clh+20
+F0       0.43212768588            3    clh+20
+PEPOCH   58388.0                       clh+20
+F1       -1.94E-16                3    clh+20
+RM       -15                      18   clh+20
+S1400    0.134                    11   clh+20
+W10      42.7                          clh+20
+W50      23.8                          clh+20
+DIST_DM1 1.253                         cl02
+DIST_DM  25.000                        ymw17
+SURVEY   fast_crafts
+@-----------------------------------------------------------------
+PSRB     B0021-72C                     mld+90
+PSRJ     J0024-7204C 
+RAJ      00:23:50.3546            1    frk+17
+DECJ     -72:04:31.5048           4    frk+17
+POSEPOCH 51600                         frk+17
+PMRA     5.25                     3    vb21 
+PMDEC    -2.55                    3    vb21 
+DM       24.5909                  3    apr+23
+DMEPOCH  59606                         apr+23
+F0       173.708218965958         4    frk+17
+PEPOCH   51600                         frk+17
+F1       1.50421E-15              6    frk+17
+F2       1.3E-27                  4    frk+17
+PX       0.232                    9    vb21 
+RM       27.3                     2    apr+23
+S3000    0.060                    10   zhm+19
+S4000    0.060                    10   zhm+19
+S400     1.53                          rlm+95
+S600     1.54                          rlm+95
+S800     1.44                     2    zhm+19
+S2000    0.230                    10   zhm+19
+S900     1.02                     3    zhm+19
+S1400    0.520                    10   zhm+19
+S1600    0.530                    10   zhm+19
+W50      0.664                         zhm+19
+W10      1.18                          zhm+19
+DIST_A   4.52                     4    bv21
+DIST_DM1 1.052                         cl02
+DIST_DM  2.593                         ymw17
+EPHEM    DE421                         frk+17
+CLK      UTC(NIST)                     frk+17
+UNITS    TDB                           frk+17
+ASSOC    GC:47Tuc(NGC104),XRS:[bgh+06]
+SURVEY   pksgc
+@-----------------------------------------------------------------
+PSRJ     J0030+0451                    lzb+00 
+# ELONG_0, nc = 0 (abb+23 versus aab+21a).
+# Errors are >1e-08< [abb+23] and >8e-09< [aab+21a]. Taking smallest uncertainty
+# ELONG_0, nc = 0 (sbf+24 versus aab+21a).
+# Errors are >1.3e-08< [sbf+24] and >8e-09< [aab+21a]. Taking smallest uncertainty
+# ELAT_0, nc = 0 (abb+23 versus aab+21a).
+# Errors are >4e-07< [abb+23] and >4e-07< [aab+21a]. Taking smallest uncertainty
+# ELAT_0, nc = 0 (sbf+24 versus aab+21a).
+# Errors are >5e-07< [sbf+24] and >4e-07< [aab+21a]. Taking smallest uncertainty
+# PMELONG_0, nc = 0 (sbf+24 versus abb+23).
+# Errors are >0.07< [sbf+24] and >0.005< [abb+23]. Taking smallest uncertainty
+# PMELAT_0, nc = 0 (sbf+24 versus abb+23).
+# Errors are >3< [sbf+24] and >0.2< [abb+23]. Taking smallest uncertainty
+# DM_0, nc = 0 (abb+23 versus sbm+22).
+# Errors are >0.001< [abb+23] and >0.00011< [sbm+22]. Taking smallest uncertainty
+# DM_0, nc = 0 (xjx+25 versus sbm+22).
+# Errors are >4e-05< [xjx+25] and >0.00011< [sbm+22]. Taking smallest uncertainty
+# F_0, nc = 0 (abb+23 versus cpb+23).
+# Errors are >2e-12< [abb+23] and >4e-12< [cpb+23]. Taking smallest uncertainty
+# F_1, nc = 0 (abb+23 versus cpb+23).
+# Errors are >1e-20< [abb+23] and >3e-19< [cpb+23]. Taking smallest uncertainty
+# PX_0, nc = 0 (abb+23 versus dds+23).
+# Errors are >0.06< [abb+23] and >0.05< [dds+23]. Taking smallest uncertainty
+# PX_0, nc = 0 (sbf+24 versus dds+23).
+# Errors are >0.18< [sbf+24] and >0.05< [dds+23]. Taking smallest uncertainty
+# RM_0, nc = 0 (xjx+25 versus sbg+19).
+# Errors are >0.23< [xjx+25] and >0.08< [sbg+19]. Taking smallest uncertainty
+# SPINDX_0, nc = 0 (gbs+23 versus fjmi16).
+# Errors are >0.1< [gbs+23] and >0.15< [fjmi16]. Taking smallest uncertainty
+PMRA     -6.15                    5    dds+23
+PMDEC    0.37                     14   dds+23
+ELONG    8.910353563              8    aab+21a
+ELAT     1.4456974                4    aab+21a
+POSEPOCH 55664.0                       aab+21a
+PMELONG  -5.523                   5    abb+23
+PMELAT   3.1                      2    abb+23
+DM       4.33235                  4    xjx+25
+DM1      0.00020                  10   abb+23
+DM2      -2.0E-5                  20   abb+23
+F0       205.530695938456         2    abb+23
+PEPOCH   55000                         abb+23
+F1       -4.29770E-16             10   abb+23
+PX       3.04                     5    dds+23
+RM       1.17                     8    sbg+19
+S400     7.9                      2    lzb+00
+S50      86                       43   bgt+20
+S100     380                           kl01 
+S150     45                       5    fjmi16
+S2000    0.63                     15   aab+21a
+S350     6.8                      15   mss+20
+S1400    1.09                     3    sbm+22
+S944     2.7                      2    gbs+23
+S1429    1.12                     5    gbs+23
+S1625    0.83                     3    gbs+23
+SPINDX   -2.10                    10   gbs+23
+DIST_DM1 0.318                         cl02
+DIST_DM  0.345                         ymw17
+EPHEM    DE438                         cpb+23
+CLK      TT(BIPM2019)                  cpb+23
+UNITS    TDB                           cpb+23
+TYPE     HE[btlb00],HE[aaa+09e]
+ASSOC    GRS:4FGL_J0030.4+0451[aab+22]
+SURVEY   misc,FermiBlind,gbncc,lotaas
+@-----------------------------------------------------------------
+PSRJ     J0048-7317                    cls+24 
+# RAJ_0, nc = 0 (cab+24 versus cls+24).
+# Errors are >0.00037< [cab+24] and >0.0029< [cls+24]. Taking smallest uncertainty
+# DECJ_0, nc = 0 (cab+24 versus cls+24).
+# Errors are >0.00011< [cab+24] and >0.00036< [cls+24]. Taking smallest uncertainty
+# DM_0, nc = 0 (cab+24 versus cls+24).
+# Errors are >0.07< [cab+24] and >NULL< [cls+24]. Taking smallest uncertainty
+# Have both P and F. Choosing to keep F
+RAJ      00:48:56.89              9    cab+24
+DECJ     -73:17:46.0              4    cab+24
+POSEPOCH 59860.0                       cab+24
+DM       292.42                   7    cab+24
+DMEPOCH  59860.0                       cab+24
+F0       12.608085313             5    cab+24
+PEPOCH   59860.0                       cab+24
+F1       -5.24925E-12             10   cab+24
+F2       3.33E-22                 12   cab+24
+S1284    56.0e-3                       cls+24
+W50      2.10                     4    cab+24
+NGLT 1
+DIST_DM1 36.100                        cl02
+DIST_DM  100.000                       ymw17
+ASSOC    EXGAL:SMC,PWN:[cfc+24]
+SURVEY   meerkat_trapum
+@-----------------------------------------------------------------
+PSRJ     J0437-4715                    jlh+93 
+# RAJ_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >8.3e-10< [rbs+24] and >2.5e-09< [rhc+16]. Taking smallest uncertainty
+# RAJ_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >1.7e-09< [rbs+24] and >8.3e-10< [rbs+24]. Taking smallest uncertainty
+# DECJ_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >5.6e-10< [rbs+24] and >1.94444e-09< [rhc+16]. Taking smallest uncertainty
+# DECJ_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >1.1e-09< [rbs+24] and >5.6e-10< [rbs+24]. Taking smallest uncertainty
+# PMRA_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >0.0005< [rbs+24] and >0.002< [rhc+16]. Taking smallest uncertainty
+# PMRA_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >0.0006< [rbs+24] and >0.0005< [rbs+24]. Taking smallest uncertainty
+# PMDEC_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >0.0005< [rbs+24] and >0.002< [rhc+16]. Taking smallest uncertainty
+# PMDEC_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >0.0007< [rbs+24] and >0.0005< [rbs+24]. Taking smallest uncertainty
+# DM_0, nc = 0 (rbs+24 versus vbv+08).
+# Errors are >3e-05< [rbs+24] and >7e-05< [vbv+08]. Taking smallest uncertainty
+# DM_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >3e-05< [rbs+24] and >3e-05< [rbs+24]. Taking smallest uncertainty
+# F_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >2e-13< [rbs+24] and >5e-13< [rhc+16]. Taking smallest uncertainty
+# F_1, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >1.3e-21< [rbs+24] and >5e-21< [rhc+16]. Taking smallest uncertainty
+# F_0, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >4e-13< [rbs+24] and >2e-13< [rbs+24]. Taking smallest uncertainty
+# F_1, nc = 0 (rbs+24 versus rbs+24).
+# Errors are >3e-21< [rbs+24] and >1.3e-21< [rbs+24]. Taking smallest uncertainty
+# PX_0, nc = 0 (mmb+23 versus rhc+16).
+# Errors are >0.05< [mmb+23] and >0.09< [rhc+16]. Taking smallest uncertainty
+# PX_0, nc = 0 (sbf+24 versus mmb+23).
+# Errors are >0.4< [sbf+24] and >0.05< [mmb+23]. Taking smallest uncertainty
+# PX_0, nc = 0 (rbs+24 versus mmb+23).
+# Errors are >0.04< [rbs+24] and >0.05< [mmb+23]. Taking smallest uncertainty
+# BINARY_0, nc = 0 (rbs+24 versus rhc+16).
+# Errors are >NULL< and >NULL<. Taking original value
+# A1_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >3e-08< [rbs+24] and >5e-08< [rhc+16]. Taking smallest uncertainty
+# A1_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >3e-08< [rbs+24] and >3e-08< [rbs+24]. Taking smallest uncertainty
+# ECC_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >1.1e-09< [rbs+24] and >1.5e-09< [rhc+16]. Taking smallest uncertainty
+# ECC_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >1e-09< [rbs+24] and >1.1e-09< [rbs+24]. Taking smallest uncertainty
+# PB_1, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >1.6e-07< [rbs+24] and >6e-15< [rhc+16]. Taking smallest uncertainty
+# PB_1, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >1.5e-15< [rbs+24] and >6e-15< [rhc+16]. Taking smallest uncertainty
+# PB_1, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >1.9e-07< [rbs+24] and >1.5e-15< [rbs+24]. Taking smallest uncertainty
+# PB_1, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >3e-15< [rbs+24] and >1.5e-15< [rbs+24]. Taking smallest uncertainty
+# OM_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.012< [rbs+24] and >0.017< [rhc+16]. Taking smallest uncertainty
+# OM_1, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.0006< [rbs+24] and >0.0013< [rhc+16]. Taking smallest uncertainty
+# OM_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.013< [rbs+24] and >0.012< [rbs+24]. Taking smallest uncertainty
+# OM_1, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.0008< [rbs+24] and >0.0006< [rbs+24]. Taking smallest uncertainty
+# T0_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.00019< [rbs+24] and >0.0003< [rhc+16]. Taking smallest uncertainty
+# T0_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.0002< [rbs+24] and >0.00019< [rbs+24]. Taking smallest uncertainty
+# KOM_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.9< [rbs+24] and >1.2< [rhc+16]. Taking smallest uncertainty
+# KOM_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.8< [rbs+24] and >0.9< [rbs+24]. Taking smallest uncertainty
+# KIN_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.018< [rbs+24] and >0.04< [rhc+16]. Taking smallest uncertainty
+# KIN_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.016< [rbs+24] and >0.018< [rbs+24]. Taking smallest uncertainty
+# M2_0, nc = 1 (rbs+24 versus rhc+16).
+# Errors are >0.004< [rbs+24] and >0.007< [rhc+16]. Taking smallest uncertainty
+# M2_0, nc = 1 (rbs+24 versus rbs+24).
+# Errors are >0.004< [rbs+24] and >0.004< [rbs+24]. Taking smallest uncertainty
+# SPINDX_0, nc = 0 (gbs+23 versus dhm+15).
+# Errors are >0.07< [gbs+23] and >0.02< [dhm+15]. Taking smallest uncertainty
+RAJ      04:37:15.9284039         2    rbs+24
+DECJ     -47:15:09.303707         2    rbs+24
+POSEPOCH 55486                         rbs+24
+PMRA     121.4429                 5    rbs+24
+PMDEC    -71.4715                 5    rbs+24
+ELONG    50.469059178             11   sbf+24
+ELAT     -67.873319464            5    sbf+24
+POSEPOCH 59187                         sbf+24
+PMELONG  85.96                    2    sbf+24
+PMELAT   -111.60                  2    sbf+24
+DM       2.64539                  3    rbs+24
+DMEPOCH  55486                         rbs+24
+F0       173.6879456649435        2    rbs+24
+PEPOCH   55486                         rbs+24
+F1       -1.7283626E-15           13   rbs+24
+F2       -6.1E-29                 15   rbs+24
+PX       6.43                     4    rbs+24
+RM       0.155                    18   sbm+22
+S3000    35.6                     12   dhm+15
+S400     550                      100  tbms98
+S5000    9                        3    kll+99
+S600     300                      20   tbms98
+S800     300                      50   jbv+19
+S150     870                      30   bmj+16
+S200     507                      6    xbt+17
+S700     364                      19   dhm+15
+S1400    150.2                    16   dhm+15
+S1600    115                      3    tbms98
+S944     265                      11   gbs+23
+S1429    137                      4    gbs+23
+S1625    104                      3    gbs+23
+W50      0.1410                   5    mhb+13
+W10      1.02                          ymv+11
+BINARY   T2                            rhc+16
+A1       3.36671463               3    rbs+24
+ECC      1.91805E-5               10   rbs+24
+PB       5.7410459                4    rhc+16
+PBDOT    3.7329E-12               15   rbs+24
+OM       1.358                    12   rbs+24
+OMDOT    0.0134                   6    rbs+24
+T0       54530.17223              19   rbs+24
+KOM      208.3                    8    rbs+24
+KIN      137.506                  16   rbs+24
+M2       0.224                    4    rbs+24
+SPINDX   -1.65                    2    dhm+15
+DIST_A   0.1568                   3    rhc+16
+DIST_DM1 0.139                         cl02
+DIST_DM  0.156                         ymw17
+EPHEM    DE440                         rbs+24
+CLK      BIPM(2020)                    rbs+24
+TYPE     HE[bt93],HE[aaa+09f]
+BINCOMP  He[vbv+08]
+ASSOC    GRS:4FGL_J0437.2-4715[aab+22],OPT:[bbm+95]
+SURVEY   pks70,FermiBlind,pkshl
+@-----------------------------------------------------------------
+PSRB     B0531+21                      sr68
+PSRJ     J0534+2200 
+# RAJ_0, nc = 0 (lvk+23 versus mcn71).
+# Errors are >2.9e-07< [lvk+23] and >2.08333e-05< [mcn71]. Taking smallest uncertainty
+# DECJ_0, nc = 0 (lvk+23 versus mcn71).
+# Errors are >2.8e-07< [lvk+23] and >1.66667e-05< [mcn71]. Taking smallest uncertainty
+# PMRA_0, nc = 0 (lvk+23 versus nr06).
+# Errors are >0.06< [lvk+23] and >0.8< [nr06]. Taking smallest uncertainty
+# PMDEC_0, nc = 0 (lvk+23 versus nr06).
+# Errors are >0.14< [lvk+23] and >0.8< [nr06]. Taking smallest uncertainty
+# DM_0, nc = 0 (dmo+24 versus bkk+16).
+# Errors are >NULL< [dmo+24] and >0.00024< [bkk+16]. Taking smallest uncertainty
+# Have both P and F. Choosing to keep F
+RAJ      05:34:31.93357           7    lvk+23
+DECJ     22:00:52.1927            10    lvk+23
+POSEPOCH 57680                         lvk+23
+PMRA     -11.34                   6    lvk+23
+PMDEC    2.65                     14   lvk+23
+DM       56.7712                  3    bkk+16
+DMEPOCH  56703                         bkk+16
+F0       29.9469230               10   ljg+15
+PEPOCH   48442.5                       ljg+15
+F1       -3.77535E-10             2    ljg+15
+F2       1.1147E-20               5    ljg+15
+F3       -2.73E-30                4    ljg+15
+PX       0.53                     6    lvk+23
+RM       -45.44                   8    sbg+19
+S400     646                      70   lylg95
+S400     550                      100  tbms98
+S600     211                      37   lylg95
+S150     8000                     4000 bkk+16
+S900     45                       10   lylg95
+S1400    14                       3    lylg95
+W50      3.0                           lylg95
+W10      4.7                           lylg95
+W50      2.0                           dmo+24
+W10      7.3                           dmo+24
+SPINDX   -3.1                     2    lylg95
+TAU_SC   1.455E-5                 14   kmn+15
+NGLT 40
+DIST_A   2.0                           tri68
+DIST_AMN 1.5                           tri68
+DIST_AMX 2.5                           tri68
+DIST_DM1 1.738                         cl02
+DIST_DM  1.311                         ymw17
+TYPE     HE[cdt69],HE[fhm+69],HE[hjm+70]
+ASSOC    GRS:4FGL_J0534.5+2200[aab+22],SNR:Crab[ccl+69],PWN:Crab[ccl+69],GRS:HESS_J0534+220[aab+06b]
+SURVEY   misc,FermiBlind,ar327,ar4,gb4,lotaas
+@-----------------------------------------------------------------
+PSRB     B1257+12                      wol90a
+PSRJ     J1300+1240 
+RAJ      13:00:03.5767            1    kw03 
+DECJ     +12:40:56.4721           3    kw03 
+POSEPOCH 49750.0                       kw03 
+PMRA     45.50                    5    kw03 
+PMDEC    -84.70                   7    kw03 
+DM       10.16550                 3    kw03 
+DM1      -0.001141                7    kw03 
+DM2      0.000121                 3    kw03 
+DM3      1.10E-5                  10   kw03 
+P0       0.00621853194840048      3    kw03 
+PEPOCH   49750.0                       kw03 
+P1       1.143341E-19             4    kw03 
+PX       1.41                     8    ysy+13
+RM       7.78                     7    sbg+19
+S400     20                            wf92 
+S50      25                       13   bgt+21
+S100     150                           kl01 
+S150     218                           scb+19
+S350     5.2                      10   mss+20
+S1400    0.39                     7    sbm+22
+W50      0.75                          mss+20
+W10      1.2                           mss+20
+BINARY   BT2P                          kw03 
+A1       3.00E-6                  10   kw03 
+A1_2     0.00131060               10   kw03 
+A1_3     0.0014134                2    kw03 
+ECC      0.0                           kw03 
+ECC_2    0.0186                   2    kw03 
+ECC_3    0.0252                   2    kw03 
+PB       25.262                   3    kw03 
+PB_2     66.54190                 10   kw03 
+PB_3     98.2114                  2    kw03 
+OM       0.0                           kw03 
+OM_2     250.4                    6    kw03 
+OM_3     108.3                    5    kw03 
+T0       49765.1                  2    kw03 
+T0_2     49768.10                 10   kw03 
+T0_3     49766.50                 10   kw03 
+SINI_2   0.80                     5    kw03 
+SINI_3   0.73                     4    kw03 
+M2       6.0E-8                   6    kw03 
+M2_2     1.29E-5                  6    kw03 
+M2_3     1.17E-5                  6    kw03 
+SPINDX   -1.7                     7    sbm+22
+TAU_SC   2.2E-8                   9    kl07 
+DIST_DM1 0.449                         cl02
+DIST_DM  0.877                         ymw17
+BINCOMP  ULT[wol94]
+ASSOC    XRS:[pkgw07]
+SURVEY   ar4,gbncc,lotaas
+@-----------------------------------------------------------------
+PSRJ     J1745-2900                    mgz+13 
+RAJ      17:45:40.1662            8    bdd+15
+DECJ     -29:00:29.896            10    bdd+15
+POSEPOCH 56899                         bdd+15
+PMRA     2.5                      4    bdd+15
+PMDEC    5.89                     11   bdd+15
+DM       1778                     3    efk+13
+F0       0.2656936554             12   laks15
+PEPOCH   56587.0                       laks15
+F1       -1.2399E-12              15   laks15
+F2       -1.047E-19               13   laks15
+RM       -66080                   24   sef+16
+S5000    0.7                      2    tde+17
+S6000    0.8                           sj13 
+S8000    0.6                      2    tde+17
+S100G    5.0                      4    tde+17
+S150G    5.8                      2    tde+17
+S2000    1.2                      2    tde+17
+SPINDX   1.3                      3    sef+16
+TAU_SC   1.3                      2    sle+14
+DIST_A   8.3                      3    geg10
+DIST_DM1 8.480                         cl02
+DIST_DM  8.289                         ymw17
+TYPE     AXP,HE[mgz+13],HE[efk+13]
+ASSOC    XRS:SGR_J1745-29[kbk+13]
+SURVEY   misc
+@-----------------------------------------------------------------
+PSRJ     J1808-2024                    kds+98 
+RAJ      18:08:39.337             4    icm+05
+DECJ     -20:24:39.85             6    icm+05
+PMRA     -4.5                     14   tck12
+PMDEC    -7                       2    tck12
+F2       -1.8E-20                 3    wkg+02
+P0       7.55592                  5    mte+05
+PEPOCH   53254.0                       mte+05
+P1       5.49E-10                 9    mte+05
+DIST_A   13.0                          vwc+12
+DIST_AMN 10.0                          vwc+12
+DIST_AMX 17.0                          vwc+12
+TYPE     AXP,NRAD
+ASSOC    XRS:SGR_1806-20
+SURVEY   misc
+@-----------------------------------------------------------------

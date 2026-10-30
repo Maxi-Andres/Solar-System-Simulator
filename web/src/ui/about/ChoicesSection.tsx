@@ -20,6 +20,7 @@ export const choicesSection: AboutSection = {
     { id: 'saturn', label: 'Saturn’s rings' },
     { id: 'earth', label: 'Earth' },
     { id: 'black-holes', label: 'Black holes' },
+    { id: 'pulsars', label: 'Pulsars' },
     { id: 'galaxy', label: 'The galaxy’s light' },
   ],
   Body: ({ data }) => {
@@ -249,6 +250,26 @@ export const choicesSection: AboutSection = {
             The cluster’s model is the Nuclear Cluster Model layer; the measured stars round Sgr A* are always
             drawn.
             <Why>as the galaxy’s model is a layer: what is modelled can be turned off to see what is measured.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="pulsars">
+          Pulsars
+        </Sub>
+        <Items>
+          <Item title="Markers">
+            Each pulsar is a small dot, a magnetar’s with a ring round it, the same size at any distance, in the
+            Pulsars layer. Not its light: a neutron star twelve kilometres in radius gives about a millionth of
+            the Sun’s visible light.
+            <Why>the dots say where the neutron stars are, which is what there is to see of them.</Why>
+          </Item>
+          <Item title="Kept with the galaxy in view">
+            Unlike the exoplanet hosts’ rings, the dots stay when the whole galaxy is in view.
+            <Why>pulsars are spread through the disc, thousands of light years out; across the galaxy is where their pattern is.</Why>
+          </Item>
+          <Item title="Spin and beams not drawn">
+            A neutron star gone to is a sphere of its radius in its colour, not turning.
+            <Why>a turning sphere shows nothing, and the beams a pulsar is known by are radio, from a region no measurement resolves.</Why>
           </Item>
         </Items>
 

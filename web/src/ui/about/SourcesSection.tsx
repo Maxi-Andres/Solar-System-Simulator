@@ -133,6 +133,13 @@ export const sourcesSection: AboutSection = {
             under the Exoplanet Exploration Program.
           </Item>
           <Item>
+            Pulsars from the <Strong>ATNF Pulsar Catalogue</Strong>: “The ATNF Pulsar Catalogue”, R. N.
+            Manchester, G. B. Hobbs, A. Teoh &amp; M. Hobbs, Astronomical Journal, 129, 1993–2006 (2005),
+            https://www.atnf.csiro.au/research/pulsar/psrcat. Magnetars from the{' '}
+            <Strong>McGill Online Magnetar Catalog</Strong> (Olausen &amp; Kaspi 2014),
+            http://www.physics.mcgill.ca/~pulsar/magnetar/main.html.
+          </Item>
+          <Item>
             This work has made use of data from the European Space Agency (ESA) mission <Strong>Gaia</Strong>{' '}
             (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium
             (DPAC, https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been

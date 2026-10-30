@@ -49,6 +49,7 @@ export const physicsSection: AboutSection = {
     { id: 'satellites', label: 'Satellites: SGP4' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
+    { id: 'pulsars', label: 'Pulsars' },
     { id: 'galaxy', label: 'The galaxy' },
   ],
   Body: () => {
@@ -1008,6 +1009,44 @@ export const physicsSection: AboutSection = {
           )}
           symbols={<>n the density of the galaxy model’s dust disc.</>}
         />
+
+        <Sub section="physics" id="pulsars">
+          Pulsars
+        </Sub>
+        <Equation
+          title="Distance from parallax"
+          code="tools/src/pulsars/atnf.ts"
+          cite="atnf"
+          math={math(row(mi('d'), mo('='), frac(mn('1'), mi('ϖ'))))}
+          symbols={<>d in kiloparsecs; ϖ the pulsar’s annual parallax in milliarcseconds, by timing or VLBI.</>}
+        >
+          Used where ϖ is more than three times its error and no independent distance is listed, as the ATNF
+          catalogue works out its own best distance.
+        </Equation>
+        <Equation
+          title="The field its spin-down implies"
+          code="web/src/core/pulsars.ts"
+          cite="lorimerKramer2005"
+          math={math(
+            row(mi('B'), mo('≈'), mn('3.2'), mo('×'), sup(mn('10'), mn('19')), sqrt(row(mi('P'), mover('P')))),
+          )}
+          symbols={<>B in gauss; P the spin period in seconds; Ṗ how much it lengthens each second.</>}
+        >
+          The surface field of a magnetic dipole whose radiation is what slows the star: a neutron star of 10
+          km radius and moment of inertia 10⁴⁵ g cm², its field across its spin. An estimate from a model, as
+          the ATNF catalogue gives it — not a measured field.
+        </Equation>
+        <Equation
+          title="The age its spin-down implies"
+          code="web/src/core/pulsars.ts"
+          cite="lorimerKramer2005"
+          math={math(row(mi('τ'), mo('='), frac(mi('P'), row(mn('2'), mover('P')))))}
+          symbols={<>τ the characteristic age.</>}
+        >
+          The time spin-down by that dipole would take from a much faster birth. The Crab’s comes to 1,260
+          years; its supernova was seen in 1054. Neither is given where Ṗ is negative: a pulsar in a cluster can
+          seem to spin up as the cluster pulls it toward us.
+        </Equation>
 
         <Sub section="physics" id="galaxy">
           The galaxy

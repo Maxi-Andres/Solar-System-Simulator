@@ -14,6 +14,7 @@ import {
 } from './satellites.ts';
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { loadExoplanetArchive, type ExoplanetArchive } from './exoplanetArchive.ts';
+import { loadPulsarArchive, type PulsarArchive } from './pulsars.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -66,6 +67,11 @@ export interface Simulation {
    * when the camera leaves the planets with the Exoplanet Hosts layer on, or search opens.
    */
   readonly exoplanets: LazySource<ExoplanetArchive>;
+  /**
+   * The pulsars and magnetars (pulsars.ts): fetched when the camera leaves the planets with
+   * the Pulsars layer on, or search opens.
+   */
+  readonly pulsars: LazySource<PulsarArchive>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -122,6 +128,11 @@ export function useSimulation(refreshHz = 10): Simulation {
   exoplanetsRef.current ??= new LazySource(
     () => loadExoplanetArchive(httpBeltFetchers, import.meta.env.BASE_URL),
     'the exoplanets',
+  );
+  const pulsarsRef = useRef<LazySource<PulsarArchive>>(null);
+  pulsarsRef.current ??= new LazySource(
+    () => loadPulsarArchive(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the pulsars',
   );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
@@ -228,6 +239,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     stars3d,
     starNames,
     exoplanets: exoplanetsRef.current,
+    pulsars: pulsarsRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

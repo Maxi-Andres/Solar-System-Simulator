@@ -20,6 +20,7 @@ export const estimatedSection: AboutSection = {
     { id: 'stars', label: 'Stars' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
+    { id: 'pulsars', label: 'Pulsars' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
@@ -314,6 +315,40 @@ export const estimatedSection: AboutSection = {
           <Item title="Left out">
             S111, whose fitted orbit is a hyperbola; the 2% of the cluster’s mass younger than a billion years,
             beyond the young stars measured; and the cluster’s dark remnants and binaries.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="pulsars">
+          Pulsars
+        </Sub>
+        <Items>
+          <Item title="Distance, from dispersion">
+            Most pulsars’ distances are their radio pulses’ dispersion — how much the electrons along the way
+            delay the low frequencies — read through YMW16’s model of where those electrons are
+            <Cite k="ymw16" />. It is the roughest distance here: of the 189 pulsars with independent distances
+            the model was fitted to, it puts 86 within their measured range and 38 more within 20% of it.
+            <Why>it is the only distance most pulsars have.</Why>
+          </Item>
+          <Item title="Not placed">
+            Where a pulsar’s dispersion is more than the model’s electrons can give along its line, YMW16 gives
+            no distance but the edge of what it models, 25,000 pc in the Galaxy and 100,000 toward the
+            Magellanic Clouds <Cite k="fermi3pc" />. Such a pulsar is left out unless something else places
+            it, as is one with no distance of any kind — most of them seen only in gamma rays.
+            <Why>a pulsar put on the model’s rim would be a place nobody measured.</Why>
+          </Item>
+          <Item title="Radius">
+            Every neutron star but the three NICER measured is drawn 12 km in radius, within the errors of all
+            three; its mass, used for nothing drawn, 1.4 solar masses.
+          </Item>
+          <Item title="Along the line of sight">
+            No pulsar’s radial velocity is measured but a few binaries’, so none moves toward or away from us:
+            each moves across the sky only. A magnetar only McGill lists, which gives no proper motion, stands
+            still.
+          </Item>
+          <Item title="Colour">
+            Drawn in the colour of a million-kelvin blackbody, which is the colour of any past about a hundred
+            thousand: a young neutron star’s surface and an old pulsar’s polar caps are that hot. Its surface
+            temperature is measured for few.
           </Item>
         </Items>
 

@@ -11,7 +11,8 @@ export type BodyId = string;
 /**
  * 'satellite' is an Earth satellite from the satellites layer, placed by SGP4; never in bodies.json.
  * 'black-hole' likewise: Sgr A*, Gaia BH1 and Gaia BH3, placed from their papers in the app
- * (web/src/core/blackHoles.ts).
+ * (web/src/core/blackHoles.ts). And 'neutron-star': a pulsar gone to, made a body from
+ * pulsars.json (web/src/core/pulsars.ts).
  */
 export type BodyKind =
   | 'star'
@@ -22,7 +23,8 @@ export type BodyKind =
   | 'moon'
   | 'spacecraft'
   | 'satellite'
-  | 'black-hole';
+  | 'black-hole'
+  | 'neutron-star';
 
 /**
  * Which surface-map set a body is being drawn with.
@@ -1783,4 +1785,92 @@ export interface ExoplanetPlanets {
   /** Earth radii, only where measured: a transiting planet's, not the Archive's estimate. */
   readonly radiusEarth: readonly (number | null)[];
   readonly radiusRef: readonly (number | null)[];
+}
+
+/**
+ * Where a pulsar's distance comes from (pulsars/atnf.ts, psrcat's own rule):
+ *
+ * - `independent`: the ATNF catalogue's DIST_A -- measured some other way than by its own
+ *   signal: the globular cluster or supernova remnant it is in, HI absorption, a companion's
+ *   optical parallax. Preferred to everything, as psrcat prefers it.
+ * - `parallax`: 1 / PX, its timing or VLBI parallax, where that is more than three times its
+ *   uncertainty.
+ * - `bounded`: the dispersion-measure distance held between the catalogue's independent
+ *   lower and upper limits (DIST_AMN, DIST_AMX).
+ * - `dm`: from its dispersion measure through the YMW16 model of the Galaxy's free electrons
+ *   (Yao, Manchester & Wang 2017, ApJ 835, 29) -- what most have, and the roughest: of
+ *   the 189 pulsars with independent distances the model was fitted to, it puts 86 within
+ *   their measured range and 38 more within 20% of it; its authors expect 95% of its
+ *   distances to be in error by less than a factor of 0.9.
+ * - `magnetar`: the McGill magnetar catalogue's, from the paper it cites.
+ */
+export type PulsarDistanceMethod = 'independent' | 'parallax' | 'bounded' | 'dm' | 'magnetar';
+
+/**
+ * `pulsars.json`: every neutron star seen as a pulsar that can be placed -- the ATNF Pulsar
+ * Catalogue -- with the magnetars of the McGill Online Magnetar Catalog folded in, one
+ * entry per neutron star; see pulsars/. Columnar, as exoplanets.json is: entry k of every
+ * column is pulsar k.
+ */
+export interface PulsarCatalog {
+  readonly sources: {
+    readonly atnf: { readonly version: string; readonly url: string; readonly queriedAt: string };
+    readonly mcgill: { readonly url: string; readonly queriedAt: string };
+  };
+  /** The frame of `x`..`vz`: the 3D stars' (Stars3dInfo.frame), at J2000.0. */
+  readonly frame: string;
+  readonly counts: {
+    /** Pulsars the ATNF catalogue lists, and magnetars McGill lists that it does not. */
+    readonly listed: number;
+    readonly placed: number;
+    /** With no distance of any kind: not placed, so not here. */
+    readonly unplaced: number;
+    readonly byMethod: Readonly<Record<PulsarDistanceMethod, number>>;
+    readonly magnetars: number;
+    readonly binaries: number;
+    readonly inGlobularClusters: number;
+  };
+  /** Every reference cited below, once, shortened: "Verbiest et al. 2012, ApJ 755, 39". */
+  readonly references: readonly string[];
+  readonly pulsars: PulsarTable;
+}
+
+export interface PulsarTable {
+  readonly count: number;
+  /** What it is called: "Crab Pulsar", "SGR 1806-20", else "PSR J1748-2446ad". */
+  readonly name: readonly string[];
+  /** Its J2000 and B1950 pulsar names, where it has them: "J0534+2200", "B0531+21". */
+  readonly jName: readonly (string | null)[];
+  readonly bName: readonly (string | null)[];
+  /**
+   * Scene frame, parsecs about the Sun at J2000.0, and km/s: from the catalogue's position at
+   * its own epoch, its distance and proper motion (none: zero), carried to J2000.0 along that
+   * motion. No pulsar's radial velocity is measured but a handful of binaries': zero.
+   */
+  readonly x: readonly number[];
+  readonly y: readonly number[];
+  readonly z: readonly number[];
+  readonly vx: readonly number[];
+  readonly vy: readonly number[];
+  readonly vz: readonly number[];
+  readonly distancePc: readonly number[];
+  readonly distanceMethod: readonly PulsarDistanceMethod[];
+  /** Index into `references`, where the catalogue names the paper. */
+  readonly distanceRef: readonly (number | null)[];
+  /** McGill's "~": a distance it calls approximate. */
+  readonly distanceApproximate: readonly boolean[];
+  /** Spin period, seconds, and its derivative, s/s; null where not measured. */
+  readonly periodS: readonly (number | null)[];
+  readonly periodDerivative: readonly (number | null)[];
+  /** The ATNF catalogue's TYPE codes: "HE" (seen at high energies), "NRAD", "AXP", "XINS", "RRAT". */
+  readonly types: readonly (readonly string[])[];
+  /** Its orbit about a companion, days, and the companion's kind ("He", "CO", "MS", "NS", "UL"). */
+  readonly binaryPeriodDays: readonly (number | null)[];
+  readonly companion: readonly (string | null)[];
+  /** The globular cluster or supernova remnant it is in: "47Tuc(NGC104)", "Crab". */
+  readonly globularCluster: readonly (string | null)[];
+  readonly remnant: readonly (string | null)[];
+  readonly magnetar: readonly boolean[];
+  /** McGill's "#": a magnetar candidate, not confirmed. */
+  readonly candidate: readonly boolean[];
 }

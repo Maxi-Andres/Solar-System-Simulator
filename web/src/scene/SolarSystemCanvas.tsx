@@ -6,6 +6,7 @@ import type { CometSource } from '../core/comets.ts';
 import type { SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
+import type { PulsarArchive } from '../core/pulsars.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
@@ -22,6 +23,7 @@ import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
+import { Pulsars } from './Pulsars.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -122,6 +124,10 @@ export interface SolarSystemCanvasProps {
   readonly exoplanets: LazySource<ExoplanetArchive>;
   readonly showExoplanetHosts: boolean;
   readonly onPickHost: (host: number) => void;
+  /** The pulsars, their markers, and what a click on one does. */
+  readonly pulsars: LazySource<PulsarArchive>;
+  readonly showPulsars: boolean;
+  readonly onPickPulsar: (k: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -153,6 +159,9 @@ export function SolarSystemCanvas({
   exoplanets,
   showExoplanetHosts,
   onPickHost,
+  pulsars,
+  showPulsars,
+  onPickPulsar,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -187,6 +196,7 @@ export function SolarSystemCanvas({
     showDistanceRings,
     showStarMap,
     showExoplanetHosts,
+    showPulsars,
     showNuclearCluster,
   ]);
 
@@ -275,6 +285,7 @@ export function SolarSystemCanvas({
         visible={showExoplanetHosts}
         onPick={onPickHost}
       />
+      <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <LabelProjector

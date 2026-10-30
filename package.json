@@ -17,6 +17,7 @@
     "fetch:satellites": "pnpm --filter @sss/tools fetch:satellites",
     "fetch:stars": "pnpm --filter @sss/tools fetch:stars",
     "fetch:exoplanets": "pnpm --filter @sss/tools fetch:exoplanets",
+    "fetch:pulsars": "pnpm --filter @sss/tools fetch:pulsars",
     "write:catalog": "pnpm --filter @sss/tools write:catalog",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

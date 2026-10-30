@@ -2,6 +2,7 @@ import type {
   BeltInfo,
   CometInfo,
   ExoplanetCatalog,
+  PulsarCatalog,
   SatelliteInfo,
   StarCatalog,
   Stars3dInfo,
@@ -11,6 +12,7 @@ import type { BeltSource, LoadedTier } from '../../core/belt.ts';
 import type { CometSource } from '../../core/comets.ts';
 import type { EphemerisStore } from '../../core/ephemerisStore.ts';
 import type { ExoplanetArchive } from '../../core/exoplanetArchive.ts';
+import type { PulsarArchive } from '../../core/pulsars.ts';
 import type { LazySource, SatelliteSource } from '../../core/satellites.ts';
 import type { Stars3dSource } from '../../core/stars3d.ts';
 import type { AboutData } from './section.ts';
@@ -130,6 +132,19 @@ export const fixtureExoplanetCatalog = {
   omegaCheck: { star: 35, planet: 2, neither: 4 },
 } as unknown as ExoplanetCatalog;
 
+export const fixturePulsarCatalog = {
+  sources: { atnf: { version: '2.9.0', queriedAt: '2026-10-30' }, mcgill: { queriedAt: '2026-10-30' } },
+  counts: {
+    listed: 4_510,
+    placed: 4_303,
+    unplaced: 207,
+    byMethod: { independent: 445, parallax: 50, bounded: 29, dm: 3_754, magnetar: 25 },
+    magnetars: 26,
+    binaries: 578,
+    inGlobularClusters: 261,
+  },
+} as unknown as PulsarCatalog;
+
 const subscribe = (): (() => void) => () => {};
 
 /** The sources AboutPanel takes, each already holding its catalogue. */
@@ -144,6 +159,7 @@ export const fixtureSources = {
     subscribe,
     value: { catalog: fixtureExoplanetCatalog },
   } as unknown as LazySource<ExoplanetArchive>,
+  pulsars: { subscribe, value: { catalog: fixturePulsarCatalog } } as unknown as LazySource<PulsarArchive>,
 };
 
 /** The same, gathered as the panel gathers it for its sections. */
@@ -156,4 +172,5 @@ export const fixtureData: AboutData = {
   satelliteInfo: fixtureSatelliteInfo,
   stars3dInfo: fixtureStars3dInfo,
   exoplanetCatalog: fixtureExoplanetCatalog,
+  pulsarCatalog: fixturePulsarCatalog,
 };

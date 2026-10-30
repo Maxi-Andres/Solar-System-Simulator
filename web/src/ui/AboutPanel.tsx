@@ -5,6 +5,7 @@ import type { StarCatalog } from '@sss/tools/types';
 import type { BeltSource } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
+import type { PulsarArchive } from '../core/pulsars.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { LazySource, SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
@@ -78,6 +79,7 @@ export function AboutPanel({
   satellites,
   stars3d = null,
   exoplanets = null,
+  pulsars = null,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
@@ -86,6 +88,7 @@ export function AboutPanel({
   satellites: SatelliteSource;
   stars3d?: Stars3dSource | null;
   exoplanets?: LazySource<ExoplanetArchive> | null;
+  pulsars?: LazySource<PulsarArchive> | null;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -105,6 +108,9 @@ export function AboutPanel({
   // And the Exoplanet Archive, once exoplanets.json is in: its counts, as read.
   const exoplanetCatalog =
     useSyncExternalStore(exoplanets?.subscribe ?? noSubscribe, () => exoplanets?.value ?? null)?.catalog ?? null;
+  // And the pulsars, once pulsars.json is in.
+  const pulsarCatalog =
+    useSyncExternalStore(pulsars?.subscribe ?? noSubscribe, () => pulsars?.value ?? null)?.catalog ?? null;
   const data: AboutData = {
     store,
     stars,
@@ -114,6 +120,7 @@ export function AboutPanel({
     satelliteInfo,
     stars3dInfo,
     exoplanetCatalog,
+    pulsarCatalog,
   };
 
   const closing = useClosing();

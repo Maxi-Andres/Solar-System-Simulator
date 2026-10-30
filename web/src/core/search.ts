@@ -63,6 +63,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
     }
     case 'black-hole':
       return 'Black hole';
+    case 'neutron-star':
+      return 'Neutron star';
   }
 }
 
@@ -95,6 +97,9 @@ export function layersFor(body: BodyDefinition): LayerId[] {
     case 'black-hole':
       // Always drawn, as another star is (floatingOrigin.ts isShown).
       return [];
+    case 'neutron-star':
+      // Gone to from its marker, which is the Pulsars layer's.
+      return ['pulsars'];
   }
 }
 
@@ -106,6 +111,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   star: 0,
   planet: 0,
   'black-hole': 0,
+  'neutron-star': 0,
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,

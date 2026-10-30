@@ -15,6 +15,7 @@ import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { archivePlanetId, archiveSystemKey, searchEntry, type ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import { registeredSystem } from '../core/planetarySystems.ts';
+import { formatPeriod, NEUTRON_STAR_COLOR, pulsarBodyId, type PulsarArchive } from '../core/pulsars.ts';
 import {
   addBulkSatelliteBody,
   addSgpSatelliteBody,
@@ -77,6 +78,10 @@ import { Panel } from './Panel.tsx';
  * panel opens. Choosing either goes to the system, made bodies then (archiveSystems.ts);
  * a planet, to that planet. A star found by its name that is a host goes to its system
  * too, and is not listed twice.
+ *
+ * And the pulsars (D6a): by the name they are known by ("Crab Pulsar", "SGR 1806-20"), and
+ * their J2000 and B1950 names ("J0534+2200", "B0531+21"), from pulsars.json, fetched when
+ * the panel opens. Choosing one makes it a neutron star and goes there (pulsars.ts).
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -97,6 +102,9 @@ const STAR_LIMIT = 12;
 /** And at most this many Exoplanet Archive hosts and planets, after the stars. */
 const EXO_LIMIT = 12;
 
+/** And at most this many pulsars, after the Archive's. */
+const PULSAR_LIMIT = 10;
+
 /** The hosts' rings' colour (scene/ExoplanetHosts.tsx). */
 const HOST_COLOR = '#7fc4c0';
 
@@ -114,7 +122,9 @@ type Result =
   /** Entry `k` of the stars' name index. */
   | { readonly kind: 'star'; readonly k: number }
   /** Entry `k` of the Exoplanet Archive's index: a host, or a planet (exoplanetArchive.ts). */
-  | { readonly kind: 'exo'; readonly k: number };
+  | { readonly kind: 'exo'; readonly k: number }
+  /** Entry `k` of pulsars.json. */
+  | { readonly kind: 'pulsar'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -129,6 +139,8 @@ export function SearchPanel({
   starNames,
   exoplanets,
   onArchive,
+  pulsars,
+  onPulsar,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -143,6 +155,9 @@ export function SearchPanel({
   readonly exoplanets: LazySource<ExoplanetArchive>;
   /** Goes to an Archive host's system, or to one of its planets (App.tsx). */
   readonly onArchive: (host: number, planet: number | null) => void;
+  readonly pulsars: LazySource<PulsarArchive>;
+  /** Goes to a pulsar (App.tsx). */
+  readonly onPulsar: (k: number) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -166,6 +181,7 @@ export function SearchPanel({
     () => starNames?.value ?? null,
   );
   const archive = useSyncExternalStore(exoplanets.subscribe, () => exoplanets.value);
+  const pulsarArchive = useSyncExternalStore(pulsars.subscribe, () => pulsars.value);
   // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
   const hostOfStar = useMemo(() => {
     const map = new Map<string, number>();
@@ -198,7 +214,8 @@ export function SearchPanel({
     void satelliteNames.request();
     void starNames?.request();
     void exoplanets.request();
-  }, [store, names, comets, satelliteNames, starNames, exoplanets]);
+    void pulsars.request();
+  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -220,12 +237,15 @@ export function SearchPanel({
             .filter(({ k }) => !store.isPropagatedBody(beltBodyId(nameIndex.names.tier[k]!, nameIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'name', k }));
     const fromSatellites = satelliteResults(store, query, satelliteData, sgpIndex, bulkNames);
+    // The stars, the Archive's and the pulsars are listed together, best match first, and in
+    // that order where they match alike: "crab" finds the Crab Pulsar before Acrab.
+    const scored = new Map<Result, number>();
     const fromStars: Result[] =
       starIndex === null
         ? []
         : searchNames(starIndex, query, STAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(starBodyId(starIndex.names.tier[k]!, starIndex.names.index[k]!)))
-            .map(({ k }) => ({ kind: 'star', k }));
+            .map(({ k, score }) => scoredResult(scored, { kind: 'star', k }, score));
     // The stars listed already, so a host found by both its names is listed once.
     const starsListed = new Set(
       fromStars.map((result) =>
@@ -250,12 +270,37 @@ export function SearchPanel({
                 !starsListed.has(`${hosts.tier[host]}:${hosts.index[host]}`)
               );
             })
-            .map(({ k }) => ({ kind: 'exo', k }));
-    return [...bodies, ...fromStars, ...fromArchive, ...fromComets, ...fromSatellites, ...fromNames].slice(
-      0,
-      RESULT_LIMIT,
+            .map(({ k, score }) => scoredResult(scored, { kind: 'exo', k }, score));
+    const fromPulsars: Result[] =
+      pulsarArchive === null
+        ? []
+        : searchNames(pulsarArchive.search, query, PULSAR_LIMIT)
+            .filter(({ k }) => !store.isPropagatedBody(pulsarBodyId(k)))
+            .map(({ k, score }) => scoredResult(scored, { kind: 'pulsar', k }, score));
+    // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars.
+    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars].sort(
+      (a, b) => scored.get(a)! - scored.get(b)!,
     );
-  }, [store, query, version, nameIndex, cometIndex, satelliteData, sgpIndex, bulkNames, starIndex, archive]);
+    return [
+      ...bodies,
+      ...fromCatalogues,
+      ...fromComets,
+      ...fromSatellites,
+      ...fromNames,
+    ].slice(0, RESULT_LIMIT);
+  }, [
+    store,
+    query,
+    version,
+    nameIndex,
+    cometIndex,
+    satelliteData,
+    sgpIndex,
+    bulkNames,
+    starIndex,
+    archive,
+    pulsarArchive,
+  ]);
 
   // A new query starts at the top.
   useEffect(() => {
@@ -315,6 +360,12 @@ export function SearchPanel({
         onArchive(host, planet);
         closePanel();
       }
+      return;
+    }
+    if (result.kind === 'pulsar') {
+      setLayer('pulsars', true);
+      onPulsar(result.k);
+      closePanel();
       return;
     }
     if (result.kind === 'star') {
@@ -440,6 +491,7 @@ export function SearchPanel({
             starIndex,
             archive,
             hostOfStar,
+            pulsarArchive,
           );
           return (
             <li
@@ -500,7 +552,26 @@ function describeResult(
   starIndex: StarNameIndex | null,
   archive: ExoplanetArchive | null,
   hostOfStar: ReadonlyMap<string, number>,
+  pulsarArchive: PulsarArchive | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'pulsar') {
+    const p = pulsarArchive!.catalog.pulsars;
+    const k = result.k;
+    const period = p.periodS[k];
+    return {
+      glyph: '·',
+      color: NEUTRON_STAR_COLOR,
+      name: p.name[k]!,
+      detail: [
+        p.magnetar[k] ? (p.candidate[k] ? 'Magnetar candidate' : 'Magnetar') : 'Pulsar',
+        p.name[k] === `PSR ${p.jName[k]}` ? undefined : (p.jName[k] ?? undefined),
+        period == null ? undefined : formatPeriod(period),
+        `${Math.round(p.distancePc[k]! * LY_PER_PC).toLocaleString('en-US')} ly`,
+      ]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'exo') {
     const { hosts, planets } = archive!.catalog;
     const { host, planet } = searchEntry(archive!.catalog, result.k);
@@ -601,6 +672,12 @@ function describeResult(
 }
 
 const noSubscribe = (): (() => void) => () => {};
+
+/** A result, its match's score kept beside it for the merge. */
+function scoredResult(scores: Map<Result, number>, result: Result, score: number): Result {
+  scores.set(result, score);
+  return result;
+}
 
 /** Light years in a parsec (IAU 2015: 648,000/pi AU; the Julian light year). */
 const LY_PER_PC = 3.261563777;

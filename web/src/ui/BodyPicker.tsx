@@ -119,10 +119,12 @@ export function BodyPicker({
   const planetSystem = planetarySystemOf(focus);
   // Or a black hole's, with the star about it.
   const blackHoleSystem = blackHoleSystemOf(focus);
+  // A pulsar is out in the galaxy, as a black hole is: hundreds of light years off at the least.
+  const isPulsar = focusBody.kind === 'neutron-star';
   // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
-  // anything of Alpha Centauri's or another star's, nor a black hole's.
+  // anything of Alpha Centauri's or another star's, nor a black hole's, nor a pulsar.
   const inSolarSystem =
-    !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null && blackHoleSystem === null;
+    !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null && blackHoleSystem === null && !isPulsar;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -217,7 +219,7 @@ export function BodyPicker({
           <Caret open={blackHolesOpen} />
         </button>
         <Separator />
-        {blackHoleSystem === null && (
+        {blackHoleSystem === null && !isPulsar && (
           <>
             <Crumb onClick={toNeighbourhood} outer>
               Solar Neighbourhood
@@ -524,6 +526,7 @@ function BodyList({
       body.kind !== 'asteroid' &&
       body.kind !== 'comet' &&
       body.kind !== 'black-hole' &&
+      body.kind !== 'neutron-star' &&
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
