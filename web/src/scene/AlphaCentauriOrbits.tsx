@@ -89,13 +89,20 @@ export function AlphaCentauriOrbits({ store, clock, focus, stars3d, visible }: A
   const view = useSyncExternalStore(stars3d?.subscribe ?? noSubscribe, () => stars3d?.view ?? EMPTY);
 
   const group = useMemo(() => new THREE.Group(), []);
+  // Put in the group by the effect below, not here: a memo may run twice (StrictMode), and
+  // the extra pair would stay in the group, never placed again.
   const pair = useMemo(() => {
     const relative = relativeOrbitPolylineKm(SEGMENTS);
     const a = lineFrom(relative, -AB_ORBIT.massFractionB, colorOf(COLOR_INDEX_A));
     const b = lineFrom(relative, 1 - AB_ORBIT.massFractionB, colorOf(COLOR_INDEX_B));
-    group.add(a, b);
     return { a, b };
-  }, [group]);
+  }, []);
+  useEffect(() => {
+    group.add(pair.a, pair.b);
+    return () => {
+      group.remove(pair.a, pair.b);
+    };
+  }, [group, pair]);
 
   // Proxima's orbit, once its record is in hand: built once, from the record and the date
   // it was first seen at -- the orbit takes 547,000 years, the clock spans centuries.
@@ -126,13 +133,13 @@ export function AlphaCentauriOrbits({ store, clock, focus, stars3d, visible }: A
 
   useEffect(
     () => () => {
-      for (const child of [...group.children]) {
+      for (const child of new Set([...group.children, pair.a, pair.b])) {
         const line = child as THREE.Line;
         line.geometry.dispose();
         (line.material as THREE.Material).dispose();
       }
     },
-    [group],
+    [group, pair],
   );
 
   useFrame(() => {

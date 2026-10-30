@@ -291,6 +291,9 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     [sampleUniforms, measuredUniforms],
   );
 
+  // Made here, put in the group by the effect below: a memo may run twice (StrictMode), and
+  // a second set added here would stay in the group with its positions never written -- every
+  // star at the camera, drawn as bright as the sprite allows.
   const measured = useMemo(() => {
     const geometry = buildMeasuredGeometry();
     const points = new THREE.Points(geometry, materials.measured);
@@ -298,10 +301,15 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     for (const each of [points, twin]) {
       each.frustumCulled = false;
       each.renderOrder = -1;
-      group.add(each);
     }
     return { geometry, points, twin };
-  }, [group, materials]);
+  }, [materials]);
+  useEffect(() => {
+    group.add(measured.points, measured.twin);
+    return () => {
+      group.remove(measured.points, measured.twin);
+    };
+  }, [group, measured]);
 
   const sample = useRef<{ points: THREE.Points; twin: THREE.Points } | null>(null);
   const asked = useRef(false);
