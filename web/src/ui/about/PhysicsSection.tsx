@@ -896,9 +896,11 @@ export const physicsSection: AboutSection = {
             </Xref>
           </Item>
           <Item title="What is bent">
-            The sky, as if infinitely far behind the hole — under 1% wrong where it shows — and the stars of
-            the nuclear star cluster at their own distances. S2, the stars of BH1 and BH3, the scale rings and
-            any body past the hole are drawn unbent.
+            The sky, as if infinitely far behind the hole — under 1% wrong where it shows — the stars of the
+            nuclear star cluster at their own distances, and the star about each hole, a sphere: each ray is
+            bent where it passes the hole and followed straight on to the star, so a star behind the hole is
+            seen wrapped round its shadow, and one in front hides it. The scale rings and any other body past
+            the hole are drawn unbent.
           </Item>
           <Item title="A camera at rest">
             No aberration or Doppler shift from the camera’s motion, and no blueshift for hovering near the

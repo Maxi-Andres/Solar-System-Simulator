@@ -68,8 +68,13 @@ export const LENS_UNIFORMS = {
   uLensShadow: { value: 0 },
 };
 
-/** Whether the lens is on this frame: for the second pass's objects, which wait for it. */
-export const lensState = { on: false };
+/**
+ * Whether the lens is on this frame: for the second pass's objects, which wait for it. And
+ * the bodies the lens draws in their place this frame (BlackHoleLens.tsx): the star about
+ * the hole, seen through it, and the hole itself where that star stands in front of it --
+ * SolarSystem.tsx leaves their own meshes undrawn.
+ */
+export const lensState: { on: boolean; drawnByLens: Set<string> } = { on: false, drawnByLens: new Set() };
 
 /** A star material's lens uniforms: the shared ones, and which image this pass draws. */
 export function lensUniforms(image: 0 | 1): Record<string, THREE.IUniform> {

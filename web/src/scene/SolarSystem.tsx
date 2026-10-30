@@ -63,6 +63,7 @@ import { labelRank } from './LabelProjector.tsx';
 import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
 import { ambientShare, exoplanetMaterial } from './exoplanetSurface.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
+import { lensState } from './lens.ts';
 import {
   countTriangles,
   craftBox,
@@ -1170,7 +1171,8 @@ export function SolarSystem({
         }
       }
 
-      handle.mesh.visible = sphereOpacity > 0.005;
+      // The star about a black hole is drawn through the lens instead, while it is on.
+      handle.mesh.visible = sphereOpacity > 0.005 && !lensState.drawnByLens.has(handle.definition.id);
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;

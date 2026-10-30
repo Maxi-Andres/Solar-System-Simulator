@@ -18,6 +18,9 @@ import { lensImageTexture, lensState, LENS_UNIFORMS, skyCapture } from './lens.t
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { COMPOSITE_FRAGMENT_SHADER, COMPOSITE_VERTEX_SHADER } from './MilkyWay.tsx';
 import { KM_PER_UNIT } from './scale.ts';
+import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
+import { SUN_OVEREXPOSURE } from './solarGlare.ts';
+import { LIMB_DARKENING_U, starDiscColor } from './starDisc.ts';
 
 /**
  * The black holes' gravitational lensing, drawn (schwarzschildLens.ts for the physics).
@@ -46,8 +49,17 @@ import { KM_PER_UNIT } from './scale.ts';
  *   (NuclearCluster.tsx) -- are moved the same way, by the lens equation for a source at a
  *   finite distance: a star a parsec behind the hole is bent less than the far sky, one
  *   in front of it not at all (schwarzschildLens.ts, finiteSourceImage).
- * - **Nothing else.** The bodies near a hole -- S2, the stars of Gaia BH1 and BH3 -- and the
- *   lines drawn over it are drawn where they are, unbent; so is any body seen past it.
+ * - **The star about the hole** -- S2, the stars of Gaia BH1, BH3 and Cygnus X-1 -- is drawn
+ *   through it, as a sphere: per pixel the ray is bent by the same exact deflection where it
+ *   passes the hole, then followed in a straight line to the star, whose limb-darkened disc
+ *   it lands on or misses (STAR_FRAGMENT_SHADER). A ray that meets the star before it reaches
+ *   the hole is not bent. So a star behind the hole is seen wrapped round its shadow, the
+ *   two images and the Einstein ring a star's light makes, and one in front of the hole
+ *   hides it. Treating the bend as happening at the ray's closest approach puts the ray a
+ *   few horizons off where it is in truth -- tens to thousands of kilometres against stars
+ *   of hundreds of thousands to millions. The star's own mesh is not drawn meanwhile.
+ * - **Nothing else.** The lines drawn over a hole are drawn where they are, unbent; so is
+ *   any other body seen past it.
  *
  * ## What it costs
  *
@@ -159,7 +171,84 @@ void main() {
 }
 `;
 
+/**
+ * The star about the hole, seen through it (see the header): drawn after the stars (-1), so
+ * it hides those behind it, and before the bodies. Lengths in the star's own radii, about
+ * the camera, so a sphere millions of kilometres off keeps its digits in float32.
+ */
+const STAR_FRAGMENT_SHADER = /* glsl */ `
+uniform sampler2D uDeflection;
+uniform vec4 uMap;
+uniform vec3 uHole;
+uniform mat3 uViewToWorld;
+uniform vec2 uTanHalf;
+uniform vec3 uStarCentre;
+uniform float uHoleDistance;
+uniform vec3 uStarColor;
+
+varying vec2 vNdc;
+
+// Where a ray from o along dir first meets the star, or -1.
+float hitStar(vec3 o, vec3 dir) {
+  vec3 oc = o - uStarCentre;
+  float b = dot(oc, dir);
+  float h = b * b - (dot(oc, oc) - 1.0);
+  if (h < 0.0) {
+    return -1.0;
+  }
+  float root = sqrt(h);
+  float t = -b - root;
+  return t > 0.0 ? t : -b + root;
+}
+
+// Its disc there, limb-darkened as the stars' discs are (starDisc.ts).
+vec4 starAt(vec3 p, vec3 dir) {
+  float mu = clamp(-dot(normalize(p - uStarCentre), dir), 0.0, 1.0);
+  return linearToOutputTexel(vec4(uStarColor * (1.0 - ${LIMB_DARKENING_U.toFixed(2)} * (1.0 - mu)), 1.0));
+}
+
+void main() {
+  vec3 d = normalize(uViewToWorld * vec3(vNdc * uTanHalf, -1.0));
+  float c = dot(d, uHole);
+  // How far along the ray it passes the hole: a star met before that is in front of it.
+  float closest = uHoleDistance * c;
+  float front = hitStar(vec3(0.0), d);
+  if (front > 0.0 && front < closest) {
+    gl_FragColor = starAt(d * front, d);
+    return;
+  }
+  vec3 side = d - c * uHole;
+  float s = length(side);
+  vec3 e2 = side / max(s, 1e-30);
+  float theta = atan(s, c);
+  float x = log(max(theta / uMap.x - 1.0, 1e-30));
+  if (theta <= uMap.x || x < uMap.y) {
+    discard;
+  }
+  float t = clamp((x - uMap.y) / (uMap.z - uMap.y), 0.0, 1.0) * (uMap.w - 1.0);
+  float k = min(floor(t), uMap.w - 2.0);
+  float delta = mix(
+    texelFetch(uDeflection, ivec2(int(k), 0), 0).r,
+    texelFetch(uDeflection, ivec2(int(k) + 1, 0), 0).r,
+    t - k
+  );
+  float seen = theta - delta;
+  vec3 bent = cos(seen) * uHole + sin(seen) * e2;
+  // Bent where it passes the hole, then straight on.
+  vec3 at = d * max(closest, 0.0);
+  float far = hitStar(at, bent);
+  if (far <= 0.0) {
+    discard;
+  }
+  gl_FragColor = starAt(at + bent * far, bent);
+}
+`;
+
+/** Below this radius on screen, pixels, the star is left to its own mesh and marker. */
+const STAR_LENSED_FROM_PX = 2;
+
 const scratchHole = new THREE.Vector3();
+const scratchStar = new THREE.Vector3();
 const scratchSunCamera = new THREE.Vector3();
 
 interface Capture {
@@ -253,6 +342,43 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     return mesh;
   }, [capture, deflectionTexture]);
 
+  const starOverlay = useMemo(() => {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uDeflection: { value: deflectionTexture },
+          uMap: { value: new THREE.Vector4(1, TABLE_X_MIN, 1, GPU_SAMPLES) },
+          uHole: { value: new THREE.Vector3(0, 0, -1) },
+          uViewToWorld: { value: new THREE.Matrix3() },
+          uTanHalf: { value: new THREE.Vector2(1, 1) },
+          uStarCentre: { value: new THREE.Vector3() },
+          uHoleDistance: { value: 1 },
+          uStarColor: { value: new THREE.Color() },
+        },
+        vertexShader: OVERLAY_VERTEX_SHADER,
+        fragmentShader: STAR_FRAGMENT_SHADER,
+        transparent: false,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -0.5;
+    mesh.visible = false;
+    return mesh;
+  }, [deflectionTexture]);
+
+  useEffect(
+    () => () => {
+      starOverlay.geometry.dispose();
+      (starOverlay.material as THREE.Material).dispose();
+      lensState.drawnByLens.clear();
+    },
+    [starOverlay],
+  );
+
   useEffect(
     () => () => {
       deflectionTexture.dispose();
@@ -301,6 +427,8 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
         LENS_UNIFORMS.uLensHole.value.copy(scratchHole).normalize();
       }
     }
+    lensState.drawnByLens.clear();
+    starOverlay.visible = false;
     if (best === null) {
       LENS_UNIFORMS.uLensOn.value = 0;
       lensState.on = false;
@@ -329,6 +457,37 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     LENS_UNIFORMS.uLensShadow.value = built.shadowAngle;
     LENS_UNIFORMS.uLensOn.value = 1;
     lensState.on = true;
+
+    // The star about the hole, through it, once it is a few pixels across.
+    const system = BLACK_HOLE_SYSTEMS.find((candidate) => candidate.id === best.id);
+    const star = system === undefined ? null : store.stateRelativeTo(system.companion, focus, jd);
+    if (system !== undefined && star !== null) {
+      const radiusKm = store.body(system.companion).radiusEquatorialKm;
+      scratchStar.set(
+        star.position.x - camera.position.x * KM_PER_UNIT,
+        star.position.y - camera.position.y * KM_PER_UNIT,
+        star.position.z - camera.position.z * KM_PER_UNIT,
+      );
+      const starKm = scratchStar.length();
+      if (starKm > radiusKm && (radiusKm / starKm) * pixelsPerRadian >= STAR_LENSED_FROM_PX) {
+        const uniforms = (starOverlay.material as THREE.ShaderMaterial).uniforms;
+        (uniforms['uStarCentre']!.value as THREE.Vector3).copy(scratchStar).multiplyScalar(1 / radiusKm);
+        uniforms['uHoleDistance']!.value = best.km / radiusKm;
+        (uniforms['uStarColor']!.value as THREE.Color).copy(
+          starDiscColor(starDiscColorIndex(system.companion), SUN_OVEREXPOSURE * starDiscExposure(system.companion)),
+        );
+        starOverlay.visible = true;
+        lensState.drawnByLens.add(system.companion);
+        // And the hole, where the star stands between it and the camera: its black sphere,
+        // drawn after, would otherwise show through the star.
+        const toHole = LENS_UNIFORMS.uLensHole.value;
+        const along = scratchStar.dot(toHole);
+        const miss = Math.sqrt(Math.max(0, scratchStar.lengthSq() - along * along));
+        if (miss < radiusKm && along - Math.sqrt(radiusKm * radiusKm - miss * miss) < best.km) {
+          lensState.drawnByLens.add(system.id);
+        }
+      }
+    }
   }, -0.5);
 
   // After the glow has set this frame's uniforms (mounted after MilkyWay): the cube, if it
@@ -350,6 +509,11 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     uniforms['uPixelAngle']!.value = pixelAngle;
     uniforms['uReach']!.value = deflectionReach(made, FADE_FROM_PX * pixelAngle);
     overlay.visible = true;
+    const starUniforms = (starOverlay.material as THREE.ShaderMaterial).uniforms;
+    (starUniforms['uMap']!.value as THREE.Vector4).copy(uniforms['uMap']!.value as THREE.Vector4);
+    (starUniforms['uHole']!.value as THREE.Vector3).copy(uniforms['uHole']!.value as THREE.Vector3);
+    (starUniforms['uViewToWorld']!.value as THREE.Matrix3).copy(uniforms['uViewToWorld']!.value as THREE.Matrix3);
+    (starUniforms['uTanHalf']!.value as THREE.Vector2).copy(uniforms['uTanHalf']!.value as THREE.Vector2);
 
     const visibility = skyCapture.paint === null || skyCapture.screen === null ? 0 : skyCapture.visibility;
     uniforms['uGlow']!.value = visibility > 0 ? 1 : 0;
@@ -388,7 +552,12 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     };
   });
 
-  return <primitive object={overlay} />;
+  return (
+    <>
+      <primitive object={overlay} />
+      <primitive object={starOverlay} />
+    </>
+  );
 }
 
 /** The glow into the cube, face by face, from where the camera stands. */
