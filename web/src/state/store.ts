@@ -112,8 +112,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // per planet (scene/ExoplanetHosts.tsx); shown where the map is, past the planets.
   { id: 'exoplanetHosts', label: 'Exoplanet Hosts', pending: null },
   // Every pulsar the ATNF catalogue can place and McGill's magnetars (core/pulsars.ts):
-  // marked across the map and the galaxy, as the hosts are on the map. On: they are what
-  // there is to find out there.
+  // marked across the map and the galaxy, as the hosts are on the map. Off until asked for:
+  // four thousand dots over the galaxy are a map of one kind of object, not a view. A
+  // pulsar found by search turns it on.
   { id: 'pulsars', label: 'Pulsars', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
@@ -161,7 +162,7 @@ const DEFAULT_LAYERS: LayerState = {
   comets: false,
   starMap: true,
   exoplanetHosts: true,
-  pulsars: true,
+  pulsars: false,
   milkyWay: true,
   nuclearCluster: true,
   spacecraft: true,
