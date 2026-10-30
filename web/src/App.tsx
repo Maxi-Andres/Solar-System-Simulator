@@ -32,6 +32,7 @@ import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
+import { ensureSirius } from './core/siriusBodies.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -296,6 +297,8 @@ export function App() {
         }
         await ensureAlphaCenBodies(store, stars3d, index, useViewStore.getState().focus);
         await ensurePlanetarySystems(store, stars3d, index, useViewStore.getState().focus);
+        // And Sirius A and its white dwarf (sirius.ts).
+        await ensureSirius(store, stars3d, index, useViewStore.getState().focus);
         renderDemand.request();
       })
       .catch((error: unknown) => {

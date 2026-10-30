@@ -1,17 +1,14 @@
 import type { BodyId } from '@sss/tools/types';
 import { useEffect, useState } from 'react';
 
+import { isProximaRecord, MASS_PROXIMA_SUN, RADIUS_PROXIMA_SUN } from '../core/alphaCentauri.ts';
 import {
-  componentState,
-  isProximaRecord,
-  MASS_A_SUN,
-  MASS_B_SUN,
-  MASS_PROXIMA_SUN,
-  matchComponent,
-  RADIUS_A_SUN,
-  RADIUS_B_SUN,
-  RADIUS_PROXIMA_SUN,
-} from '../core/alphaCentauri.ts';
+  matchOrbitingStar,
+  orbitingStarParallax,
+  orbitingStarSize,
+  orbitingStarState,
+  type OrbitingStar,
+} from '../core/orbitingStars.ts';
 import { planetarySystemOf, type PlanetarySystem } from '../core/planetarySystems.ts';
 import { starBodyFacts } from '../core/starBodies.ts';
 import {
@@ -40,22 +37,24 @@ import { LIGHT_YEAR_KM } from '../scene/scale.ts';
  * (alphaCentauri.ts): for those the panel says what the scene does.
  */
 
-type Member = 'A' | 'B' | 'Proxima';
+type Member = OrbitingStar | 'Proxima';
 
-/** Alpha Centauri's measured radius and mass, solar units, by member. */
-const MEASURED: Record<Member, { readonly radius: number; readonly mass: number }> = {
-  A: { radius: RADIUS_A_SUN, mass: MASS_A_SUN },
-  B: { radius: RADIUS_B_SUN, mass: MASS_B_SUN },
-  Proxima: { radius: RADIUS_PROXIMA_SUN, mass: MASS_PROXIMA_SUN },
-};
+/** The measured radius and mass, solar units, of a star on its orbit, or of Proxima. */
+function measuredSize(member: Member): { readonly radius: number; readonly mass: number } {
+  if (member === 'Proxima') {
+    return { radius: RADIUS_PROXIMA_SUN, mass: MASS_PROXIMA_SUN };
+  }
+  const size = orbitingStarSize(member);
+  return { radius: size.radiusSun, mass: size.massSun };
+}
 
 /**
  * Where A or B is now and how it moves, read from its orbit about the pair's barycentre as
  * starNow reads a catalogue star's straight line: the radial velocity is the barycentre's,
  * measured (Kervella et al. 2016), plus the star's orbital motion along our line of sight.
  */
-function componentNow(component: 'A' | 'B', absoluteV: number, jd: number): StarNow {
-  const { position: r, velocity: v } = componentState(component, jd);
+function componentNow(component: OrbitingStar, absoluteV: number, jd: number): StarNow {
+  const { position: r, velocity: v } = orbitingStarState(component, jd);
   const distanceKm = Math.hypot(r.x, r.y, r.z);
   const distancePc = distanceKm / PARSEC_KM;
   const radial = (r.x * v.x + r.y * v.y + r.z * v.z) / distanceKm;
@@ -133,14 +132,14 @@ export function StarFacts({
   const record = facts.record;
   const flags = record[STAR3D.flags]!;
   const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
-  const component = matchComponent(at);
+  const component = matchOrbitingStar(at);
   const member: Member | null = component ?? (isProximaRecord(at) ? 'Proxima' : null);
   // A planetary system's star: its measured radius and published mass (planetarySystems.ts),
   // or the Exoplanet Archive's (archiveSystems.ts).
   const host = system;
   const measured: { readonly radius: number | null; readonly mass: number } | null =
     member !== null
-      ? MEASURED[member]
+      ? measuredSize(member)
       : host === null
         ? null
         : { radius: host.hostRadiusSun, mass: host.hostMassSun };
@@ -153,7 +152,12 @@ export function StarFacts({
     <>
       <dt style={TERM}>Distance</dt>
       <dd style={VALUE}>{formatStarDistance(now.distancePc)}</dd>
-      {details !== null && (
+      {component !== null ? (
+        <>
+          <dt style={TERM}>Parallax</dt>
+          <dd style={VALUE}>{`${orbitingStarParallax(component).mas.toFixed(2)} mas, the pair's`}</dd>
+        </>
+      ) : details !== null && (
         <>
           <dt style={TERM}>Parallax</dt>
           <dd style={VALUE}>
@@ -235,7 +239,7 @@ export function StarFacts({
       {/* Where each number comes from, a word or two each (the About has the long version). */}
       <div style={DIVIDER} />
       <dt style={TERM}>Distance from</dt>
-      <dd style={VALUE}>{parallaxSource(flags)}</dd>
+      <dd style={VALUE}>{component !== null ? orbitingStarParallax(component).source : parallaxSource(flags)}</dd>
       <dt style={TERM}>Photometry</dt>
       <dd style={VALUE}>{gaiaPhotometry ? 'Gaia, transformed' : 'Johnson V, B−V'}</dd>
       {gcns && (

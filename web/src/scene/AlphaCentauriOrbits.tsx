@@ -51,7 +51,7 @@ function colorOf(colorIndex: number): THREE.Color {
   return new THREE.Color(r / peak, g / peak, b / peak);
 }
 
-function lineFrom(points: readonly { x: number; y: number; z: number }[], scale: number, color: THREE.Color) {
+export function lineFrom(points: readonly { x: number; y: number; z: number }[], scale: number, color: THREE.Color) {
   const positions = new Float32Array(points.length * 3);
   points.forEach((p, i) => {
     positions[i * 3] = (p.x * scale) / KM_PER_UNIT;
@@ -67,7 +67,7 @@ function lineFrom(points: readonly { x: number; y: number; z: number }[], scale:
   return line;
 }
 
-function ramp(value: number, gone: number, full: number): number {
+export function ramp(value: number, gone: number, full: number): number {
   if (value <= gone) return 0;
   if (value >= full) return 1;
   return (value - gone) / (full - gone);

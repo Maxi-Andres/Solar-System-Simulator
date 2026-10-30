@@ -237,6 +237,21 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
     label: 'Alpha Centauri',
     refs: [
       {
+        key: 'bond2017',
+        who: 'Bond et al. 2017',
+        title: 'The Sirius system and its astrophysical puzzles: Hubble Space Telescope and ground-based astrometry',
+        where: 'ApJ 840, 70',
+        link: arxiv('1703.10625'),
+        use: 'the orbit of Sirius B, both masses, the distance, B’s radius and temperature',
+      },
+      {
+        key: 'davis2011',
+        who: 'Davis et al. 2011',
+        title: 'The angular diameter and fundamental parameters of Sirius A',
+        where: 'PASA 28, 58',
+        use: 'Sirius A’s radius and temperature',
+      },
+      {
         key: 'kervella2016',
         who: 'Kervella et al. 2016',
         where: 'A&A 594, A107',

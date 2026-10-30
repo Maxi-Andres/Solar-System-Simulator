@@ -266,6 +266,14 @@ export const estimatedSection: AboutSection = {
           </Item>
         </Items>
 
+        <Items>
+          <Item title="Which of Sirius A and B is nearer">
+            The orbit fixes the two on the sky, not which is in front: the paper does not say which node is
+            ascending. It is read in the usual sense, B receding where it crosses the sky’s plane at the
+            node.
+          </Item>
+        </Items>
+
         <Sub section="estimated" id="nuclear-cluster">
           The nuclear star cluster
         </Sub>

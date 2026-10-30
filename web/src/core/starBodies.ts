@@ -1,7 +1,8 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { colorIndexToTemperature, starColor, surfaceLuminanceRelativeToSun } from '../scene/blackbody.ts';
-import { componentState, matchComponent, measuredMassSun, measuredRadiusKm } from './alphaCentauri.ts';
+import { measuredMassSun, measuredRadiusKm } from './alphaCentauri.ts';
+import { matchOrbitingStar, orbitingStarSize, orbitingStarState } from './orbitingStars.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
 
@@ -252,16 +253,20 @@ export async function addStarRecordBody(
     // Centauri A and B are the exception: they follow their measured orbit instead
     // (alphaCentauri.ts), which a straight line from 1991 has long since left.
     const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
-    const component = matchComponent(at);
-    const radiusKm = measuredRadiusKm(at) ?? (radiusSun === null ? null : radiusSun * SOLAR_RADIUS_KM);
+    const component = matchOrbitingStar(at);
+    const size = component === null ? null : orbitingStarSize(component);
+    const radiusKm =
+      (size === null ? null : size.radiusSun * SOLAR_RADIUS_KM) ??
+      measuredRadiusKm(at) ??
+      (radiusSun === null ? null : radiusSun * SOLAR_RADIUS_KM);
     if (radiusKm !== null) {
       discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(record[STAR3D.bv]!)));
       discColorIndices.set(id, record[STAR3D.bv]!);
     }
     store.addPropagatedBody(
-      starBodyDefinition(id, entry.display, record[STAR3D.bv]!, radiusKm, measuredMassSun(at) ?? massSun),
+      starBodyDefinition(id, entry.display, record[STAR3D.bv]!, radiusKm, size?.massSun ?? measuredMassSun(at) ?? massSun),
       null,
-      component === null ? (jd) => starState(record, 0, jd) : (jd) => componentState(component, jd),
+      component === null ? (jd) => starState(record, 0, jd) : (jd) => orbitingStarState(component, jd),
       { exact: true },
     );
   }

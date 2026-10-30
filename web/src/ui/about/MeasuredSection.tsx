@@ -27,6 +27,7 @@ export const measuredSection: AboutSection = {
     { id: 'satellites', label: 'Earth satellites' },
     { id: 'stars', label: 'Stars' },
     { id: 'alpha-centauri', label: 'Alpha Centauri' },
+    { id: 'sirius', label: 'Sirius and its white dwarf' },
     { id: 'exoplanets', label: 'Planets of other stars' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'galactic-centre', label: 'The Galactic Centre’s stars' },
@@ -231,6 +232,30 @@ export const measuredSection: AboutSection = {
               what is borrowed
             </Xref>
             .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="sirius">
+          Sirius and its white dwarf
+        </Sub>
+        <Items>
+          <Item>
+            Sirius A and Sirius B follow the orbit of <Strong>Bond et al. 2017</Strong>
+            <Cite k="bond2017" />: fifty years, B between 8 and 31 AU from A, with their dynamical masses —
+            2.063 Suns for A, 1.018 for B — and the system’s distance, 2.639 pc. Sirius B, the white dwarf, is
+            a sphere of the radius HST’s spectra give it, 0.008098 of the Sun’s: 5,630 km, smaller than the
+            Earth, with the mass of the Sun. Sirius A’s radius is the interferometric one of{' '}
+            <Strong>Davis et al. 2011</Strong>
+            <Cite k="davis2011" />.
+          </Item>
+          <Item>
+            The pair’s barycentre is not published; it is worked out here from Sirius A’s Hipparcos position
+            and motion in 1991 <Cite k="vanLeeuwen2007" />, less A’s own motion on the orbit then, and moves
+            straight at Bond et al.’s system velocity, −8.47 km/s.
+            <Why>
+              Hipparcos caught A three years before periastron, 0.46″ a year of its motion its orbit’s; drawn
+              on that line it would have left the orbit by arcseconds, AU at this distance.
+            </Why>
           </Item>
         </Items>
 

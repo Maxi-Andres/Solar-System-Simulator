@@ -28,6 +28,7 @@ import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
+import { SiriusOrbits } from './SiriusOrbits.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
@@ -288,6 +289,7 @@ export function SolarSystemCanvas({
       <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
+      <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
       <LabelProjector
         store={store}
         clock={clock}

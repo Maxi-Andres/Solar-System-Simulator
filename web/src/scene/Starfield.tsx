@@ -35,7 +35,8 @@ import {
 } from './starRendering.ts';
 import { mapDotPeak, splitHigh, splitLow, STAR3D_VERTEX_SHADER, UNITS_PER_PC } from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
-import { componentState, isProximaRecord, matchComponent, type AlphaCenComponent } from '../core/alphaCentauri.ts';
+import { isProximaRecord } from '../core/alphaCentauri.ts';
+import { matchOrbitingStar, orbitingStarState, type OrbitingStar } from '../core/orbitingStars.ts';
 import { isCatalogueStar, parseStarBodyId, starBodyId } from '../core/starBodies.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { lensState, lensUniforms } from './lens.ts';
@@ -52,8 +53,8 @@ interface DiscStar {
   readonly tier: number;
   readonly index: number;
   readonly records: Float32Array;
-  /** A or B, placed on their orbit; null for a star on its record's straight line. */
-  readonly component: AlphaCenComponent | null;
+  /** Alpha Centauri A or B, or Sirius A, placed on its orbit; null for a star on its record's straight line. */
+  readonly component: OrbitingStar | null;
 }
 
 /**
@@ -335,7 +336,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       // The stars in this tier drawn on their own: Alpha Centauri's three, by their
       // positions, and the others with a disc.
       const hidden: number[] = [];
-      const apart: { i: number; key: string; component: AlphaCenComponent | null }[] = [];
+      const apart: { i: number; key: string; component: OrbitingStar | null }[] = [];
       for (let i = 0; i < tier.tier.count; i += 1) {
         const base = i * STAR3D_FLOATS;
         const at = {
@@ -343,7 +344,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
           y: tier.records[base + STAR3D.y]!,
           z: tier.records[base + STAR3D.z]!,
         };
-        const component = matchComponent(at);
+        const component = matchOrbitingStar(at);
         const key =
           component ?? (isProximaRecord(at) ? 'Proxima' : discStars.has(`${tier.index}:${i}`) ? `${tier.index}:${i}` : null);
         if (key !== null) {
@@ -543,7 +544,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       const star =
         entry.component === null
           ? starState(entry.records, entry.index, jd).position
-          : componentState(entry.component, jd).position;
+          : orbitingStarState(entry.component, jd).position;
       const uniforms = (entry.points.material as THREE.ShaderMaterial).uniforms;
       const x = (camera.position.x * KM_PER_UNIT - sun.position.x - star.x) / PARSEC_KM;
       const y = (camera.position.y * KM_PER_UNIT - sun.position.y - star.y) / PARSEC_KM;
