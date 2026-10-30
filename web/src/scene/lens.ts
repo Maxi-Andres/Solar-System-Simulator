@@ -24,6 +24,14 @@ import { IMAGE_SAMPLES } from '../core/schwarzschildLens.ts';
  * an arc, which a point cannot draw. So an image is drawn at most LENS_MU_CAP times (5
  * magnitudes) brighter than its star: a star crossing behind the hole flares, and does not
  * become a blinding spot.
+ *
+ * ## Stars at a finite distance
+ *
+ * The catalogue's stars are lensed as if infinitely far behind the hole (lensStar), which
+ * from Sgr A* they are. The nuclear star cluster's are not: they are all round it, some in
+ * front. lensStarAt takes a star's offset, works out the thin-lens factor D_ls / D_s from
+ * the hole's distance -- zero in front of the hole, one far behind it -- and reads the same
+ * table scaled by its square root (schwarzschildLens.ts, finiteSourceImage).
  */
 
 /** The brightest an image is drawn, against its star: log10 of 100, five magnitudes. */
@@ -54,6 +62,10 @@ export const LENS_UNIFORMS = {
   /** The image table's mapping: scale s, half-range W, samples. See LensTables. */
   uLensImageMap: { value: new THREE.Vector3(1, 1, IMAGE_SAMPLES) },
   uLensMuCap: { value: LENS_MU_CAP_LOG10 },
+  /** The hole's distance from the camera, km: for stars at a finite distance (lensStarAt). */
+  uLensHoleKm: { value: 0 },
+  /** The shadow's angular radius from the camera, radians: no image is put inside it. */
+  uLensShadow: { value: 0 },
 };
 
 /** Whether the lens is on this frame: for the second pass's objects, which wait for it. */
@@ -110,6 +122,64 @@ bool lensStar(inout vec3 direction, out float dm) {
   float theta = max(y, 0.0) + v.x;
   float onSide = uLensImage > 0.5 ? -1.0 : 1.0;
   direction = (cos(theta) * uLensHole + sin(theta) * onSide * e2) * len;
+  dm = -2.5 * min(v.y, uLensMuCap);
+  return true;
+}
+
+uniform float uLensHoleKm;
+uniform float uLensShadow;
+
+vec2 lensTableAt(float y) {
+  float t = clamp(
+    (asinh(y / uLensImageMap.x) + uLensImageMap.y) / (2.0 * uLensImageMap.y) * uLensImageMap.z - 0.5,
+    0.0,
+    uLensImageMap.z - 1.0
+  );
+  float k = min(floor(t), uLensImageMap.z - 2.0);
+  return mix(
+    texelFetch(uLensImages, ivec2(int(k), 0), 0).rg,
+    texelFetch(uLensImages, ivec2(int(k) + 1, 0), 0).rg,
+    t - k
+  );
+}
+
+// The same for a star at a finite distance from the hole: \`offset\` from the camera in units
+// of kmPerUnit km. The thin-lens equation's factor f = D_ls / D_s, and the table scaled by it
+// (schwarzschildLens.ts, sourceDistanceFactor and finiteSourceImage, are these lines). A
+// star in front of the hole, f = 0, is drawn where it is and has no second image.
+bool lensStarAt(inout vec3 offset, float kmPerUnit, out float dm) {
+  dm = 0.0;
+  if (uLensOn < 0.5) {
+    return uLensImage < 0.5;
+  }
+  float len = length(offset);
+  float along = dot(offset, uLensHole) * uLensHoleKm / kmPerUnit;
+  float f = clamp(1.0 - along / max(len * len, 1e-30), 0.0, 1.0);
+  if (f <= 1e-6) {
+    return uLensImage < 0.5;
+  }
+  vec3 d = offset / max(len, 1e-30);
+  float c = dot(d, uLensHole);
+  vec3 side = d - c * uLensHole;
+  float s = length(side);
+  vec3 across = abs(uLensHole.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  vec3 e2 = s > 1e-12 ? side / s : normalize(cross(uLensHole, across));
+  float y = atan(s, c);
+  float root = sqrt(f);
+  float scaled = min(${Math.PI.toFixed(7)}, y / root);
+  float theta;
+  float onSide;
+  vec2 v;
+  if (uLensImage > 0.5) {
+    v = lensTableAt(-scaled);
+    theta = max(root * v.x, uLensShadow * 1.0001);
+    onSide = -1.0;
+  } else {
+    v = lensTableAt(scaled);
+    theta = y + root * v.x;
+    onSide = 1.0;
+  }
+  offset = (cos(theta) * uLensHole + sin(theta) * onSide * e2) * len;
   dm = -2.5 * min(v.y, uLensMuCap);
   return true;
 }

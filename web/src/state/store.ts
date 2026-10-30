@@ -70,6 +70,7 @@ export type LayerId =
   | 'starMap'
   | 'exoplanetHosts'
   | 'milkyWay'
+  | 'nuclearCluster'
   | 'spacecraft'
   | 'satellites'
   | 'constellations'
@@ -113,6 +114,12 @@ export const LAYERS: readonly LayerDefinition[] = [
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
   { id: 'milkyWay', label: 'Milky Way Model', pending: null },
+  // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
+  // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
+  // none a particular one. A layer of its own, as the galaxy's model is, so the measured
+  // S-stars and young stars can be seen without it. On, so the sky round the black hole
+  // is not taken for empty.
+  { id: 'nuclearCluster', label: 'Nuclear Cluster Model', pending: null },
   { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
 
   { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
@@ -150,6 +157,7 @@ const DEFAULT_LAYERS: LayerState = {
   starMap: true,
   exoplanetHosts: true,
   milkyWay: true,
+  nuclearCluster: true,
   spacecraft: true,
   satellites: false,
   constellations: false,

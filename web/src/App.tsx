@@ -446,6 +446,7 @@ export function App() {
         showDistanceRings={layers.distanceRings}
         ringLabels={ringLabels}
         showMilkyWay={layers.milkyWay}
+        showNuclearCluster={layers.nuclearCluster}
         galaxyLabels={galaxyLabels}
         horizonScaleLabels={horizonScaleLabels}
         scaleBar={scaleBar}

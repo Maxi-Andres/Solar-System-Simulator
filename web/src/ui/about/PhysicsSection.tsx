@@ -48,6 +48,7 @@ export const physicsSection: AboutSection = {
     { id: 'saturn', label: 'Saturn’s shadows' },
     { id: 'satellites', label: 'Satellites: SGP4' },
     { id: 'black-holes', label: 'Black holes' },
+    { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'galaxy', label: 'The galaxy' },
   ],
   Body: () => {
@@ -855,6 +856,35 @@ export const physicsSection: AboutSection = {
           away, not as if it were infinitely far: inside the photon sphere, at 1.5 r<sub>s</sub>, the shadow
           fills more than half the sky.
         </Equation>
+        <Equation
+          title="The lens for a star at a finite distance"
+          cite="paczynski1986"
+          code={['web/src/core/schwarzschildLens.ts (finiteSourceImage)', 'web/src/scene/lens.ts']}
+          math={math(
+            row(
+              mi('β'),
+              mo('='),
+              mi('θ'),
+              mo('−'),
+              frac(sub(mi('D'), up('ls')), sub(mi('D'), up('s'))),
+              mi('α'),
+              paren(mi('θ')),
+            ),
+          )}
+          symbols={
+            <>
+              β where the star is seen without the hole and θ its image, both from the hole’s direction; α the
+              bend; D<sub>s</sub> the star’s distance and D<sub>ls</sub> the part of it past the point where the
+              line of sight comes closest to the hole.
+            </>
+          }
+        >
+          The stars round Sgr A* are not infinitely far behind it: they are hundreds of AU to parsecs from it,
+          on every side. A star in front of the hole is not bent; one behind it is bent less than the far sky,
+          by the share D<sub>ls</sub>/D<sub>s</sub>. With the weak-field bend this is the far sky’s lens with
+          its angles shrunk by the square root of that share, which is how it is drawn — within a thirtieth of a
+          pixel where the bend is weak, a pixel and a half at worst close in.
+        </Equation>
         <Items>
           <Item title="Spin: none">
             The holes are lensed as non-spinning (Schwarzschild). A spinning hole’s shadow is slightly smaller
@@ -863,9 +893,10 @@ export const physicsSection: AboutSection = {
               Not known › Black holes
             </Xref>
           </Item>
-          <Item title="Only the sky is bent">
-            S2, the stars of BH1 and BH3, the scale rings and any body past the hole are drawn unbent; sources
-            are treated as infinitely far behind it, under 1% wrong where it shows.
+          <Item title="What is bent">
+            The sky, as if infinitely far behind the hole — under 1% wrong where it shows — and the stars of
+            the nuclear star cluster at their own distances. S2, the stars of BH1 and BH3, the scale rings and
+            any body past the hole are drawn unbent.
           </Item>
           <Item title="A camera at rest">
             No aberration or Doppler shift from the camera’s motion, and no blueshift for hovering near the
@@ -880,6 +911,103 @@ export const physicsSection: AboutSection = {
             measured by GRAVITY, as general relativity predicts — is not drawn.
           </Item>
         </Items>
+
+        <Sub section="physics" id="nuclear-cluster">
+          The nuclear star cluster
+        </Sub>
+        <Equation
+          title="Its density"
+          cite="schoedel2018"
+          code="web/src/core/nuclearCluster.ts"
+          math={math(
+            row(
+              mi('ρ'),
+              paren(mi('m')),
+              mo('∝'),
+              sup(paren(frac(mi('m'), sub(mi('r'), mi('b')))), row(mo('−'), mi('γ'))),
+              sup(
+                paren(row(mn('1'), mo('+'), sup(paren(frac(mi('m'), sub(mi('r'), mi('b')))), mi('α')))),
+                row(paren(row(mi('γ'), mo('−'), mi('β'))), mo('/'), mi('α')),
+              ),
+            ),
+          )}
+          symbols={
+            <>
+              m the ellipsoidal radius, √(x² + y² + (z/q)²), z toward the Galactic pole and q = 0.71; r
+              <sub>b</sub> = 3.1 pc, γ = 1.13, β = 3.5, α = 10.
+            </>
+          }
+        >
+          A 3D Nuker law, fitted to the light of the cluster’s unresolved stars; scaled to their million Suns
+          inside 1 pc, it gives back, within their errors, their 180 inside 0.01 pc and 13,000 inside 0.1, and
+          is cut where it holds the
+          cluster’s 25 million, 15.7 pc out <Cite k="schoedel2014" />. Its stars, 3.15 to each solar mass, are
+          sampled from it in shells, each kept if bright enough as seen from the black hole:
+        </Equation>
+        <Equation
+          title="Which are drawn"
+          code="web/src/core/nuclearCluster.ts (sampleNuclearCluster)"
+          math={math(
+            row(
+              sub(mi('M'), mi('V')),
+              mo('+'),
+              mn('5'),
+              sub(fn('log'), mn('10')),
+              paren(frac(mi('r'), t('10 ~pc'))),
+              mo('<'),
+              mo('−'),
+              mn('1'),
+            ),
+          )}
+          symbols={<>M<sub>V</sub> a star’s absolute visual magnitude; r its distance from Sgr A*.</>}
+        />
+        <Equation
+          title="From K to V"
+          cite={['fritz2011', 'pecautMamajek2013']}
+          code="web/src/core/galacticCentreStars.ts"
+          math={math(
+            row(
+              sub(mi('M'), mi('V')),
+              mo('='),
+              mi('K'),
+              mo('−'),
+              sub(mi('A'), mi('K')),
+              mo('−'),
+              mn('5'),
+              sub(fn('log'), mn('10')),
+              paren(frac(sub(mi('R'), mn('0')), t('10 ~pc'))),
+              mo('+'),
+              sub(paren(row(mi('V'), mo('−'), mi('K'))), mn('0')),
+            ),
+          )}
+          symbols={
+            <>
+              K the measured magnitude; A<sub>K</sub> the extinction in K, 2.42 toward Sgr A* and 2.62 over the
+              central parsec; R<sub>0</sub> = 8,275.9 pc; (V − K)<sub>0</sub> the colour of the star’s kind.
+            </>
+          }
+        >
+          How the measured stars get their visible brightness: hot stars take the main-sequence colour of their
+          temperature, −1.00 to −0.38; red giants that of the model’s giants of the same K, about +2.6 at the
+          red clump; IRS 7, +5.0 from a red-supergiant model at its 3,600 K.
+        </Equation>
+        <Equation
+          title="The dust in front"
+          cite="drimmelSpergel2001"
+          code="web/src/core/nuclearCluster.ts (cameraExtinctionV)"
+          math={math(
+            row(
+              sub(mi('A'), mi('V')),
+              mo('='),
+              mn('30'),
+              frac(
+                row(subsup(mo('∫'), up('camera'), up('centre')), mi('n'), mi('d'), mi('s')),
+                row(subsup(mo('∫'), up('Sun'), up('centre')), mi('n'), mi('d'), mi('s')),
+              ),
+            ),
+          )}
+          symbols={<>n the density of the galaxy model’s dust disc.</>}
+        />
 
         <Sub section="physics" id="galaxy">
           The galaxy

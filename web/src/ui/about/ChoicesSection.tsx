@@ -227,6 +227,29 @@ export const choicesSection: AboutSection = {
             Around Sgr A* the orbits of Mercury and Earth are drawn for scale, as circles facing you; nothing
             of the Solar System is there.
           </Item>
+          <Item title="The cluster’s stars dimmed by light">
+            An image of a cluster star that the lens makes fainter is drawn at its star’s brightness times its
+            magnification in light, not shifted in magnitude as a single star’s is.
+            <Why>
+              the picture’s response is linear in magnitude, so a star a hundred times fainter still shows; the
+              lens packs the whole sky’s far-side images into a thin ring at the shadow, a thousand to a pixel,
+              and summed that way they came out a solid white ring. Light spread over an image is conserved,
+              and drawn by light the ring has the sky’s own dim glow.
+            </Why>
+          </Item>
+          <Item title="The cluster’s budget">
+            The model draws the stars brighter than magnitude −1 as seen from Sgr A*: 171,739.
+            <Why>
+              a frame-rate budget. At magnitude 0 there were 363,000, and inside the cluster’s core the picture
+              fell to ten frames a second on an integrated GPU; at −1, 15 to 20 there, 40 to 50 at the black
+              hole.
+            </Why>
+          </Item>
+          <Item title="A layer of its own">
+            The cluster’s model is the Nuclear Cluster Model layer; the measured stars round Sgr A* are always
+            drawn.
+            <Why>as the galaxy’s model is a layer: what is modelled can be turned off to see what is measured.</Why>
+          </Item>
         </Items>
 
         <Sub section="choices" id="galaxy">
