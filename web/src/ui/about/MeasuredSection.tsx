@@ -29,6 +29,7 @@ export const measuredSection: AboutSection = {
     { id: 'alpha-centauri', label: 'Alpha Centauri' },
     { id: 'exoplanets', label: 'Planets of other stars' },
     { id: 'black-holes', label: 'Black holes' },
+    { id: 'galactic-centre', label: 'The Galactic Centre’s stars' },
     { id: 'galaxy', label: 'The Milky Way' },
   ],
   Body: ({ data }) => {
@@ -332,6 +333,51 @@ export const measuredSection: AboutSection = {
           <Item>
             Each black hole, like every star here, is where it is seen: the light from Sgr A* left it 27,000
             years ago.
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="galactic-centre">
+          The Galactic Centre’s stars
+        </Sub>
+        <Items>
+          <Item title="The S-stars">
+            38 stars on their orbits round Sgr A*, from <Strong>Gillessen et al. 2017</Strong>
+            <Cite k="gillessen2017" />, 25 years of astrometry and spectroscopy — S29, S38 and S55 on GRAVITY’s
+            newer elements <Cite k="gravity2024" />. Each is a Kepler ellipse at GRAVITY’s mass and distance;
+            the periods come out within 1.6% of the published ones, or inside their errors. S2 is its own
+            body; S111 is left out (
+            <Xref to="estimated" sub="nuclear-cluster">
+              Not known › The nuclear star cluster
+            </Xref>
+            ).
+          </Item>
+          <Item title="The young stars">
+            70 of the young massive stars of the central parsec — Wolf-Rayet stars, O and B supergiants — where
+            they are seen on the sky, from <Strong>Paumard et al. 2006</Strong>
+            <Cite k="paumard2006" />; 22 of them with a measured depth, in the disc they orbit in. The other 20
+            of their 90 lie in the S-stars’ own arcsecond or are S-stars already on orbits.
+          </Item>
+          <Item title="IRS 7">
+            The red supergiant IRS 7, the brightest star of the central parsec in the infrared, at its maser’s
+            place 5.5″ north of Sgr A* <Cite k="reid2003" />, with its brightness and temperature from Paumard
+            et al. 2014 <Cite k="paumard2014" />.
+          </Item>
+          <Item title="Their light">
+            Each from its measured K magnitude, less the extinction measured toward it, 2.42 and 2.62 magnitudes
+            in K <Cite k="fritz2011" />, at GRAVITY’s distance; their colours from their spectra: S-star
+            temperatures from Habibi et al. 2017 <Cite k="habibi2017" />, those of hot stars from Pecaut &amp;
+            Mamajek 2013 <Cite k="pecautMamajek2013" />.{' '}
+            <Xref to="physics" sub="nuclear-cluster">
+              From K to V
+            </Xref>
+            .
+          </Item>
+          <Item>
+            Around them, the rest of the nuclear star cluster is a model:{' '}
+            <Xref to="estimated" sub="nuclear-cluster">
+              Not known › The nuclear star cluster
+            </Xref>
+            .
           </Item>
         </Items>
 

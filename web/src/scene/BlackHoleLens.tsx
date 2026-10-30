@@ -42,6 +42,10 @@ import { KM_PER_UNIT } from './scale.ts';
  *   ring, the rings inside it, and the black where the ray falls in. Where the lens moves
  *   the sky by less than half a pixel it fades out, and by a tenth, the glow is left as
  *   it is drawn.
+ * - **The stars round Sgr A*** -- the nuclear star cluster's, model and measured
+ *   (NuclearCluster.tsx) -- are moved the same way, by the lens equation for a source at a
+ *   finite distance: a star a parsec behind the hole is bent less than the far sky, one
+ *   in front of it not at all (schwarzschildLens.ts, finiteSourceImage).
  * - **Nothing else.** The bodies near a hole -- S2, the stars of Gaia BH1 and BH3 -- and the
  *   lines drawn over it are drawn where they are, unbent; so is any body seen past it.
  *
@@ -274,7 +278,7 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     const jd = clock.tdbJulianDay;
     const fov = (camera as THREE.PerspectiveCamera).fov;
     const pixelsPerRadian = size.height / (2 * Math.tan((fov * Math.PI) / 360));
-    let best: { id: BodyId; r: number; px: number } | null = null;
+    let best: { id: BodyId; r: number; px: number; km: number } | null = null;
     for (const system of BLACK_HOLE_SYSTEMS) {
       if (!store.isPropagatedBody(system.id)) {
         continue;
@@ -293,7 +297,7 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
       const r = distanceKm / store.body(system.id).radiusEquatorialKm;
       const px = (r > 10 ? farEinsteinAngle(r) : 1) * pixelsPerRadian;
       if (px >= LENS_ACTIVE_PX && (best === null || px > best.px)) {
-        best = { id: system.id, r, px };
+        best = { id: system.id, r, px, km: distanceKm };
         LENS_UNIFORMS.uLensHole.value.copy(scratchHole).normalize();
       }
     }
@@ -309,9 +313,10 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
       hole.current = best.id;
       captured.current = null;
     }
-    const built = tables.current;
+    let built = tables.current;
     if (built === null || Math.abs(Math.log(best.r / built.r)) > REBUILD_SHARE) {
       const made = buildLensTables(best.r);
+      built = made;
       tables.current = made;
       (lensImageTexture.image.data as Float32Array).set(made.images);
       lensImageTexture.needsUpdate = true;
@@ -319,6 +324,9 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
       deflectionTexture.needsUpdate = true;
       LENS_UNIFORMS.uLensImageMap.value.set(made.imageScale, made.imageW, made.images.length / 2);
     }
+    // For the stars at a finite distance from it: the cluster's (lens.ts, lensStarAt).
+    LENS_UNIFORMS.uLensHoleKm.value = best.km;
+    LENS_UNIFORMS.uLensShadow.value = built.shadowAngle;
     LENS_UNIFORMS.uLensOn.value = 1;
     lensState.on = true;
   }, -0.5);

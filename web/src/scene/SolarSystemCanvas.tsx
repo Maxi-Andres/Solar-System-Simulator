@@ -24,6 +24,7 @@ import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
+import { NuclearCluster } from './NuclearCluster.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
@@ -110,6 +111,8 @@ export interface SolarSystemCanvasProps {
   readonly ringLabels: RefObject<(HTMLElement | null)[]>;
   /** The Milky Way model: the Milky Way Model layer, and its names, in GALAXY_LABELS order. */
   readonly showMilkyWay: boolean;
+  /** The Nuclear Cluster Model layer: the sampled stars round Sgr A*. */
+  readonly showNuclearCluster: boolean;
   readonly galaxyLabels: RefObject<(HTMLElement | null)[]>;
   /** The names of the Solar System's orbits laid over Sgr A* for scale (HorizonScale). */
   readonly horizonScaleLabels: RefObject<(HTMLElement | null)[]>;
@@ -143,6 +146,7 @@ export function SolarSystemCanvas({
   showDistanceRings,
   ringLabels,
   showMilkyWay,
+  showNuclearCluster,
   galaxyLabels,
   horizonScaleLabels,
   scaleBar,
@@ -183,6 +187,7 @@ export function SolarSystemCanvas({
     showDistanceRings,
     showStarMap,
     showExoplanetHosts,
+    showNuclearCluster,
   ]);
 
   return (
@@ -259,6 +264,7 @@ export function SolarSystemCanvas({
         labels={ringLabels}
       />
       <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
+      <NuclearCluster catalog={stars} store={store} clock={clock} focus={focus} showModel={showNuclearCluster} />
       {/* After the glow: it draws the glow again, into its cube, with this frame's uniforms. */}
       <BlackHoleLens store={store} clock={clock} focus={focus} />
       <ExoplanetHosts

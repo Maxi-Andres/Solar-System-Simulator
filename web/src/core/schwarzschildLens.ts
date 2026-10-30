@@ -69,6 +69,42 @@
  * parsecs of Sgr A*, 5 to 8 AU of Gaia BH1), and the stars and the galaxy's light are
  * kiloparsecs from Sgr A* and parsecs at least from the other two, so that is under 1% at
  * the very edge of Sgr A*'s reach, where the bend is a pixel, and far less anywhere else.
+ *
+ * ## Except the stars round Sgr A* itself
+ *
+ * The nuclear star cluster (nuclearCluster.ts) is not kiloparsecs behind the hole: its stars
+ * are hundreds of AU to parsecs from it, all round it, while the camera stands AU to parsecs
+ * away -- the two distances can be the same, and some stars are in front. For them the
+ * thin-lens equation with the source at a finite distance is used -- the one microlensing
+ * is worked with, whose Einstein ring for a source at D_s is Paczynski's (1986, ApJ 304, 1):
+ *
+ *     beta = theta - (D_ls / D_s) alpha(theta)
+ *
+ * beta the star's angle from the hole as the camera would see it with no hole, theta its
+ * image's, alpha the bend, D_s the star's distance from the camera and D_ls the stretch of
+ * it past the point where the line of sight comes closest to the hole. Measured along the
+ * line to the star, that point is t = D (h . s) / |s|^2 of the way there (h the unit
+ * direction to the hole, D its distance, s the star's offset), and the factor is
+ * f = D_ls / D_s = 1 - t, held to [0, 1]:
+ *
+ * - **f = 1** for a star far behind the hole, or anywhere behind the camera -- the sky's
+ *   case, the table as it is;
+ * - **f = 0** for a star in front of the hole, t >= 1: its light reaches the camera before
+ *   it gets near the hole, and it is drawn where it is, once;
+ * - a star beside the hole, at its distance d from it: f = d^2 / (d^2 + D^2) -- nearly 1 when
+ *   the camera is close in, nearly 0 (and its bend under a pixel) when the camera is far.
+ *
+ * With the bend's weak-field form alpha = theta_E^2 / theta the equation scales exactly:
+ * a source at f is imaged as the table's source at beta / sqrt(f), its angles shrunk by
+ * sqrt(f) and its magnification the same (finiteSourceImage) -- the Einstein ring of a
+ * source at a finite distance, sqrt(f) times the far sky's. Near the shadow, where the
+ * bend is not weak, the scaling is not exact, and it is used there too. Held against the
+ * thin-lens equation solved with the exact bend (schwarzschildLens.test.ts): within a
+ * thirtieth of a pixel 0.04 pc from the hole, and a pixel and a half at worst for the
+ * cluster as it is -- the camera 5 AU out, a star at S2's pericentre distance, 120 AU,
+ * behind, its far image in the strong field. (The thin lens itself is an approximation
+ * there, a bend taken at one point; at f = 1 none of this applies and the table is exact.)
+ * No image is let inside the shadow.
  */
 
 /** The critical impact parameter, r_s: sqrt(27)/2, the shadow's radius seen from afar. */
@@ -409,6 +445,49 @@ export function tableImage(tables: LensTables, y: number): { theta: number; log1
     theta: Math.max(y, 0) + tables.images[k * 2]! * (1 - f) + tables.images[(k + 1) * 2]! * f,
     log10Mu: tables.images[k * 2 + 1]! * (1 - f) + tables.images[(k + 1) * 2 + 1]! * f,
   };
+}
+
+/**
+ * The lens equation's distance factor for a star at a finite distance, D_ls / D_s, from the
+ * hole's offset from the camera and the star's, in any one unit: 1 - t, where t is how far
+ * along the line of sight to the star it passes closest to the hole, held to [0, 1]. Zero
+ * for a star in front of the hole. See the header.
+ */
+export function sourceDistanceFactor(
+  hole: { readonly x: number; readonly y: number; readonly z: number },
+  star: { readonly x: number; readonly y: number; readonly z: number },
+): number {
+  const along = hole.x * star.x + hole.y * star.y + hole.z * star.z;
+  const squared = star.x * star.x + star.y * star.y + star.z * star.z;
+  return Math.min(1, Math.max(0, 1 - along / Math.max(squared, 1e-300)));
+}
+
+/**
+ * Where a table puts an image of a star at a finite distance: the source at angle y from
+ * the hole (y >= 0), at distance factor f; image 0 on its own side, 1 on the far side. The
+ * weak-field scaling of the header: the table's source at y / sqrt(f) -- carried no farther
+ * than pi, where every bend is already negligible -- its bend times sqrt(f) for the near
+ * image, its angle times sqrt(f) for the far one, which is kept outside the shadow. Its
+ * magnification is the table's. Null where there is no image: the far one of a star in
+ * front of the hole. As the star shaders do it (lens.ts, lensStarAt).
+ */
+export function finiteSourceImage(
+  tables: LensTables,
+  y: number,
+  f: number,
+  image: 0 | 1,
+): { theta: number; log10Mu: number } | null {
+  if (!(f > 1e-6)) {
+    return image === 0 ? { theta: y, log10Mu: 0 } : null;
+  }
+  const root = Math.sqrt(f);
+  const scaled = Math.min(Math.PI, y / root);
+  if (image === 0) {
+    const at = tableImage(tables, scaled);
+    return { theta: y + root * (at.theta - scaled), log10Mu: at.log10Mu };
+  }
+  const at = tableImage(tables, -scaled);
+  return { theta: Math.max(root * at.theta, tables.shadowAngle * (1 + 1e-4)), log10Mu: at.log10Mu };
 }
 
 /**

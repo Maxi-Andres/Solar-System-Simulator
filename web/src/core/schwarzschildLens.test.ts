@@ -10,9 +10,11 @@ import {
   deflectionSeen,
   escapeAngle,
   farEinsteinAngle,
+  finiteSourceImage,
   orbitCubic,
   shadowAngle,
   shadowSphereRadius,
+  sourceDistanceFactor,
   strongFieldDeflection,
   STRONG_FIELD_B,
   sweptAngle,
@@ -221,6 +223,98 @@ describe('the tables', () => {
     const reach = deflectionReach(tables, 1e-4);
     expect(deflectionSeen(reach * 1.01, 1e5)).toBeLessThan(1e-4);
     expect(deflectionSeen(reach * 0.99, 1e5)).toBeGreaterThan(1e-4);
+  });
+});
+
+describe('a star at a finite distance', () => {
+  // The thin-lens equation with the exact bend, solved by bisection: the near image at theta
+  // has theta - f delta(theta) = y, the far one f delta(theta) - theta = y.
+  const exactImage = (r: number, y: number, f: number, image: 0 | 1, from: number, to: number): number => {
+    const g = (theta: number): number =>
+      image === 0 ? theta - f * deflectionSeen(theta, r) - y : f * deflectionSeen(theta, r) - theta - y;
+    let lo = from;
+    let hi = to;
+    const rising = g(hi) > g(lo);
+    for (let k = 0; k < 200; k += 1) {
+      const mid = 0.5 * (lo + hi);
+      if (g(mid) > 0 === rising) hi = mid;
+      else lo = mid;
+    }
+    return 0.5 * (lo + hi);
+  };
+
+  it('is behind, beside, in front of the hole or behind the camera: the factor D_ls / D_s', () => {
+    const hole = { x: 0, y: 0, z: 10 };
+    // Straight behind, d past the hole: d / (D + d).
+    expect(sourceDistanceFactor(hole, { x: 0, y: 0, z: 14 })).toBeCloseTo(4 / 14, 12);
+    // Beside it, at its distance d from it: d^2 / (d^2 + D^2).
+    expect(sourceDistanceFactor(hole, { x: 3, y: 0, z: 10 })).toBeCloseTo(9 / 109, 12);
+    // In front of the hole: its light never passes it.
+    expect(sourceDistanceFactor(hole, { x: 0, y: 0.5, z: 6 })).toBe(0);
+    // Behind the camera, and far behind the hole: the sky's case.
+    expect(sourceDistanceFactor(hole, { x: 0, y: 1, z: -5 })).toBe(1);
+    expect(sourceDistanceFactor(hole, { x: 0, y: 1e3, z: 1e9 })).toBeCloseTo(1, 7);
+  });
+
+  it('is the far sky’s table at f = 1, and left where it is, once, at f = 0', () => {
+    const tables = buildLensTables(59);
+    for (const y of [0.01, 0.2, 1, 2.5]) {
+      expect(finiteSourceImage(tables, y, 1, 0)!.theta).toBeCloseTo(tableImage(tables, y).theta, 9);
+      expect(finiteSourceImage(tables, y, 1, 1)!.theta).toBeCloseTo(tableImage(tables, -y).theta, 9);
+      expect(finiteSourceImage(tables, y, 0, 0)).toEqual({ theta: y, log10Mu: 0 });
+      expect(finiteSourceImage(tables, y, 0, 1)).toBeNull();
+    }
+  });
+
+  it('solves the thin-lens equation where the bend is weak: 0.04 pc from Sgr A*, a star as far behind', () => {
+    const r = 1e5;
+    const tables = buildLensTables(r);
+    for (const f of [0.5, 0.1]) {
+      const ring = Math.sqrt(f) * tables.einsteinAngle;
+      for (const u of [0.1, 0.5, 1, 3]) {
+        const y = u * ring;
+        const near = exactImage(r, y, f, 0, y, y + 4 * ring);
+        const far = exactImage(r, y, f, 1, tables.shadowAngle * 1.01, ring);
+        // To a thirtieth of a pixel at the app's 27 degrees on 1080 -- the bend's next terms,
+        // a percent of it this close in, are what the scaling leaves out.
+        const pixel = ((27 * Math.PI) / 180) / 1080;
+        expect(Math.abs(finiteSourceImage(tables, y, f, 0)!.theta - near) / pixel, `f ${f} u ${u}`).toBeLessThan(0.033);
+        expect(Math.abs(finiteSourceImage(tables, y, f, 1)!.theta - far) / pixel, `f ${f} u ${u}`).toBeLessThan(0.033);
+      }
+    }
+  });
+
+  it('agrees with the thin-lens equation and the exact bend within a pixel and a half, for the cluster as it is', () => {
+    // A camera from 5 AU to a parsec from Sgr A*, a star from S2's pericentre, 120 AU, to a
+    // parsec behind it; every image brighter than ten magnitudes below its star.
+    const rsKm = schwarzschildRadiusKm(SGR_A_MASS_SUN);
+    const auKm = 149_597_870.7;
+    const pixel = ((27 * Math.PI) / 180) / 1080;
+    let worst = 0;
+    for (const cameraKm of [5 * auKm, 50 * auKm, 0.01 * PARSEC_KM, PARSEC_KM]) {
+      const r = cameraKm / rsKm;
+      const tables = buildLensTables(r);
+      for (const starKm of [120 * auKm, 0.01 * PARSEC_KM, PARSEC_KM]) {
+        const f = starKm / (cameraKm + starKm);
+        const ring = Math.sqrt(f) * tables.einsteinAngle;
+        for (const u of [0.05, 0.3, 1, 2, 5]) {
+          const y = Math.min(Math.PI * 0.99, u * ring);
+          const near = finiteSourceImage(tables, y, f, 0)!;
+          const far = finiteSourceImage(tables, y, f, 1)!;
+          if (near.log10Mu > -4) {
+            const from = Math.max(y, tables.shadowAngle * (1 + 1e-9));
+            worst = Math.max(worst, Math.abs(near.theta - exactImage(r, y, f, 0, from, y + 4 * ring + 0.1)) / pixel);
+          }
+          if (far.log10Mu > -4) {
+            worst = Math.max(worst, Math.abs(far.theta - exactImage(r, y, f, 1, tables.shadowAngle * (1 + 1e-9), Math.max(ring, far.theta * 2))) / pixel);
+          }
+          expect(far.theta).toBeGreaterThan(tables.shadowAngle);
+        }
+      }
+    }
+    // Worst with the camera 5 AU out and the star at 120 AU behind: the far image, in the
+    // strong field, 1.46 pixels off. Where f is 1 the two are the same table.
+    expect(worst).toBeLessThan(1.5);
   });
 });
 

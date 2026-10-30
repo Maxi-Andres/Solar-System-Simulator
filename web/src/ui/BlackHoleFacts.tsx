@@ -17,7 +17,9 @@ import {
 } from '../core/blackHoles.ts';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { CRITICAL_IMPACT, shadowAngle } from '../core/schwarzschildLens.ts';
+import { S_STARS } from '../core/galacticCentreStars.ts';
 import { R0_PC } from '../core/milkyWay.ts';
+import { SAMPLE_COUNT } from '../core/nuclearCluster.ts';
 import { PARSEC_KM } from '../scene/scale.ts';
 import { Panel } from './Panel.tsx';
 import { formatStarDistance } from './StarFacts.tsx';
@@ -127,6 +129,8 @@ function HoleFacts({ store, system }: { store: EphemerisStore; system: BlackHole
         <>
           <Row label="Measured from">S2 and three more stars</Row>
           <Row label="Galaxy model's centre">{`${Math.round(SGR_A_DISTANCE_PC - R0_PC)} pc nearer`}</Row>
+          <Row label="S-stars">{`${S_STARS.length} on orbits`}</Row>
+          <Row label="Nuclear cluster">{`Model: ${SAMPLE_COUNT.toLocaleString('en-US')} stars`}</Row>
           <Row label="Source">{SGR_A_REFERENCE}</Row>
           <Divider />
           <Row label="M87*'s horizon">

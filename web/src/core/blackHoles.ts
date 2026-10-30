@@ -322,6 +322,11 @@ export function s2StateAboutSgrA(jd: number): StateVector {
   return skyToScene(skyAxes(SGR_A_TOWARD), skyOrbitState(S2_SKY_ORBIT, jd));
 }
 
+/** Any state on the sky's axes at Sgr A* -- east, north, away -- in the scene frame. */
+export function sgrASkyToScene(state: SkyState): StateVector {
+  return skyToScene(skyAxes(SGR_A_TOWARD), state);
+}
+
 // ---------------------------------------------------------------------------------------
 // Gaia BH1 and BH3
 

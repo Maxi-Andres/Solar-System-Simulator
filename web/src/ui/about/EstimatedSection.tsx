@@ -19,6 +19,7 @@ export const estimatedSection: AboutSection = {
     { id: 'exoplanets', label: 'Planets of other stars' },
     { id: 'stars', label: 'Stars' },
     { id: 'black-holes', label: 'Black holes' },
+    { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
@@ -250,6 +251,69 @@ export const estimatedSection: AboutSection = {
             M87*, six and a half billion Suns, is 55 million light years away, past anywhere the camera can
             go, and is not placed: its horizon, set on the Sun, would reach 128 AU, more than two and a half
             times as far as Pluto ever goes.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="nuclear-cluster">
+          The nuclear star cluster
+        </Sub>
+        <Items>
+          <Item title="A model, not a census">
+            Round Sgr A* tens of millions of stars crowd into a few parsecs. Past the stars measured one by one,
+            they are a model: 171,739 stars sampled from the cluster’s measured shape — density rising as
+            r<sup>−1.13</sup> into the black hole and falling as r<sup>−3.5</sup> past 3.1 pc, a million Suns
+            inside one parsec <Cite k="schoedel2018" />, 25 million in all, flattened to 0.71 along the
+            Galactic plane <Cite k="schoedel2014" /> — each a star of its own brightness and colour, from stellar
+            models <Cite k={['bressan2012', 'kroupa2001']} /> at the ages and metallicity measured for the
+            cluster <Cite k="schoedel2020" />. Its infrared luminosity function climbs 0.28 dex a magnitude
+            through the giants, as the cluster’s does, 0.27 ± 0.02 <Cite k={['schoedel2010', 'gallegoCano2018']} />.
+            No star of it is a particular star; the Nuclear Cluster Model layer turns it off.
+            <Why>
+              nothing counts the cluster’s stars below about the Sun’s mass, and in visible light, behind 30
+              magnitudes of dust, nothing sees them at all.
+            </Why>
+          </Item>
+          <Item title="The brightest, as seen from the black hole">
+            Of the model’s 79 million living stars, only those brighter than magnitude −1 seen from Sgr A* are
+            drawn: red giants out to the edge, dwarfs close in.
+            <Why>
+              millions more are brighter than the picture’s limit from the centre, more than points can be
+              drawn; a budget, set in{' '}
+              <Xref to="choices" sub="black-holes">
+                Choices › Black holes
+              </Xref>
+              . Far from the black hole, among the cluster’s outer stars, the sky is thinner than it would be.
+            </Why>
+          </Item>
+          <Item title="Standing still">
+            The model’s stars and the young stars do not move; the S-stars do, on their orbits.
+            <Why>their orbits are not known — only that they move at about 100 km/s, a hundredth of a parsec a century.</Why>
+          </Item>
+          <Item title="Depth along the line of sight">
+            For 48 of the 70 young stars it is not measured, and is drawn, seeded, from the young stars’ own
+            density, which falls as r<sup>−3</sup>; IRS 7 is drawn in the plane of the sky through Sgr A*.
+            <Why>only positions on the sky are measured; a depth drawn this way gives the cluster its real
+            thickness rather than a flat sheet.</Why>
+          </Item>
+          <Item title="Hot stars’ colours">
+            The Wolf-Rayet stars and supergiants are given the colours of hot main-sequence stars of their
+            class.
+            <Why>
+              their visible light has never been seen, behind 30 magnitudes of dust; hot stars of every kind are
+              nearly alike in V − K. The dustiest Wolf-Rayet stars are brighter in K than that, so likely drawn
+              too bright.
+            </Why>
+          </Item>
+          <Item title="The dust in between">
+            From the Sun the cluster is behind about 30 magnitudes of dust in visible light{' '}
+            <Cite k={['genzel2010', 'fritz2011']} />, and invisible; from inside it there is none. In between,
+            the camera takes the share of that 30 its own line to the centre crosses in the galaxy model’s dust
+            disc <Cite k="drimmelSpergel2001" />. Dust inside the cluster is not drawn.
+            <Why>only the view from here is measured; the dust disc is the model the galaxy is drawn with.</Why>
+          </Item>
+          <Item title="Left out">
+            S111, whose fitted orbit is a hyperbola; the 2% of the cluster’s mass younger than a billion years,
+            beyond the young stars measured; and the cluster’s dark remnants and binaries.
           </Item>
         </Items>
 
