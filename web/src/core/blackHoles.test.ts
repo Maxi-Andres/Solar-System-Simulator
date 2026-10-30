@@ -4,6 +4,8 @@ import { directionToGalactic, GALACTIC_BASIS } from '../scene/galactic.ts';
 import { colorIndexToTemperature } from '../scene/blackbody.ts';
 import {
   BLACK_HOLE_SYSTEMS,
+  CYG_X1,
+  CYG_X1_CONJUNCTION_JD,
   blackHoleState,
   blackHoleSystemOf,
   colorIndexForTemperature,
@@ -186,7 +188,9 @@ describe('Gaia BH1 and BH3', () => {
       const starOrbitAu = (a * binary.blackHoleMassSun) / totalMassSun(binary) / AU_KM;
       expect(Math.abs(starOrbitAu / binary.publishedStarOrbitAu - 1)).toBeLessThan(0.01);
       // And on the sky, at the parallax: a0 = a1 * parallax.
-      expect(Math.abs((starOrbitAu * binary.barycentre.parallaxMas) / binary.publishedStarOrbitMas - 1)).toBeLessThan(0.01);
+      if (binary.publishedStarOrbitMas !== null) {
+        expect(Math.abs((starOrbitAu * binary.barycentre.parallaxMas) / binary.publishedStarOrbitMas - 1)).toBeLessThan(0.01);
+      }
       expect(keplerPeriodDays(a, totalMassSun(binary))).toBeCloseTo(binary.periodDays, 6);
     }
     // BH1's relative orbit: their 1.40 AU.
@@ -251,16 +255,60 @@ describe('Gaia BH1 and BH3', () => {
       const eps = (84381.448 / 3600) * (Math.PI / 180);
       const eq = { x: Math.cos(dec) * Math.cos(ra), y: Math.cos(dec) * Math.sin(ra), z: Math.sin(dec) };
       const scene = { x: eq.x, y: eq.y * Math.cos(eps) + eq.z * Math.sin(eps), z: -eq.y * Math.sin(eps) + eq.z * Math.cos(eps) };
-      const n = Math.hypot(p.x, p.y, p.z);
-      const angleMas = Math.acos(Math.min(1, (p.x * scene.x + p.y * scene.y + p.z * scene.z) / n)) / MAS;
-      // The black hole's own wobble about the barycentre: 0.24 mas for BH1, 2.3 for BH3.
-      expect(angleMas).toBeLessThan(3);
+      // The angle from the cross product: an arccosine of a cosine this near 1 has no digits
+      // left below a few mas.
+      const cross = Math.hypot(
+        p.y * scene.z - p.z * scene.y,
+        p.z * scene.x - p.x * scene.z,
+        p.x * scene.y - p.y * scene.x,
+      );
+      const angleMas = Math.atan2(cross, p.x * scene.x + p.y * scene.y + p.z * scene.z) / MAS;
+      // The black hole's own wobble about the barycentre: 0.24 mas for BH1, 2.3 for BH3,
+      // 0.07 for Cygnus X-1.
+      expect(angleMas).toBeLessThan(binary === CYG_X1 ? 0.1 : 3);
     }
   });
 });
 
+describe('Cygnus X-1', () => {
+  it('swings its supergiant at K = 75 km/s, as Miller-Jones et al. fit (75.21)', () => {
+    let max = -Infinity;
+    let min = Infinity;
+    for (let k = 0; k < 2000; k += 1) {
+      const rv = starRadialVelocityKmS(CYG_X1, CYG_X1.periastronJd + (k / 2000) * CYG_X1.periodDays);
+      max = Math.max(max, rv);
+      min = Math.min(min, rv);
+    }
+    expect(Math.abs((max - min) / 2 - 75.21)).toBeLessThan(1);
+    // About the system's own -7.0 km/s (Gies et al. 2003).
+    expect((max + min) / 2).toBeCloseTo(-7.0 + 75.2 * CYG_X1.eccentricity * Math.cos((CYG_X1.argPeriastronDeg * Math.PI) / 180), 0);
+  });
+
+  it('has its star in front of the hole at the conjunction Gies et al. timed', () => {
+    const rel = starStateAboutBlackHole(CYG_X1, CYG_X1_CONJUNCTION_JD);
+    const toward = blackHoleState(CYG_X1)(CYG_X1_CONJUNCTION_JD).position;
+    const n = Math.hypot(toward.x, toward.y, toward.z);
+    // Its offset from the hole along the line of sight: toward us, all of the projected separation's worth.
+    const along = (rel.position.x * toward.x + rel.position.y * toward.y + rel.position.z * toward.z) / n;
+    const r = Math.hypot(rel.position.x, rel.position.y, rel.position.z);
+    expect(along / r).toBeCloseTo(-Math.sin((27.51 * Math.PI) / 180), 2);
+    // Periastron a tenth of a period later: Miller-Jones et al. put it at phase 0.109 of
+    // another ephemeris.
+    const phase = (CYG_X1.periastronJd - CYG_X1_CONJUNCTION_JD) / CYG_X1.periodDays;
+    expect(phase).toBeGreaterThan(0.09);
+    expect(phase).toBeLessThan(0.11);
+  });
+
+  it('is 2.22 kpc away, its star 0.0838 AU from the barycentre, its horizon 63 km', () => {
+    const p = blackHoleState(CYG_X1)(CYG_X1.barycentre.epochJd).position;
+    expect(Math.hypot(p.x, p.y, p.z) / PARSEC_KM).toBeCloseTo(2220, -1);
+    expect(schwarzschildRadiusKm(CYG_X1.blackHoleMassSun)).toBeCloseTo(62.6, 1);
+    expect(relativeSkyOrbit(CYG_X1).semiMajorAxisKm / AU_KM).toBeCloseTo(0.244, 3);
+  });
+});
+
 describe('the bodies', () => {
-  it('are six, the stars about their black holes, found by id', () => {
+  it('are eight, the stars about their black holes, found by id', () => {
     const store = new EphemerisStore({
       manifest: { bodies: [], tables: {} },
       bodies: [],
@@ -270,7 +318,7 @@ describe('the bodies', () => {
     } as unknown as ConstructorParameters<typeof EphemerisStore>[0]);
     ensureBlackHoles(store);
     ensureBlackHoles(store);
-    const ids = ['sgr-a-star', 's2', 'gaia-bh1', 'gaia-bh1-star', 'gaia-bh3', 'gaia-bh3-star'];
+    const ids = ['sgr-a-star', 's2', 'gaia-bh1', 'gaia-bh1-star', 'gaia-bh3', 'gaia-bh3-star', 'cyg-x1', 'cyg-x1-star'];
     for (const id of ids) {
       expect(store.isPropagatedBody(id)).toBe(true);
     }
@@ -279,7 +327,7 @@ describe('the bodies', () => {
     expect(store.body(SGR_A_ID).radiusEquatorialKm).toBeCloseTo(schwarzschildRadiusKm(SGR_A_MASS_SUN), 3);
     expect(blackHoleSystemOf('gaia-bh3-star')?.id).toBe('gaia-bh3');
     expect(blackHoleSystemOf('earth')).toBeNull();
-    expect(BLACK_HOLE_SYSTEMS).toHaveLength(3);
+    expect(BLACK_HOLE_SYSTEMS).toHaveLength(4);
   });
 
   it("colour their stars by the scene's own relation, run backwards", () => {

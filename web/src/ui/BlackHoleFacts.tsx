@@ -113,15 +113,22 @@ function HoleFacts({ store, system }: { store: EphemerisStore; system: BlackHole
           <Row label="EHT ring (2022)">{`${EHT_RING_MICROARCSEC} ± ${EHT_RING_ERROR_MICROARCSEC} µas`}</Row>
         </>
       )}
-      <Row label="Spin">Unmeasured: drawn as none</Row>
+      {binary?.spin == null ? (
+        <Row label="Spin">Unmeasured: drawn as none</Row>
+      ) : (
+        <>
+          <Row label="Spin">{binary.spin.text}</Row>
+          <Row label="">{`${binary.spin.reference}; drawn as none`}</Row>
+        </>
+      )}
       <Row label="Lensing">Drawn: Schwarzschild</Row>
-      <Row label="Disc">None in visible light</Row>
+      <Row label="Disc">{binary?.accreting === true ? 'X-rays only: not drawn' : 'None in visible light'}</Row>
       {binary !== null && (
         <>
           <Divider />
           <Row label="Star">{store.body(system.companion).name}</Row>
           <OrbitRows orbit={relativeSkyOrbit(binary)} />
-          <Row label="Gaia DR3">{binary.gaiaDr3}</Row>
+          {binary.gaiaDr3 !== null && <Row label="Gaia DR3">{binary.gaiaDr3}</Row>}
           <Row label="Source">{binary.reference}</Row>
         </>
       )}

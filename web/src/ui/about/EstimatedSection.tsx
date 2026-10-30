@@ -237,8 +237,8 @@ export const estimatedSection: AboutSection = {
         <Items>
           <Item title="Spin unknown: none">
             The horizon drawn is the Schwarzschild radius, 2GM/c², the horizon of a black hole that does not
-            spin: none of the three has a measured spin, and a spinning one’s horizon is smaller, down to
-            half.
+            spin: of the four only Cygnus X-1 has a measured spin, and a spinning one’s horizon is smaller,
+            down to half.
             <Why>
               with no spin measured, not spinning is the convention that claims least — and it is the largest
               a horizon of that mass can be.{' '}
@@ -252,6 +252,17 @@ export const estimatedSection: AboutSection = {
             M87*, six and a half billion Suns, is 55 million light years away, past anywhere the camera can
             go, and is not placed: its horizon, set on the Sun, would reach 128 AU, more than two and a half
             times as far as Pluto ever goes.
+          </Item>
+        </Items>
+
+        <Items>
+          <Item title="Cygnus X-1">
+            Its spin, measured above 0.998 of the maximum, is not drawn: it is lensed and sized as the others
+            are, though its horizon is in truth about half as wide and its shadow a little smaller and
+            flattened on one side. Its orbit’s orientation on the sky — the node — is not measured by the
+            orbit: the paper takes the radio jet’s direction, assuming the jet leaves along the orbit’s axis.
+            Its supergiant fills 96% of the room the hole’s pull leaves it and is drawn out toward the hole;
+            it is drawn round.
           </Item>
         </Items>
 

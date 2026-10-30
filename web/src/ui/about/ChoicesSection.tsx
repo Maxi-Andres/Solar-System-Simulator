@@ -213,8 +213,9 @@ export const choicesSection: AboutSection = {
             No accretion disc is drawn round any of them.
             <Why>
               in visible light there is none to see: Sgr A* is quiescent, and hidden behind about 30 magnitudes
-              of dust <Cite k="genzel2010" />; Gaia BH1 and BH3 are dormant. The bright discs of films are of
-              holes that are feeding.
+              of dust <Cite k="genzel2010" />; Gaia BH1 and BH3 are dormant. Cygnus X-1 is feeding, but its
+              disc shines in X-rays: in visible light the system is its supergiant. None of the four shows the
+              glowing disc of films.
             </Why>
           </Item>
           <Item title="Star images capped">

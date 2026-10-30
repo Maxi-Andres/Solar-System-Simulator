@@ -889,7 +889,8 @@ export const physicsSection: AboutSection = {
         <Items>
           <Item title="Spin: none">
             The holes are lensed as non-spinning (Schwarzschild). A spinning hole’s shadow is slightly smaller
-            and flattened on one side, and the EHT’s models for Sgr A* disfavour no spin.{' '}
+            and flattened on one side; the EHT’s models for Sgr A* disfavour no spin, and Cygnus X-1’s is
+            measured near the maximum.{' '}
             <Xref to="estimated" sub="black-holes">
               Not known › Black holes
             </Xref>

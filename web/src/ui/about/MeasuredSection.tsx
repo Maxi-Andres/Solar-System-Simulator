@@ -297,8 +297,9 @@ export const measuredSection: AboutSection = {
         <Items>
           <Item>
             The black holes are spheres of their event horizons at true size: Sgr A*’s 12.7 million km in
-            radius, a fifth of the way out to Mercury’s orbit; Gaia BH1’s 28 km and Gaia BH3’s 97 km, smaller
-            than a city and below a pixel from anywhere farther than a few thousand kilometres.{' '}
+            radius, a fifth of the way out to Mercury’s orbit; Gaia BH1’s 28 km, Gaia BH3’s 97 km and Cygnus
+            X-1’s 63 km, smaller than a city and below a pixel from anywhere farther than a few thousand
+            kilometres.{' '}
             <Xref to="physics" sub="black-holes">
               The horizon’s equation, and what is not drawn
             </Xref>
@@ -325,6 +326,22 @@ export const measuredSection: AboutSection = {
             separations follow from Kepler’s law and the masses, within 1% of the papers’.{' '}
             <Xref to="physics" sub="third-law">
               Kepler’s third law
+            </Xref>
+            .
+          </Item>
+          <Item title="Cygnus X-1">
+            <Strong>Cygnus X-1</Strong>, the first black hole known, and its supergiant HDE 226868 from{' '}
+            <Strong>Miller-Jones et al. 2021</Strong>
+            <Cite k="millerJones2021" />: 21.2 Suns, 2.22 kpc away by its radio parallax, the orbit’s size,
+            shape and tilt from the star’s light and velocities, and its turning sense on the sky from the
+            radio. The period from <Strong>Brocksopp et al. 1999</Strong>
+            <Cite k="brocksopp1999" />, and the time the star passes in front of the hole and the system’s
+            own velocity from <Strong>Gies et al. 2003</Strong>
+            <Cite k="gies2003" />. Its spin is measured, near the maximum, from its disc’s X-rays (
+            <Strong>Zhao et al. 2021</Strong>
+            <Cite k="zhao2021" />); it is not drawn.{' '}
+            <Xref to="estimated" sub="black-holes">
+              What is assumed
             </Xref>
             .
           </Item>

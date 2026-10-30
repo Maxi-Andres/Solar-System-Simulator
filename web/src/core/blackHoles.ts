@@ -11,18 +11,19 @@ import type { StateVector, Vec3 } from './vec3.ts';
 
 /**
  * Black holes to scale (D5): Sagittarius A* at the centre of the Galaxy, with the star S2 on
- * its measured orbit about it; and the two nearest black holes known, Gaia BH1 and Gaia BH3,
- * each with the star that gave it away on the orbit measured for the pair. Each is a body of
- * its event horizon's real size -- 12.7 million km for Sgr A*, 28 and 97 km for the other
- * two -- at its real place, drawn as what it looks like: its shadow, and the sky bent
- * round it.
+ * its measured orbit about it; the two nearest black holes known, Gaia BH1 and Gaia BH3, each
+ * with the star that gave it away on the orbit measured for the pair; and (D6b) Cygnus X-1,
+ * the first black hole known, feeding on the wind of its supergiant. Each is a body of its
+ * event horizon's real size -- 12.7 million km for Sgr A*, 28, 97 and 63 km for the others --
+ * at its real place, drawn as what it looks like: its shadow, and the sky bent round it.
  *
  * ## The horizon, the shadow and the lens
  *
  * The body's radius is the **Schwarzschild radius, r_s = 2GM/c^2**: the horizon of a black
- * hole that does not spin. None of the three has a measured spin, so not spinning is a
- * convention, and it is the largest a horizon of that mass can be -- a spinning one is
- * smaller, down to half at the maximum spin. It sets how close the camera may come. What
+ * hole that does not spin. Of the four only Cygnus X-1 has a spin measured -- near the
+ * maximum, by fitting its disc's X-rays (below) -- so not spinning is a convention for three
+ * and a simplification for the fourth, and it is the largest a horizon of that mass can be:
+ * a spinning one is smaller, down to half at the maximum spin. It sets how close the camera may come. What
  * one would *see* is larger: light that passes within sqrt(27)/2 = 2.6 r_s of the centre
  * falls in, and the dark **shadow** is that, not the horizon -- so the black sphere drawn
  * is scaled to hide exactly the shadow from where the camera is (schwarzschildLens.ts,
@@ -98,6 +99,38 @@ import type { StateVector, Vec3 } from './vec3.ts';
  * from Kepler's law, with the period and the two masses, so the orbit drawn and the motion
  * along it agree: 1.396 AU for BH1 against their 1.40, and BH3's star 16.18 AU from the
  * barycentre against their 16.17 +- 0.27.
+ *
+ * ## Cygnus X-1
+ *
+ * Found in X-rays in 1964, and the first black hole shown to be one: the supergiant HDE
+ * 226868's orbit needs an unseen companion too heavy for a neutron star. Unlike the two above
+ * it is feeding: the star's wind falls onto a disc about the hole that shines in X-rays, and
+ * a radio jet leaves it.
+ *
+ * - **The system:** Miller-Jones et al. 2021, Science 371, 1046 (arXiv 2102.09091), Table 1,
+ *   their fit of the optical light curve and radial velocities: black hole 21.2 +- 2.2 Msun,
+ *   the O9.7 supergiant 40.6 (+7.7 -7.1) Msun, 22.3 Rsun and 31,138 K, e = 0.0189, the star's
+ *   omega = 306.6 degrees, i = 27.51 degrees; the star's orbit about the barycentre 0.0838 AU.
+ * - **On the sky:** the same paper's VLBA astrometry (Table S3): the reference position
+ *   19h58m21.6717793s +35d12'05.705435" at MJD 56198.0, proper motion (-3.804, -6.312) mas/yr,
+ *   and the orbit turning clockwise on the sky -- so the inclination drawn is 180 - 27.51 =
+ *   152.49 degrees, which their astrometric fit gives too (152.9 +- 0.7). Its node, 64.1 +- 1.0
+ *   degrees, is **not measured by the orbit**: they put the jet's direction in as a prior,
+ *   assuming the jet leaves along the orbit's axis, and the fit returns it. Distance 2.22
+ *   (+0.18 -0.17) kpc, their parallax read with a prior on how stars are spread.
+ * - **When along it:** the period, 5.599829 d, from Brocksopp et al. 1999 (MNRAS 309, 1063;
+ *   26 years of radial velocities), and the star's inferior conjunction, in front of the hole,
+ *   at HJD 2,451,730.449 from Gies et al. 2003 (ApJ 583, 424), whose fit also gives the
+ *   system's radial velocity, -7.0 +- 0.5 km/s. There the star is nearest us: omega + nu =
+ *   270 degrees, which puts periastron a tenth of a period later (periastronFromConjunction).
+ * - **Spin:** a* > 0.9985 (3 sigma), by fitting its disc's X-ray continuum with the disc in the
+ *   orbit's plane (Zhao et al. 2021, ApJ 908, 117; arXiv 2102.09093). Not drawn: the hole is a
+ *   Schwarzschild one like the others. A hole spinning that fast has a horizon about half as
+ *   wide, and a shadow a little smaller and flattened on one side.
+ * - **The disc and the jet** are not drawn: the disc is X-rays, the jet radio. In visible light
+ *   the system is the supergiant.
+ * - **The star** is drawn a sphere; it fills 96% of its Roche lobe (their f1 = 0.960), so it is
+ *   in truth drawn out a little toward the hole.
  *
  * ## Where they are, and when
  *
@@ -331,14 +364,15 @@ export function sgrASkyToScene(state: SkyState): StateVector {
 // Gaia BH1 and BH3
 
 export interface DarkBinary {
-  readonly key: 'gaia-bh1' | 'gaia-bh3';
+  readonly key: 'gaia-bh1' | 'gaia-bh3' | 'cyg-x1';
   /** The black hole's body id and name. */
   readonly id: BodyId;
   readonly name: string;
   /** The star's. */
   readonly starId: BodyId;
   readonly starName: string;
-  readonly gaiaDr3: string;
+  /** The star's Gaia DR3 source_id, where the paper gives it. */
+  readonly gaiaDr3: string | null;
   /** The system's barycentre, at its epoch. */
   readonly barycentre: Astrometry & { readonly epochJd: number };
   readonly periodDays: number;
@@ -352,10 +386,14 @@ export interface DarkBinary {
   readonly starMassSun: number;
   readonly starRadiusSun: number;
   readonly starTemperatureK: number;
-  /** What the paper gives for the star's orbit about the barycentre: AU, and mas. */
+  /** What the paper gives for the star's orbit about the barycentre: AU, and mas where it gives it. */
   readonly publishedStarOrbitAu: number;
-  readonly publishedStarOrbitMas: number;
+  readonly publishedStarOrbitMas: number | null;
   readonly reference: string;
+  /** The spin, where it is measured, and whose. */
+  readonly spin: { readonly text: string; readonly reference: string } | null;
+  /** Whether it is feeding: a disc and a jet, neither drawn. */
+  readonly accreting: boolean;
 }
 
 /** El-Badry et al. 2023 (MNRAS 518, 1057) Table 1: the joint astrometric and RV fit. */
@@ -390,6 +428,8 @@ export const GAIA_BH1: DarkBinary = {
   publishedStarOrbitAu: (1.4 * 9.62) / (9.62 + 0.93),
   publishedStarOrbitMas: 2.67,
   reference: 'El-Badry et al. 2023, MNRAS 518, 1057',
+  spin: null,
+  accreting: false,
 };
 
 /** Gaia Collaboration, Panuzzo et al. 2024 (A&A 686, L2) Tables 2 and 3: the combined solution. */
@@ -422,9 +462,72 @@ export const GAIA_BH3: DarkBinary = {
   publishedStarOrbitAu: 16.17,
   publishedStarOrbitMas: 27.39,
   reference: 'Gaia Collaboration, Panuzzo et al. 2024, A&A 686, L2',
+  spin: null,
+  accreting: false,
 };
 
-export const DARK_BINARIES: readonly DarkBinary[] = [GAIA_BH1, GAIA_BH3];
+/**
+ * The time of periastron from a time of conjunction: when the star is at true anomaly
+ * `trueAnomalyDeg`, Kepler's equation run backwards -- E from nu, M from E.
+ */
+export function periastronFromConjunction(
+  conjunctionJd: number,
+  trueAnomalyDeg: number,
+  eccentricity: number,
+  periodDays: number,
+): number {
+  const nu = trueAnomalyDeg * DEG;
+  const E = 2 * Math.atan2(Math.sqrt(1 - eccentricity) * Math.sin(nu / 2), Math.sqrt(1 + eccentricity) * Math.cos(nu / 2));
+  const M = E - eccentricity * Math.sin(E);
+  return conjunctionJd - (M / (2 * Math.PI)) * periodDays;
+}
+
+/** Cygnus X-1's eccentricity and its star's argument of periastron (Miller-Jones et al. 2021). */
+const CYG_X1_E = 0.0189;
+const CYG_X1_OMEGA_DEG = 306.6;
+/** The star's inferior conjunction, HJD (Gies et al. 2003), and the period (Brocksopp et al. 1999). */
+export const CYG_X1_CONJUNCTION_JD = 2451730.449;
+const CYG_X1_PERIOD_DAYS = 5.599829;
+
+/** Miller-Jones et al. 2021 (Science 371, 1046): Table 1 and Table S3; see the header. */
+export const CYG_X1: DarkBinary = {
+  key: 'cyg-x1',
+  id: 'cyg-x1',
+  name: 'Cygnus X-1',
+  starId: 'cyg-x1-star',
+  starName: 'HDE 226868',
+  gaiaDr3: null,
+  barycentre: {
+    raDeg: (19 + 58 / 60 + 21.6717793 / 3600) * 15,
+    decDeg: 35 + 12 / 60 + 5.705435 / 3600,
+    // Their 2.22 kpc, not 1 / their 0.458 mas: the distance is read with a prior.
+    parallaxMas: 1 / 2.22,
+    pmRaMasPerYear: -3.804,
+    pmDecMasPerYear: -6.312,
+    radialVelocityKmS: -7.0,
+    // MJD 56198.0.
+    epochJd: 2456198.5,
+  },
+  periodDays: CYG_X1_PERIOD_DAYS,
+  eccentricity: CYG_X1_E,
+  // Clockwise on the sky, as the VLBA saw it.
+  inclinationDeg: 180 - 27.51,
+  nodeDeg: 64.1,
+  argPeriastronDeg: CYG_X1_OMEGA_DEG,
+  // Nearest us, in front of the hole, at omega + nu = 270 degrees.
+  periastronJd: periastronFromConjunction(CYG_X1_CONJUNCTION_JD, 270 - CYG_X1_OMEGA_DEG, CYG_X1_E, CYG_X1_PERIOD_DAYS),
+  blackHoleMassSun: 21.2,
+  starMassSun: 40.6,
+  starRadiusSun: 22.3,
+  starTemperatureK: 31_138,
+  publishedStarOrbitAu: 0.0838,
+  publishedStarOrbitMas: null,
+  reference: 'Miller-Jones et al. 2021, Science 371, 1046',
+  spin: { text: 'a* > 0.9985 (disc X-rays)', reference: 'Zhao et al. 2021, ApJ 908, 117' },
+  accreting: true,
+};
+
+export const DARK_BINARIES: readonly DarkBinary[] = [GAIA_BH1, GAIA_BH3, CYG_X1];
 
 /** A binary's total mass, solar. */
 export function totalMassSun(binary: DarkBinary): number {
