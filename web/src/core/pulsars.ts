@@ -1,6 +1,6 @@
 import type { BodyDefinition, BodyId, PulsarCatalog } from '@sss/tools/types';
 
-import { blackbodyChromaticity } from '../scene/blackbody.ts';
+import { blackbodyChromaticity, surfaceLuminanceRelativeToSun } from '../scene/blackbody.ts';
 import type { BeltFetchers } from './belt.ts';
 import type { Searchable } from './beltNames.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
@@ -39,7 +39,9 @@ import type { StateVector } from './vec3.ts';
  * million-kelvin blackbody -- which is the colour of any blackbody past a hundred thousand
  * or so, the Rayleigh-Jeans tail's: a pale blue-violet white. Not how bright: at a million
  * kelvin a sphere of twelve kilometres' radius gives about a millionth of the Sun's visible
- * light, and the sphere is drawn at its colour at full brightness, as the stars' discs are.
+ * light in all -- but each square metre of it 3,500 times what the Sun's gives. The sphere is
+ * drawn at its colour at full brightness, as the stars' discs are, and close by it glares as
+ * the Sun does by that surface brightness (NEUTRON_STAR_SURFACE_RATIO, solarGlare.ts).
  *
  * ## Spin
  *
@@ -105,6 +107,16 @@ export const NOMINAL_MASS_SUN = 1.4;
 
 /** The temperature whose colour every neutron star is drawn in (see the header). */
 export const NEUTRON_STAR_COLOR_K = 1e6;
+
+/**
+ * Its surface brightness in visible light against the Sun's at that temperature: about
+ * 3,500 times (blackbody.ts surfaceLuminanceRelativeToSun). What its glare is scaled by
+ * (solarGlare.ts), as every star's is by its own -- so close by, twelve kilometres of it
+ * outshine everything. A convention as the colour is: the temperature is measured for few,
+ * and the visible light of so hot a surface goes as the temperature itself (Rayleigh-Jeans),
+ * so an older, cooler one at 300,000 K would glare a third as much.
+ */
+export const NEUTRON_STAR_SURFACE_RATIO = surfaceLuminanceRelativeToSun(NEUTRON_STAR_COLOR_K);
 
 /** The Sun's GM, km^3/s^2 (IAU 2015 B3 nominal). */
 const GM_SUN = 1.3271244e11;

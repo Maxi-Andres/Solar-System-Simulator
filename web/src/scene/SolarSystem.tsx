@@ -51,7 +51,8 @@ import {
   SUN_OVEREXPOSURE,
 } from './solarGlare.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
-import { starColor } from './blackbody.ts';
+import { blackbodyChromaticity, starColor } from './blackbody.ts';
+import { NEUTRON_STAR_COLOR_K, NEUTRON_STAR_SURFACE_RATIO } from '../core/pulsars.ts';
 import { poleDirection } from './orientation.ts';
 import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
 import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeModels.ts';
@@ -736,14 +737,17 @@ export function SolarSystem({
       // The Sun's, scaled by its drawn disc (solarGlare.ts), and every other star's that has
       // a disc -- a measured radius -- by the same equation and its own surface brightness.
       // A star with no radius is a point drawn by the star renderer, wings and all.
+      // A neutron star too (pulsars.ts): twelve kilometres, at a million kelvin.
       const glareStar =
-        definition.kind === 'star' && (definition.id === 'sun' || definition.radiusPublished !== false);
+        definition.kind === 'neutron-star' ||
+        (definition.kind === 'star' && (definition.id === 'sun' || definition.radiusPublished !== false));
       if (glareStar) {
         // The star's own colour, from its colour index through the same Planck and CIE
         // path the stars use: scattered starlight is still starlight.
-        const [red, green, blue] = starColor(
-          definition.id === 'sun' ? SUN_COLOR_INDEX : starDiscColorIndex(definition.id),
-        );
+        const [red, green, blue] =
+          definition.kind === 'neutron-star'
+            ? blackbodyChromaticity(NEUTRON_STAR_COLOR_K)
+            : starColor(definition.id === 'sun' ? SUN_COLOR_INDEX : starDiscColorIndex(definition.id));
         glare = new THREE.Mesh(
           new THREE.PlaneGeometry(1, 1),
           new THREE.ShaderMaterial({
@@ -1162,7 +1166,12 @@ export function SolarSystem({
         // Everything the veil does follows from one distance: how bright it is, how far
         // it reaches, and where the disc masks it. See solarGlare.ts.
         // Another star's by its surface brightness against the Sun's (its disc's exposure).
-        const surfaceRatio = handle.definition.id === 'sun' ? 1 : starDiscExposure(handle.definition.id);
+        const surfaceRatio =
+          handle.definition.id === 'sun'
+            ? 1
+            : handle.definition.kind === 'neutron-star'
+              ? NEUTRON_STAR_SURFACE_RATIO
+              : starDiscExposure(handle.definition.id);
         const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm, surfaceRatio);
         // Not while the lens draws the star (BlackHoleLens.tsx): its light comes round the hole.
         handle.glare.visible = radiusDeg > 0 && !lensState.drawnByLens.has(handle.definition.id);

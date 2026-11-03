@@ -367,7 +367,9 @@ export const estimatedSection: AboutSection = {
           <Item title="Colour">
             Drawn in the colour of a million-kelvin blackbody, which is the colour of any past about a hundred
             thousand: a young neutron star’s surface and an old pulsar’s polar caps are that hot. Its surface
-            temperature is measured for few.
+            temperature is measured for few. Its glare, close by, takes that temperature’s surface
+            brightness, 3,500 times the Sun’s in visible light; a cooler one, at 300,000 K, would glare a third
+            as much.
           </Item>
         </Items>
 
