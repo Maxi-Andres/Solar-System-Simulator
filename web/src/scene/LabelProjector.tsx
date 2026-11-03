@@ -177,6 +177,14 @@ export function labelRank(kind: string, parent: BodyId | null): number {
   return parent === null && kind !== 'asteroid' && kind !== 'comet' ? 0 : 1;
 }
 
+/**
+ * Kinds of body that are places out in the galaxy, not of the Solar System: a pulsar gone to,
+ * a globular cluster, a supernova remnant. Their names never fold into the Solar System's --
+ * that would hide a remnant's name, its only way to be clicked, whenever the Sun's planets
+ * are small on screen.
+ */
+const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant']);
+
 export function LabelProjector({
   store,
   clock,
@@ -224,7 +232,7 @@ export function LabelProjector({
         if (isCatalogueStar(body)) {
           entry.host = body.id;
         }
-      } else if (!isCatalogueStar(body) && blackHoleSystemOf(body.id) === null) {
+      } else if (!isCatalogueStar(body) && blackHoleSystemOf(body.id) === null && !OUT_IN_THE_GALAXY.has(body.kind)) {
         solar.add(body.id);
       }
     }

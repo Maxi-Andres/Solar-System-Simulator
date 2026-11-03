@@ -12,6 +12,7 @@ import type { SimClock } from '../core/time.ts';
 import { KM_PER_UNIT } from './scale.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
+import { setMarkerPointer } from './markerPointer.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -334,7 +335,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
         return;
       }
       const i = down === null ? pick(event) : null;
-      element.style.cursor = i === null ? '' : 'pointer';
+      setMarkerPointer(element, 'exoplanet-hosts', i !== null);
       if (i === null) {
         tip.style.display = 'none';
         return;
@@ -354,7 +355,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     };
     const onLeave = (): void => {
       tip.style.display = 'none';
-      element.style.cursor = '';
+      setMarkerPointer(element, 'exoplanet-hosts', false);
     };
     element.addEventListener('pointerdown', onDown);
     element.addEventListener('pointerup', onUp);
@@ -365,7 +366,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
       element.removeEventListener('pointerup', onUp);
       element.removeEventListener('pointermove', onMove);
       element.removeEventListener('pointerleave', onLeave);
-      element.style.cursor = '';
+      setMarkerPointer(element, 'exoplanet-hosts', false);
       tip.remove();
     };
   }, [markers, archive, gl, camera]);

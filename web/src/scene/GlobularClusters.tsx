@@ -25,6 +25,7 @@ import { clusterMaterial, clusterUniforms, sceneToGalacticPc } from './NuclearCl
 import { KM_PER_UNIT } from './scale.ts';
 import { magnitudeToPeakCoefficients } from './starRendering.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
+import { setMarkerPointer } from './markerPointer.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -356,7 +357,8 @@ export function GlobularClusters({ source, catalog, store, clock, focus, visible
       }
     };
     const pick = (event: PointerEvent): number | null => {
-      if (frame.current.fade < 0.2) {
+      // Any mark drawn can be picked: a faint one too.
+      if (frame.current.fade < 0.05) {
         return null;
       }
       project();
@@ -366,13 +368,7 @@ export function GlobularClusters({ source, catalog, store, clock, focus, visible
     let down: { x: number; y: number } | null = null;
     let waiting = false;
     let lastMove: PointerEvent | null = null;
-    let pointing = false;
-    const setPointing = (on: boolean): void => {
-      if (on !== pointing) {
-        element.style.cursor = on ? 'pointer' : '';
-        pointing = on;
-      }
-    };
+    const setPointing = (on: boolean): void => setMarkerPointer(element, 'globular-clusters', on);
     const onDown = (event: PointerEvent): void => {
       down = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
     };

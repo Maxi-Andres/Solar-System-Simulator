@@ -12,6 +12,7 @@ import type { SimClock } from '../core/time.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { KM_PER_UNIT } from './scale.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
+import { setMarkerPointer } from './markerPointer.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -238,7 +239,8 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
       }
     };
     const pick = (event: PointerEvent): number | null => {
-      if (frame.current.fade < 0.2) {
+      // Any mark drawn can be picked: a faint one too.
+      if (frame.current.fade < 0.05) {
         return null;
       }
       project();
@@ -248,14 +250,7 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     let down: { x: number; y: number } | null = null;
     let pending = false;
     let lastMove: PointerEvent | null = null;
-    // Whether the pointer cursor is this layer's to take back: the hosts' rings set it too.
-    let pointing = false;
-    const setPointing = (on: boolean): void => {
-      if (on !== pointing) {
-        element.style.cursor = on ? 'pointer' : '';
-        pointing = on;
-      }
-    };
+    const setPointing = (on: boolean): void => setMarkerPointer(element, 'pulsars', on);
     const onDown = (event: PointerEvent): void => {
       down = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
     };
