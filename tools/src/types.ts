@@ -12,7 +12,8 @@ export type BodyId = string;
  * 'satellite' is an Earth satellite from the satellites layer, placed by SGP4; never in bodies.json.
  * 'black-hole' likewise: Sgr A*, Gaia BH1 and Gaia BH3, placed from their papers in the app
  * (web/src/core/blackHoles.ts). And 'neutron-star': a pulsar gone to, made a body from
- * pulsars.json (web/src/core/pulsars.ts).
+ * pulsars.json (web/src/core/pulsars.ts). And 'globular-cluster': a cluster gone to, from
+ * globular-clusters.json (web/src/core/globularClusters.ts) -- a place of no surface.
  */
 export type BodyKind =
   | 'star'
@@ -24,7 +25,8 @@ export type BodyKind =
   | 'spacecraft'
   | 'satellite'
   | 'black-hole'
-  | 'neutron-star';
+  | 'neutron-star'
+  | 'globular-cluster';
 
 /**
  * Which surface-map set a body is being drawn with.
@@ -1873,4 +1875,46 @@ export interface PulsarTable {
   readonly magnetar: readonly boolean[];
   /** McGill's "#": a magnetar candidate, not confirmed. */
   readonly candidate: readonly boolean[];
+}
+
+/**
+ * `globular-clusters.json`: the Milky Way's globular clusters (clusters/), one entry per
+ * cluster in Baumgardt's database, with Harris's metallicity and reddening where Harris
+ * lists the cluster. Columnar: entry k of every column is cluster k.
+ */
+export interface GlobularClusterCatalog {
+  readonly sources: {
+    readonly baumgardt: { readonly orbits: string; readonly structure: string };
+    readonly harris: string;
+    readonly queriedAt: string;
+  };
+  readonly frame: string;
+  readonly count: number;
+  /** Baumgardt's designation, spaced: "NGC 104", "Pal 5", "Ter 5". */
+  readonly name: readonly string[];
+  /** Other names: Harris's ("47 Tuc", "omega Cen") and the Messier number, where there are any. */
+  readonly otherNames: readonly (readonly string[])[];
+  /** Its centre, scene frame, parsecs about the Sun at J2000.0, and its velocity, km/s. */
+  readonly x: readonly number[];
+  readonly y: readonly number[];
+  readonly z: readonly number[];
+  readonly vx: readonly number[];
+  readonly vy: readonly number[];
+  readonly vz: readonly number[];
+  /** Distance from the Sun, pc, and its uncertainty (Baumgardt & Vasiliev 2021). */
+  readonly distancePc: readonly number[];
+  readonly distanceErrorPc: readonly number[];
+  /** Mass, solar masses; its V magnitude; radii, pc: core, projected half-light, 3D half-mass, tidal. */
+  readonly massSun: readonly number[];
+  readonly vMag: readonly (number | null)[];
+  readonly coreRadiusPc: readonly number[];
+  readonly halfLightRadiusPc: readonly number[];
+  readonly halfMassRadiusPc: readonly number[];
+  readonly tidalRadiusPc: readonly number[];
+  /** Central velocity dispersion and escape velocity, km/s. */
+  readonly sigma0KmS: readonly number[];
+  readonly escapeKmS: readonly number[];
+  /** Harris's [Fe/H] and E(B-V); null where Harris does not list the cluster or the value. */
+  readonly feH: readonly (number | null)[];
+  readonly ebv: readonly (number | null)[];
 }

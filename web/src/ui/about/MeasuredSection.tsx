@@ -32,6 +32,7 @@ export const measuredSection: AboutSection = {
     { id: 'black-holes', label: 'Black holes' },
     { id: 'galactic-centre', label: 'The Galactic Centre’s stars' },
     { id: 'pulsars', label: 'Pulsars and magnetars' },
+    { id: 'globular-clusters', label: 'Globular clusters' },
     { id: 'galaxy', label: 'The Milky Way' },
   ],
   Body: ({ data }) => {
@@ -465,6 +466,30 @@ export const measuredSection: AboutSection = {
             spin-down implies.{' '}
             <Xref to="physics" sub="pulsars">
               The equations
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="globular-clusters">
+          Globular clusters
+        </Sub>
+        <Items>
+          <Item>
+            {data.clusterCatalog == null
+              ? 'The Milky Way’s globular clusters'
+              : `The Milky Way’s ${data.clusterCatalog.count} globular clusters`}{' '}
+            from <Strong>Holger Baumgardt’s database</Strong>: where each is and how it moves, from Gaia EDR3 and
+            the radial velocities <Cite k="vasilievBaumgardt2021" />; its distance, from Gaia parallaxes,
+            kinematics and the literature together <Cite k="baumgardtVasiliev2021" />; its mass and radii from
+            N-body fits <Cite k="baumgardtHilker2018" />; its V magnitude <Cite k="baumgardt2020" />. And from
+            the <Strong>Harris catalogue</Strong> <Cite k="harris1996" />, each one’s metallicity and the
+            reddening in front of it{data.clusterCatalog == null
+              ? ''
+              : `, for ${data.clusterCatalog.feH.filter((value) => value !== null).length} of them — the rest were found after its last edition, in 2010`}
+            .{' '}
+            <Xref to="estimated" sub="globular-clusters">
+              How their stars are drawn
             </Xref>
             .
           </Item>

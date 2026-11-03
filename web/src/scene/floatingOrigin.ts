@@ -126,7 +126,7 @@ export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>)
   // drawn, and so is the marker of one you went to. The Sun rides with the Planets. A
   // black hole is in none either (blackHoles.ts), nor the stars about them; nor a pulsar
   // gone to (pulsars.ts) -- its marker is the Pulsars layer's, the body once made is drawn.
-  if ((body.kind === 'star' && body.id !== 'sun') || body.kind === 'black-hole' || body.kind === 'neutron-star') {
+  if ((body.kind === 'star' && body.id !== 'sun') || body.kind === 'black-hole' || body.kind === 'neutron-star' || body.kind === 'globular-cluster') {
     return true;
   }
   return (

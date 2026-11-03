@@ -16,6 +16,7 @@ import { isCatalogueStar } from '../core/starBodies.ts';
 import { blackHoleSystemOf } from '../core/blackHoles.ts';
 import { BlackHolePanel } from './BlackHoleFacts.tsx';
 import { PulsarPanel } from './PulsarFacts.tsx';
+import { ClusterPanel } from './ClusterFacts.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -48,6 +49,9 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
     return <BlackHolePanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
   }
   // A pulsar gone to: its spin, and where its distance is from (pulsars.ts).
+  if (body.kind === 'globular-cluster') {
+    return <ClusterPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
   if (body.kind === 'neutron-star') {
     return <PulsarPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
   }

@@ -6,6 +6,7 @@ import type { BeltSource } from '../core/belt.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import type { PulsarArchive } from '../core/pulsars.ts';
+import type { GlobularClusterArchive } from '../core/globularClusters.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { LazySource, SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
@@ -80,6 +81,7 @@ export function AboutPanel({
   stars3d = null,
   exoplanets = null,
   pulsars = null,
+  globularClusters = null,
 }: {
   store: EphemerisStore;
   stars: StarCatalog;
@@ -89,6 +91,7 @@ export function AboutPanel({
   stars3d?: Stars3dSource | null;
   exoplanets?: LazySource<ExoplanetArchive> | null;
   pulsars?: LazySource<PulsarArchive> | null;
+  globularClusters?: LazySource<GlobularClusterArchive> | null;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   // Described from its own files, so only once they have arrived -- with the Asteroids
@@ -111,6 +114,10 @@ export function AboutPanel({
   // And the pulsars, once pulsars.json is in.
   const pulsarCatalog =
     useSyncExternalStore(pulsars?.subscribe ?? noSubscribe, () => pulsars?.value ?? null)?.catalog ?? null;
+  // And the globular clusters, once globular-clusters.json is in.
+  const clusterCatalog =
+    useSyncExternalStore(globularClusters?.subscribe ?? noSubscribe, () => globularClusters?.value ?? null)?.catalog ??
+    null;
   const data: AboutData = {
     store,
     stars,
@@ -121,6 +128,7 @@ export function AboutPanel({
     stars3dInfo,
     exoplanetCatalog,
     pulsarCatalog,
+    clusterCatalog,
   };
 
   const closing = useClosing();

@@ -7,6 +7,7 @@ import type { SatelliteSource } from '../core/satellites.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import type { PulsarArchive } from '../core/pulsars.ts';
+import type { GlobularClusterArchive } from '../core/globularClusters.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
@@ -24,6 +25,7 @@ import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
+import { GlobularClusters } from './GlobularClusters.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -129,6 +131,10 @@ export interface SolarSystemCanvasProps {
   readonly pulsars: LazySource<PulsarArchive>;
   readonly showPulsars: boolean;
   readonly onPickPulsar: (k: number) => void;
+  /** The globular clusters, their marks and the stars of the one the camera is near. */
+  readonly globularClusters: LazySource<GlobularClusterArchive>;
+  readonly showGlobularClusters: boolean;
+  readonly onPickCluster: (k: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -163,6 +169,9 @@ export function SolarSystemCanvas({
   pulsars,
   showPulsars,
   onPickPulsar,
+  globularClusters,
+  showGlobularClusters,
+  onPickCluster,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -198,6 +207,7 @@ export function SolarSystemCanvas({
     showStarMap,
     showExoplanetHosts,
     showPulsars,
+    showGlobularClusters,
     showNuclearCluster,
   ]);
 
@@ -287,6 +297,15 @@ export function SolarSystemCanvas({
         onPick={onPickHost}
       />
       <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
+      <GlobularClusters
+        source={globularClusters}
+        catalog={stars}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showGlobularClusters}
+        onPick={onPickCluster}
+      />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />

@@ -8,6 +8,7 @@ import {
   OUTPUT_DIR,
   POSITION_DECIMALS,
   PULSARS_FILE,
+  GLOBULAR_CLUSTERS_FILE,
   SATELLITES_DIR,
   SATELLITES_INFO_FILE,
   STARS3D_DIR,
@@ -34,6 +35,7 @@ import type {
   OsculatingElements,
   PathTable,
   PulsarCatalog,
+  GlobularClusterCatalog,
   Seam,
   SmallMoonBundle,
   StarCatalog,
@@ -304,4 +306,10 @@ export async function writeExoplanets(catalog: ExoplanetCatalog, outputDir = OUT
 export async function writePulsars(catalog: PulsarCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   await writeCompactJson(join(outputDir, PULSARS_FILE), catalog);
+}
+
+/** The globular clusters, as globular-clusters.json (GlobularClusterCatalog): 160-odd entries, a few tens of KB. */
+export async function writeGlobularClusters(catalog: GlobularClusterCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  await writeCompactJson(join(outputDir, GLOBULAR_CLUSTERS_FILE), catalog);
 }

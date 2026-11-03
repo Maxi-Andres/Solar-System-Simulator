@@ -1199,7 +1199,11 @@ export function SolarSystem({
       }
 
       // The star about a black hole is drawn through the lens instead, while it is on.
-      handle.mesh.visible = sphereOpacity > 0.005 && !lensState.drawnByLens.has(handle.definition.id);
+      // A globular cluster is a place, not a surface: its stars are drawn by GlobularClusters.tsx.
+      handle.mesh.visible =
+        sphereOpacity > 0.005 &&
+        !lensState.drawnByLens.has(handle.definition.id) &&
+        handle.definition.kind !== 'globular-cluster';
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;

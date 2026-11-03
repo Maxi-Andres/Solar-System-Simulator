@@ -3,6 +3,7 @@ import type {
   CometInfo,
   ExoplanetCatalog,
   PulsarCatalog,
+  GlobularClusterCatalog,
   SatelliteInfo,
   StarCatalog,
   Stars3dInfo,
@@ -173,4 +174,5 @@ export const fixtureData: AboutData = {
   stars3dInfo: fixtureStars3dInfo,
   exoplanetCatalog: fixtureExoplanetCatalog,
   pulsarCatalog: fixturePulsarCatalog,
+  clusterCatalog: { count: 165, feH: new Array(149).fill(-1.5).concat(new Array(16).fill(null)) } as unknown as GlobularClusterCatalog,
 };

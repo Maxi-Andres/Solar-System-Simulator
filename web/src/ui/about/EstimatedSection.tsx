@@ -21,6 +21,7 @@ export const estimatedSection: AboutSection = {
     { id: 'black-holes', label: 'Black holes' },
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'pulsars', label: 'Pulsars' },
+    { id: 'globular-clusters', label: 'Globular clusters' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
@@ -370,6 +371,40 @@ export const estimatedSection: AboutSection = {
             temperature is measured for few. Its glare, close by, takes that temperature’s surface
             brightness, 3,500 times the Sun’s in visible light; a cooler one, at 300,000 K, would glare a third
             as much.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="globular-clusters">
+          Globular clusters
+        </Sub>
+        <Items>
+          <Item title="Their stars: a model">
+            No catalogue lists a cluster’s stars one by one, so the cluster the camera is near is drawn as a
+            sample of a model built from what is measured of it. How many stars: as many as give its measured
+            light — its V magnitude less its distance and its extinction, over a star’s mean light in its
+            population. Where: a Plummer sphere <Cite k="plummer1911" /> of its measured half-mass radius, cut
+            at its tidal radius. What they are: PARSEC isochrones at 12 billion years
+            <Cite k={['bressan2012', 'vandenberg2013']} />, the nearest of four metallicities to its own, its
+            [Fe/H] plus 0.21 for the alpha elements its stars are rich in <Cite k="salaris1993" />, with the
+            Kroupa initial mass function <Cite k="kroupa2001" />.
+            <Why>
+              its light is what is seen; its mass also counts the white dwarfs and neutron stars, which are dark.
+            </Why>{' '}
+            Its faint dwarfs are too many: the Galaxy’s tides strip a cluster’s low-mass stars first, and its
+            measured mass function is flatter than the initial one <Cite k="baumgardt2023" />. They are the
+            stars least seen; the giants and the stars about the turnoff, which give its light, come out right.
+          </Item>
+          <Item title="Which are drawn">
+            Every star brighter, seen from the cluster’s centre, than a limit solved for each cluster so that
+            none is drawn with more than 120,000 — all that could show of a small one, Omega Centauri’s brightest.
+            The panel gives the limit. A camera far from the centre stands among stars this left out.
+          </Item>
+          <Item title="Left out">
+            Each one’s particular shape and flattening (a round Plummer sphere for all), the several
+            populations some have, blue horizontal branches and blue stragglers, binaries, the motion of its
+            stars; and the reddening of the clusters Harris does not list, drawn with none. Nor the light of
+            the stars too faint to draw one by one: from far off a cluster is its brightest giants alone, a
+            sprinkle, where a telescope shows their light and the light of all the others as one ball.
           </Item>
         </Items>
 

@@ -22,7 +22,7 @@ import { buildPulsars, describePulsars } from './buildPulsars.ts';
 import { parseMcgillCsv } from './mcgill.ts';
 
 /** One file over HTTPS, its bytes; retried with the project's backoff, then thrown. */
-async function download(url: string, label: string): Promise<Uint8Array> {
+export async function download(url: string, label: string): Promise<Uint8Array> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     try {

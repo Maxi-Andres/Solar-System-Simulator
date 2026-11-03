@@ -676,3 +676,18 @@ export const MCGILL_MAGNETARS_URL = 'https://www.physics.mcgill.ca/~pulsar/magne
 
 /** The output file. */
 export const PULSARS_FILE = 'pulsars.json';
+
+/**
+ * The Galactic globular clusters: Holger Baumgardt's database (version 4, March 2023), two
+ * of its tables as the plain text it serves -- the clusters' mean motions (Vasiliev &
+ * Baumgardt 2021) and their masses and structure from N-body fits (Baumgardt & Hilker
+ * 2018 and after), with distances from Baumgardt & Vasiliev 2021 -- and the Harris catalogue
+ * (1996, 2010 edition) for what Baumgardt's does not give: each cluster's metallicity, the
+ * reddening in front of it, and its other names.
+ */
+export const BAUMGARDT_ORBITS_URL = 'https://people.smp.uq.edu.au/HolgerBaumgardt/globular/orbits_table.txt';
+export const BAUMGARDT_STRUCTURE_URL = 'https://people.smp.uq.edu.au/HolgerBaumgardt/globular/combined_table.txt';
+export const HARRIS_URL = 'https://physics.mcmaster.ca/~harris/mwgc.dat';
+
+/** The output file. */
+export const GLOBULAR_CLUSTERS_FILE = 'globular-clusters.json';

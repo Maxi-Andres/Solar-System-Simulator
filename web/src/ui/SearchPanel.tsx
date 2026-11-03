@@ -17,6 +17,12 @@ import { archivePlanetId, archiveSystemKey, searchEntry, type ExoplanetArchive }
 import { registeredSystem } from '../core/planetarySystems.ts';
 import { formatPeriod, NEUTRON_STAR_COLOR, pulsarBodyId, type PulsarArchive } from '../core/pulsars.ts';
 import {
+  CLUSTER_COLOR,
+  clusterDisplayName,
+  globularClusterBodyId,
+  type GlobularClusterArchive,
+} from '../core/globularClusters.ts';
+import {
   addBulkSatelliteBody,
   addSgpSatelliteBody,
   bulkSatelliteBodyId,
@@ -82,6 +88,9 @@ import { Panel } from './Panel.tsx';
  * And the pulsars (D6a): by the name they are known by ("Crab Pulsar", "SGR 1806-20"), and
  * their J2000 and B1950 names ("J0534+2200", "B0531+21"), from pulsars.json, fetched when
  * the panel opens. Choosing one makes it a neutron star and goes there (pulsars.ts).
+ *
+ * And the globular clusters (D6d): by designation ("NGC 104"), Harris's other names ("47
+ * Tuc") and Messier numbers ("M13"), from globular-clusters.json. Choosing one goes there.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -102,8 +111,9 @@ const STAR_LIMIT = 12;
 /** And at most this many Exoplanet Archive hosts and planets, after the stars. */
 const EXO_LIMIT = 12;
 
-/** And at most this many pulsars, after the Archive's. */
+/** And at most this many pulsars, after the Archive's, and as many globular clusters. */
 const PULSAR_LIMIT = 10;
+const CLUSTER_LIMIT = 8;
 
 /** The hosts' rings' colour (scene/ExoplanetHosts.tsx). */
 const HOST_COLOR = '#7fc4c0';
@@ -124,7 +134,9 @@ type Result =
   /** Entry `k` of the Exoplanet Archive's index: a host, or a planet (exoplanetArchive.ts). */
   | { readonly kind: 'exo'; readonly k: number }
   /** Entry `k` of pulsars.json. */
-  | { readonly kind: 'pulsar'; readonly k: number };
+  | { readonly kind: 'pulsar'; readonly k: number }
+  /** Entry `k` of globular-clusters.json. */
+  | { readonly kind: 'cluster'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -141,6 +153,8 @@ export function SearchPanel({
   onArchive,
   pulsars,
   onPulsar,
+  globularClusters,
+  onCluster,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -158,6 +172,9 @@ export function SearchPanel({
   readonly pulsars: LazySource<PulsarArchive>;
   /** Goes to a pulsar (App.tsx). */
   readonly onPulsar: (k: number) => void;
+  readonly globularClusters: LazySource<GlobularClusterArchive>;
+  /** Goes to a globular cluster (App.tsx). */
+  readonly onCluster: (k: number) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -182,6 +199,7 @@ export function SearchPanel({
   );
   const archive = useSyncExternalStore(exoplanets.subscribe, () => exoplanets.value);
   const pulsarArchive = useSyncExternalStore(pulsars.subscribe, () => pulsars.value);
+  const clusterArchive = useSyncExternalStore(globularClusters.subscribe, () => globularClusters.value);
   // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
   const hostOfStar = useMemo(() => {
     const map = new Map<string, number>();
@@ -215,7 +233,8 @@ export function SearchPanel({
     void starNames?.request();
     void exoplanets.request();
     void pulsars.request();
-  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars]);
+    void globularClusters.request();
+  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -277,8 +296,14 @@ export function SearchPanel({
         : searchNames(pulsarArchive.search, query, PULSAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(pulsarBodyId(k)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'pulsar', k }, score));
-    // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars.
-    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars].sort(
+    const fromClusters: Result[] =
+      clusterArchive === null
+        ? []
+        : searchNames(clusterArchive.search, query, CLUSTER_LIMIT)
+            .filter(({ k }) => !store.isPropagatedBody(globularClusterBodyId(k)))
+            .map(({ k, score }) => scoredResult(scored, { kind: 'cluster', k }, score));
+    // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters.
+    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars, ...fromClusters].sort(
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
     return [
@@ -300,6 +325,7 @@ export function SearchPanel({
     starIndex,
     archive,
     pulsarArchive,
+    clusterArchive,
   ]);
 
   // A new query starts at the top.
@@ -365,6 +391,12 @@ export function SearchPanel({
     if (result.kind === 'pulsar') {
       setLayer('pulsars', true);
       onPulsar(result.k);
+      closePanel();
+      return;
+    }
+    if (result.kind === 'cluster') {
+      setLayer('globularClusters', true);
+      onCluster(result.k);
       closePanel();
       return;
     }
@@ -492,6 +524,7 @@ export function SearchPanel({
             archive,
             hostOfStar,
             pulsarArchive,
+            clusterArchive,
           );
           return (
             <li
@@ -553,7 +586,25 @@ function describeResult(
   archive: ExoplanetArchive | null,
   hostOfStar: ReadonlyMap<string, number>,
   pulsarArchive: PulsarArchive | null,
+  clusterArchive: GlobularClusterArchive | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'cluster') {
+    const c = clusterArchive!.catalog;
+    const k = result.k;
+    const name = clusterDisplayName(c, k);
+    return {
+      glyph: '⊙',
+      color: CLUSTER_COLOR,
+      name,
+      detail: [
+        'Globular cluster',
+        name === c.name[k] ? (c.otherNames[k]![0] ?? undefined) : c.name[k],
+        `${Math.round(c.distancePc[k]! * LY_PER_PC).toLocaleString('en-US')} ly`,
+      ]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'pulsar') {
     const p = pulsarArchive!.catalog.pulsars;
     const k = result.k;

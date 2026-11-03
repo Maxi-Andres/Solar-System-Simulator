@@ -27,6 +27,10 @@
  *   ATNF Pulsar Catalogue -- https://www.atnf.csiro.au/research/pulsar/psrcat/
  *   McGill Online Magnetar Catalog -- https://www.physics.mcgill.ca/~pulsar/magnetar/
  *     The neutron stars seen as pulsars, and the magnetars. See pulsars/.
+ *
+ *   Baumgardt's Galactic Globular Cluster Database -- https://people.smp.uq.edu.au/HolgerBaumgardt/globular/
+ *   Harris catalogue of Milky Way globular clusters -- https://physics.mcmaster.ca/~harris/mwgc.dat
+ *     The globular clusters. See clusters/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -76,6 +80,8 @@ import {
 } from './paths.ts';
 import { ARCHIVE_ACKNOWLEDGEMENT, fetchArchive } from './exoplanets/archive.ts';
 import { buildExoplanets, describeExoplanets, starIdsFromBuild } from './exoplanets/buildExoplanets.ts';
+import { describeGlobularClusters } from './clusters/globularClusters.ts';
+import { loadGlobularClusters } from './clusters/fetchClusters.ts';
 import { describePulsars } from './pulsars/buildPulsars.ts';
 import { loadPulsars } from './pulsars/fetchPulsars.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
@@ -103,6 +109,7 @@ import {
   writeElements,
   writeExoplanets,
   writePulsars,
+  writeGlobularClusters,
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
@@ -634,8 +641,9 @@ async function main(): Promise<void> {
   //
   // The pulsars, two more (the ATNF's package and McGill's table), the same way: two
   // downloads of a few seconds, retried, and a run that cannot read them fails rather than
-  // publish a galaxy that has quietly lost its neutron stars.
-  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars] = await Promise.all([
+  // publish a galaxy that has quietly lost its neutron stars. The globular clusters, three
+  // small files more, likewise.
+  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -662,6 +670,7 @@ async function main(): Promise<void> {
     }),
     fetchArchive(),
     loadPulsars(),
+    loadGlobularClusters(),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -767,6 +776,9 @@ async function main(): Promise<void> {
   for (const line of describePulsars(pulsars)) {
     console.log(line.replace('[pulsars]', '[fetch-data] pulsars'));
   }
+  for (const line of describeGlobularClusters(globularClusters)) {
+    console.log(line.replace('[clusters]', '[fetch-data] clusters'));
+  }
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
@@ -855,6 +867,7 @@ async function main(): Promise<void> {
   await writeBelt(belt, comets);
   await writeExoplanets(exoplanets);
   await writePulsars(pulsars);
+  await writeGlobularClusters(globularClusters);
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {

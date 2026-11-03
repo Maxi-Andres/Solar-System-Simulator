@@ -140,6 +140,11 @@ export const sourcesSection: AboutSection = {
             http://www.physics.mcgill.ca/~pulsar/magnetar/main.html.
           </Item>
           <Item>
+            Globular clusters from Holger Baumgardt’s Galactic Globular Cluster Database
+            (https://people.smp.uq.edu.au/HolgerBaumgardt/globular/) and the Harris catalogue, Harris 1996
+            (2010 edition), https://physics.mcmaster.ca/~harris/mwgc.dat.
+          </Item>
+          <Item>
             This work has made use of data from the European Space Agency (ESA) mission <Strong>Gaia</Strong>{' '}
             (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium
             (DPAC, https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been

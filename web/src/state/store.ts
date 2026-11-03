@@ -70,6 +70,7 @@ export type LayerId =
   | 'starMap'
   | 'exoplanetHosts'
   | 'pulsars'
+  | 'globularClusters'
   | 'milkyWay'
   | 'nuclearCluster'
   | 'spacecraft'
@@ -116,6 +117,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // four thousand dots over the galaxy are a map of one kind of object, not a view. A
   // pulsar found by search turns it on.
   { id: 'pulsars', label: 'Pulsars', pending: null },
+  // The Milky Way's globular clusters (core/globularClusters.ts): marked on the map and the
+  // galaxy, and the one the camera is near drawn as stars, a model of its measured light and
+  // size. On: a hundred and sixty marks, and what there is to see out of the disc.
+  { id: 'globularClusters', label: 'Globular Clusters', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -163,6 +168,7 @@ const DEFAULT_LAYERS: LayerState = {
   starMap: true,
   exoplanetHosts: true,
   pulsars: false,
+  globularClusters: true,
   milkyWay: true,
   nuclearCluster: true,
   spacecraft: true,

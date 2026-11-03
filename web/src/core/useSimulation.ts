@@ -15,6 +15,7 @@ import {
 import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { loadExoplanetArchive, type ExoplanetArchive } from './exoplanetArchive.ts';
 import { loadPulsarArchive, type PulsarArchive } from './pulsars.ts';
+import { loadGlobularClusterArchive, type GlobularClusterArchive } from './globularClusters.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -72,6 +73,8 @@ export interface Simulation {
    * the Pulsars layer on, or search opens.
    */
   readonly pulsars: LazySource<PulsarArchive>;
+  /** The globular clusters (globularClusters.ts): fetched past the planets, or when search opens. */
+  readonly globularClusters: LazySource<GlobularClusterArchive>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -133,6 +136,11 @@ export function useSimulation(refreshHz = 10): Simulation {
   pulsarsRef.current ??= new LazySource(
     () => loadPulsarArchive(httpBeltFetchers, import.meta.env.BASE_URL),
     'the pulsars',
+  );
+  const globularClustersRef = useRef<LazySource<GlobularClusterArchive>>(null);
+  globularClustersRef.current ??= new LazySource(
+    () => loadGlobularClusterArchive(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the globular clusters',
   );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
@@ -240,6 +248,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     starNames,
     exoplanets: exoplanetsRef.current,
     pulsars: pulsarsRef.current,
+    globularClusters: globularClustersRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

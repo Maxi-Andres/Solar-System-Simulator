@@ -162,7 +162,7 @@ void main() {
 }
 `;
 
-function clusterUniforms(coefficients: readonly [number, number], limit: number): Record<string, THREE.IUniform> {
+export function clusterUniforms(coefficients: readonly [number, number], limit: number): Record<string, THREE.IUniform> {
   return {
     uCameraHigh: { value: new THREE.Vector3() },
     uCameraLow: { value: new THREE.Vector3() },
@@ -178,7 +178,7 @@ function clusterUniforms(coefficients: readonly [number, number], limit: number)
   };
 }
 
-function clusterMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderMaterial {
+export function clusterMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms,
     vertexShader: CLUSTER_VERTEX_SHADER,
@@ -199,7 +199,7 @@ function galacticToScene(x: number, y: number, z: number, out: Float32Array, off
 }
 
 /** Scene-frame km to Galactic-frame pc. */
-function sceneToGalacticPc(v: THREE.Vector3): [number, number, number] {
+export function sceneToGalacticPc(v: THREE.Vector3): [number, number, number] {
   const { x: bx, y: by, z: bz } = GALACTIC_BASIS;
   return [
     (bx.x * v.x + bx.y * v.y + bx.z * v.z) / PARSEC_KM,

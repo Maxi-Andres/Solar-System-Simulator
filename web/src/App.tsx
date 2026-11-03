@@ -33,6 +33,7 @@ import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
+import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -82,6 +83,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   satellites: ['satellite'],
   // A pulsar gone to (pulsars.ts): its name goes with the markers it was chosen from.
   pulsars: ['neutron-star'],
+  globularClusters: ['globular-cluster'],
 };
 
 export function App() {
@@ -97,6 +99,7 @@ export function App() {
     satelliteNames,
     exoplanets,
     pulsars,
+    globularClusters,
     clock,
     error,
     readout,
@@ -269,6 +272,32 @@ export function App() {
         });
     },
     [store, pulsars, requestFraming, setFocus],
+  );
+
+  // A globular cluster clicked on the map or found by search (D6d): made a place and framed
+  // from four half-light radii out (globularClusters.ts).
+  const goToCluster = useCallback(
+    (k: number): void => {
+      if (store === null) {
+        return;
+      }
+      globularClusters
+        .request()
+        .then(() => {
+          const archive = globularClusters.value;
+          if (archive === null) {
+            return;
+          }
+          const id = ensureClusterBody(store, archive, k);
+          requestFraming(clusterFramingKm(archive.catalog, k));
+          setFocus(id);
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that cluster', error);
+        });
+    },
+    [store, globularClusters, requestFraming, setFocus],
   );
 
   // The black holes, and the stars about them, are bodies from the start: nothing to fetch,
@@ -489,6 +518,9 @@ export function App() {
         pulsars={pulsars}
         showPulsars={layers.pulsars}
         onPickPulsar={goToPulsar}
+        globularClusters={globularClusters}
+        showGlobularClusters={layers.globularClusters}
+        onPickCluster={goToCluster}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -569,6 +601,8 @@ export function App() {
               onArchive={goToArchive}
               pulsars={pulsars}
               onPulsar={goToPulsar}
+              globularClusters={globularClusters}
+              onCluster={goToCluster}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
@@ -604,6 +638,7 @@ export function App() {
           stars3d={stars3d}
           exoplanets={exoplanets}
           pulsars={pulsars}
+          globularClusters={globularClusters}
         />
       </Presence>
 

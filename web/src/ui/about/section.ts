@@ -5,6 +5,7 @@ import type {
   CometInfo,
   ExoplanetCatalog,
   PulsarCatalog,
+  GlobularClusterCatalog,
   SatelliteInfo,
   StarCatalog,
   Stars3dInfo,
@@ -29,6 +30,7 @@ export interface AboutData {
   readonly stars3dInfo: Stars3dInfo | null;
   readonly exoplanetCatalog: ExoplanetCatalog | null;
   readonly pulsarCatalog: PulsarCatalog | null;
+  readonly clusterCatalog: GlobularClusterCatalog | null;
 }
 
 /** One section of the About: its tab, its heading, its subsections and its text. */
