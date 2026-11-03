@@ -31,6 +31,7 @@ import { ensureArchiveSystem } from './core/archiveSystems.ts';
 import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
+import { ensureSupernovaRemnants } from './core/supernovaRemnants.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -84,6 +85,9 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // A pulsar gone to (pulsars.ts): its name goes with the markers it was chosen from.
   pulsars: ['neutron-star'],
   globularClusters: ['globular-cluster'],
+  // The supernova remnants are bodies from the start (supernovaRemnants.ts): their names and
+  // rings go with their layer.
+  supernovaRemnants: ['supernova-remnant'],
 };
 
 export function App() {
@@ -305,6 +309,7 @@ export function App() {
   useEffect(() => {
     if (store !== null) {
       ensureBlackHoles(store);
+      ensureSupernovaRemnants(store);
       renderDemand.request();
     }
   }, [store]);
@@ -521,6 +526,7 @@ export function App() {
         globularClusters={globularClusters}
         showGlobularClusters={layers.globularClusters}
         onPickCluster={goToCluster}
+        showSupernovaRemnants={layers.supernovaRemnants}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (

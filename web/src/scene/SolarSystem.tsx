@@ -1203,7 +1203,8 @@ export function SolarSystem({
       handle.mesh.visible =
         sphereOpacity > 0.005 &&
         !lensState.drawnByLens.has(handle.definition.id) &&
-        handle.definition.kind !== 'globular-cluster';
+        handle.definition.kind !== 'globular-cluster' &&
+        handle.definition.kind !== 'supernova-remnant';
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;

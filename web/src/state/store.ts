@@ -71,6 +71,7 @@ export type LayerId =
   | 'exoplanetHosts'
   | 'pulsars'
   | 'globularClusters'
+  | 'supernovaRemnants'
   | 'milkyWay'
   | 'nuclearCluster'
   | 'spacecraft'
@@ -121,6 +122,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // galaxy, and the one the camera is near drawn as stars, a model of its measured light and
   // size. On: a hundred and sixty marks, and what there is to see out of the disc.
   { id: 'globularClusters', label: 'Globular Clusters', pending: null },
+  // Nine famous supernova remnants (core/supernovaRemnants.ts), each a ring of its real size
+  // at its measured distance. On: nine names.
+  { id: 'supernovaRemnants', label: 'Supernova Remnants', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -169,6 +173,7 @@ const DEFAULT_LAYERS: LayerState = {
   exoplanetHosts: true,
   pulsars: false,
   globularClusters: true,
+  supernovaRemnants: true,
   milkyWay: true,
   nuclearCluster: true,
   spacecraft: true,

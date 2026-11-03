@@ -140,6 +140,10 @@ export const sourcesSection: AboutSection = {
             http://www.physics.mcgill.ca/~pulsar/magnetar/main.html.
           </Item>
           <Item>
+            Supernova remnants’ positions and sizes from D. A. Green’s Catalogue of Galactic Supernova Remnants
+            (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
+          </Item>
+          <Item>
             Globular clusters from Holger Baumgardt’s Galactic Globular Cluster Database
             (https://people.smp.uq.edu.au/HolgerBaumgardt/globular/) and the Harris catalogue, Harris 1996
             (2010 edition), https://physics.mcmaster.ca/~harris/mwgc.dat.

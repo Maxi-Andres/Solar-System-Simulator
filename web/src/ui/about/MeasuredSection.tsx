@@ -33,6 +33,7 @@ export const measuredSection: AboutSection = {
     { id: 'galactic-centre', label: 'The Galactic Centre’s stars' },
     { id: 'pulsars', label: 'Pulsars and magnetars' },
     { id: 'globular-clusters', label: 'Globular clusters' },
+    { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The Milky Way' },
   ],
   Body: ({ data }) => {
@@ -490,6 +491,27 @@ export const measuredSection: AboutSection = {
             .{' '}
             <Xref to="estimated" sub="globular-clusters">
               How their stars are drawn
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="supernova-remnants">
+          Supernova remnants
+        </Sub>
+        <Items>
+          <Item>
+            Nine supernova remnants, each where <Strong>Green’s catalogue</Strong> <Cite k="green2024" /> puts its
+            centre, of the size it gives, at a distance measured for it: the Crab Nebula, 2.0 kpc, by the
+            expansion of its filaments <Cite k="trimble1968" />; Cassiopeia A, 3.4 kpc, by its knots’ motions
+            <Cite k="reed1995" />; Tycho’s, 3.2 kpc, by light echoes <Cite k="neumann2024" />; Kepler’s, 5.1 kpc
+            <Cite k="sankrit2016" />, and SN 1006, 2.17 kpc <Cite k="winkler2003" />, by the motions of their
+            filaments against their shock speeds; Vela’s, 287 pc, by its pulsar’s parallax <Cite k="dodson2003" />;
+            the Cygnus Loop, 725 pc, by Gaia parallaxes of stars in it <Cite k="fesen2021" />; Puppis A, 1.3 kpc,
+            kinematically <Cite k="reynoso2017" />; IC 443, 1.73 kpc, by the jump in extinction it makes
+            <Cite k="yu2019" />. The panel names each, and says where a distance is disputed.{' '}
+            <Xref to="estimated" sub="supernova-remnants">
+              What is not drawn
             </Xref>
             .
           </Item>

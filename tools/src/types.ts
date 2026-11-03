@@ -26,7 +26,8 @@ export type BodyKind =
   | 'satellite'
   | 'black-hole'
   | 'neutron-star'
-  | 'globular-cluster';
+  | 'globular-cluster'
+  | 'supernova-remnant';
 
 /**
  * Which surface-map set a body is being drawn with.

@@ -67,6 +67,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       return 'Neutron star';
     case 'globular-cluster':
       return 'Globular cluster';
+    case 'supernova-remnant':
+      return 'Supernova remnant';
   }
 }
 
@@ -104,6 +106,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['pulsars'];
     case 'globular-cluster':
       return ['globularClusters'];
+    case 'supernova-remnant':
+      return ['supernovaRemnants'];
   }
 }
 
@@ -117,6 +121,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   'black-hole': 0,
   'neutron-star': 0,
   'globular-cluster': 0,
+  'supernova-remnant': 0,
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,

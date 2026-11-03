@@ -121,7 +121,8 @@ export function BodyPicker({
   const blackHoleSystem = blackHoleSystemOf(focus);
   // A pulsar or a globular cluster is out in the galaxy, as a black hole is: hundreds of
   // light years off at the least.
-  const inGalaxy = focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster';
+  const inGalaxy =
+    focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
   // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
   // anything of Alpha Centauri's or another star's, nor a black hole's, nor a pulsar.
   const inSolarSystem =
@@ -529,6 +530,7 @@ function BodyList({
       body.kind !== 'black-hole' &&
       body.kind !== 'neutron-star' &&
       body.kind !== 'globular-cluster' &&
+      body.kind !== 'supernova-remnant' &&
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );

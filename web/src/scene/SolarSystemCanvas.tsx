@@ -26,6 +26,7 @@ import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
+import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -135,6 +136,8 @@ export interface SolarSystemCanvasProps {
   readonly globularClusters: LazySource<GlobularClusterArchive>;
   readonly showGlobularClusters: boolean;
   readonly onPickCluster: (k: number) => void;
+  /** The Supernova Remnants layer: their rings (their names and marks are the bodies'). */
+  readonly showSupernovaRemnants: boolean;
 }
 
 export function SolarSystemCanvas({
@@ -172,6 +175,7 @@ export function SolarSystemCanvas({
   globularClusters,
   showGlobularClusters,
   onPickCluster,
+  showSupernovaRemnants,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -208,6 +212,7 @@ export function SolarSystemCanvas({
     showExoplanetHosts,
     showPulsars,
     showGlobularClusters,
+    showSupernovaRemnants,
     showNuclearCluster,
   ]);
 
@@ -297,6 +302,7 @@ export function SolarSystemCanvas({
         onPick={onPickHost}
       />
       <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
+      <SupernovaRemnants store={store} clock={clock} focus={focus} visible={showSupernovaRemnants} />
       <GlobularClusters
         source={globularClusters}
         catalog={stars}

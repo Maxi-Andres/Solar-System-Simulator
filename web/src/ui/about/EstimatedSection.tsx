@@ -22,6 +22,7 @@ export const estimatedSection: AboutSection = {
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'globular-clusters', label: 'Globular clusters' },
+    { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
@@ -405,6 +406,23 @@ export const estimatedSection: AboutSection = {
             stars; and the reddening of the clusters Harris does not list, drawn with none. Nor the light of
             the stars too faint to draw one by one: from far off a cluster is its brightest giants alone, a
             sprinkle, where a telescope shows their light and the light of all the others as one ball.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="supernova-remnants">
+          Supernova remnants
+        </Sub>
+        <Items>
+          <Item title="Only nine">
+            Green’s catalogue lists 310 remnants and no distances; a remnant’s distance is measured one by one, and
+            for most it is rough. These nine are the ones with a measurement of their own. The compilation of
+            distances for the rest (Ranasinghe &amp; Leahy 2023) is served only by CDS VizieR, which was down when
+            these were added.
+          </Item>
+          <Item title="A ring, not its look">
+            Each is drawn as a ring of its mean radius, turned to the camera: its size, not its filaments or its
+            elongation, whose position angle the catalogue does not give. Nor its expansion, nor its motion.
+            <Why>a remnant’s glowing gas is a picture no catalogue gives; its size is a number one does.</Why>
           </Item>
         </Items>
 
