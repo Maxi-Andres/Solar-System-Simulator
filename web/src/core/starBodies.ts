@@ -134,8 +134,10 @@ const discColorIndices = new Map<BodyId, number>();
  * the Archive (archiveSystems.ts), a star about a black hole (blackHoles.ts) -- its disc's
  * colour index, and so its colour and brightness, as addStarBody gives a record's.
  */
-export function setStarDisc(id: BodyId, colorIndex: number): void {
-  discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(colorIndex)));
+export function setStarDisc(id: BodyId, colorIndex: number, temperatureK: number | null = null): void {
+  // Its brightness from its published temperature where there is one: the colour relation
+  // stops at 21,700 K, and a 31,000 K star's surface is 70 times the Sun's, not that one's 39.
+  discExposures.set(id, surfaceLuminanceRelativeToSun(temperatureK ?? colorIndexToTemperature(colorIndex)));
   discColorIndices.set(id, colorIndex);
 }
 

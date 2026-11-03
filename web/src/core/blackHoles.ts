@@ -709,7 +709,7 @@ export function ensureBlackHoles(store: EphemerisStore): void {
     return;
   }
   const s2Body = companionDefinition(S2_ID, 'S2', SGR_A_ID, S2_STAR.massSun, S2_STAR.radiusSun, S2_STAR.temperatureK);
-  setStarDisc(S2_ID, colorIndexForTemperature(S2_STAR.temperatureK));
+  setStarDisc(S2_ID, colorIndexForTemperature(S2_STAR.temperatureK), S2_STAR.temperatureK);
   const entries: Parameters<EphemerisStore['addPropagatedBodies']>[0][number][] = [
     {
       body: blackHoleDefinition(SGR_A_ID, 'Sgr A*', SGR_A_MASS_SUN),
@@ -732,7 +732,7 @@ export function ensureBlackHoles(store: EphemerisStore): void {
     },
   ];
   for (const binary of DARK_BINARIES) {
-    setStarDisc(binary.starId, colorIndexForTemperature(binary.starTemperatureK));
+    setStarDisc(binary.starId, colorIndexForTemperature(binary.starTemperatureK), binary.starTemperatureK);
     entries.push(
       {
         body: blackHoleDefinition(binary.id, binary.name, binary.blackHoleMassSun),

@@ -568,8 +568,10 @@ export const physicsSection: AboutSection = {
           inside the eye itself, and a lens has no retina.{' '}
           Every other star whose disc is drawn — Alpha Centauri’s, Sirius A and B, the planetary systems’
           stars, the stars about the black holes, a pulsar gone to — casts the same veil, its E from its own disc and its own
-          surface brightness against the Sun’s at its colour’s temperature: Sirius A seven times the Sun’s,
-          Proxima a twenty-fourth. It lies over the star’s own disc too, which is drawn at its colour rather
+          surface brightness against the Sun’s at its temperature — the published one where its paper gives
+          it, else its colour’s: Sirius A seven times the Sun’s, Cygnus X-1’s supergiant seventy, Proxima a
+          twenty-fourth. Near the black holes the veil stays about where the star is, not bent with its
+          images. It lies over the star’s own disc too, which is drawn at its colour rather
           than clipped white as the Sun’s is, and over everything in front of it, as scattered light does.
         </Equation>
         <Equation

@@ -150,7 +150,7 @@ export async function ensureArchiveSystem(
       const colorIndex = teff == null ? 0.65 : temperatureToColorIndex(teff);
       const radius = system.hostRadiusSun;
       if (radius !== null) {
-        setStarDisc(host, colorIndex);
+        setStarDisc(host, colorIndex, teff ?? null);
       }
       store.addPropagatedBody(
         starBodyDefinition(host, hosts.name[h]!, colorIndex, radius === null ? null : radius * SOLAR_RADIUS_KM, massSun),

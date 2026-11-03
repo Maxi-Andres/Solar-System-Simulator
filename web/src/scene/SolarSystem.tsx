@@ -1173,8 +1173,10 @@ export function SolarSystem({
               ? NEUTRON_STAR_SURFACE_RATIO
               : starDiscExposure(handle.definition.id);
         const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm, surfaceRatio);
-        // Not while the lens draws the star (BlackHoleLens.tsx): its light comes round the hole.
-        handle.glare.visible = radiusDeg > 0 && !lensState.drawnByLens.has(handle.definition.id);
+        // Also while the lens draws the star (BlackHoleLens.tsx): the veil stays about where the
+        // star is, not bent round the hole with its images -- right away from the hole, an
+        // approximation close to it.
+        handle.glare.visible = radiusDeg > 0;
         if (handle.glare.visible) {
           const uniforms = (handle.glare.material as THREE.ShaderMaterial).uniforms;
           uniforms.uLevel!.value = glareLevel(
