@@ -158,15 +158,23 @@ export const SUN_DRAWN_LUMINANCE = SUN_MAP_LUMINANCE * SUN_OVEREXPOSURE;
  * Written this way rather than as `1/d^2` because it stays right when you are close
  * enough that the Sun is not a point any more, which is exactly where the old version
  * was worst.
+ *
+ * **Any other star's veil is the same equation** (Maxi, 2026-11-03: "no tienen brillo las
+ * estrellas, ninguna, como tiene el sol"): a star whose disc is drawn -- a measured radius
+ * -- casts it too, with its radiance against the Sun's, `surfaceRatio`: its surface
+ * luminance at its temperature over the Sun's (blackbody.ts surfaceLuminanceRelativeToSun,
+ * the number its disc is exposed by, from its colour). Sirius A, at its colour's 10,000 K,
+ * is seven times the Sun's; Proxima, at 3,400 K, a twenty-fourth. Seen at the same angular
+ * size, each veils the view by that much more or less.
  */
-export function glareLevel(radiusKm: number, distanceKm: number): number {
+export function glareLevel(radiusKm: number, distanceKm: number, surfaceRatio = 1): number {
   const sinRadius = Math.min(1, radiusKm / Math.max(1, distanceKm));
-  return SUN_DRAWN_LUMINANCE * Math.PI * sinRadius * sinRadius;
+  return SUN_DRAWN_LUMINANCE * surfaceRatio * Math.PI * sinRadius * sinRadius;
 }
 
 /** Linear light of the veil at an angle. What the shader computes. */
-export function glareLinear(angleDeg: number, radiusKm: number, distanceKm: number): number {
-  return Math.min(1, glareLevel(radiusKm, distanceKm) * glareSpread(angleDeg));
+export function glareLinear(angleDeg: number, radiusKm: number, distanceKm: number, surfaceRatio = 1): number {
+  return Math.min(1, glareLevel(radiusKm, distanceKm, surfaceRatio) * glareSpread(angleDeg));
 }
 
 /**
@@ -190,9 +198,9 @@ export const GLARE_MAX_DEG = 70;
  * needs to be: a bigger one costs fill rate on fragments that round to black, a smaller
  * one cuts the halo off with a visible straight edge.
  */
-export function glareRadiusDeg(radiusKm: number, distanceKm: number): number {
+export function glareRadiusDeg(radiusKm: number, distanceKm: number, surfaceRatio = 1): number {
   const floorLinear = srgbToLinear(DISPLAY_FLOOR);
-  const level = glareLevel(radiusKm, distanceKm);
+  const level = glareLevel(radiusKm, distanceKm, surfaceRatio);
   if (level * glareSpread(GLARE_MIN_DEG) <= floorLinear) {
     return 0;
   }
@@ -263,6 +271,9 @@ uniform float uLevel;
 uniform float uTanRadius;
 uniform float uSunRadiusDeg;
 uniform vec3 uColor;
+// 1 for a star whose disc is drawn at its colour, not clipped: the veil lies over the disc
+// too, at the limb's strength, so the disc is never darker than the light about it.
+uniform float uOverDisc;
 
 varying vec2 vUv;
 
@@ -278,6 +289,9 @@ void main() {
   }
 
   float angleDeg = max(${GLARE_MIN_DEG.toFixed(2)}, degrees(atan(radius * uTanRadius)));
+  if (uOverDisc > 0.5) {
+    angleDeg = max(angleDeg, uSunRadiusDeg);
+  }
   float veil = uLevel * (
     ${GLARE_CUBE_COEFFICIENT.toFixed(1)} / (angleDeg * angleDeg * angleDeg) +
     ${GLARE_SQUARE_COEFFICIENT.toFixed(1)} / (angleDeg * angleDeg)
@@ -288,7 +302,7 @@ void main() {
   // past it -- which left a black band exactly where the halo should be brightest, and
   // the radial profile of the frame showed it: 69 at the limb, 29 ten pixels out, and
   // no halo until 1.07 radii.
-  veil *= smoothstep(uSunRadiusDeg * 0.9, uSunRadiusDeg, angleDeg);
+  veil *= uOverDisc > 0.5 ? 1.0 : smoothstep(uSunRadiusDeg * 0.9, uSunRadiusDeg, angleDeg);
 
   vec3 linear = uColor * min(1.0, veil);
   gl_FragColor = vec4(

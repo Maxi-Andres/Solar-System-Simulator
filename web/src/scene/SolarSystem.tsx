@@ -733,12 +733,17 @@ export function SolarSystem({
       const orbitCenter = `500@${parentDefinition.horizonsId}`;
 
       let glare: THREE.Mesh | null = null;
-      // The Sun's alone: the veil is scaled by its drawn disc (solarGlare.ts). Another star
-      // is a point source drawn by the star renderer, wings and all.
-      if (definition.id === 'sun') {
-        // The Sun's own colour, from its colour index through the same Planck and CIE
-        // path the stars use: scattered sunlight is still sunlight.
-        const [red, green, blue] = starColor(SUN_COLOR_INDEX);
+      // The Sun's, scaled by its drawn disc (solarGlare.ts), and every other star's that has
+      // a disc -- a measured radius -- by the same equation and its own surface brightness.
+      // A star with no radius is a point drawn by the star renderer, wings and all.
+      const glareStar =
+        definition.kind === 'star' && (definition.id === 'sun' || definition.radiusPublished !== false);
+      if (glareStar) {
+        // The star's own colour, from its colour index through the same Planck and CIE
+        // path the stars use: scattered starlight is still starlight.
+        const [red, green, blue] = starColor(
+          definition.id === 'sun' ? SUN_COLOR_INDEX : starDiscColorIndex(definition.id),
+        );
         glare = new THREE.Mesh(
           new THREE.PlaneGeometry(1, 1),
           new THREE.ShaderMaterial({
@@ -747,12 +752,19 @@ export function SolarSystem({
               uTanRadius: { value: 1 },
               uSunRadiusDeg: { value: 0.27 },
               uColor: { value: new THREE.Color(red, green, blue) },
+              // The Sun's disc is clipped white already; another star's is drawn at its
+              // colour, and the veil lies over it as over everything (solarGlare.ts).
+              uOverDisc: { value: definition.id === 'sun' ? 0 : 1 },
             },
             vertexShader: SOLAR_GLARE_VERTEX_SHADER,
             fragmentShader: SOLAR_GLARE_FRAGMENT_SHADER,
             // Light adds. Depth is read, so a planet crossing in front of the Sun hides
             // the halo behind it, and never written, because a veil has no surface.
+            // Another star's veil lies over its own disc, and the sphere would hide it there
+            // from the test: it is scattered light in the camera, over everything, so it
+            // is not tested at all.
             blending: THREE.AdditiveBlending,
+            depthTest: definition.id === 'sun',
             depthWrite: false,
             transparent: true,
             // The exposure is already chosen and stated, as it is for the stars.
@@ -1149,13 +1161,17 @@ export function SolarSystem({
       if (handle.glare !== null) {
         // Everything the veil does follows from one distance: how bright it is, how far
         // it reaches, and where the disc masks it. See solarGlare.ts.
-        const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm);
-        handle.glare.visible = radiusDeg > 0;
+        // Another star's by its surface brightness against the Sun's (its disc's exposure).
+        const surfaceRatio = handle.definition.id === 'sun' ? 1 : starDiscExposure(handle.definition.id);
+        const radiusDeg = glareRadiusDeg(handle.definition.radiusEquatorialKm, distanceKm, surfaceRatio);
+        // Not while the lens draws the star (BlackHoleLens.tsx): its light comes round the hole.
+        handle.glare.visible = radiusDeg > 0 && !lensState.drawnByLens.has(handle.definition.id);
         if (handle.glare.visible) {
           const uniforms = (handle.glare.material as THREE.ShaderMaterial).uniforms;
           uniforms.uLevel!.value = glareLevel(
             handle.definition.radiusEquatorialKm,
             distanceKm,
+            surfaceRatio,
           );
           // The tangent, not the angle: a fragment's angle is the arctangent of its
           // offset over the distance, and close to the Sun the difference is 40%.

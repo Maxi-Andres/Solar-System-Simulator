@@ -310,3 +310,15 @@ describe('the contrast of the disc, which is what overexposure does to it', () =
     expect(spread).toBeLessThan(153 / 5);
   });
 });
+
+describe('another star’s glare', () => {
+  it('is the Sun’s equation scaled by its surface brightness against the Sun’s', () => {
+    const sun = glareLevel(695_700, AU_KM);
+    // Sirius A seen as large as the Sun from 1 AU, at seven times its surface brightness.
+    expect(glareLevel(695_700, AU_KM, 7.2)).toBeCloseTo(sun * 7.2, 12);
+    // And so reaches farther before it fades below the display's floor; a dim red dwarf's less far.
+    expect(glareRadiusDeg(695_700, AU_KM, 7.2)).toBeGreaterThan(glareRadiusDeg(695_700, AU_KM));
+    expect(glareRadiusDeg(695_700, AU_KM, 0.041)).toBeLessThan(glareRadiusDeg(695_700, AU_KM));
+    expect(glareLinear(2, 695_700, AU_KM, 1)).toBeCloseTo(glareLinear(2, 695_700, AU_KM), 12);
+  });
+});
