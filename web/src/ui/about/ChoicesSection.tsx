@@ -21,6 +21,7 @@ export const choicesSection: AboutSection = {
     { id: 'earth', label: 'Earth' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'pulsars', label: 'Pulsars' },
+    { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy’s light' },
   ],
   Body: ({ data }) => {
@@ -271,6 +272,31 @@ export const choicesSection: AboutSection = {
           <Item title="Spin and beams not drawn">
             A neutron star gone to is a sphere of its radius in its colour, not turning.
             <Why>a turning sphere shows nothing, and the beams a pulsar is known by are radio, from a region no measurement resolves.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="supernova-remnants">
+          Supernova remnants
+        </Sub>
+        <Items>
+          <Item title="The photograph’s brightness">
+            A remnant is drawn as bright as its photograph is, as its makers stretched it from a long exposure, and
+            added to the sky behind it. To the eye almost none shows at all: the Crab is a faint smudge in a small
+            telescope.
+            <Why>at its true faintness there would be nothing to see; the photograph shows its shape, which is
+            what there is to see of it.</Why>
+          </Item>
+          <Item title="False colour where it is X-rays">
+            Tycho’s, Kepler’s and Puppis A’s photographs are X-ray images in false colour, Tycho’s and Kepler’s on
+            the Digitized Sky Survey’s stars; SN 1006’s mixes radio, X-rays and hydrogen’s light. The panel says
+            which light each shows.
+            <Why>none of the three has a free photograph of all of it in visible light: their visible light is a few
+            faint filaments.</Why>
+          </Item>
+          <Item title="The photograph’s stars too">
+            A photograph has the stars in front of and behind the remnant in it, drawn over the sky’s own, where
+            they are from Earth.
+            <Why>taking them out would be retouching the photograph.</Why>
           </Item>
         </Items>
 

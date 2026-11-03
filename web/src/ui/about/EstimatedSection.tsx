@@ -419,10 +419,17 @@ export const estimatedSection: AboutSection = {
             distances for the rest (Ranasinghe &amp; Leahy 2023) is served only by CDS VizieR, which was down when
             these were added.
           </Item>
-          <Item title="A ring, not its look">
-            Each is drawn as a ring of its mean radius, turned to the camera: its size, not its filaments or its
-            elongation, whose position angle the catalogue does not give. Nor its expansion, nor its motion.
-            <Why>a remnant’s glowing gas is a picture no catalogue gives; its size is a number one does.</Why>
+          <Item title="Earth’s view of it, from anywhere">
+            Each is drawn as a photograph of it, at its true size and orientation on the sky, turned to face the
+            camera, with a ring of its mean radius. A photograph is a remnant seen from Earth: from anywhere else it
+            is still Earth’s view, turned. What it would look like from the side is not known — how deep its gas
+            lies along the line of sight is measured for very few. Nor are its expansion or its motion drawn.
+            <Why>a remnant is roughly a shell, so from the side it is roughly the same; its true look from there is
+            not measured.</Why>
+          </Item>
+          <Item title="Not all of each">
+            Vela’s photograph is its northern quarter: no free image shows the whole of it, 255′ across. The Cygnus
+            Loop’s leaves out its faint southern edge, about a sixth of it. The ring shows the whole size.
           </Item>
         </Items>
 

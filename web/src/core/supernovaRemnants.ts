@@ -32,6 +32,9 @@ import type { StateVector } from './vec3.ts';
  * catalogue. The ring is red, the red of hydrogen's H-alpha light, which most of their
  * optical filaments shine in. It does not move: the shell's expansion and the motion of its
  * centre through the Galaxy are not drawn.
+ *
+ * And with a photograph of it, where a free one shows it (RemnantImage, web/public/remnants/
+ * CREDITS.md): its look, as a telescope saw it from Earth, at its true size on the sky.
  */
 
 export interface SupernovaRemnant {
@@ -57,10 +60,45 @@ export interface SupernovaRemnant {
   readonly reference: string;
   /** Anything said about the distance beyond the number: a disputed one says so. */
   readonly note: string | null;
+  /** A photograph of it, where one is free to use (see RemnantImage); null where none is. */
+  readonly image: RemnantImage | null;
+}
+
+/**
+ * A photograph of a remnant, drawn at its true angular size and orientation: the image's own
+ * field of view and where north lies in it, as its source publishes them.
+ */
+export interface RemnantImage {
+  /** The file in web/public/remnants/. */
+  readonly file: string;
+  /** Its field of view, arcminutes. */
+  readonly widthArcmin: number;
+  readonly heightArcmin: number;
+  /**
+   * Its centre, J2000, degrees: from the astrometry its source embeds in it (AVM), which is not
+   * always the "Position" on its page -- that is the reference point, not the middle.
+   */
+  readonly centreRaDeg: number;
+  readonly centreDecDeg: number;
+  /** Where north is in it: degrees right of the image's vertical (0 for north up). East is left of north. */
+  readonly northRightOfVerticalDeg: number;
+  /** What it shows, in a few words: "visible light, HST WFPC2". */
+  readonly light: string;
+  /** The credit line its source asks for, and the licence. */
+  readonly credit: string;
+  readonly licence: string;
+  /** The page it is from. */
+  readonly source: string;
 }
 
 const hms = (h: number, m: number, s: number): number => (h + m / 60 + s / 3600) * 15;
 const dm = (sign: 1 | -1, d: number, m: number): number => sign * (d + m / 60);
+const dms = (sign: 1 | -1, d: number, m: number, s: number): number => sign * (d + m / 60 + s / 3600);
+
+const CC_BY = 'CC BY 4.0';
+// Chandra claims no copyright on its own images; the DSS stars in a composite are published
+// by ESO and ESA/Hubble themselves under CC BY 4.0 (web/public/remnants/CREDITS.md).
+const CHANDRA = 'NASA/CXC: no copyright claimed';
 
 export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
   {
@@ -80,6 +118,19 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'expansion of its filaments',
     reference: 'Trimble 1968, AJ 73, 535',
     note: null,
+    image: {
+      file: 'crab.jpg',
+      widthArcmin: 6.41,
+      heightArcmin: 6.41,
+      centreRaDeg: hms(5, 34, 32.5),
+      centreDecDeg: dms(1, 22, 0, 55),
+      northRightOfVerticalDeg: 0,
+      light: 'visible, [O III], [S II], [O I] lines; Hubble WFPC2',
+      credit:
+        'NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble)',
+      licence: CC_BY,
+      source: 'https://esahubble.org/images/heic0515a/',
+    },
   },
   {
     key: 'cas-a',
@@ -97,6 +148,19 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'proper motions and radial velocities of its knots',
     reference: 'Reed et al. 1995, ApJ 440, 706',
     note: 'Light echoes give 3.6 ± 0.1 kpc (Neumann et al. 2024).',
+    image: {
+      file: 'cas-a.jpg',
+      widthArcmin: 8.55,
+      heightArcmin: 6.15,
+      centreRaDeg: hms(23, 23, 26.1),
+      centreDecDeg: dms(1, 58, 48, 54),
+      northRightOfVerticalDeg: -0.4,
+      light: 'visible and near-infrared, broadband; Hubble ACS',
+      credit:
+        'NASA, ESA, and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration. Acknowledgement: Robert A. Fesen (Dartmouth College, USA) and James Long (ESA/Hubble)',
+      licence: CC_BY,
+      source: 'https://esahubble.org/images/heic0609a/',
+    },
   },
   {
     key: 'tycho',
@@ -114,6 +178,18 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'light echoes and 3D dust maps',
     reference: 'Neumann et al. 2024, arXiv 2407.14584',
     note: 'Disputed: measurements range from 1.7 to 4.5 kpc.',
+    image: {
+      file: 'tycho.jpg',
+      widthArcmin: 19.04,
+      heightArcmin: 15.04,
+      centreRaDeg: hms(0, 25, 20.6),
+      centreDecDeg: dms(1, 64, 8, 19),
+      northRightOfVerticalDeg: -0.1,
+      light: 'X-rays, false colour (Chandra), on the Digitized Sky Survey’s stars',
+      credit: 'X-ray: NASA/CXC/Rutgers/K.Eriksen et al.; Optical: DSS',
+      licence: CHANDRA,
+      source: 'https://chandra.harvard.edu/photo/2011/tycho/',
+    },
   },
   {
     key: 'kepler',
@@ -131,6 +207,18 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'proper motions of its Balmer filaments and their shock speed',
     reference: 'Sankrit et al. 2016, ApJ 817, 36',
     note: null,
+    image: {
+      file: 'kepler.jpg',
+      widthArcmin: 12.16,
+      heightArcmin: 8.13,
+      centreRaDeg: hms(17, 30, 41.2),
+      centreDecDeg: dms(-1, 21, 29, 34),
+      northRightOfVerticalDeg: 0.2,
+      light: 'X-rays, false colour (Chandra), on the Digitized Sky Survey’s stars',
+      credit: 'X-ray: NASA/CXC/NCSU/M.Burkey et al; Optical: DSS',
+      licence: CHANDRA,
+      source: 'https://chandra.harvard.edu/photo/2013/kepler/',
+    },
   },
   {
     key: 'sn-1006',
@@ -148,6 +236,19 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'proper motions of its Balmer filaments and their shock speed',
     reference: 'Winkler, Gupta & Long 2003, ApJ 585, 324',
     note: null,
+    image: {
+      file: 'sn-1006.jpg',
+      widthArcmin: 55.54,
+      heightArcmin: 55.54,
+      centreRaDeg: hms(15, 2, 52.2),
+      centreDecDeg: dms(-1, 41, 55, 30),
+      northRightOfVerticalDeg: 0,
+      light: 'radio (red), X-rays (blue), H-alpha (yellow), false colour; DSS stars',
+      credit:
+        'Radio: NRAO/AUI/NSF/GBT/VLA/Dyer, Maddalena & Cornwell, X-ray: Chandra X-ray Observatory; NASA/CXC/Rutgers/G. Cassam-Chenaï, J. Hughes et al., Visible light: 0.9-metre Curtis Schmidt optical telescope; NOAO/AURA/NSF/CTIO/Middlebury College/F. Winkler and Digitized Sky Survey.',
+      licence: CC_BY,
+      source: 'https://www.eso.org/public/images/eso1308b/',
+    },
   },
   {
     key: 'vela',
@@ -165,6 +266,19 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'the parallax of its pulsar',
     reference: 'Dodson et al. 2003, ApJ 596, 1137',
     note: null,
+    image: {
+      file: 'vela.jpg',
+      widthArcmin: 161.11,
+      heightArcmin: 161.53,
+      centreRaDeg: hms(8, 31, 19.0),
+      centreDecDeg: dms(-1, 43, 55, 44),
+      northRightOfVerticalDeg: -0.1,
+      light: 'visible, [O III], H-alpha and [S II] lines; DECam. Its northern quarter only',
+      credit:
+        'CTIO/NOIRLab/DOE/NSF/AURA Image Processing: T.A. Rector (University of Alaska Anchorage/NSF NOIRLab), M. Zamani & D. de Martin (NSF NOIRLab)',
+      licence: CC_BY,
+      source: 'https://noirlab.edu/public/images/noirlab2406a/',
+    },
   },
   {
     key: 'cygnus-loop',
@@ -182,6 +296,18 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'Gaia parallaxes of stars inside and behind it',
     reference: 'Fesen et al. 2021, arXiv 2109.05368',
     note: 'Questioned since: one of its two stars is a binary, and other work favours about 890 pc.',
+    image: {
+      file: 'cygnus-loop.jpg',
+      widthArcmin: 173.1,
+      heightArcmin: 173.97,
+      centreRaDeg: hms(20, 51, 38.4),
+      centreDecDeg: dms(1, 31, 2, 15),
+      northRightOfVerticalDeg: 0.6,
+      light: 'visible, H-alpha, [S II] and [O III] lines; WIYN 0.9 m',
+      credit: 'T.A. Rector (University of Alaska Anchorage) and WIYN/NOIRLab/NSF/AURA',
+      licence: CC_BY,
+      source: 'https://noirlab.edu/public/images/noao1209a/',
+    },
   },
   {
     key: 'puppis-a',
@@ -199,6 +325,18 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'its systemic velocity in HI (kinematic)',
     reference: 'Reynoso, Cichowolski & Walsh 2017, MNRAS 464, 3029',
     note: null,
+    image: {
+      file: 'puppis-a.jpg',
+      widthArcmin: 85.66,
+      heightArcmin: 85.66,
+      centreRaDeg: hms(8, 22, 13.5),
+      centreDecDeg: dms(-1, 43, 0, 28),
+      northRightOfVerticalDeg: 0,
+      light: 'X-rays, false colour (Chandra and XMM-Newton)',
+      credit: 'X-ray: NASA/CXC/IAFE/G.Dubner et al & ESA/XMM-Newton',
+      licence: CHANDRA,
+      source: 'https://chandra.harvard.edu/photo/2014/puppisa/',
+    },
   },
   {
     key: 'ic-443',
@@ -216,6 +354,18 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
     distanceMethod: 'the jump in dust extinction it makes (3D dust map)',
     reference: 'Yu et al. 2019, arXiv 1907.04326',
     note: 'Often quoted at 1.5 kpc, the distance of the Gem OB1 association.',
+    image: {
+      file: 'ic-443.jpg',
+      widthArcmin: 121.16,
+      heightArcmin: 78.84,
+      centreRaDeg: hms(6, 17, 33.7),
+      centreDecDeg: dms(1, 22, 54, 50),
+      northRightOfVerticalDeg: 111.1,
+      light: 'visible, broadband; Kitt Peak',
+      credit: 'KPNO/NOIRLab/NSF/AURA/Tom Bash and John Fox/Adam Block',
+      licence: CC_BY,
+      source: 'https://noirlab.edu/public/images/noao-ic443block2/',
+    },
   },
 ];
 
@@ -225,6 +375,24 @@ const ARCMIN = Math.PI / 180 / 60;
 export function remnantRadiusKm(remnant: SupernovaRemnant): number {
   const meanArcmin = (remnant.sizeArcmin[0] + remnant.sizeArcmin[1]) / 2;
   return Math.tan((meanArcmin / 2) * ARCMIN) * remnant.distancePc * PARSEC_KM;
+}
+
+/**
+ * Where its photograph's centre lies from Green's, km at the remnant's distance, east and north
+ * on the sky (the tangent plane at Green's centre): a picture centred off the remnant, as
+ * Vela's northern quarter is, drawn where it shows.
+ */
+export function imageOffsetKm(remnant: SupernovaRemnant, image: RemnantImage): { east: number; north: number } {
+  const rad = Math.PI / 180;
+  const dRa = (image.centreRaDeg - remnant.raDeg) * rad;
+  const dec0 = remnant.decDeg * rad;
+  const dec = image.centreDecDeg * rad;
+  const cosC = Math.sin(dec0) * Math.sin(dec) + Math.cos(dec0) * Math.cos(dec) * Math.cos(dRa);
+  const km = remnant.distancePc * PARSEC_KM;
+  return {
+    east: ((Math.cos(dec) * Math.sin(dRa)) / cosC) * km,
+    north: ((Math.cos(dec0) * Math.sin(dec) - Math.sin(dec0) * Math.cos(dec) * Math.cos(dRa)) / cosC) * km,
+  };
 }
 
 export function remnantBodyId(remnant: SupernovaRemnant): BodyId {
