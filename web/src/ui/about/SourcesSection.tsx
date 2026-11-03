@@ -1,4 +1,3 @@
-import { SUPERNOVA_REMNANTS } from '../../core/supernovaRemnants.ts';
 import { ESA_MODEL_CREDIT } from '../../scene/craftModels.ts';
 import { ACCENT, BRIGHT, Items, Item, MUTED, Prose, Strong, Sub, TEXT } from './prose.tsx';
 import { REFERENCE_GROUPS, referenceAnchor, referenceNumber, type Reference } from './references.ts';
@@ -143,17 +142,6 @@ export const sourcesSection: AboutSection = {
           <Item>
             Supernova remnants’ positions and sizes from D. A. Green’s Catalogue of Galactic Supernova Remnants
             (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
-          </Item>
-          <Item>
-            Supernova remnant photographs, downscaled, otherwise unchanged:
-            {SUPERNOVA_REMNANTS.map((remnant) =>
-              remnant.image === null ? null : (
-                <span key={remnant.key}>
-                  {' '}
-                  {remnant.name}: {remnant.image.credit} ({remnant.image.licence}), {remnant.image.source}.
-                </span>
-              ),
-            )}
           </Item>
           <Item>
             Globular clusters from Holger Baumgardt’s Galactic Globular Cluster Database

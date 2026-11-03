@@ -59,23 +59,6 @@ export function RemnantPanel({
         <Row label="Radius drawn">{`${radiusPc < 10 ? radiusPc.toFixed(1) : Math.round(radiusPc)} pc, mean`}</Row>
         <Row label="Type">{TYPES[remnant.type]}</Row>
         <Row label="Listed by">Green 2024</Row>
-        {remnant.image !== null && (
-          <>
-            <Divider />
-            <Row label="Photo">{remnant.image.light}</Row>
-            <Row label="Credit">
-              <a
-                href={remnant.image.source}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: 'inherit', textDecoration: 'none' }}
-              >
-                {remnant.image.credit}
-              </a>
-            </Row>
-            <Row label="Licence">{remnant.image.licence}</Row>
-          </>
-        )}
       </dl>
     </Panel>
   );
