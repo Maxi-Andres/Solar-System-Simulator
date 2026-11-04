@@ -115,20 +115,33 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
     return [];
   }
   const squeezed = q.replace(/ /g, '');
+  const first = squeezed.charCodeAt(0);
+  const word = ` ${q}`;
+  // 170,000 names twice a keystroke, so nothing is made for a name that cannot match: one
+  // with spaces whose spaces taken out could be the query's starts as it does (names are
+  // trimmed) and is longer, and any other match contains the query.
   const score = (field: string): number | null => {
     if (field === '') {
       return null;
     }
-    if (field === q || field.replace(/ /g, '') === squeezed) {
+    if (field === q || field === squeezed) {
       return 0;
+    }
+    if (
+      field.charCodeAt(0) === first &&
+      field.length > squeezed.length &&
+      field.includes(' ') &&
+      field.replace(/ /g, '') === squeezed
+    ) {
+      return 0;
+    }
+    if (!field.includes(q)) {
+      return null;
     }
     if (field.startsWith(q)) {
       return 1;
     }
-    if (field.includes(` ${q}`)) {
-      return 2;
-    }
-    return field.includes(q) ? 3 : null;
+    return field.includes(word) ? 2 : 3;
   };
   const best: NameMatch[] = [];
   for (let k = 0; k < index.display.length; k += 1) {

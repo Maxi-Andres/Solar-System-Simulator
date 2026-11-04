@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { BELT_FAMILIES, httpBeltFetchers, type BeltSource } from '../core/belt.ts';
 import { addBeltBody, beltBodyId } from '../core/beltBodies.ts';
@@ -183,6 +183,8 @@ export function SearchPanel({
   const toggleSatelliteChip = useViewStore((state) => state.toggleSatelliteChip);
 
   const [query, setQuery] = useState('');
+  // The box shows each key at once; the lists, which read 170,000 names, follow when they can.
+  const searched = useDeferredValue(query);
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -238,7 +240,7 @@ export function SearchPanel({
 
   const results = useMemo((): Result[] => {
     void version;
-    const bodies: Result[] = searchBodies(store.bodies, query, RESULT_LIMIT).map(({ body }) => ({
+    const bodies: Result[] = searchBodies(store.bodies, searched, RESULT_LIMIT).map(({ body }) => ({
       kind: 'body',
       id: body.id,
     }));
@@ -246,23 +248,23 @@ export function SearchPanel({
     const fromComets: Result[] =
       cometIndex === null
         ? []
-        : searchNames(cometIndex, query, COMET_LIMIT)
+        : searchNames(cometIndex, searched, COMET_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(cometBodyId(k)))
             .map(({ k }) => ({ kind: 'comet', k }));
     const fromNames: Result[] =
       nameIndex === null
         ? []
-        : searchNames(nameIndex, query, NAME_LIMIT)
+        : searchNames(nameIndex, searched, NAME_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(beltBodyId(nameIndex.names.tier[k]!, nameIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'name', k }));
-    const fromSatellites = satelliteResults(store, query, satelliteData, sgpIndex, bulkNames);
+    const fromSatellites = satelliteResults(store, searched, satelliteData, sgpIndex, bulkNames);
     // The stars, the Archive's and the pulsars are listed together, best match first, and in
     // that order where they match alike: "crab" finds the Crab Pulsar before Acrab.
     const scored = new Map<Result, number>();
     const fromStars: Result[] =
       starIndex === null
         ? []
-        : searchNames(starIndex, query, STAR_LIMIT)
+        : searchNames(starIndex, searched, STAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(starBodyId(starIndex.names.tier[k]!, starIndex.names.index[k]!)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'star', k }, score));
     // The stars listed already, so a host found by both its names is listed once.
@@ -276,7 +278,7 @@ export function SearchPanel({
     const fromArchive: Result[] =
       archive === null
         ? []
-        : searchNames(archive.search, query, EXO_LIMIT)
+        : searchNames(archive.search, searched, EXO_LIMIT)
             .filter(({ k }) => {
               const { host, planet } = searchEntry(archive.catalog, k);
               const { hosts } = archive.catalog;
@@ -293,13 +295,13 @@ export function SearchPanel({
     const fromPulsars: Result[] =
       pulsarArchive === null
         ? []
-        : searchNames(pulsarArchive.search, query, PULSAR_LIMIT)
+        : searchNames(pulsarArchive.search, searched, PULSAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(pulsarBodyId(k)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'pulsar', k }, score));
     const fromClusters: Result[] =
       clusterArchive === null
         ? []
-        : searchNames(clusterArchive.search, query, CLUSTER_LIMIT)
+        : searchNames(clusterArchive.search, searched, CLUSTER_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(globularClusterBodyId(k)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'cluster', k }, score));
     // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters.
@@ -315,7 +317,7 @@ export function SearchPanel({
     ].slice(0, RESULT_LIMIT);
   }, [
     store,
-    query,
+    searched,
     version,
     nameIndex,
     cometIndex,
@@ -331,7 +333,7 @@ export function SearchPanel({
   // A new query starts at the top.
   useEffect(() => {
     setSelected(0);
-  }, [query]);
+  }, [searched]);
 
   // Keep the highlighted row in view while the arrows move it.
   useEffect(() => {
@@ -497,7 +499,7 @@ export function SearchPanel({
         }}
       />
 
-      {query.trim() !== '' && results.length === 0 && (
+      {searched.trim() !== '' && results.length === 0 && (
         <p style={{ color: '#6a6a6a', fontSize: '0.72rem', margin: '0.7rem 0 0' }}>
           Nothing by that name here.
         </p>

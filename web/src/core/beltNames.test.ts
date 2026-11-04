@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { decodeBeltRecords, httpBeltFetchers, RECORD, RECORD_BYTES, RECORD_FLOATS, type BeltFetchers, type LoadedTier } from './belt.ts';
 import { addBeltBody, beltBodyFacts, beltBodyId, nominalRadiusKm, parseBeltBodyId, recordElements } from './beltBodies.ts';
-import { indexNames, loadBeltRecord, parseBeltNames, searchNames } from './beltNames.ts';
+import { indexNames, loadBeltRecord, parseBeltNames, searchable, searchNames } from './beltNames.ts';
 import { describeWithData as withData } from './describeWithData.ts';
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { propagate } from './kepler.ts';
@@ -76,6 +76,17 @@ describe('the name index', () => {
     expect(searchNames(index, '433 eros')[0]).toEqual({ k: 1, score: 0 });
     expect(searchNames(index, '2024 yr4')[0]!.k).toBe(3);
     expect(searchNames(index, 'yr4')[0]!.k).toBe(3);
+  });
+
+  it('scores each kind of match as before it skipped the names that cannot match', () => {
+    const names = searchable(['S/2004 S 12', 'S2004S12', 'Pan', 'Pandora', 'Alpha Pan', 'Japan']);
+    const score = (query: string) => searchNames(names, query, 10).map(({ k, score }) => `${k}:${score}`);
+    // Spaces or none, either way round: the whole name.
+    expect(score('s2004s12')).toEqual(['0:0', '1:0']);
+    expect(score('s 2004 s 12')).toEqual(['0:0', '1:0']);
+    // Whole, start, a word, anywhere.
+    expect(score('pan')).toEqual(['2:0', '3:1', '4:2', '5:3']);
+    expect(score('xyz')).toEqual([]);
   });
 
   it('matches the designation a name does not show, a step below the name', () => {
