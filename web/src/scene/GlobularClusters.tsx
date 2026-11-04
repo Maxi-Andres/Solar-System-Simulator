@@ -100,6 +100,8 @@ export interface GlobularClustersProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly visible: boolean;
+  /** The Icons layer: off, the marks go and the cluster's stars stay. */
+  readonly showMarks: boolean;
   readonly onPick: (k: number) => void;
 }
 
@@ -108,7 +110,16 @@ const scratchCamera = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchCluster = new THREE.Vector3();
 
-export function GlobularClusters({ source, catalog, store, clock, focus, visible, onPick }: GlobularClustersProps) {
+export function GlobularClusters({
+  source,
+  catalog,
+  store,
+  clock,
+  focus,
+  visible,
+  showMarks,
+  onPick,
+}: GlobularClustersProps) {
   const { gl, camera } = useThree();
   const archive = useSyncExternalStore(source.subscribe, () => source.value);
   const markersRef = useRef<THREE.Group>(null);
@@ -229,7 +240,7 @@ export function GlobularClusters({ source, catalog, store, clock, focus, visible
     const pixelRatio = renderer.getPixelRatio();
 
     // The marks, as the pulsars'.
-    const fade = mapStrength(frameCamera.position.length() * KM_PER_UNIT);
+    const fade = showMarks ? mapStrength(frameCamera.position.length() * KM_PER_UNIT) : 0;
     frame.current.fade = fade;
     frame.current.jd = jd;
     markersGroup.visible = fade > 0;

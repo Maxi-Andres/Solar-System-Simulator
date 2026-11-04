@@ -444,6 +444,8 @@ export interface LocalGroupProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly visible: boolean;
+  /** The Icons layer: off, the marks go and the galaxies' light stays. */
+  readonly showMarks: boolean;
   /** A dwarf's mark clicked: its index in the archive. */
   readonly onPick: (k: number) => void;
 }
@@ -453,7 +455,7 @@ const scratchMatrix = new THREE.Matrix4();
 const scratchBasis = new THREE.Matrix4();
 const scratchSize = new THREE.Vector2();
 
-export function LocalGroup({ source, store, clock, focus, visible, onPick }: LocalGroupProps) {
+export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick }: LocalGroupProps) {
   const { gl, camera } = useThree();
   const loaded = useSyncExternalStore(source.subscribe, () => source.value);
   // The four are drawn before the catalogue arrives, from their own numbers.
@@ -741,7 +743,9 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
       void source.request();
     }
     const fade = galaxyVisibility(fromSunKm);
-    const markFade = mapStrength(frameCamera.position.length() * KM_PER_UNIT) * outOfDiscStrength(fromSunKm);
+    const markFade = showMarks
+      ? mapStrength(frameCamera.position.length() * KM_PER_UNIT) * outOfDiscStrength(fromSunKm)
+      : 0;
     frame.current.markFade = markFade;
     group.visible = fade > 0 || markFade > 0;
     if (!group.visible) {

@@ -308,17 +308,33 @@ export function SolarSystemCanvas({
         store={store}
         clock={clock}
         focus={focus}
-        visible={showExoplanetHosts}
+        // Rings and nothing else: Icons off takes them too.
+        visible={showExoplanetHosts && showIcons}
         onPick={onPickHost}
       />
-      <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
-      <SupernovaRemnants store={store} clock={clock} focus={focus} visible={showSupernovaRemnants} />
+      <Pulsars
+        source={pulsars}
+        store={store}
+        clock={clock}
+        focus={focus}
+        // Markers and nothing else, as the hosts' rings.
+        visible={showPulsars && showIcons}
+        onPick={onPickPulsar}
+      />
+      <SupernovaRemnants
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showSupernovaRemnants}
+        showRings={showIcons}
+      />
       <LocalGroup
         source={localGroup}
         store={store}
         clock={clock}
         focus={focus}
         visible={showLocalGroup}
+        showMarks={showIcons}
         onPick={onPickGalaxy}
       />
       <GlobularClusters
@@ -328,6 +344,7 @@ export function SolarSystemCanvas({
         clock={clock}
         focus={focus}
         visible={showGlobularClusters}
+        showMarks={showIcons}
         onPick={onPickCluster}
       />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />

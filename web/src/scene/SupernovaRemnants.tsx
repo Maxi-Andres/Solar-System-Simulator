@@ -46,6 +46,8 @@ export interface SupernovaRemnantsProps {
   readonly clock: SimClock;
   readonly focus: BodyId;
   readonly visible: boolean;
+  /** The Icons layer: off, the rings go and the gas stays. */
+  readonly showRings: boolean;
 }
 
 interface Drawn {
@@ -56,7 +58,7 @@ interface Drawn {
   gas: THREE.Mesh | null;
 }
 
-export function SupernovaRemnants({ store, clock, focus, visible }: SupernovaRemnantsProps) {
+export function SupernovaRemnants({ store, clock, focus, visible, showRings }: SupernovaRemnantsProps) {
   const { camera, size } = useThree();
   const group = useMemo(() => new THREE.Group(), []);
   // Made here, added by the effect: a memo may run twice (StrictMode).
@@ -154,7 +156,9 @@ export function SupernovaRemnants({ store, clock, focus, visible }: SupernovaRem
         }
       }
 
-      const visibility = ramp(px, HIDDEN_PX, SHOWN_PX) * ramp(fromCameraKm / radiusKm, 0.3, 0.8) * (1 - gasShown);
+      const visibility =
+        (showRings ? 1 : 0) *
+        ramp(px, HIDDEN_PX, SHOWN_PX) * ramp(fromCameraKm / radiusKm, 0.3, 0.8) * (1 - gasShown);
       ring.visible = visibility > 0;
       if (!ring.visible) {
         continue;
