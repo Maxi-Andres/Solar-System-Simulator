@@ -1199,12 +1199,14 @@ export function SolarSystem({
       }
 
       // The star about a black hole is drawn through the lens instead, while it is on.
-      // A globular cluster is a place, not a surface: its stars are drawn by GlobularClusters.tsx.
+      // A globular cluster is a place, not a surface: its stars are drawn by GlobularClusters.tsx,
+      // and a galaxy's light by LocalGroup.tsx.
       handle.mesh.visible =
         sphereOpacity > 0.005 &&
         !lensState.drawnByLens.has(handle.definition.id) &&
         handle.definition.kind !== 'globular-cluster' &&
-        handle.definition.kind !== 'supernova-remnant';
+        handle.definition.kind !== 'supernova-remnant' &&
+        handle.definition.kind !== 'galaxy';
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;

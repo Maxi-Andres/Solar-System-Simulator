@@ -153,9 +153,10 @@ export function starProfile(radiusPx: number, sigmaPx = PSF_SIGMA_PX): number {
 
 /**
  * Distance to the star sphere, in scene units: 7e15, 7e18 km, 740,000 ly (since D2b; it
- * was 5e13 below). Past the farthest zoom, 400,000 ly, by more than half again, so the
- * Sun is never behind the sky from anywhere the camera goes, and inside the far plane,
- * 1e16 (logDepth.ts). Float32 of a vertex there is 2^-24 of it, an angle of 6e-8 rad:
+ * was 5e13 below). Past the farthest zoom it was set for, 400,000 ly, by more than half
+ * again, so the Sun is never behind the sky from anywhere the sky is drawn -- and since the
+ * Local Group the camera goes on to 40 million ly, but the sky is gone long before, faded
+ * out as the galaxy comes in (Starfield.tsx) -- and inside the far plane (logDepth.ts). Float32 of a vertex there is 2^-24 of it, an angle of 6e-8 rad:
  * still a hundredth of a pixel.
  *
  *

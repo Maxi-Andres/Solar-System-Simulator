@@ -13,7 +13,9 @@ export type BodyId = string;
  * 'black-hole' likewise: Sgr A*, Gaia BH1 and Gaia BH3, placed from their papers in the app
  * (web/src/core/blackHoles.ts). And 'neutron-star': a pulsar gone to, made a body from
  * pulsars.json (web/src/core/pulsars.ts). And 'globular-cluster': a cluster gone to, from
- * globular-clusters.json (web/src/core/globularClusters.ts) -- a place of no surface.
+ * globular-clusters.json (web/src/core/globularClusters.ts) -- a place of no surface. And
+ * 'galaxy': another galaxy of the Local Group, from web/src/core/localGroup.ts and
+ * local-group.json -- a place of no surface too.
  */
 export type BodyKind =
   | 'star'
@@ -27,7 +29,8 @@ export type BodyKind =
   | 'black-hole'
   | 'neutron-star'
   | 'globular-cluster'
-  | 'supernova-remnant';
+  | 'supernova-remnant'
+  | 'galaxy';
 
 /**
  * Which surface-map set a body is being drawn with.
@@ -1918,4 +1921,59 @@ export interface GlobularClusterCatalog {
   /** Harris's [Fe/H] and E(B-V); null where Harris does not list the cluster or the value. */
   readonly feH: readonly (number | null)[];
   readonly ebv: readonly (number | null)[];
+}
+
+/**
+ * The Local Group and the dwarf galaxies about it out to 3 Mpc: McConnachie's catalogue of
+ * nearby galaxies (2012, AJ 144, 4), as he keeps it updated -- the January 2021 version, a
+ * FITS table (config.ts). One entry a galaxy, columns as arrays; a value the catalogue does
+ * not give is null.
+ */
+export interface LocalGroupCatalog {
+  readonly source: { readonly url: string; readonly version: string; readonly queriedAt: string };
+  readonly frame: string;
+  readonly count: number;
+  /** The catalogue's own name, as it spells it: "AndromedaXXI", "Bootes(1)", "*Tucana3". */
+  readonly catalogueName: readonly string[];
+  /** What it is called here: "Andromeda XXI", "Boötes I", "Tucana III". */
+  readonly name: readonly string[];
+  /** Other names it is known by, where it has any: "M110", "Barnard's Galaxy". */
+  readonly otherNames: readonly (readonly string[])[];
+  /**
+   * The catalogue's asterisk: a faint object whose nature is ambiguous -- a dwarf galaxy or a
+   * star cluster -- left to the user to include (McConnachie's Update.log, 2015).
+   */
+  readonly ambiguous: readonly boolean[];
+  /** Centre, J2000, degrees. */
+  readonly raDeg: readonly number[];
+  readonly decDeg: readonly number[];
+  /** Centre about the Sun, scene frame, parsecs. */
+  readonly x: readonly number[];
+  readonly y: readonly number[];
+  readonly z: readonly number[];
+  /** Distance modulus (m-M)0 and its errors up and down, magnitudes; and the distance it gives, pc. */
+  readonly distanceModulus: readonly number[];
+  readonly distanceModulusUp: readonly (number | null)[];
+  readonly distanceModulusDown: readonly (number | null)[];
+  readonly distancePc: readonly number[];
+  /** Foreground reddening E(B-V), from Schlegel et al. 1998's maps. */
+  readonly ebv: readonly (number | null)[];
+  /** Apparent V magnitude, corrected for that reddening. */
+  readonly vMag: readonly (number | null)[];
+  /** Central V surface brightness, mag/arcsec^2. */
+  readonly muV0: readonly (number | null)[];
+  /** Half-light radius on the major axis, arcminutes; ellipticity 1 - b/a; major axis's position angle, degrees east of north. */
+  readonly halfLightArcmin: readonly (number | null)[];
+  readonly ellipticity: readonly (number | null)[];
+  readonly positionAngleDeg: readonly (number | null)[];
+  /** Heliocentric radial velocity, km/s; stellar velocity dispersion, km/s. */
+  readonly radialVelocityKmS: readonly (number | null)[];
+  readonly sigmaStarsKmS: readonly (number | null)[];
+  /** HI mass, millions of solar masses: its gas, where any is measured. */
+  readonly hiMassMillionSun: readonly (number | null)[];
+  /** Mean [Fe/H] of its stars. */
+  readonly feH: readonly (number | null)[];
+  /** Systemic proper motion, mas/yr, where measured. */
+  readonly pmRaMasYr: readonly (number | null)[];
+  readonly pmDecMasYr: readonly (number | null)[];
 }

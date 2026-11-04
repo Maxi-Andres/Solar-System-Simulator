@@ -31,6 +31,9 @@
  *   Baumgardt's Galactic Globular Cluster Database -- https://people.smp.uq.edu.au/HolgerBaumgardt/globular/
  *   Harris catalogue of Milky Way globular clusters -- https://physics.mcmaster.ca/~harris/mwgc.dat
  *     The globular clusters. See clusters/.
+ *
+ *   McConnachie's catalogue of nearby galaxies -- https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/community/nearby/
+ *     The Local Group's galaxies and their neighbours. See localGroup/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -82,6 +85,8 @@ import { ARCHIVE_ACKNOWLEDGEMENT, fetchArchive } from './exoplanets/archive.ts';
 import { buildExoplanets, describeExoplanets, starIdsFromBuild } from './exoplanets/buildExoplanets.ts';
 import { describeGlobularClusters } from './clusters/globularClusters.ts';
 import { loadGlobularClusters } from './clusters/fetchClusters.ts';
+import { loadLocalGroup } from './localGroup/fetchLocalGroup.ts';
+import { describeLocalGroup } from './localGroup/nearbyGalaxies.ts';
 import { describePulsars } from './pulsars/buildPulsars.ts';
 import { loadPulsars } from './pulsars/fetchPulsars.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
@@ -110,6 +115,7 @@ import {
   writeExoplanets,
   writePulsars,
   writeGlobularClusters,
+  writeLocalGroup,
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
@@ -642,8 +648,8 @@ async function main(): Promise<void> {
   // The pulsars, two more (the ATNF's package and McGill's table), the same way: two
   // downloads of a few seconds, retried, and a run that cannot read them fails rather than
   // publish a galaxy that has quietly lost its neutron stars. The globular clusters, three
-  // small files more, likewise.
-  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters] = await Promise.all([
+  // small files more, likewise, and the Local Group's one.
+  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters, localGroup] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -671,6 +677,7 @@ async function main(): Promise<void> {
     fetchArchive(),
     loadPulsars(),
     loadGlobularClusters(),
+    loadLocalGroup(),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -779,6 +786,9 @@ async function main(): Promise<void> {
   for (const line of describeGlobularClusters(globularClusters)) {
     console.log(line.replace('[clusters]', '[fetch-data] clusters'));
   }
+  for (const line of describeLocalGroup(localGroup)) {
+    console.log(line.replace('[local-group]', '[fetch-data] local group'));
+  }
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
@@ -868,6 +878,7 @@ async function main(): Promise<void> {
   await writeExoplanets(exoplanets);
   await writePulsars(pulsars);
   await writeGlobularClusters(globularClusters);
+  await writeLocalGroup(localGroup);
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {

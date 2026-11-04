@@ -69,6 +69,8 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       return 'Globular cluster';
     case 'supernova-remnant':
       return 'Supernova remnant';
+    case 'galaxy':
+      return 'Galaxy';
   }
 }
 
@@ -108,6 +110,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['globularClusters'];
     case 'supernova-remnant':
       return ['supernovaRemnants'];
+    case 'galaxy':
+      return ['localGroup'];
   }
 }
 
@@ -122,6 +126,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   'neutron-star': 0,
   'globular-cluster': 0,
   'supernova-remnant': 0,
+  galaxy: 0,
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,

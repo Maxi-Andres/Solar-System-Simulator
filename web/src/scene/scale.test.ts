@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { CAMERA_FAR_UNITS } from './logDepth.ts';
+import { GALAXY_FULL_LY, galaxyVisibility } from './MilkyWay.tsx';
 import { SPHERE_RADIUS } from './starRendering.ts';
 
 import {
@@ -452,10 +453,21 @@ describe('how far the camera may pull back', () => {
     expect(voyagerKm / reachKm).toBeLessThan(0.5);
   });
 
-  it('stays inside the star sphere, so the Sun is never drawn behind the sky', () => {
-    expect(kmToUnits(MAX_VIEW_DISTANCE_KM)).toBeLessThan(SPHERE_RADIUS / 1.5);
+  it('stays inside the star sphere wherever the sky is drawn, so the Sun is never behind it', () => {
+    // Past the galaxy's fade-in the sky is not drawn at all (Starfield.tsx): only nearer
+    // than that need the Sun be inside it.
+    expect(galaxyVisibility(GALAXY_FULL_LY * LIGHT_YEAR_KM)).toBe(1);
+    expect(kmToUnits(GALAXY_FULL_LY * LIGHT_YEAR_KM)).toBeLessThan(SPHERE_RADIUS / 1.5);
     // And the sphere inside the far plane, so its depth is a real one.
     expect(SPHERE_RADIUS).toBeLessThan(CAMERA_FAR_UNITS);
+  });
+
+  it('sees the Local Group whole, and keeps the farthest galaxy inside the far plane', () => {
+    // Its far edge about 1.4 Mpc from the Sun, in the inner half of the frame's height.
+    const edgeKm = 1.4e6 * PARSEC_KM;
+    expect((Math.asin(edgeKm / MAX_VIEW_DISTANCE_KM) * 180) / Math.PI).toBeLessThan(FOV_DEG / 4);
+    // The catalogue's farthest, 3 Mpc, behind the Sun from the farthest zoom.
+    expect(kmToUnits(MAX_VIEW_DISTANCE_KM + 3e6 * PARSEC_KM)).toBeLessThan(CAMERA_FAR_UNITS);
   });
 
   it('sees the whole 100-parsec sphere, in the inner half of the frame', () => {

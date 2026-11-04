@@ -52,10 +52,10 @@ export function niceFloor(value: number): number {
   return step * power;
 }
 
-/** A count in a unit, as the bar writes it: "200,000 km", "2 million km", "0.5 ly". */
+/** A count in a unit, as the bar writes it: "200,000 km", "2 million km", "0.5 ly", "2 million ly". */
 export function formatLength(value: number, unit: ScaleUnit): string {
-  if (unit === 'km' && value >= 1e6) {
-    return `${Number((value / 1e6).toPrecision(3))} million km`;
+  if ((unit === 'km' || unit === 'ly') && value >= 1e6) {
+    return `${Number((value / 1e6).toPrecision(3))} million ${unit}`;
   }
   return `${value.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${unit}`;
 }

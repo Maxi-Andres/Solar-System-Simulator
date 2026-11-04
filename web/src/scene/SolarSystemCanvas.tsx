@@ -8,6 +8,7 @@ import type { Stars3dSource } from '../core/stars3d.ts';
 import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import type { PulsarArchive } from '../core/pulsars.ts';
 import type { GlobularClusterArchive } from '../core/globularClusters.ts';
+import type { LocalGroupArchive } from '../core/localGroup.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
@@ -27,6 +28,7 @@ import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
+import { LocalGroup } from './LocalGroup.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -138,6 +140,10 @@ export interface SolarSystemCanvasProps {
   readonly onPickCluster: (k: number) => void;
   /** The Supernova Remnants layer: their rings (their names and marks are the bodies'). */
   readonly showSupernovaRemnants: boolean;
+  /** The Local Group's galaxies, the dwarfs' marks, and what a click on one does. */
+  readonly localGroup: LazySource<LocalGroupArchive>;
+  readonly showLocalGroup: boolean;
+  readonly onPickGalaxy: (k: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -176,6 +182,9 @@ export function SolarSystemCanvas({
   showGlobularClusters,
   onPickCluster,
   showSupernovaRemnants,
+  localGroup,
+  showLocalGroup,
+  onPickGalaxy,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -213,6 +222,7 @@ export function SolarSystemCanvas({
     showPulsars,
     showGlobularClusters,
     showSupernovaRemnants,
+    showLocalGroup,
     showNuclearCluster,
   ]);
 
@@ -303,6 +313,14 @@ export function SolarSystemCanvas({
       />
       <Pulsars source={pulsars} store={store} clock={clock} focus={focus} visible={showPulsars} onPick={onPickPulsar} />
       <SupernovaRemnants store={store} clock={clock} focus={focus} visible={showSupernovaRemnants} />
+      <LocalGroup
+        source={localGroup}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showLocalGroup}
+        onPick={onPickGalaxy}
+      />
       <GlobularClusters
         source={globularClusters}
         catalog={stars}

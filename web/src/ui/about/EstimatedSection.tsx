@@ -28,6 +28,7 @@ export const estimatedSection: AboutSection = {
     { id: 'maps', label: 'Surface maps' },
     { id: 'earth', label: 'Earth' },
     { id: 'galaxy', label: 'The galaxy' },
+    { id: 'local-group', label: 'The Local Group' },
   ],
   Body: ({ data }) => {
     const { store, beltInfo, cometInfo, exoplanetCatalog } = data;
@@ -591,6 +592,48 @@ export const estimatedSection: AboutSection = {
               another number
               <Cite k="reid2019" />.
             </Why>
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="local-group">
+          The Local Group
+        </Sub>
+        <Items>
+          <Item title="A dwarf’s depth">
+            How deep a dwarf galaxy is along our line of sight is measured for none of them. Each is drawn as deep
+            as the geometric mean of its two measured axes on the sky.
+            <Why>neither a disc seen face-on nor a cigar seen end-on, when either could be.</Why>
+          </Item>
+          <Item title="A dwarf’s profile">
+            Every dwarf is drawn as a Plummer ellipsoid whose projected half-light radius is its catalogue’s,
+            though some are fitted better by an exponential or a King profile.
+            <Why>
+              one profile from the catalogue’s one radius; drawn so, Fornax’s centre comes out within 0.3
+              magnitudes of its measured surface brightness
+              <Cite k={['plummer1911', 'mcconnachie2012']} />.
+            </Why>
+          </Item>
+          <Item title="A disc’s thickness">
+            Andromeda’s, Triangulum’s and the Large Cloud’s discs are drawn a fifth as thick as their scale
+            length: the flattening conventionally assumed when galaxies’ inclinations are worked out from their
+            shapes. The thickness of their light is measured for none of the three.
+          </Item>
+          <Item title="Which side of Triangulum is nearer">
+            Not measured here: its west side is drawn nearer. From Earth it looks the same either way.
+          </Item>
+          <Item title="Their colours">
+            The catalogue gives no colours. A dwarf rich in gas — a fifth of a solar mass of hydrogen or more for
+            each solar luminosity — is drawn in a young population’s colour, B−V 0.45, any other in an old one’s,
+            0.75 — a dwarf irregular’s and a dwarf spheroidal’s — and Andromeda’s bulge redder than its disc.
+            <Why>
+              gas is where stars still form
+              <Cite k="mateo1998" />.
+            </Why>
+          </Item>
+          <Item title="What is not drawn">
+            Spiral arms, dust lanes and star-forming regions; the Large Cloud’s bar; Andromeda’s halo, 4% of its
+            light, and its streams; the Magellanic Stream; and each galaxy’s motion. A galaxy whose size or V is
+            not measured is its mark only.
           </Item>
         </Items>
       </>

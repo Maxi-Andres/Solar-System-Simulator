@@ -19,6 +19,7 @@
     "fetch:exoplanets": "pnpm --filter @sss/tools fetch:exoplanets",
     "fetch:pulsars": "pnpm --filter @sss/tools fetch:pulsars",
     "fetch:clusters": "pnpm --filter @sss/tools fetch:clusters",
+    "fetch:local-group": "pnpm --filter @sss/tools fetch:local-group",
     "write:catalog": "pnpm --filter @sss/tools write:catalog",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

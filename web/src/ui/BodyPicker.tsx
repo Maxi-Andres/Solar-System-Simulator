@@ -19,7 +19,9 @@ import { useSignal } from '../core/useSignal.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
 import { GALAXY_VIEW } from '../scene/MilkyWay.tsx';
-import { GALAXY_FRAMING_KM, NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
+import { LOCAL_GROUP_VIEW } from '../scene/LocalGroup.tsx';
+import { GALAXY_FRAMING_KM, LOCAL_GROUP_FRAMING_KM, NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
+import { galaxyBodyId, GIANTS } from '../core/localGroup.ts';
 import { useViewStore } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
@@ -41,6 +43,10 @@ import { Presence, useClosing } from './Presence.tsx';
  * nearest stars (NEIGHBOURHOOD_FRAMING_KM). **Milky Way** goes to the Sun and stands the
  * camera 180,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
  * seen whole. It was a name and not a place until that model existed.
+ *
+ * Above them all, **Local Group** (G1): the Sun, the camera 8 million light years out over the
+ * Milky Way's pole with Andromeda across the frame (LOCAL_GROUP_FRAMING_KM), and beside it a
+ * list of its big galaxies. At another galaxy the breadcrumb is Local Group and that galaxy.
  *
  * Milky Way has a list of its own beside it: the places in the galaxy -- home first, the
  * Solar System and the Solar Neighbourhood, then the black holes (D5, blackHoles.ts), Sgr
@@ -123,10 +129,17 @@ export function BodyPicker({
   // light years off at the least.
   const inGalaxy =
     focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
+  // Another galaxy: out of the Milky Way altogether.
+  const inOtherGalaxy = focusBody.kind === 'galaxy';
   // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
   // anything of Alpha Centauri's or another star's, nor a black hole's, nor a pulsar.
   const inSolarSystem =
-    !isCatalogueStar(focusBody) && !inAlphaCen && planetSystem === null && blackHoleSystem === null && !inGalaxy;
+    !isCatalogueStar(focusBody) &&
+    !inAlphaCen &&
+    planetSystem === null &&
+    blackHoleSystem === null &&
+    !inGalaxy &&
+    !inOtherGalaxy;
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -140,6 +153,13 @@ export function BodyPicker({
     onFocus('sun');
     renderDemand.request();
   };
+  const toLocalGroup = (): void => {
+    requestFraming(LOCAL_GROUP_FRAMING_KM, LOCAL_GROUP_VIEW);
+    onFocus('sun');
+    renderDemand.request();
+  };
+  // The Local Group's big galaxies, under its own caret.
+  const [galaxiesOpen, setGalaxiesOpen] = useState(false);
 
   // The star systems one can go to, under Solar Neighbourhood's own caret.
   const [systemsOpen, setSystemsOpen] = useState(false);
@@ -154,7 +174,7 @@ export function BodyPicker({
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open && !systemsOpen && !blackHolesOpen) {
+    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen) {
       return;
     }
     const onPointerDown = (event: PointerEvent): void => {
@@ -162,6 +182,7 @@ export function BodyPicker({
         setOpen(false);
         setSystemsOpen(false);
         setBlackHolesOpen(false);
+        setGalaxiesOpen(false);
       }
     };
     const onKey = (event: KeyboardEvent): void => {
@@ -169,6 +190,7 @@ export function BodyPicker({
         setOpen(false);
         setSystemsOpen(false);
         setBlackHolesOpen(false);
+        setGalaxiesOpen(false);
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -177,7 +199,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, systemsOpen, blackHolesOpen]);
+  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen]);
 
   const choose = (id: BodyId): void => {
     onFocus(id);
@@ -202,26 +224,51 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={toGalaxy} outer>
-          Milky Way
+        <Crumb onClick={toLocalGroup} outer>
+          Local Group
         </Crumb>
         <button
           type="button"
-          aria-label="Places in the Milky Way"
+          aria-label="Galaxies of the Local Group"
           aria-haspopup="listbox"
-          aria-expanded={blackHolesOpen}
-          title="Go to a place in the Milky Way"
+          aria-expanded={galaxiesOpen}
+          title="Go to a galaxy of the Local Group"
           onClick={() => {
-            setBlackHolesOpen((value) => !value);
+            setGalaxiesOpen((value) => !value);
+            setBlackHolesOpen(false);
             setSystemsOpen(false);
             setOpen(false);
           }}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
-          <Caret open={blackHolesOpen} />
+          <Caret open={galaxiesOpen} />
         </button>
         <Separator />
-        {blackHoleSystem === null && !inGalaxy && (
+        {!inOtherGalaxy && (
+          <>
+            <Crumb onClick={toGalaxy} outer>
+              Milky Way
+            </Crumb>
+            <button
+              type="button"
+              aria-label="Places in the Milky Way"
+              aria-haspopup="listbox"
+              aria-expanded={blackHolesOpen}
+              title="Go to a place in the Milky Way"
+              onClick={() => {
+                setBlackHolesOpen((value) => !value);
+                setSystemsOpen(false);
+                setGalaxiesOpen(false);
+                setOpen(false);
+              }}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+            >
+              <Caret open={blackHolesOpen} />
+            </button>
+            <Separator />
+          </>
+        )}
+        {blackHoleSystem === null && !inGalaxy && !inOtherGalaxy && (
           <>
             <Crumb onClick={toNeighbourhood} outer>
               Solar Neighbourhood
@@ -317,6 +364,21 @@ export function BodyPicker({
                   setSystemsOpen(false);
                 }
           }
+        />
+      </Presence>
+
+      <Presence show={galaxiesOpen}>
+        <GalaxyList
+          active={inOtherGalaxy ? focus : null}
+          onMilkyWay={() => {
+            toGalaxy();
+            setGalaxiesOpen(false);
+          }}
+          onChoose={(id) => {
+            onFocus(id);
+            renderDemand.request();
+            setGalaxiesOpen(false);
+          }}
         />
       </Presence>
 
@@ -531,6 +593,7 @@ function BodyList({
       body.kind !== 'neutron-star' &&
       body.kind !== 'globular-cluster' &&
       body.kind !== 'supernova-remnant' &&
+      body.kind !== 'galaxy' &&
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
@@ -1090,6 +1153,44 @@ function SystemList({
  * black holes (D5), each framed with the star on its orbit: Sgr A* first, at the centre of
  * the Galaxy; then the two nearest known, by distance.
  */
+/** The Local Group's big galaxies: the Milky Way, and the four that are bodies from the start. */
+function GalaxyList({
+  active,
+  onMilkyWay,
+  onChoose,
+}: {
+  active: BodyId | null;
+  onMilkyWay: () => void;
+  onChoose: (id: BodyId) => void;
+}) {
+  const closing = useClosing();
+  return (
+    <div
+      role="listbox"
+      aria-label="Galaxies of the Local Group"
+      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
+      style={{
+        marginTop: '0.55rem',
+        width: '13.5rem',
+        background: 'rgba(14,14,17,0.97)',
+        border: '1px solid #262626',
+        borderRadius: '0.4rem',
+        padding: '0.35rem',
+      }}
+    >
+      <MemberRow name="Milky Way" active={false} onChoose={onMilkyWay} />
+      {GIANTS.map((galaxy) => (
+        <MemberRow
+          key={galaxy.key}
+          name={galaxy.name}
+          active={active === galaxyBodyId(galaxy)}
+          onChoose={() => onChoose(galaxyBodyId(galaxy))}
+        />
+      ))}
+    </div>
+  );
+}
+
 function BlackHoleList({
   active,
   inSolarSystem,

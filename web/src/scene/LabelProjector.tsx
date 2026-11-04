@@ -179,11 +179,11 @@ export function labelRank(kind: string, parent: BodyId | null): number {
 
 /**
  * Kinds of body that are places out in the galaxy, not of the Solar System: a pulsar gone to,
- * a globular cluster, a supernova remnant. Their names never fold into the Solar System's --
+ * a globular cluster, a supernova remnant -- or past it, another galaxy. Their names never fold into the Solar System's --
  * that would hide a remnant's name, its only way to be clicked, whenever the Sun's planets
  * are small on screen.
  */
-const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant']);
+const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant', 'galaxy']);
 
 export function LabelProjector({
   store,

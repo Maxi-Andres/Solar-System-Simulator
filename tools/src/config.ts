@@ -691,3 +691,17 @@ export const HARRIS_URL = 'https://physics.mcmaster.ca/~harris/mwgc.dat';
 
 /** The output file. */
 export const GLOBULAR_CLUSTERS_FILE = 'globular-clusters.json';
+
+/**
+ * The Local Group and its neighbours out to 3 Mpc: Alan McConnachie's catalogue of nearby
+ * galaxies (McConnachie 2012, AJ 144, 4), kept up to date on his page at the CADC
+ * (https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/community/nearby/) -- its January 2021
+ * version, the latest, a FITS binary table of 144 galaxies. It does not list the Milky Way or
+ * M31, the two it is about; M31 is the app's own (web/src/core/localGroup.ts).
+ */
+export const NEARBY_GALAXIES_URL =
+  'https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/files/vault/PANDAS/NearbyGals/NearbyGalaxies_Jan2021_PUBLIC.fits';
+export const NEARBY_GALAXIES_VERSION = 'January 2021';
+
+/** The output file. */
+export const LOCAL_GROUP_FILE = 'local-group.json';

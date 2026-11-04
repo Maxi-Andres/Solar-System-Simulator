@@ -140,6 +140,11 @@ export const sourcesSection: AboutSection = {
             http://www.physics.mcgill.ca/~pulsar/magnetar/main.html.
           </Item>
           <Item>
+            The Local Group’s dwarf galaxies from A. W. McConnachie’s catalogue of nearby galaxies (January 2021
+            version), https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/en/community/nearby/ — McConnachie, A. W.,
+            2012, AJ, 144, 4, The observed properties of dwarf galaxies in and around the Local Group.
+          </Item>
+          <Item>
             Supernova remnants’ positions and sizes from D. A. Green’s Catalogue of Galactic Supernova Remnants
             (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
           </Item>

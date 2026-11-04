@@ -52,6 +52,7 @@ export const physicsSection: AboutSection = {
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy' },
+    { id: 'local-group', label: 'The Local Group' },
   ],
   Body: () => {
     const log10 = (...argument: Parameters<typeof row>) => row(sub(up('log'), mn('10')), paren(...argument));
@@ -1182,6 +1183,87 @@ export const physicsSection: AboutSection = {
           of it crosses it. Within a slab, a few thousand light years deep, stars and dust are not ordered.
           <Cite k="osterbrockFerland2006" />
         </Prose>
+
+        <Sub section="physics" id="local-group">
+          The Local Group
+        </Sub>
+        <Equation
+          title="A galaxy’s light"
+          code="web/src/core/localGroup.ts"
+          math={math(
+            row(
+              mi('L'),
+              mo('='),
+              sup(mn('10'), row(mo('−'), mn('0.4'), paren(row(mi('V'), mo('−'), paren(row(mi('m'), mo('−'), mi('M'))), mo('−'), sub(mi('M'), mi('V☉')))))),
+              t(',  '),
+              mi('μ'),
+              mo('='),
+              sub(mi('M'), mi('V☉')),
+              mo('+'),
+              mn('21.572'),
+              mo('−'),
+              mn('2.5'),
+              fn('log'),
+              mi('Σ'),
+            ),
+          )}
+          symbols={
+            <>
+              V its magnitude, dereddened; m − M its distance modulus; M<sub>V☉</sub> 4.81; Σ a column of light
+              in solar luminosities per square parsec; μ its surface brightness, mag/arcsec².
+            </>
+          }
+        >
+          Each galaxy is a density of light in space whose whole is its luminosity. What a pixel sees is the
+          density summed along its ray: a surface brightness, the same at any distance, so from Earth it is the
+          galaxy’s measured profile and from beside it its side.
+        </Equation>
+        <Equation
+          title="A dwarf, in closed form"
+          code="web/src/scene/LocalGroup.tsx"
+          math={math(
+            row(
+              mi('Σ'),
+              mo('='),
+              frac(sub(mi('ρ'), mn('0')), row(mo('|'), mi('v'), mo('|'))),
+              paren(row(frac(mn('2'), row(mn('3'), sup(mi('c'), mn('4')))), mo('−'), frac(row(sub(mi('s'), mn('0')), paren(row(mn('2'), subsup(mi('s'), mn('0'), mn('2')), mo('+'), mn('3'), sup(mi('c'), mn('2'))))), row(mn('3'), sup(mi('c'), mn('4')), sup(paren(row(subsup(mi('s'), mn('0'), mn('2')), mo('+'), sup(mi('c'), mn('2')))), frac(mn('3'), mn('2'))))))),
+            ),
+          )}
+          symbols={
+            <>
+              ρ<sub>0</sub> its central density, from its luminosity; in the ellipsoid’s units — each axis over its
+              scale — the ray is u<sub>0</sub> + t v from the camera, c² is one plus the square of its closest
+              approach, and s<sub>0</sub> where the camera is along it.
+            </>
+          }
+        >
+          A Plummer ellipsoid, ρ = ρ<sub>0</sub>(1 + m²)<sup>−5/2</sup>, integrates along any ray in closed form:
+          exact from outside or inside it, one evaluation a pixel. The disc galaxies have no such form and are
+          summed in steps along the ray.
+          <Cite k="plummer1911" />
+        </Equation>
+        <Equation
+          title="Andromeda’s bulge in three dimensions"
+          code="web/src/core/localGroup.ts"
+          math={math(
+            row(
+              mi('ρ'),
+              mo('='),
+              sub(mi('ρ'), mn('0')),
+              sup(paren(frac(mi('r'), sub(mi('R'), mi('e')))), row(mo('−'), mi('p'))),
+              sup(mi('e'), row(mo('−'), mi('b'), sup(paren(frac(mi('r'), sub(mi('R'), mi('e')))), frac(mn('1'), mi('n'))))),
+            ),
+          )}
+          symbols={
+            <>
+              n 2.2 and R<sub>e</sub> 1.0 kpc, Courteau et al.’s Sérsic fit; p = 1 − 0.6097/n + 0.05463/n²; b = 2n −
+              1/3 + 0.009876/n.
+            </>
+          }
+        >
+          A sphere whose projection is, very nearly, the Sérsic profile measured on the sky.
+          <Cite k={['prugnielSimien1997', 'limaNeto1999', 'courteau2011']} />
+        </Equation>
       </>
     );
   },

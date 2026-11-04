@@ -20,7 +20,7 @@ import * as THREE from 'three';
  *   depth = log2(1 + w / near) / log2(1 + far / near)
  *
  * Now every distance gets the same relative step, 2^-24 * ln 2 * log2(1 + far / near) of
- * itself -- 3.0e-6 with the far plane below -- and at the planets' distances the buffer
+ * itself -- 3.3e-6 with the far plane below -- and at the planets' distances the buffer
  * behaves as it did under three's own formula.
  *
  * ## The far plane moved for the light years (step D1), and what it cost
@@ -62,6 +62,15 @@ import * as THREE from 'three';
  *    so clip-space z never reaches w. A star past it writes a depth over 1, which a
  *    fixed-point depth buffer clamps to 1 -- behind every body, which is where it is.
  *
+ * ## And again for the Local Group (step G1)
+ *
+ * The camera now pulls back to 40 million ly (scale.ts), so the far plane is 1e18 units,
+ * 1e21 km, 106 million ly: the zoom and the catalogue's farthest galaxies, 3 Mpc beyond the
+ * Sun on the far side, inside it. log2(1e24) against log2(1e22): another 9 %, 79.73 / 73.08,
+ * on every step -- 6.6 um at a metre, 21 m at Earth's radius, 490 km at an AU. vFragDepth
+ * reaches 1e24, inside float32, and log2 of it, 79.7, has the same float32 step, 7.6e-6.
+ * And the projection term is still exactly 1 (far / near = 1e24).
+ *
  * Applied by replacing the two shader chunks that compute it, which every built-in
  * material and every custom shader here that includes them picks up. It must run before
  * the first material compiles; importing this module does it.
@@ -70,8 +79,8 @@ import * as THREE from 'three';
 /** The camera's near plane, scene units: one metre. */
 export const CAMERA_NEAR_UNITS = 1e-6;
 
-/** The camera's far plane, scene units: 1e19 km, 1.06 million ly. See the header. */
-export const CAMERA_FAR_UNITS = 1e16;
+/** The camera's far plane, scene units: 1e21 km, 106 million ly. See the header. */
+export const CAMERA_FAR_UNITS = 1e18;
 
 /** The 24-bit depth buffer's smallest step, as a fraction of the buffer's range. */
 const DEPTH_STEP = 2 ** -24;

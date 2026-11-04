@@ -35,6 +35,7 @@ export const measuredSection: AboutSection = {
     { id: 'globular-clusters', label: 'Globular clusters' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The Milky Way' },
+    { id: 'local-group', label: 'The Local Group' },
   ],
   Body: ({ data }) => {
     const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog, pulsarCatalog } = data;
@@ -566,6 +567,47 @@ export const measuredSection: AboutSection = {
             and{' '}
             <Xref to="choices" sub="galaxy">
               Choices › The galaxy’s light
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="local-group">
+          The Local Group
+        </Sub>
+        <Items>
+          <Item>
+            The dwarf galaxies about the Milky Way and Andromeda, and the small galaxies out to 3 Mpc, from{' '}
+            <Strong>McConnachie’s catalogue</Strong> <Cite k="mcconnachie2012" /> as he keeps it, its January
+            2021 version: a hundred and forty, each at the distance its adopted distance modulus gives, on its
+            measured centre, with its V corrected for the reddening in front of it, its half-light radius,
+            ellipticity and position angle, its central surface brightness, and — where they are measured — its
+            radial velocity, its stars’ velocity dispersion, its gas, its [Fe/H] and its proper motion. Two dozen
+            faint ones the catalogue marks as of uncertain nature, a dwarf galaxy or a star cluster; their panels
+            say so.
+          </Item>
+          <Item>
+            The four big ones from their own papers. <Strong>Andromeda</Strong> at 761 ± 11 kpc, from Hubble’s
+            Cepheids <Cite k="li2021" />; its disc’s scale length, 5.3 kpc, and its bulge, a Sérsic profile of
+            index 2.2 and effective radius 1.0 kpc with 23% of its light to the disc’s 73% <Cite k="courteau2011" />
+            ; tipped 77° to us, its major axis at 38° <Cite k="devaucouleurs1958" />, its north-west side the
+            nearer <Cite k="walterbosKennicutt1988" />; V 3.44 <Cite k="rc3" /> less the 0.21 magnitudes of dust
+            in front of its centre <Cite k="schlegel1998" />. <Strong>Triangulum</Strong> at 839 kpc, from
+            Cepheids <Cite k="breuval2023" />; tipped 52°, its major axis at 22.5° <Cite k="warner1973" />, its
+            disc’s scale length 1.6 kpc <Cite k="kam2015" />. The <Strong>Large Magellanic Cloud</Strong> at
+            49.59 kpc, from eclipsing binaries, to one per cent <Cite k="pietrzynski2019" />; tipped 34° about a
+            line of nodes at 139°, its north-east side nearer, from its stars’ motions{' '}
+            <Cite k="vdMarelKallivayalil2014" />; its scale length 1.4 kpc <Cite k="vdMarel2001" />. The{' '}
+            <Strong>Small Magellanic Cloud</Strong> at 62.44 kpc, from eclipsing binaries, which also show it
+            deeper along our line of sight than it is wide <Cite k="graczyk2020" />; its old stars’ scale length,
+            1.25 kpc, and extent <Cite k="gonidakis2009" />, its axis at 49° <Cite k="harrisZaritsky2006" />.
+            Their V from McConnachie’s catalogue.
+          </Item>
+          <Item>
+            Each stands still at its place. Their motions are measured for some — a few hundred km/s at most —
+            and over the clock’s centuries they would move a galaxy less than a parsec.{' '}
+            <Xref to="estimated" sub="local-group">
+              What is not measured
             </Xref>
             .
           </Item>

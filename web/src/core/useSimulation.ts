@@ -16,6 +16,7 @@ import { EphemerisStore, httpFetcher, loadEphemerisStore, type Fetcher } from '.
 import { loadExoplanetArchive, type ExoplanetArchive } from './exoplanetArchive.ts';
 import { loadPulsarArchive, type PulsarArchive } from './pulsars.ts';
 import { loadGlobularClusterArchive, type GlobularClusterArchive } from './globularClusters.ts';
+import { loadLocalGroupArchive, type LocalGroupArchive } from './localGroup.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -75,6 +76,8 @@ export interface Simulation {
   readonly pulsars: LazySource<PulsarArchive>;
   /** The globular clusters (globularClusters.ts): fetched past the planets, or when search opens. */
   readonly globularClusters: LazySource<GlobularClusterArchive>;
+  /** The Local Group's galaxies (localGroup.ts): fetched as the camera leaves the disc, or when search opens. */
+  readonly localGroup: LazySource<LocalGroupArchive>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -141,6 +144,12 @@ export function useSimulation(refreshHz = 10): Simulation {
   globularClustersRef.current ??= new LazySource(
     () => loadGlobularClusterArchive(httpBeltFetchers, import.meta.env.BASE_URL),
     'the globular clusters',
+  );
+
+  const localGroupRef = useRef<LazySource<LocalGroupArchive>>(null);
+  localGroupRef.current ??= new LazySource(
+    () => loadLocalGroupArchive(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the Local Group',
   );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
@@ -249,6 +258,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     exoplanets: exoplanetsRef.current,
     pulsars: pulsarsRef.current,
     globularClusters: globularClustersRef.current,
+    localGroup: localGroupRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

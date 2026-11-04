@@ -18,6 +18,7 @@ import { BlackHolePanel } from './BlackHoleFacts.tsx';
 import { PulsarPanel } from './PulsarFacts.tsx';
 import { ClusterPanel } from './ClusterFacts.tsx';
 import { RemnantPanel } from './RemnantFacts.tsx';
+import { GalaxyPanel } from './GalaxyFacts.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -52,6 +53,9 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   // A pulsar gone to: its spin, and where its distance is from (pulsars.ts).
   if (body.kind === 'supernova-remnant') {
     return <RemnantPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
+  if (body.kind === 'galaxy') {
+    return <GalaxyPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
   }
   if (body.kind === 'globular-cluster') {
     return <ClusterPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;

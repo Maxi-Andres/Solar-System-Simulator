@@ -80,10 +80,24 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **400,000 light years** since
- * the Milky Way model (D2b), 3,000 before it.
+ * The farthest the camera may pull back from its focus, km: **40 million light years** since
+ * the Local Group (G1); 400,000 since the Milky Way model (D2b), 3,000 before it.
  *
- * Now set by the galaxy, by the same rule as everything before it: the farthest thing
+ * Now set by the Local Group, by the same rule as everything before it: the farthest thing
+ * worth seeing whole. Its galaxies are bound within about a megaparsec of its centre of mass
+ * (McConnachie 2012, AJ 144, 4, section 5), which lies between the Milky Way and Andromeda,
+ * nearer Andromeda, the heavier; so its far edge is some 1.4 Mpc, 4.6 million ly, from the
+ * Sun. In the inner half of the 27-degree frame's height, an angular radius of 6.75 degrees,
+ * that takes 4.6 / sin(6.75 deg) = 39 million ly: 40. From there the catalogue's farthest,
+ * 3 Mpc out, fill the frame's height.
+ *
+ * float32 at the camera is then 3.8e17 scene units out: a step of 2.3e10 units, 2.4 ly, 6e-8
+ * of the distance -- a ten-thousandth of a pixel's angle. The depth buffer's range is
+ * logDepth.ts's.
+ *
+ * What the 400,000 was, kept because its argument still holds at its own scale:
+ *
+ * Set by the galaxy, by the same rule as everything before it: the farthest thing
  * worth seeing whole. Focused on the Sun, the disc runs out to about 76,000 ly on the far
  * side of the centre (26,600 ly to the centre, 15 kpc of disc past it); in the inner half
  * of the 27-degree frame's height, half-angle 6.75 degrees, that is 76,000 / tan(6.75 deg)
@@ -108,7 +122,16 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 400_000 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 40e6 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Local Group puts the camera, km from the Sun: 8 million ly, looking
+ * down on the Milky Way's disc with Andromeda across the frame (LocalGroup.tsx
+ * LOCAL_GROUP_VIEW). Andromeda is 2.48 million ly from the Sun, 17 degrees from the middle of
+ * the frame from here, inside its half-width of 23.5 at 16:9, with Triangulum beyond it and
+ * the Milky Way's satellites about the middle.
+ */
+export const LOCAL_GROUP_FRAMING_KM = 8e6 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 180,000 ly. The view

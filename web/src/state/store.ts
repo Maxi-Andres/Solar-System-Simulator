@@ -73,6 +73,7 @@ export type LayerId =
   | 'globularClusters'
   | 'supernovaRemnants'
   | 'milkyWay'
+  | 'localGroup'
   | 'nuclearCluster'
   | 'spacecraft'
   | 'satellites'
@@ -129,6 +130,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
   { id: 'milkyWay', label: 'Milky Way Model', pending: null },
+  // The Local Group's galaxies (core/localGroup.ts): each a volume of its measured light,
+  // size and shape, past the Milky Way; the dwarfs marked as the camera leaves the disc.
+  { id: 'localGroup', label: 'Local Group', pending: null },
   // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
   // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
   // none a particular one. A layer of its own, as the galaxy's model is, so the measured
@@ -175,6 +179,7 @@ const DEFAULT_LAYERS: LayerState = {
   globularClusters: true,
   supernovaRemnants: true,
   milkyWay: true,
+  localGroup: true,
   nuclearCluster: true,
   spacecraft: true,
   satellites: false,

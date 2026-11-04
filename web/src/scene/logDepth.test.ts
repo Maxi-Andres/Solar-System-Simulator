@@ -20,7 +20,7 @@ describe('the logarithmic depth buffer', () => {
 
   it('keeps the same relative step at every distance past the near plane', () => {
     for (const w of [1e-3, 1, 1e3, 1e8]) {
-      expect(depthResolution(w) / w).toBeCloseTo(3.0194e-6, 8);
+      expect(depthResolution(w) / w).toBeCloseTo(3.2972e-6, 8);
     }
   });
 
@@ -44,11 +44,23 @@ describe('the logarithmic depth buffer', () => {
     const AU = 149_597.870_7;
     const EARTH_RADIUS = 6.378_137;
     const d1 = (w: number): number => depthResolution(w, true, 1e14);
-    expect(CAMERA_FAR_UNITS).toBe(1e16);
-    expect(depthResolution(METRE) / d1(METRE)).toBeCloseTo(73.08 / 66.44, 3);
-    expect(depthResolution(METRE) / METRE).toBeCloseTo(6.04e-6, 8);
-    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(19.3, 1);
-    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(452, 0);
+    const d2 = (w: number): number => depthResolution(w, true, 1e16);
+    expect(d2(METRE) / d1(METRE)).toBeCloseTo(73.08 / 66.44, 3);
+    expect(d2(METRE) / METRE).toBeCloseTo(6.04e-6, 8);
+    expect(d2(EARTH_RADIUS) / METRE).toBeCloseTo(19.3, 1);
+    expect(d2(AU) / METRE / 1000).toBeCloseTo(452, 0);
+  });
+
+  it('paid 9 % more for the Local Group, as logDepth.ts states', () => {
+    // Step G1: the far plane from 1e16 units to 1e18 (past 40 million ly).
+    const AU = 149_597.870_7;
+    const EARTH_RADIUS = 6.378_137;
+    const d2 = (w: number): number => depthResolution(w, true, 1e16);
+    expect(CAMERA_FAR_UNITS).toBe(1e18);
+    expect(depthResolution(METRE) / d2(METRE)).toBeCloseTo(79.73 / 73.08, 3);
+    expect(depthResolution(METRE) / METRE).toBeCloseTo(6.59e-6, 7);
+    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(21, 0);
+    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(490, -1);
   });
 
   it('never far-clips: the projection’s depth term is exactly one at this range', () => {

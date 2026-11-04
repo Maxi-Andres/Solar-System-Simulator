@@ -35,6 +35,13 @@ import { ensureSupernovaRemnants, remnantEarthView, remnantOf, remnantRadiusKm }
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
+import {
+  ensureGalaxyBody,
+  ensureLocalGroupGiants,
+  galaxyEarthView,
+  galaxyFramingKm,
+  galaxyOf,
+} from './core/localGroup.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -56,10 +63,15 @@ import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
 
 // A supernova remnant is gone to from Earth's side of it, as its photographs show it, six of its
-// radii out -- all of it in view: whichever way it is focused.
+// radii out -- all of it in view: whichever way it is focused. A galaxy of the Local Group the
+// same way, as its photographs show it, all of it in view (localGroup.ts).
 setFocusFraming((id) => {
   const remnant = remnantOf(id);
-  return remnant === null ? null : { km: 6 * remnantRadiusKm(remnant), view: remnantEarthView(remnant) };
+  if (remnant !== null) {
+    return { km: 6 * remnantRadiusKm(remnant), view: remnantEarthView(remnant) };
+  }
+  const galaxy = galaxyOf(id);
+  return galaxy === null ? null : { km: galaxyFramingKm(galaxy), view: galaxyEarthView(galaxy) };
 });
 
 /**
@@ -95,6 +107,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // The supernova remnants are bodies from the start (supernovaRemnants.ts): their names and
   // rings go with their layer.
   supernovaRemnants: ['supernova-remnant'],
+  // The four big galaxies are bodies from the start, a dwarf once gone to (localGroup.ts).
+  localGroup: ['galaxy'],
 };
 
 export function App() {
@@ -111,6 +125,7 @@ export function App() {
     exoplanets,
     pulsars,
     globularClusters,
+    localGroup,
     clock,
     error,
     readout,
@@ -311,12 +326,37 @@ export function App() {
     [store, globularClusters, requestFraming, setFocus],
   );
 
+  // A galaxy of the Local Group clicked or found by search (G1): made a place, and framed from
+  // Earth's side by its focus framing above.
+  const goToGalaxy = useCallback(
+    (k: number): void => {
+      if (store === null) {
+        return;
+      }
+      localGroup
+        .request()
+        .then(() => {
+          const galaxy = localGroup.value?.galaxies[k];
+          if (galaxy === undefined) {
+            return;
+          }
+          setFocus(ensureGalaxyBody(store, galaxy));
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that galaxy', error);
+        });
+    },
+    [store, localGroup, setFocus],
+  );
+
   // The black holes, and the stars about them, are bodies from the start: nothing to fetch,
   // every number is in blackHoles.ts.
   useEffect(() => {
     if (store !== null) {
       ensureBlackHoles(store);
       ensureSupernovaRemnants(store);
+      ensureLocalGroupGiants(store);
       renderDemand.request();
     }
   }, [store]);
@@ -534,6 +574,9 @@ export function App() {
         showGlobularClusters={layers.globularClusters}
         onPickCluster={goToCluster}
         showSupernovaRemnants={layers.supernovaRemnants}
+        localGroup={localGroup}
+        showLocalGroup={layers.localGroup}
+        onPickGalaxy={goToGalaxy}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -616,6 +659,8 @@ export function App() {
               onPulsar={goToPulsar}
               globularClusters={globularClusters}
               onCluster={goToCluster}
+              localGroup={localGroup}
+              onGalaxy={goToGalaxy}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>

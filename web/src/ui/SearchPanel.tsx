@@ -39,6 +39,8 @@ import {
 } from '../core/satellites.ts';
 import { describeBody, layersFor, normalizeName, parentNameOf, searchBodies } from '../core/search.ts';
 import { addStarBody, starBodyId } from '../core/starBodies.ts';
+import { GALAXY_COLOR, galaxyBodyId, type LocalGroupArchive } from '../core/localGroup.ts';
+import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { systemDisplayName, type StarNameIndex, type Stars3dSource } from '../core/stars3d.ts';
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
@@ -91,6 +93,10 @@ import { Panel } from './Panel.tsx';
  *
  * And the globular clusters (D6d): by designation ("NGC 104"), Harris's other names ("47
  * Tuc") and Messier numbers ("M13"), from globular-clusters.json. Choosing one goes there.
+ *
+ * And the Local Group's galaxies (G1): by name and other names ("M31", "Barnard's Galaxy"),
+ * the four big ones and the dwarfs of local-group.json. A galaxy that is a body already and
+ * matched as one is listed once, as the body.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -114,6 +120,7 @@ const EXO_LIMIT = 12;
 /** And at most this many pulsars, after the Archive's, and as many globular clusters. */
 const PULSAR_LIMIT = 10;
 const CLUSTER_LIMIT = 8;
+const GALAXY_LIMIT = 10;
 
 /** The hosts' rings' colour (scene/ExoplanetHosts.tsx). */
 const HOST_COLOR = '#7fc4c0';
@@ -136,7 +143,9 @@ type Result =
   /** Entry `k` of pulsars.json. */
   | { readonly kind: 'pulsar'; readonly k: number }
   /** Entry `k` of globular-clusters.json. */
-  | { readonly kind: 'cluster'; readonly k: number };
+  | { readonly kind: 'cluster'; readonly k: number }
+  /** Galaxy `k` of the Local Group's archive. */
+  | { readonly kind: 'galaxy'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -155,6 +164,8 @@ export function SearchPanel({
   onPulsar,
   globularClusters,
   onCluster,
+  localGroup,
+  onGalaxy,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -175,6 +186,9 @@ export function SearchPanel({
   readonly globularClusters: LazySource<GlobularClusterArchive>;
   /** Goes to a globular cluster (App.tsx). */
   readonly onCluster: (k: number) => void;
+  readonly localGroup: LazySource<LocalGroupArchive>;
+  /** Goes to a galaxy (App.tsx). */
+  readonly onGalaxy: (k: number) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -202,6 +216,7 @@ export function SearchPanel({
   const archive = useSyncExternalStore(exoplanets.subscribe, () => exoplanets.value);
   const pulsarArchive = useSyncExternalStore(pulsars.subscribe, () => pulsars.value);
   const clusterArchive = useSyncExternalStore(globularClusters.subscribe, () => globularClusters.value);
+  const galaxyArchive = useSyncExternalStore(localGroup.subscribe, () => localGroup.value);
   // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
   const hostOfStar = useMemo(() => {
     const map = new Map<string, number>();
@@ -236,7 +251,8 @@ export function SearchPanel({
     void exoplanets.request();
     void pulsars.request();
     void globularClusters.request();
-  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters]);
+    void localGroup.request();
+  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters, localGroup]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -304,8 +320,17 @@ export function SearchPanel({
         : searchNames(clusterArchive.search, searched, CLUSTER_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(globularClusterBodyId(k)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'cluster', k }, score));
-    // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters.
-    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars, ...fromClusters].sort(
+    // A galaxy is listed as its body where its body matched too ("andromeda"), and as itself
+    // where only its other names did ("m31").
+    const bodiesListed = new Set(bodies.map((result) => (result.kind === 'body' ? result.id : '')));
+    const fromGalaxies: Result[] =
+      galaxyArchive === null
+        ? []
+        : searchNames(galaxyArchive.search, searched, GALAXY_LIMIT)
+            .filter(({ k }) => !bodiesListed.has(galaxyBodyId(galaxyArchive.galaxies[k]!)))
+            .map(({ k, score }) => scoredResult(scored, { kind: 'galaxy', k }, score));
+    // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters, galaxies.
+    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars, ...fromClusters, ...fromGalaxies].sort(
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
     return [
@@ -328,6 +353,7 @@ export function SearchPanel({
     archive,
     pulsarArchive,
     clusterArchive,
+    galaxyArchive,
   ]);
 
   // A new query starts at the top.
@@ -399,6 +425,12 @@ export function SearchPanel({
     if (result.kind === 'cluster') {
       setLayer('globularClusters', true);
       onCluster(result.k);
+      closePanel();
+      return;
+    }
+    if (result.kind === 'galaxy') {
+      setLayer('localGroup', true);
+      onGalaxy(result.k);
       closePanel();
       return;
     }
@@ -527,6 +559,7 @@ export function SearchPanel({
             hostOfStar,
             pulsarArchive,
             clusterArchive,
+            galaxyArchive,
           );
           return (
             <li
@@ -589,7 +622,19 @@ function describeResult(
   hostOfStar: ReadonlyMap<string, number>,
   pulsarArchive: PulsarArchive | null,
   clusterArchive: GlobularClusterArchive | null,
+  galaxyArchive: LocalGroupArchive | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'galaxy') {
+    const galaxy = galaxyArchive!.galaxies[result.k]!;
+    return {
+      glyph: '⬭',
+      color: GALAXY_COLOR,
+      name: galaxy.name,
+      detail: [galaxy.ambiguous ? 'Galaxy or star cluster' : 'Galaxy', galaxy.otherNames[0], formatGalaxyDistance(galaxy.distancePc)]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'cluster') {
     const c = clusterArchive!.catalog;
     const k = result.k;

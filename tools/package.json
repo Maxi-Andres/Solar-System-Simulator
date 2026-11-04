@@ -20,6 +20,7 @@
     "fetch:exoplanets": "node src/exoplanets/fetchExoplanets.ts",
     "fetch:pulsars": "node src/pulsars/fetchPulsars.ts",
     "fetch:clusters": "node src/clusters/fetchClusters.ts",
+    "fetch:local-group": "node src/localGroup/fetchLocalGroup.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
     "test": "vitest run --passWithNoTests",

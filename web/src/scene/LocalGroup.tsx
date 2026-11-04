@@ -1,0 +1,780 @@
+import type { BodyId } from '@sss/tools/types';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import * as THREE from 'three';
+
+import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import {
+  centralDensities,
+  columnAt,
+  GALAXY_COLOR,
+  galaxyAxes,
+  galaxyBodyId,
+  galaxyExtentPc,
+  galaxyPositionPc,
+  GIANTS,
+  indexLocalGroup,
+  prugnielSimien,
+  type LocalGroupArchive,
+  type LocalGroupGalaxy,
+} from '../core/localGroup.ts';
+import { renderDemand } from '../core/renderDemand.ts';
+import type { LazySource } from '../core/satellites.ts';
+import { PARSEC_KM } from '../core/stars3d.ts';
+import type { SimClock } from '../core/time.ts';
+import { useStoreVersion } from '../core/useStoreVersion.ts';
+import { starColor } from './blackbody.ts';
+import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
+import { setMarkerPointer } from './markerPointer.ts';
+import type { FramingView } from '../state/store.ts';
+import { GALACTIC_BASIS } from './galactic.ts';
+import { galaxyVisibility } from './MilkyWay.tsx';
+import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
+import { mapStrength } from './Starfield.tsx';
+import { UNITS_PER_PC } from './stars3dShader.ts';
+
+/**
+ * The Local Group's galaxies (core/localGroup.ts), drawn as what they are: volumes of light,
+ * seen from wherever the camera is.
+ *
+ * ## Light along a line of sight
+ *
+ * Each galaxy is a luminosity density in space, rho (solar V luminosities per cubic parsec).
+ * What a pixel sees is its integral along the pixel's ray, the column Sigma in L_Sun per
+ * square parsec -- a surface brightness, mu = 26.38 - 2.5 log10 Sigma mag/arcsec^2, the same
+ * at any distance, as a galaxy's is: from Earth this is the galaxy's measured profile, and
+ * from beside it, its side.
+ *
+ * - **A dwarf, a Plummer ellipsoid**, has that integral in closed form. In the ellipsoid's
+ *   own units -- each axis divided by its scale -- the ray is u0 + t v, and with c^2 = 1 +
+ *   |u0 x v|^2 / |v|^2, its squared distance of closest approach plus one, and s = t |v| +
+ *   u0.v / |v|,
+ *
+ *     Sigma = rho0 / |v| * [F(inf) - F(s0)],   F(s) = s (2 s^2 + 3 c^2) / (3 c^4 (s^2 + c^2)^(3/2)),
+ *
+ *   from the camera (s0) to infinity: exact from outside or inside, one evaluation a pixel.
+ *   |u0 x v| rather than |u0|^2 - (u0.v)^2/|v|^2: from far off the two terms of the latter
+ *   are 10^8 each and their difference is 1, which float32 cannot hold.
+ * - **A disc, or the Small Cloud's ellipsoid**, has none: its ray is marched across its box
+ *   in DISC_STEPS steps, each a little jittered so the steps do not show as bands, and
+ *   Andromeda's bulge across a sphere of its own, finer.
+ *
+ * Instanced: one draw for the dwarfs, one each for the four. Every box is placed about the
+ * camera from float64 positions, as the stars are, and its numbers -- the camera in the
+ * galaxy's units -- worked out in float64 each frame and handed over per galaxy.
+ *
+ * ## How bright
+ *
+ * One exposure for all of them: a column of WHITE_MU mag/arcsec^2 is drawn at full
+ * strength, 1 - e^(-Sigma / Sigma_white) -- a soft shoulder, as the Milky Way's, so a bright
+ * centre does not cut off. Andromeda's disc is about 20 mag/arcsec^2 seen at its tilt;
+ * Fornax's centre 23.4; the faintest dwarfs 28 to 31, and those do not show, as they do not
+ * show in any photograph: they were found by counting their stars. Their marks show where
+ * they are.
+ *
+ * The colours are estimated (localGroup.ts colourIndex): B-V through the stars' blackbody.
+ *
+ * ## Not round the camera
+ *
+ * Light nearer the camera than NEAR_SHARE of its distance from a galaxy's centre -- and never
+ * nearer than half the galaxy's scale -- is left out, as the Milky Way's model leaves out the
+ * points round the camera: there a galaxy is its stars, one by one, which are not drawn, and
+ * summed as a glow they would fill the sky white. From inside a disc, what is left is the disc
+ * across the sky as a band -- as the Milky Way is from here.
+ *
+ * ## Where
+ *
+ * Only once out of the Milky Way's neighbourhood, as the Milky Way's own model
+ * (galaxyVisibility): from the Solar System these are the sky's, and the sky is drawn by the
+ * stars. The marks come in further out, as the camera leaves the disc (outOfDiscStrength):
+ * from among the stars a hundred and forty galaxy marks would be a second sky.
+ */
+
+/**
+ * Where the breadcrumb's Local Group looks from (scale.ts LOCAL_GROUP_FRAMING_KM): above the
+ * Milky Way's north pole, so its disc is seen face-on, turned so that Andromeda lies to the
+ * right of the Sun across the frame.
+ */
+export const LOCAL_GROUP_VIEW: FramingView = (() => {
+  const d = GALACTIC_BASIS.z;
+  const m31 = galaxyPositionPc(GIANTS[0]!);
+  const along = m31.x * d.x + m31.y * d.y + m31.z * d.z;
+  const r = { x: m31.x - along * d.x, y: m31.y - along * d.y, z: m31.z - along * d.z };
+  const n = Math.hypot(r.x, r.y, r.z);
+  const right = { x: r.x / n, y: r.y / n, z: r.z / n };
+  // right x up = direction, so up = direction x right.
+  const up = [
+    d.y * right.z - d.z * right.y,
+    d.z * right.x - d.x * right.z,
+    d.x * right.y - d.y * right.x,
+  ] as const;
+  return { direction: [d.x, d.y, d.z], up };
+})();
+
+/** The column drawn at full strength, mag/arcsec^2. */
+export const WHITE_MU = 21;
+
+/** The share of the camera's distance from a galaxy's centre within which its light is left out. */
+export const NEAR_SHARE = 0.3;
+
+/** Steps across a disc's box, and across Andromeda's bulge. */
+export const DISC_STEPS = 64;
+export const BULGE_STEPS = 32;
+
+/** Where the dwarfs' marks come in, light years from the Sun: as the camera leaves the disc. */
+export const MARKS_FROM_LY = 20_000;
+export const MARKS_FULL_LY = 100_000;
+
+/** The marks: an ellipse, the old sign for a nebula, and its size, CSS pixels. */
+const SPRITE_PX = 15;
+const CLICK_SLOP_PX = 5;
+
+export function outOfDiscStrength(cameraFromSunKm: number): number {
+  const ly = cameraFromSunKm / LIGHT_YEAR_KM;
+  const t = (Math.log(ly) - Math.log(MARKS_FROM_LY)) / (Math.log(MARKS_FULL_LY) - Math.log(MARKS_FROM_LY));
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+/**
+ * The column of a Plummer ellipsoid from a camera at u0 (its units) along direction v (its
+ * units per parsec), in units of rho0 parsecs: see the header. Here for the tests; the shader
+ * has the same lines.
+ */
+export function plummerColumn(
+  u0: readonly [number, number, number],
+  v: readonly [number, number, number],
+  nearPc = 0,
+): number {
+  const vv = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+  const cross = [u0[1] * v[2] - u0[2] * v[1], u0[2] * v[0] - u0[0] * v[2], u0[0] * v[1] - u0[1] * v[0]];
+  const c2 = 1 + (cross[0]! ** 2 + cross[1]! ** 2 + cross[2]! ** 2) / vv;
+  // From the near limit on, not the camera.
+  const s0 = (u0[0] * v[0] + u0[1] * v[1] + u0[2] * v[2]) / Math.sqrt(vv) + nearPc * Math.sqrt(vv);
+  const f = (s: number) => (s * (2 * s * s + 3 * c2)) / (3 * c2 * c2 * (s * s + c2) ** 1.5);
+  return (2 / (3 * c2 * c2) - f(s0)) / Math.sqrt(vv);
+}
+
+const COMMON_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+varying vec3 vRel;
+`;
+
+const DWARF_VERTEX = /* glsl */ `
+${COMMON_VERTEX}
+attribute vec3 aM0;
+attribute vec3 aM1;
+attribute vec3 aM2;
+attribute vec3 aU0;
+attribute vec3 aGlow;
+attribute float aNear;
+varying float vNear;
+varying vec3 vM0;
+varying vec3 vM1;
+varying vec3 vM2;
+varying vec3 vU0;
+varying vec3 vGlow;
+
+void main() {
+  vec4 rel = instanceMatrix * vec4(position, 1.0);
+  vRel = rel.xyz;
+  vM0 = aM0;
+  vM1 = aM1;
+  vM2 = aM2;
+  vU0 = aU0;
+  vGlow = aGlow;
+  vNear = aNear;
+  gl_Position = projectionMatrix * modelViewMatrix * rel;
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const DWARF_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform float uFade;
+varying vec3 vRel;
+varying vec3 vM0;
+varying vec3 vM1;
+varying vec3 vM2;
+varying vec3 vU0;
+varying vec3 vGlow;
+varying float vNear;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 d = normalize(vRel);
+  vec3 v = vec3(dot(vM0, d), dot(vM1, d), dot(vM2, d));
+  float vv = dot(v, v);
+  vec3 cr = cross(vU0, v);
+  float c2 = 1.0 + dot(cr, cr) / vv;
+  // From the near limit on (see the header), not the camera.
+  float s0 = dot(vU0, v) / sqrt(vv) + vNear * sqrt(vv);
+  float fs = s0 * (2.0 * s0 * s0 + 3.0 * c2) / (3.0 * c2 * c2 * pow(s0 * s0 + c2, 1.5));
+  float column = (2.0 / (3.0 * c2 * c2) - fs) / sqrt(vv);
+  // vGlow is the colour times rho0 over the white column.
+  vec3 x = vGlow * max(column, 0.0);
+  vec3 light = (1.0 - exp(-x)) * uFade;
+  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+  // Half a display step of noise: a faint gradient in 8 bits is otherwise rings.
+  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  gl_FragColor = vec4(max(light + (n - 0.5) / 255.0, 0.0), 1.0);
+}
+`;
+
+const GIANT_VERTEX = /* glsl */ `
+${COMMON_VERTEX}
+// The box about the camera: its own matrix, the group's being the camera's place alone.
+uniform mat4 uLocal;
+void main() {
+  vRel = (uLocal * vec4(position, 1.0)).xyz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const GIANT_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform float uFade;
+// The galaxy's axes (rows), the camera in its frame, pc, and its box's half extents, pc.
+uniform mat3 uAxes;
+uniform vec3 uCamera;
+uniform vec3 uExtent;
+// 0 a disc: scale length and height; 1 an exponential ellipsoid: its three scale lengths.
+uniform int uKind;
+uniform vec3 uScale;
+uniform vec3 uGlow;
+// The bulge: its colour times rho0 over the white column, R_e, and p, b, 1/n.
+uniform vec3 uBulgeGlow;
+uniform vec4 uBulge;
+// Light nearer the camera than this, pc, is left out (see the header).
+uniform float uNear;
+varying vec3 vRel;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// Where the ray from the camera meets the box: entry and exit, pc.
+vec2 slab(vec3 o, vec3 d, vec3 halfSize) {
+  vec3 inv = 1.0 / d;
+  vec3 a = (-halfSize - o) * inv;
+  vec3 b = (halfSize - o) * inv;
+  vec3 lo = min(a, b);
+  vec3 hi = max(a, b);
+  return vec2(max(max(lo.x, lo.y), max(lo.z, 0.0)), min(hi.x, min(hi.y, hi.z)));
+}
+
+float density(vec3 p) {
+  if (uKind == 0) {
+    return exp(-length(p.xy) / uScale.x - abs(p.z) / uScale.y);
+  }
+  return exp(-length(p / uScale));
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 d = uAxes * normalize(vRel);
+  float jitter = hash(gl_FragCoord.xy);
+  vec3 light = vec3(0.0);
+  vec2 span = slab(uCamera, d, uExtent);
+  span.x = max(span.x, uNear);
+  if (span.y > span.x) {
+    float dt = (span.y - span.x) / float(${DISC_STEPS});
+    float sum = 0.0;
+    for (int i = 0; i < ${DISC_STEPS}; i++) {
+      sum += density(uCamera + d * (span.x + (float(i) + jitter) * dt));
+    }
+    light += uGlow * sum * dt;
+  }
+  if (uBulge.x > 0.0) {
+    // Across a sphere of eight effective radii about the centre.
+    float reach = 8.0 * uBulge.x;
+    float mid = -dot(uCamera, d);
+    float miss2 = dot(uCamera, uCamera) - mid * mid;
+    if (miss2 < reach * reach) {
+      float halfChord = sqrt(reach * reach - miss2);
+      float t0 = max(mid - halfChord, uNear);
+      float t1 = mid + halfChord;
+      if (t1 > t0) {
+        float dt = (t1 - t0) / float(${BULGE_STEPS});
+        float sum = 0.0;
+        for (int i = 0; i < ${BULGE_STEPS}; i++) {
+          float r = max(length(uCamera + d * (t0 + (float(i) + jitter) * dt)) / uBulge.x, 0.02);
+          sum += pow(r, -uBulge.y) * exp(-uBulge.z * pow(r, uBulge.w));
+        }
+        light += uBulgeGlow * sum * dt;
+      }
+    }
+  }
+  light = (1.0 - exp(-light)) * uFade;
+  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+  // Half a display step of noise, as the dwarfs'.
+  gl_FragColor = vec4(max(light + (hash(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 0.0), 1.0);
+}
+`;
+
+const MARK_VERTEX = /* glsl */ `
+uniform vec3 uCameraPc;
+uniform float uUnitsPerPc;
+uniform float uPixelRatio;
+attribute float shown;
+varying float vShown;
+
+void main() {
+  vShown = shown;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4((position - uCameraPc) * uUnitsPerPc, 1.0);
+  gl_PointSize = ${SPRITE_PX.toFixed(1)} * uPixelRatio;
+}
+`;
+
+const MARK_FRAGMENT = /* glsl */ `
+uniform vec3 uColor;
+uniform float uFade;
+varying float vShown;
+
+void main() {
+  vec2 q = (gl_PointCoord - 0.5) * ${SPRITE_PX.toFixed(1)};
+  // An ellipse twice as wide as tall, tipped, its outline only.
+  float c = 0.8;
+  float s = 0.6;
+  vec2 r = vec2(c * q.x + s * q.y, -s * q.x + c * q.y);
+  float e = length(r / vec2(5.6, 2.6));
+  float ring = 1.0 - smoothstep(0.08, 0.22, abs(e - 1.0));
+  float alpha = 0.65 * ring * uFade * vShown;
+  if (alpha < 0.004) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+/** The colour of a galaxy's light, linear, times rho0 over the white column. */
+function glow(galaxy: LocalGroupGalaxy, rho0: number, colourIndex = galaxy.colourIndex): THREE.Vector3 {
+  const [r, g, b] = starColor(colourIndex);
+  const scale = rho0 / columnAt(WHITE_MU);
+  return new THREE.Vector3(r * scale, g * scale, b * scale);
+}
+
+export interface LocalGroupProps {
+  readonly source: LazySource<LocalGroupArchive>;
+  readonly store: EphemerisStore;
+  readonly clock: SimClock;
+  readonly focus: BodyId;
+  readonly visible: boolean;
+  /** A dwarf's mark clicked: its index in the archive. */
+  readonly onPick: (k: number) => void;
+}
+
+const noRaycast = (): void => {};
+const scratchMatrix = new THREE.Matrix4();
+const scratchBasis = new THREE.Matrix4();
+
+export function LocalGroup({ source, store, clock, focus, visible, onPick }: LocalGroupProps) {
+  const { gl, camera } = useThree();
+  const loaded = useSyncExternalStore(source.subscribe, () => source.value);
+  // The four are drawn before the catalogue arrives, from their own numbers.
+  const archive = useMemo(() => loaded ?? indexLocalGroup(null), [loaded]);
+  const version = useStoreVersion(store);
+  const group = useMemo(() => new THREE.Group(), []);
+  const requested = useRef(false);
+  const frame = useRef({ cameraPc: new THREE.Vector3(), markFade: 0 });
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
+
+  // The dwarfs: one instanced box each, with what its shader needs.
+  const dwarfUniforms = useMemo(() => ({ uFade: { value: 0 } }), []);
+  const dwarfs = useMemo(() => {
+    const list = archive.galaxies
+      .map((galaxy, k) => ({ galaxy, k }))
+      .filter(({ galaxy }) => galaxy.model?.kind === 'plummer' && centralDensities(galaxy) !== null);
+    const count = list.length;
+    const geometry = new THREE.BoxGeometry(2, 2, 2);
+    const attribute = (name: string) => {
+      const value = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+      value.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute(name, value);
+      return value;
+    };
+    const m0 = attribute('aM0');
+    const m1 = attribute('aM1');
+    const m2 = attribute('aM2');
+    const u0 = attribute('aU0');
+    const glowAttribute = attribute('aGlow');
+    const near = new THREE.InstancedBufferAttribute(new Float32Array(count), 1);
+    near.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aNear', near);
+    const material = new THREE.ShaderMaterial({
+      uniforms: dwarfUniforms,
+      vertexShader: DWARF_VERTEX,
+      fragmentShader: DWARF_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      toneMapped: false,
+    });
+    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(count, 1));
+    mesh.count = count;
+    mesh.frustumCulled = false;
+    mesh.raycast = noRaycast;
+    // Per galaxy, fixed: its centre, axes over their scales, and its box.
+    const fixed = list.map(({ galaxy }) => {
+      const model = galaxy.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
+      const axes = galaxyAxes(galaxy);
+      const extent = galaxyExtentPc(galaxy)!;
+      return {
+        centre: galaxyPositionPc(galaxy),
+        axes,
+        scales: [model.majorPc, model.minorPc, model.depthPc] as const,
+        extent,
+      };
+    });
+    fixed.forEach(({ axes, scales }, i) => {
+      const { galaxy } = list[i]!;
+      m0.setXYZ(i, axes.u.x / scales[0], axes.u.y / scales[0], axes.u.z / scales[0]);
+      m1.setXYZ(i, axes.v.x / scales[1], axes.v.y / scales[1], axes.v.z / scales[1]);
+      m2.setXYZ(i, axes.w.x / scales[2], axes.w.y / scales[2], axes.w.z / scales[2]);
+      const g = glow(galaxy, centralDensities(galaxy)!.main);
+      glowAttribute.setXYZ(i, g.x, g.y, g.z);
+    });
+    return { mesh, list, fixed, u0, near };
+  }, [archive, dwarfUniforms]);
+
+  // The four, each its own box and marcher.
+  const giants = useMemo(
+    () =>
+      GIANTS.flatMap((galaxy) => {
+        const model = galaxy.model;
+        const densities = centralDensities(galaxy);
+        const extent = galaxyExtentPc(galaxy);
+        if (model === null || densities === null || extent === null || model.kind === 'plummer') {
+          return [];
+        }
+        const axes = galaxyAxes(galaxy);
+        const bulge = model.kind === 'disc' ? model.bulge : null;
+        const ps = bulge === null ? null : prugnielSimien(bulge.sersicN);
+        const uniforms = {
+          uFade: { value: 0 },
+          uLocal: { value: new THREE.Matrix4() },
+          uNear: { value: 0 },
+          uAxes: {
+            value: new THREE.Matrix3().set(
+              axes.u.x, axes.u.y, axes.u.z,
+              axes.v.x, axes.v.y, axes.v.z,
+              axes.w.x, axes.w.y, axes.w.z,
+            ),
+          },
+          uCamera: { value: new THREE.Vector3() },
+          uExtent: { value: new THREE.Vector3(...extent) },
+          uKind: { value: model.kind === 'disc' ? 0 : 1 },
+          uScale: {
+            value:
+              model.kind === 'disc'
+                ? new THREE.Vector3(model.scaleLengthPc, model.scaleHeightPc, 0)
+                : new THREE.Vector3(model.majorPc, model.minorPc, model.depthPc),
+          },
+          uGlow: { value: glow(galaxy, densities.main) },
+          // An old bulge's colour, B-V 0.95, redder than its disc.
+          uBulgeGlow: { value: bulge === null ? new THREE.Vector3() : glow(galaxy, densities.bulge, 0.95) },
+          uBulge: {
+            value:
+              bulge === null || ps === null
+                ? new THREE.Vector4(0, 0, 0, 0)
+                : new THREE.Vector4(bulge.effectiveRadiusPc, ps.p, ps.b, 1 / bulge.sersicN),
+          },
+        };
+        const material = new THREE.ShaderMaterial({
+          uniforms,
+          vertexShader: GIANT_VERTEX,
+          fragmentShader: GIANT_FRAGMENT,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.BackSide,
+          toneMapped: false,
+        });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), material);
+        mesh.frustumCulled = false;
+        mesh.raycast = noRaycast;
+        const scale = model.kind === 'disc' ? model.scaleLengthPc : model.majorPc;
+        return [{ galaxy, mesh, uniforms, axes, extent, centre: galaxyPositionPc(galaxy), scale }];
+      }),
+    [],
+  );
+
+  // The dwarfs' marks.
+  const markUniforms = useMemo<Record<string, THREE.IUniform>>(
+    () => ({
+      uCameraPc: { value: new THREE.Vector3() },
+      uUnitsPerPc: { value: UNITS_PER_PC },
+      uPixelRatio: { value: 1 },
+      uColor: { value: new THREE.Color().setStyle(GALAXY_COLOR, THREE.LinearSRGBColorSpace) },
+      uFade: { value: 0 },
+    }),
+    [],
+  );
+  const marks = useMemo(() => {
+    const list = archive.galaxies.map((galaxy, k) => ({ galaxy, k })).filter(({ galaxy }) => !galaxy.giant);
+    const centres = list.map(({ galaxy }) => galaxyPositionPc(galaxy));
+    // Parsecs about the Sun: float32 holds 3 Mpc to a fifth of a parsec, far finer than a mark.
+    const position = new Float32Array(list.length * 3);
+    centres.forEach((centre, i) => position.set([centre.x, centre.y, centre.z], i * 3));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    const shown = new THREE.BufferAttribute(new Float32Array(list.length).fill(1), 1);
+    geometry.setAttribute('shown', shown);
+    const points = new THREE.Points(
+      geometry,
+      new THREE.ShaderMaterial({
+        uniforms: markUniforms,
+        vertexShader: MARK_VERTEX,
+        fragmentShader: MARK_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    points.frustumCulled = false;
+    points.raycast = noRaycast;
+    return { points, list, centres, shown };
+  }, [archive, markUniforms]);
+
+  // A galaxy made a body has its body's mark and name: its own mark steps aside.
+  useEffect(() => {
+    void version;
+    marks.list.forEach(({ galaxy }, i) => {
+      marks.shown.setX(i, store.isPropagatedBody(galaxyBodyId(galaxy)) ? 0 : 1);
+    });
+    marks.shown.needsUpdate = true;
+    renderDemand.request();
+  }, [marks, store, version]);
+
+  useEffect(() => {
+    group.add(dwarfs.mesh);
+    for (const giant of giants) group.add(giant.mesh);
+    group.add(marks.points);
+    renderDemand.request();
+    return () => {
+      group.remove(dwarfs.mesh, marks.points);
+      for (const giant of giants) group.remove(giant.mesh);
+      dwarfs.mesh.geometry.dispose();
+      (dwarfs.mesh.material as THREE.Material).dispose();
+      marks.points.geometry.dispose();
+      (marks.points.material as THREE.Material).dispose();
+    };
+  }, [group, dwarfs, giants, marks]);
+
+  useEffect(
+    () => () => {
+      for (const giant of giants) {
+        giant.mesh.geometry.dispose();
+        (giant.mesh.material as THREE.Material).dispose();
+      }
+    },
+    [giants],
+  );
+
+  useFrame(({ camera: frameCamera, gl: renderer }) => {
+    const jd = clock.tdbJulianDay;
+    const sun = store.stateRelativeTo('sun', focus, jd);
+    if (sun === null || !visible) {
+      group.visible = false;
+      frame.current.markFade = 0;
+      return;
+    }
+    const cameraPc = frame.current.cameraPc.set(
+      (frameCamera.position.x * KM_PER_UNIT - sun.position.x) / PARSEC_KM,
+      (frameCamera.position.y * KM_PER_UNIT - sun.position.y) / PARSEC_KM,
+      (frameCamera.position.z * KM_PER_UNIT - sun.position.z) / PARSEC_KM,
+    );
+    const fromSunKm = cameraPc.length() * PARSEC_KM;
+    if (!requested.current && fromSunKm > (MARKS_FROM_LY / 2) * LIGHT_YEAR_KM) {
+      requested.current = true;
+      void source.request();
+    }
+    const fade = galaxyVisibility(fromSunKm);
+    const markFade = mapStrength(frameCamera.position.length() * KM_PER_UNIT) * outOfDiscStrength(fromSunKm);
+    frame.current.markFade = markFade;
+    group.visible = fade > 0 || markFade > 0;
+    if (!group.visible) {
+      return;
+    }
+    group.position.copy(frameCamera.position);
+    group.updateMatrixWorld();
+
+    // The dwarfs: each box about the camera, and the camera in each one's units.
+    dwarfUniforms.uFade.value = fade;
+    dwarfs.mesh.visible = fade > 0;
+    if (fade > 0) {
+      dwarfs.fixed.forEach(({ centre, axes, scales, extent }, i) => {
+        const rx = centre.x - cameraPc.x;
+        const ry = centre.y - cameraPc.y;
+        const rz = centre.z - cameraPc.z;
+        // u0 = the camera minus the centre, along each axis over its scale.
+        dwarfs.near.setX(i, Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scales[0]));
+        dwarfs.u0.setXYZ(
+          i,
+          -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z) / scales[0],
+          -(rx * axes.v.x + ry * axes.v.y + rz * axes.v.z) / scales[1],
+          -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z) / scales[2],
+        );
+        scratchBasis.makeBasis(
+          new THREE.Vector3(axes.u.x, axes.u.y, axes.u.z).multiplyScalar(extent[0] * UNITS_PER_PC),
+          new THREE.Vector3(axes.v.x, axes.v.y, axes.v.z).multiplyScalar(extent[1] * UNITS_PER_PC),
+          new THREE.Vector3(axes.w.x, axes.w.y, axes.w.z).multiplyScalar(extent[2] * UNITS_PER_PC),
+        );
+        scratchMatrix.copy(scratchBasis).setPosition(rx * UNITS_PER_PC, ry * UNITS_PER_PC, rz * UNITS_PER_PC);
+        dwarfs.mesh.setMatrixAt(i, scratchMatrix);
+      });
+      dwarfs.u0.needsUpdate = true;
+      dwarfs.near.needsUpdate = true;
+      dwarfs.mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    // The four: each box about the camera, and the camera in its frame.
+    for (const { mesh, uniforms, axes, extent, centre, scale } of giants) {
+      mesh.visible = fade > 0;
+      uniforms.uFade.value = fade;
+      const rx = centre.x - cameraPc.x;
+      const ry = centre.y - cameraPc.y;
+      const rz = centre.z - cameraPc.z;
+      uniforms.uNear.value = Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scale);
+      uniforms.uCamera.value.set(
+        -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z),
+        -(rx * axes.v.x + ry * axes.v.y + rz * axes.v.z),
+        -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z),
+      );
+      mesh.matrixAutoUpdate = false;
+      scratchBasis.makeBasis(
+        new THREE.Vector3(axes.u.x, axes.u.y, axes.u.z).multiplyScalar(extent[0] * UNITS_PER_PC),
+        new THREE.Vector3(axes.v.x, axes.v.y, axes.v.z).multiplyScalar(extent[1] * UNITS_PER_PC),
+        new THREE.Vector3(axes.w.x, axes.w.y, axes.w.z).multiplyScalar(extent[2] * UNITS_PER_PC),
+      );
+      mesh.matrix.copy(scratchBasis).setPosition(rx * UNITS_PER_PC, ry * UNITS_PER_PC, rz * UNITS_PER_PC);
+      uniforms.uLocal.value.copy(mesh.matrix);
+      mesh.matrixWorldNeedsUpdate = true;
+    }
+
+    // The marks, about the camera.
+    marks.points.visible = markFade > 0;
+    (markUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
+    markUniforms['uPixelRatio']!.value = renderer.getPixelRatio();
+    markUniforms['uFade']!.value = markFade;
+  });
+
+  // Pointing and clicking a dwarf's mark, as a cluster's.
+  useEffect(() => {
+    const element = gl.domElement;
+    const tip = document.createElement('div');
+    Object.assign(tip.style, TIP_STYLE);
+    element.parentElement?.appendChild(tip);
+    const screen = new Float64Array(marks.list.length * 2);
+    const scratch = new THREE.Vector3();
+    const inverse = new THREE.Quaternion();
+    const project = (): void => {
+      const { cameraPc } = frame.current;
+      camera.updateMatrixWorld();
+      inverse.copy(camera.quaternion).invert();
+      const e = camera.projectionMatrix.elements;
+      const rect = element.getBoundingClientRect();
+      marks.centres.forEach((centre, i) => {
+        if (marks.shown.getX(i) === 0) {
+          screen[i * 2] = Number.NaN;
+          screen[i * 2 + 1] = Number.NaN;
+          return;
+        }
+        scratch.set(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z).applyQuaternion(inverse);
+        const depth = -scratch.z;
+        screen[i * 2] = depth > 0 ? ((e[0]! * scratch.x) / depth + 1) * 0.5 * rect.width : Number.NaN;
+        screen[i * 2 + 1] = depth > 0 ? (1 - (e[5]! * scratch.y) / depth) * 0.5 * rect.height : Number.NaN;
+      });
+    };
+    const pick = (event: PointerEvent): number | null => {
+      if (frame.current.markFade < 0.05) {
+        return null;
+      }
+      project();
+      const rect = element.getBoundingClientRect();
+      return nearestMarker(screen, event.clientX - rect.left, event.clientY - rect.top, PICK_RADIUS_PX);
+    };
+    let down: { x: number; y: number } | null = null;
+    let waiting = false;
+    let lastMove: PointerEvent | null = null;
+    const setPointing = (on: boolean): void => setMarkerPointer(element, 'local-group', on);
+    const onDown = (event: PointerEvent): void => {
+      down = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
+    };
+    const onUp = (event: PointerEvent): void => {
+      const start = down;
+      down = null;
+      if (start === null || Math.hypot(event.clientX - start.x, event.clientY - start.y) > CLICK_SLOP_PX) {
+        return;
+      }
+      const i = pick(event);
+      if (i !== null) {
+        tip.style.display = 'none';
+        pickRef.current(marks.list[i]!.k);
+      }
+    };
+    const hover = (): void => {
+      waiting = false;
+      const event = lastMove;
+      if (event === null) {
+        return;
+      }
+      const i = down === null ? pick(event) : null;
+      setPointing(i !== null);
+      if (i === null) {
+        tip.style.display = 'none';
+        return;
+      }
+      const { galaxy } = marks.list[i]!;
+      tip.textContent = `${galaxy.name} · ${formatGalaxyDistance(galaxy.distancePc)}`;
+      tip.style.display = 'block';
+      tip.style.transform = `translate(${screen[i * 2]! + 10}px, ${screen[i * 2 + 1]! - 22}px)`;
+    };
+    const onMove = (event: PointerEvent): void => {
+      lastMove = event;
+      if (!waiting) {
+        waiting = true;
+        requestAnimationFrame(hover);
+      }
+    };
+    const onLeave = (): void => {
+      tip.style.display = 'none';
+      setPointing(false);
+    };
+    element.addEventListener('pointerdown', onDown);
+    element.addEventListener('pointerup', onUp);
+    element.addEventListener('pointermove', onMove);
+    element.addEventListener('pointerleave', onLeave);
+    return () => {
+      element.removeEventListener('pointerdown', onDown);
+      element.removeEventListener('pointerup', onUp);
+      element.removeEventListener('pointermove', onMove);
+      element.removeEventListener('pointerleave', onLeave);
+      setPointing(false);
+      tip.remove();
+    };
+  }, [marks, gl, camera]);
+
+  return <primitive object={group} />;
+}
+
+/** A galaxy's distance, as the tip and the panel write it: "147 kpc", "2.08 Mpc". */
+export function formatGalaxyDistance(pc: number): string {
+  return pc >= 1e6 ? `${(pc / 1e6).toFixed(2)} Mpc` : `${Math.round(pc / 1000)} kpc`;
+}
+
+const TIP_STYLE: Partial<CSSStyleDeclaration> = {
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  display: 'none',
+  pointerEvents: 'none',
+  color: '#c9d4ff',
+  fontSize: '0.66rem',
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  whiteSpace: 'nowrap',
+  textShadow: '0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1)',
+};

@@ -23,6 +23,7 @@ export const choicesSection: AboutSection = {
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy’s light' },
+    { id: 'local-group', label: 'The Local Group' },
   ],
   Body: ({ data }) => {
     const { stars } = data;
@@ -312,6 +313,36 @@ export const choicesSection: AboutSection = {
               photograph
               <Cite k={['reid2019', 'blandHawthorn2016', 'drimmelSpergel2001']} />.
             </Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="local-group">
+          The Local Group
+        </Sub>
+        <Items>
+          <Item title="One exposure for all of them">
+            A surface brightness of 21 mag/arcsec² is drawn at full strength, the brightest parts softened rather
+            than cut off. Andromeda’s disc, about 20 seen at its tilt, shows bright; Fornax’s centre, 23.4,
+            faint; the faintest dwarfs, 28 to 31, not at all — as in any photograph: they were found by counting
+            their stars. Their marks show where they are.
+            <Why>the same rule for every galaxy, so how bright one looks against another is how bright it is.</Why>
+          </Item>
+          <Item title="As the eye would not see them">
+            To the eye only the centres of Andromeda, Triangulum and the Magellanic Clouds would show, faint and
+            grey; the rest is a long exposure’s.
+          </Item>
+          <Item title="Seen first from Earth’s side">
+            A galaxy is gone to from the Sun’s side of it, north up, as its photographs show it.
+          </Item>
+          <Item title="Not round the camera">
+            Light nearer the camera than three-tenths of its distance from a galaxy’s centre is left out. From
+            inside a disc what is left is the disc across the sky, a band, as the Milky Way is from here.
+            <Why>there a galaxy is its stars, one by one, which are not drawn; summed as a glow they would fill the sky white.</Why>
+          </Item>
+          <Item title="Only out of the Milky Way">
+            They are drawn once the camera is out among the galaxy’s own model, and their marks once it leaves
+            the disc.
+            <Why>from inside, they are the sky’s, and the sky is the stars’.</Why>
           </Item>
         </Items>
       </>

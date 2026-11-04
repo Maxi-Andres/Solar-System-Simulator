@@ -9,6 +9,7 @@ import {
   POSITION_DECIMALS,
   PULSARS_FILE,
   GLOBULAR_CLUSTERS_FILE,
+  LOCAL_GROUP_FILE,
   SATELLITES_DIR,
   SATELLITES_INFO_FILE,
   STARS3D_DIR,
@@ -36,6 +37,7 @@ import type {
   PathTable,
   PulsarCatalog,
   GlobularClusterCatalog,
+  LocalGroupCatalog,
   Seam,
   SmallMoonBundle,
   StarCatalog,
@@ -312,4 +314,10 @@ export async function writePulsars(catalog: PulsarCatalog, outputDir = OUTPUT_DI
 export async function writeGlobularClusters(catalog: GlobularClusterCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   await writeCompactJson(join(outputDir, GLOBULAR_CLUSTERS_FILE), catalog);
+}
+
+/** The Local Group's galaxies, as local-group.json (LocalGroupCatalog): 140-odd entries, a few tens of KB. */
+export async function writeLocalGroup(catalog: LocalGroupCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  await writeCompactJson(join(outputDir, LOCAL_GROUP_FILE), catalog);
 }
