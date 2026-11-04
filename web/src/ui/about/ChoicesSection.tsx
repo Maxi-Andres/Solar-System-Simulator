@@ -327,6 +327,12 @@ export const choicesSection: AboutSection = {
             their stars. Their marks show where they are.
             <Why>the same rule for every galaxy, so how bright one looks against another is how bright it is.</Why>
           </Item>
+          <Item title="Too small for a pixel, a point">
+            A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
+            lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and
+            Andromeda little more; most of the dwarfs are too faint to show at all.
+            <Why>drawn as a volume, a galaxy that small fell between the pixels and was gone.</Why>
+          </Item>
           <Item title="As the eye would not see them">
             To the eye only the centres of Andromeda, Triangulum and the Magellanic Clouds would show, faint and
             grey; the rest is a long exposure’s.

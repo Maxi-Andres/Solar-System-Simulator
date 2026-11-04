@@ -4,13 +4,21 @@ import { join } from 'node:path';
 import type { LocalGroupCatalog } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { plummerColumn } from '../scene/LocalGroup.tsx';
+import {
+  MIN_SIGMA_PX,
+  plummerColumn,
+  pointPeak,
+  pointShare,
+  RESOLVED_PX,
+  UNRESOLVED_PX,
+} from '../scene/LocalGroup.tsx';
 import {
   catalogueGalaxy,
   centralDensities,
   colourIndex,
   columnAt,
   galaxyAxes,
+  galaxyHalfLightPc,
   galaxyKey,
   galaxyLuminosity,
   galaxyPositionPc,
@@ -141,6 +149,37 @@ describe('a galaxy’s light', () => {
     // Freeman's law: discs' central B surface brightness near 21.65, V some 0.7 brighter.
     expect(surfaceBrightness(faceOn)).toBeGreaterThan(20);
     expect(surfaceBrightness(faceOn)).toBeLessThan(22);
+  });
+
+  it('puts all of a galaxy too small for a pixel in its point, and hands it to its volume as it grows', () => {
+    // A Gaussian of the narrowest sigma, its peak from pointPeak, summed over pixels of 1 pc.
+    const sigma = MIN_SIGMA_PX;
+    let sum = 0;
+    for (let x = -10; x <= 10; x += 1) {
+      for (let y = -10; y <= 10; y += 1) {
+        sum += pointPeak(1000, sigma) * Math.exp((-0.5 * (x * x + y * y)) / (sigma * sigma));
+      }
+    }
+    expect(sum / 1000).toBeCloseTo(1, 2);
+    expect(pointShare(UNRESOLVED_PX)).toBe(1);
+    expect(pointShare(RESOLVED_PX)).toBe(0);
+    expect(pointShare((UNRESOLVED_PX + RESOLVED_PX) / 2)).toBeCloseTo(0.5, 10);
+  });
+
+  it('has an exponential ellipsoid half its light within 2.027 scale lengths on the sky', () => {
+    // Its column at R: twice the integral of e^-sqrt(R^2 + z^2) over z; summed over rings.
+    const column = (r: number) => {
+      let s = 0;
+      for (let z = 0.0025; z < 40; z += 0.005) s += Math.exp(-Math.sqrt(r * r + z * z)) * 0.005;
+      return 2 * s;
+    };
+    const smc = byKey('smc');
+    const scale = (smc.model as { majorPc: number }).majorPc;
+    const within = galaxyHalfLightPc(smc)! / scale;
+    let inside = 0;
+    for (let r = 0.005; r < within; r += 0.01) inside += 2 * Math.PI * r * column(r) * 0.01;
+    // All of it: 8 pi.
+    expect(inside / (8 * Math.PI)).toBeCloseTo(0.5, 2);
   });
 
   it('converts surface brightness both ways', () => {

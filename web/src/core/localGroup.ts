@@ -509,6 +509,28 @@ export function galaxyExtentPc(galaxy: LocalGroupGalaxy): readonly [number, numb
 }
 
 /**
+ * The radius, pc, within which half its light lies as seen on the sky, about: a Plummer
+ * sphere's scale radius, the geometric mean of its two axes; an exponential disc's 1.678
+ * scale lengths; an exponential ellipsoid's 2.027 of its major scale length, worked out from
+ * its column. Only how big it looks: what decides when it is too small for a pixel
+ * (scene/LocalGroup.tsx).
+ */
+export function galaxyHalfLightPc(galaxy: LocalGroupGalaxy): number | null {
+  const model = galaxy.model;
+  if (model === null) {
+    return null;
+  }
+  switch (model.kind) {
+    case 'plummer':
+      return Math.sqrt(model.majorPc * model.minorPc);
+    case 'exponential-ellipsoid':
+      return 2.027 * model.majorPc;
+    case 'disc':
+      return 1.678 * model.scaleLengthPc;
+  }
+}
+
+/**
  * How far from its centre the camera stands when going to it, km: all of it in view, its
  * light out to where it fades into the dark -- four scale lengths of a disc, three scale radii
  * of a dwarf -- in the inner half of the frame's height.

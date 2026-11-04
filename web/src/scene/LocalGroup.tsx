@@ -11,6 +11,8 @@ import {
   galaxyAxes,
   galaxyBodyId,
   galaxyExtentPc,
+  galaxyHalfLightPc,
+  galaxyLuminosity,
   galaxyPositionPc,
   GIANTS,
   indexLocalGroup,
@@ -74,6 +76,17 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  *
  * The colours are estimated (localGroup.ts colourIndex): B-V through the stars' blackbody.
  *
+ * ## Too small for a pixel
+ *
+ * A volume is seen where a pixel's ray goes through it, so a galaxy smaller than a pixel fell
+ * between the rays and was gone: from the Local Group's view, Andromeda itself. A photograph
+ * does not lose it, its light lands on the pixel it is in. So as a galaxy's half-light radius
+ * (galaxyHalfLightPc) shrinks from RESOLVED_PX to UNRESOLVED_PX pixels its light goes over
+ * from its volume to a point: a Gaussian of that radius, never narrower than MIN_SIGMA_PX,
+ * holding all of its luminosity (pointPeak), through the same exposure. From the Local
+ * Group's view Andromeda, Triangulum, the Clouds and a dozen more are dots, some forty in all
+ * show, and the faintest dwarfs still do not.
+ *
  * ## Not round the camera
  *
  * Light nearer the camera than NEAR_SHARE of its distance from a galaxy's centre -- and never
@@ -120,6 +133,30 @@ export const NEAR_SHARE = 0.3;
 /** Steps across a disc's box, and across Andromeda's bulge. */
 export const DISC_STEPS = 64;
 export const BULGE_STEPS = 32;
+
+/**
+ * A galaxy's half-light radius on the screen, device pixels, below which its light is a point
+ * alone, and above which its volume alone; between, the one goes over to the other.
+ */
+export const UNRESOLVED_PX = 1.5;
+export const RESOLVED_PX = 4;
+/** The narrowest a point's Gaussian is drawn, device pixels: narrower falls between pixels. */
+export const MIN_SIGMA_PX = 0.7;
+
+/** The share of a galaxy's light drawn as a point, its half-light radius `halfLightPx` across. */
+export function pointShare(halfLightPx: number): number {
+  const t = Math.min(1, Math.max(0, (halfLightPx - UNRESOLVED_PX) / (RESOLVED_PX - UNRESOLVED_PX)));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * The column at the centre of a point, L_Sun/pc^2: `luminosity` spread as a Gaussian sigma
+ * `sigmaPc` across where the galaxy is -- L / (2 pi sigma^2), so that summed over the screen
+ * it is all of the galaxy's light.
+ */
+export function pointPeak(luminosity: number, sigmaPc: number): number {
+  return luminosity / (2 * Math.PI * sigmaPc * sigmaPc);
+}
 
 /** Where the dwarfs' marks come in, light years from the Sun: as the camera leaves the disc. */
 export const MARKS_FROM_LY = 20_000;
@@ -314,6 +351,53 @@ void main() {
 }
 `;
 
+const POINT_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+uniform vec3 uCameraPc;
+uniform float uUnitsPerPc;
+uniform float uPixelsPerRadian;
+uniform float uFade;
+// The colour times the luminosity over the white column; the half-light radius, pc; the
+// share drawn as a point (pointShare, worked out on the CPU each frame).
+attribute vec3 aLight;
+attribute float aHalfLightPc;
+attribute float aShare;
+varying vec3 vPeak;
+varying float vSigmaPx;
+varying float vSizePx;
+
+void main() {
+  vec3 rel = position - uCameraPc;
+  float distancePc = length(rel);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
+  #include <logdepthbuf_vertex>
+  float sigmaPx = max(${MIN_SIGMA_PX.toFixed(2)}, aHalfLightPc / distancePc * uPixelsPerRadian / 1.1774);
+  float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
+  // pointPeak: L / (2 pi sigma^2).
+  vPeak = aLight * aShare * uFade / (6.2831853 * sigmaPc * sigmaPc);
+  vSigmaPx = sigmaPx;
+  vSizePx = ceil(6.0 * sigmaPx) + 1.0;
+  gl_PointSize = aShare * uFade > 0.0 ? vSizePx : 0.0;
+}
+`;
+
+const POINT_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+varying vec3 vPeak;
+varying float vSigmaPx;
+varying float vSizePx;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec2 offset = (gl_PointCoord - 0.5) * vSizePx;
+  vec3 x = vPeak * exp(-0.5 * dot(offset, offset) / (vSigmaPx * vSigmaPx));
+  vec3 light = 1.0 - exp(-x);
+  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+  gl_FragColor = vec4(light, 1.0);
+}
+`;
+
 const MARK_VERTEX = /* glsl */ `
 uniform vec3 uCameraPc;
 uniform float uUnitsPerPc;
@@ -367,6 +451,7 @@ export interface LocalGroupProps {
 const noRaycast = (): void => {};
 const scratchMatrix = new THREE.Matrix4();
 const scratchBasis = new THREE.Matrix4();
+const scratchSize = new THREE.Vector2();
 
 export function LocalGroup({ source, store, clock, focus, visible, onPick }: LocalGroupProps) {
   const { gl, camera } = useThree();
@@ -426,17 +511,16 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
         axes,
         scales: [model.majorPc, model.minorPc, model.depthPc] as const,
         extent,
+        halfLightPc: galaxyHalfLightPc(galaxy)!,
+        glow: glow(galaxy, centralDensities(galaxy)!.main),
       };
     });
     fixed.forEach(({ axes, scales }, i) => {
-      const { galaxy } = list[i]!;
       m0.setXYZ(i, axes.u.x / scales[0], axes.u.y / scales[0], axes.u.z / scales[0]);
       m1.setXYZ(i, axes.v.x / scales[1], axes.v.y / scales[1], axes.v.z / scales[1]);
       m2.setXYZ(i, axes.w.x / scales[2], axes.w.y / scales[2], axes.w.z / scales[2]);
-      const g = glow(galaxy, centralDensities(galaxy)!.main);
-      glowAttribute.setXYZ(i, g.x, g.y, g.z);
     });
-    return { mesh, list, fixed, u0, near };
+    return { mesh, list, fixed, u0, near, glow: glowAttribute };
   }, [archive, dwarfUniforms]);
 
   // The four, each its own box and marcher.
@@ -496,10 +580,72 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
         mesh.frustumCulled = false;
         mesh.raycast = noRaycast;
         const scale = model.kind === 'disc' ? model.scaleLengthPc : model.majorPc;
-        return [{ galaxy, mesh, uniforms, axes, extent, centre: galaxyPositionPc(galaxy), scale }];
+        return [
+          {
+            galaxy,
+            mesh,
+            uniforms,
+            axes,
+            extent,
+            centre: galaxyPositionPc(galaxy),
+            scale,
+            halfLightPc: galaxyHalfLightPc(galaxy)!,
+            glow: uniforms.uGlow.value.clone(),
+            bulgeGlow: uniforms.uBulgeGlow.value.clone(),
+          },
+        ];
       }),
     [],
   );
+
+  // Every galaxy drawn as a volume, as a point too: its light when too small for a pixel.
+  const pointUniforms = useMemo<Record<string, THREE.IUniform>>(
+    () => ({
+      uCameraPc: { value: new THREE.Vector3() },
+      uUnitsPerPc: { value: UNITS_PER_PC },
+      uPixelsPerRadian: { value: 1 },
+      uFade: { value: 0 },
+    }),
+    [],
+  );
+  const points = useMemo(() => {
+    const list = archive.galaxies.filter(
+      (galaxy) => centralDensities(galaxy) !== null && galaxyLuminosity(galaxy) !== null,
+    );
+    const centres = list.map((galaxy) => galaxyPositionPc(galaxy));
+    const halfLightPc = list.map((galaxy) => galaxyHalfLightPc(galaxy)!);
+    const position = new Float32Array(list.length * 3);
+    const light = new Float32Array(list.length * 3);
+    list.forEach((galaxy, i) => {
+      const centre = centres[i]!;
+      position.set([centre.x, centre.y, centre.z], i * 3);
+      // Its whole light, in the colour of the most of it.
+      const g = glow(galaxy, galaxyLuminosity(galaxy)!);
+      light.set([g.x, g.y, g.z], i * 3);
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('aLight', new THREE.BufferAttribute(light, 3));
+    geometry.setAttribute('aHalfLightPc', new THREE.BufferAttribute(new Float32Array(halfLightPc), 1));
+    const share = new THREE.BufferAttribute(new Float32Array(list.length), 1);
+    share.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aShare', share);
+    const object = new THREE.Points(
+      geometry,
+      new THREE.ShaderMaterial({
+        uniforms: pointUniforms,
+        vertexShader: POINT_VERTEX,
+        fragmentShader: POINT_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    );
+    object.frustumCulled = false;
+    object.raycast = noRaycast;
+    return { object, centres, halfLightPc, share };
+  }, [archive, pointUniforms]);
 
   // The dwarfs' marks.
   const markUniforms = useMemo<Record<string, THREE.IUniform>>(
@@ -551,17 +697,20 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
   useEffect(() => {
     group.add(dwarfs.mesh);
     for (const giant of giants) group.add(giant.mesh);
+    group.add(points.object);
     group.add(marks.points);
     renderDemand.request();
     return () => {
-      group.remove(dwarfs.mesh, marks.points);
+      group.remove(dwarfs.mesh, points.object, marks.points);
       for (const giant of giants) group.remove(giant.mesh);
       dwarfs.mesh.geometry.dispose();
       (dwarfs.mesh.material as THREE.Material).dispose();
+      points.object.geometry.dispose();
+      (points.object.material as THREE.Material).dispose();
       marks.points.geometry.dispose();
       (marks.points.material as THREE.Material).dispose();
     };
-  }, [group, dwarfs, giants, marks]);
+  }, [group, dwarfs, giants, points, marks]);
 
   useEffect(
     () => () => {
@@ -600,15 +749,22 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
     }
     group.position.copy(frameCamera.position);
     group.updateMatrixWorld();
+    const fov = (frameCamera as THREE.PerspectiveCamera).fov;
+    const pixelsPerRadian = renderer.getDrawingBufferSize(scratchSize).y / (2 * Math.tan((fov * Math.PI) / 360));
+    // The share of a galaxy's light that is its volume's; the rest is its point's.
+    const volumeShare = (halfLightPc: number, distancePc: number): number =>
+      1 - pointShare((halfLightPc / distancePc) * pixelsPerRadian);
 
     // The dwarfs: each box about the camera, and the camera in each one's units.
     dwarfUniforms.uFade.value = fade;
     dwarfs.mesh.visible = fade > 0;
     if (fade > 0) {
-      dwarfs.fixed.forEach(({ centre, axes, scales, extent }, i) => {
+      dwarfs.fixed.forEach(({ centre, axes, scales, extent, halfLightPc, glow: g }, i) => {
         const rx = centre.x - cameraPc.x;
         const ry = centre.y - cameraPc.y;
         const rz = centre.z - cameraPc.z;
+        const share = volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
+        dwarfs.glow.setXYZ(i, g.x * share, g.y * share, g.z * share);
         // u0 = the camera minus the centre, along each axis over its scale.
         dwarfs.near.setX(i, Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scales[0]));
         dwarfs.u0.setXYZ(
@@ -627,16 +783,20 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
       });
       dwarfs.u0.needsUpdate = true;
       dwarfs.near.needsUpdate = true;
+      dwarfs.glow.needsUpdate = true;
       dwarfs.mesh.instanceMatrix.needsUpdate = true;
     }
 
     // The four: each box about the camera, and the camera in its frame.
-    for (const { mesh, uniforms, axes, extent, centre, scale } of giants) {
+    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow } of giants) {
       mesh.visible = fade > 0;
       uniforms.uFade.value = fade;
       const rx = centre.x - cameraPc.x;
       const ry = centre.y - cameraPc.y;
       const rz = centre.z - cameraPc.z;
+      const share = volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
+      uniforms.uGlow.value.copy(g).multiplyScalar(share);
+      uniforms.uBulgeGlow.value.copy(bulgeGlow).multiplyScalar(share);
       uniforms.uNear.value = Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scale);
       uniforms.uCamera.value.set(
         -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z),
@@ -652,6 +812,19 @@ export function LocalGroup({ source, store, clock, focus, visible, onPick }: Loc
       mesh.matrix.copy(scratchBasis).setPosition(rx * UNITS_PER_PC, ry * UNITS_PER_PC, rz * UNITS_PER_PC);
       uniforms.uLocal.value.copy(mesh.matrix);
       mesh.matrixWorldNeedsUpdate = true;
+    }
+
+    // The points: what the volumes do not draw.
+    points.object.visible = fade > 0;
+    if (fade > 0) {
+      points.centres.forEach((centre, i) => {
+        const distancePc = Math.hypot(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z);
+        points.share.setX(i, 1 - volumeShare(points.halfLightPc[i]!, distancePc));
+      });
+      points.share.needsUpdate = true;
+      (pointUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
+      pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
+      pointUniforms['uFade']!.value = fade;
     }
 
     // The marks, about the camera.
