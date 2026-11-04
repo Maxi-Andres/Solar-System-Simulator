@@ -21,6 +21,7 @@ export const choicesSection: AboutSection = {
     { id: 'earth', label: 'Earth' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'pulsars', label: 'Pulsars' },
+    { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy’s light' },
   ],
   Body: ({ data }) => {
@@ -271,6 +272,31 @@ export const choicesSection: AboutSection = {
           <Item title="Spin and beams not drawn">
             A neutron star gone to is a sphere of its radius in its colour, not turning.
             <Why>a turning sphere shows nothing, and the beams a pulsar is known by are radio, from a region no measurement resolves.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="supernova-remnants">
+          Supernova remnants
+        </Sub>
+        <Items>
+          <Item title="As bright as their pictures, not as the eye sees them">
+            A remnant is as bright as its picture, a long exposure stretched by its makers, thousands of times
+            what reaches the eye. Going there would not help: an extended glow’s brightness per patch of sky is
+            the same from any distance — nearer, it only covers more of the sky — and from inside one the whole
+            sky is that faint. At that brightness the eye sees with its rods, which see no colour: in person, or
+            at a telescope, a remnant is a faint grey glow at most. The hues drawn are its light’s own — its lines’
+            wavelengths through the eye’s colour response — as they would look were it bright enough to see.
+            <Why>the light is the measurement; at the eye’s brightness there would be nothing to see.</Why>
+          </Item>
+          <Item title="Seen first from Earth’s side">
+            Gone to, a remnant is seen from the Sun’s side, north up, as its pictures show it, six of its radii
+            out; from there the camera can go round it and into it.
+            <Why>from there it is exactly the picture; from anywhere else part of what is shown is modelled.</Why>
+          </Item>
+          <Item title="Pictures in other light">
+            Where no visible-light picture of the whole of a remnant may be used, one in other light gives its
+            shape, drawn in the colours of its visible lines.
+            <Why>a whole remnant shaped by a measurement, over a part of one or a shape made up.</Why>
           </Item>
         </Items>
 

@@ -419,10 +419,42 @@ export const estimatedSection: AboutSection = {
             distances for the rest (Ranasinghe &amp; Leahy 2023) is served only by CDS VizieR, which was down when
             these were added.
           </Item>
-          <Item title="A ring, not its look">
-            Each is drawn as a ring of its mean radius, turned to the camera: its size, not its filaments or its
-            elongation, whose position angle the catalogue does not give. Nor its expansion, nor its motion.
-            <Why>a remnant’s glowing gas is a picture no catalogue gives; its size is a number one does.</Why>
+          <Item title="Its depth: modelled">
+            A picture says how much light comes from each point of the sky, not how deep along the line of sight
+            it is. Except for Cassiopeia A’s, which is measured, each line of sight’s light is put where it
+            crosses the remnant’s shell — a sphere of its mean radius, or the Crab’s spheroid along its pulsar’s
+            axis — each patch of it on the near side or the far, broken into clumps, by noise; the Crab’s
+            synchrotron light, its blue, fills the spheroid instead. Seen from Earth the sum along every line of
+            sight is the picture; from anywhere else, where the clumps are is not measured.
+            <Why>it keeps what is measured exactly — the picture, from here — and is a shell, which a remnant is.</Why>
+          </Item>
+          <Item title="Its colour, where the picture is not in visible light">
+            Cassiopeia A’s, Vela’s, Tycho’s, SN 1006’s and Puppis A’s pictures give only where the light is and how
+            much. They are drawn in the colours of the lines each is known to shine in: Balmer lines alone for
+            Tycho’s and SN 1006 <Cite k={['kirshnerChevalier1978', 'ghavamian2002']} />, oxygen and sulphur for
+            Cassiopeia A <Cite k="chevalierKirshner1979" />, hydrogen with sulphur, nitrogen and oxygen for Vela and
+            Puppis A <Cite k="fesen1985" />, the second colour in a share of the gas, by noise. Tycho’s and SN
+            1006’s are their outer shocks in X-rays, which is where their Balmer filaments are; those are far
+            fainter and fewer than the X-rays.
+          </Item>
+          <Item title="Its colour, where the picture is a photograph">
+            The Crab’s, Kepler’s, the Cygnus Loop’s and IC 443’s colours are their photographs’, and those are
+            set by their filters, not the eye: the Crab’s ESO picture, in a sulphur-line filter with broad red and
+            blue ones, is nearest true colour; Kepler’s Hubble mosaic is in its makers’ choice of narrow filters;
+            the Cygnus Loop’s and IC 443’s are two photographic plates, red and blue, the green between them made
+            up, balanced so that the stars come out white.
+          </Item>
+          <Item title="What the pictures leave in or out">
+            Their stars are taken out — the app draws stars from its own catalogues — at the positions Gaia and
+            Hipparcos give, and filled from the light round them: where one lay on a filament, the filament there
+            is a guess. Vela’s H-alpha includes the Gum Nebula’s, which lies across it on the sky; the Cygnus
+            Loop’s and IC 443’s photographic plates keep faint stars too small to take out. Not drawn: their
+            expansion and their motion.
+          </Item>
+          <Item title="A ring from far off">
+            From far off, where its gas would be a few pixels across, each is a ring of its mean radius, turned to
+            the camera.
+            <Why>a mark of its size where its gas is too small to see.</Why>
           </Item>
         </Items>
 

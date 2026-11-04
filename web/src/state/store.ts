@@ -198,6 +198,17 @@ export interface FramingRequest {
   readonly view: FramingView | null;
 }
 
+/**
+ * A framing a body asks for whenever it is focused, however it is -- a click, the search, the
+ * breadcrumb: a supernova remnant's is Earth's view of it (App.tsx). Taken only when nothing
+ * else asked for one with the focus.
+ */
+let focusFraming: ((id: BodyId) => FramingRequest | null) | null = null;
+
+export function setFocusFraming(framing: ((id: BodyId) => FramingRequest | null) | null): void {
+  focusFraming = framing;
+}
+
 /** Which slide-over panel is open, if any. */
 export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'readout';
 
@@ -283,7 +294,9 @@ export const useViewStore = create<ViewState>((set, get) => ({
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
 
   setFocus: (id) => {
-    set({ focus: id });
+    const state = get();
+    const own = state.framingRequestKm === null && id !== state.focus ? (focusFraming?.(id) ?? null) : null;
+    set(own === null ? { focus: id } : { focus: id, framingRequestKm: own.km, framingView: own.view });
   },
 
   toggleLayer: (id) => {

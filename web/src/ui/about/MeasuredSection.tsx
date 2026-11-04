@@ -515,6 +515,23 @@ export const measuredSection: AboutSection = {
             </Xref>
             .
           </Item>
+          <Item>
+            Each one’s gas is drawn from a picture of it: how much light comes from each point of its sky,
+            reprojected from the picture’s own astrometry. The Crab’s, Kepler’s, the Cygnus Loop’s and IC 443’s
+            are in visible light, from ESO’s VLT, Hubble and the Digitized Sky Survey’s photographic plates;
+            Cassiopeia A’s in Hubble’s red and near-infrared filters; Vela’s in H-alpha, from SHASSA
+            <Cite k="gaustad2001" />; Tycho’s, SN 1006 and Puppis A in X-rays, from Chandra and XMM-Newton, as no
+            visible-light picture shows the whole of them. Each one’s credit is in its panel and under Sources.
+          </Item>
+          <Item>
+            Cassiopeia A’s gas is mapped in 3D: <Strong>DeLaney et al. 2010</Strong> <Cite k="delaney2010" />{' '}
+            measured the Doppler shifts of its ejecta’s lines — with Spitzer, Chandra and optical spectra — and,
+            the ejecta coasting since the explosion, a knot’s velocity towards or away from us is its depth. Its
+            light is put at those depths. The Crab Nebula is stretched along its pulsar’s spin axis, whose
+            direction Chandra’s images of the X-ray ring round the pulsar give <Cite k="weisskopf2013" />: at
+            position angle 298° on the sky, 119° from the line of sight towards us, its north-western end away
+            from us.
+          </Item>
         </Items>
 
         <Sub section="measured" id="galaxy">

@@ -1,0 +1,314 @@
+{
+  "_about": "Recipes for tools/remnants/prepare.py: each remnant's source, its astrometry where the source is a press image (AVM, read from the file), and the cleaning it needs. See web/public/remnants/CREDITS.md.",
+  "crab": {
+    "source": {
+      "kind": "avm",
+      "image": "https://cdn.eso.org/images/large/eso9948f.jpg",
+      "scale": [
+        -2.292566e-05,
+        2.292566e-05
+      ],
+      "refValue": [
+        83.633185,
+        22.014272
+      ],
+      "refPixel": [
+        2443.56045829,
+        2592.22275423
+      ],
+      "refDim": [
+        4961,
+        4990
+      ],
+      "rotationDeg": -0.07593199413
+    },
+    "centre": [
+      83.6292,
+      22.0167
+    ],
+    "halfArcmin": 4.0,
+    "maskArcmin": 4.2,
+    "size": 1024,
+    "gaiaLimit": 19,
+    "out": "crab.png",
+    "continuum": "crab-continuum.png"
+  },
+  "cas-a": {
+    "source": {
+      "kind": "avm",
+      "image": "https://cdn.esahubble.org/archives/images/publicationjpg/heic0609a.jpg",
+      "scale": [
+        -1.38937659775e-05,
+        1.38937659775e-05
+      ],
+      "refValue": [
+        350.858757421,
+        58.8148655004
+      ],
+      "refPixel": [
+        5126.0,
+        3689.0
+      ],
+      "refDim": [
+        10252,
+        7379
+      ],
+      "rotationDeg": 0.44
+    },
+    "centre": [
+      350.85833,
+      58.8
+    ],
+    "halfArcmin": 3.6,
+    "maskArcmin": 3.5,
+    "size": 1024,
+    "mono": true,
+    "level": 0.85,
+    "out": "cas-a.png",
+    "maxStar": 40,
+    "floor": 3,
+    "gaiaLimit": 21,
+    "spikes": [
+      0.0
+    ]
+  },
+  "cas-a-points": {
+    "kind": "points",
+    "url": "https://chandra.harvard.edu/graphics/resources/illustrations/3d_files/CasA_supernova_remnant-ascii_vtks.zip",
+    "surfaces": [
+      "newar",
+      "newsi",
+      "newopt",
+      "newjets"
+    ],
+    "shell": [
+      "newar",
+      "newsi"
+    ],
+    "map": "cas-a.png",
+    "halfArcmin": 3.6,
+    "count": 60000,
+    "out": "cas-a-points.bin"
+  },
+  "tycho": {
+    "source": {
+      "kind": "fits-mono",
+      "files": [
+        "https://chandra.harvard.edu/photo/2009/tycho/fits/tycho_4100-6100eV.fits"
+      ]
+    },
+    "centre": [
+      6.325,
+      64.15
+    ],
+    "halfArcmin": 5.0,
+    "maskArcmin": 4.6,
+    "size": 1024,
+    "mono": true,
+    "level": 0.85,
+    "stretch": 1.0,
+    "out": "tycho.png",
+    "floor": 3,
+    "maxStar": 40
+  },
+  "kepler": {
+    "source": {
+      "kind": "avm",
+      "image": "https://cdn.esahubble.org/archives/images/large/opo0429i.jpg",
+      "scale": [
+        -4.8619699112e-05,
+        4.8619699112e-05
+      ],
+      "refValue": [
+        262.671039583,
+        -21.4917739919
+      ],
+      "refPixel": [
+        833.829681275,
+        833.667467949
+      ],
+      "refDim": [
+        1666,
+        1666
+      ],
+      "rotationDeg": -0.04
+    },
+    "centre": [
+      262.675,
+      -21.48333
+    ],
+    "halfArcmin": 2.4,
+    "maskArcmin": 2.1,
+    "size": 1024,
+    "out": "kepler.png",
+    "maxStar": 40,
+    "floor": 4,
+    "gaiaLimit": 21,
+    "spikes": [
+      0.0
+    ],
+    "whiteOut": 0.9,
+    "level": 0.85
+  },
+  "sn-1006": {
+    "source": {
+      "kind": "avm",
+      "image": "https://chandra.harvard.edu/photo/2013/sn1006/sn1006_lg.jpg",
+      "cd": [
+        [
+          -0.0001554691326,
+          -7.2961249679e-08
+        ],
+        [
+          4.9177507751e-08,
+          0.00015546112525
+        ]
+      ],
+      "refValue": [
+        225.707701,
+        -41.9356537
+      ],
+      "refPixel": [
+        1801,
+        1801
+      ],
+      "refDim": [
+        3600,
+        3600
+      ]
+    },
+    "centre": [
+      225.70833,
+      -41.93333
+    ],
+    "halfArcmin": 16.8,
+    "maskArcmin": 16.3,
+    "size": 1024,
+    "mono": true,
+    "level": 0.85,
+    "out": "sn-1006.png",
+    "floor": 2,
+    "maxStar": 40
+  },
+  "vela": {
+    "source": {
+      "kind": "fits-mono",
+      "files": [
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=128.5,-45.8333&Coordinates=J2000&Projection=Tan&Survey=SHASSA+CC&Size=5.0&Pixels=600&Sampler=Clip&Return=FITS"
+      ]
+    },
+    "centre": [
+      128.5,
+      -45.83333
+    ],
+    "halfArcmin": 150,
+    "maskArcmin": 140,
+    "size": 1024,
+    "mono": true,
+    "localSky": 160,
+    "floor": 1.5,
+    "level": 0.85,
+    "stretch": 0.8,
+    "out": "vela.png",
+    "smooth": 1.2,
+    "brightRadius": 4,
+    "lineLength": 11
+  },
+  "cygnus-loop": {
+    "source": {
+      "kind": "fits",
+      "red": [
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=312.75,30.6667&Coordinates=J2000&Projection=Tan&Survey=DSS2+Red&Size=4.5&Pixels=2700&Sampler=Clip&Return=FITS"
+      ],
+      "blue": [
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=312.75,30.6667&Coordinates=J2000&Projection=Tan&Survey=DSS2+Blue&Size=4.5&Pixels=2700&Sampler=Clip&Return=FITS"
+      ]
+    },
+    "centre": [
+      312.75,
+      30.66667
+    ],
+    "halfArcmin": 135,
+    "maskArcmin": 128,
+    "size": 1024,
+    "balance": "stars",
+    "level": 0.85,
+    "out": "cygnus-loop.png",
+    "localSky": 96,
+    "floor": 2.5,
+    "gaiaLimit": 13.5,
+    "maxStar": 40
+  },
+  "puppis-a": {
+    "source": {
+      "kind": "avm",
+      "image": "https://chandra.harvard.edu/photo/2014/puppisa/puppisa_lg.jpg",
+      "cd": [
+        [
+          -0.00039611785882,
+          -1.1183559721e-07
+        ],
+        [
+          2.3024556656e-06,
+          0.00039656876068
+        ]
+      ],
+      "refValue": [
+        125.5557773,
+        -43.0076723
+      ],
+      "refPixel": [
+        1801,
+        1801
+      ],
+      "refDim": [
+        3600,
+        3600
+      ]
+    },
+    "centre": [
+      125.54167,
+      -43.0
+    ],
+    "halfArcmin": 40,
+    "maskArcmin": 37,
+    "size": 1024,
+    "mono": true,
+    "level": 0.85,
+    "out": "puppis-a.png",
+    "floor": 2,
+    "maxStar": 40
+  },
+  "ic-443": {
+    "source": {
+      "kind": "fits",
+      "red": [
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=94.25,22.5667&Coordinates=J2000&Projection=Tan&Survey=DSS2+Red&Size=1.25&Pixels=1800&Sampler=Clip&Return=FITS"
+      ],
+      "blue": [
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=94.25,22.5667&Coordinates=J2000&Projection=Tan&Survey=DSS1+Blue&Size=1.25&Pixels=1800&Sampler=Clip&Return=FITS"
+      ]
+    },
+    "centre": [
+      94.25,
+      22.56667
+    ],
+    "halfArcmin": 37.5,
+    "maskArcmin": 30,
+    "size": 1024,
+    "balance": "stars",
+    "level": 0.85,
+    "out": "ic-443.png",
+    "localSky": 96,
+    "floor": 3,
+    "masks": [
+      [
+        93.7192,
+        22.5068,
+        9
+      ]
+    ],
+    "gaiaLimit": 16,
+    "maxStar": 40
+  }
+}

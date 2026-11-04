@@ -50,6 +50,7 @@ export const physicsSection: AboutSection = {
     { id: 'black-holes', label: 'Black holes' },
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'pulsars', label: 'Pulsars' },
+    { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy' },
   ],
   Body: () => {
@@ -1057,6 +1058,94 @@ export const physicsSection: AboutSection = {
           years; its supernova was seen in 1054. Neither is given where Ṗ is negative: a pulsar in a cluster can
           seem to spin up as the cluster pulls it toward us.
         </Equation>
+
+        <Sub section="physics" id="supernova-remnants">
+          Supernova remnants
+        </Sub>
+        <Equation
+          title="A picture made a volume"
+          code="web/src/scene/remnantMap.ts"
+          math={math(
+            row(
+              mi('j'),
+              paren(mi('s')),
+              mo('='),
+              mo('−'),
+              fn('ln'),
+              paren(row(mn('1'), mo('−'), mi('P'))),
+              mi('w'),
+              paren(mi('s')),
+              t(',  '),
+              mo('∫'),
+              mi('w'),
+              mi('d'),
+              mi('s'),
+              mo('='),
+              mn('1'),
+            ),
+          )}
+          symbols={
+            <>
+              j the light given off at a point; P the picture’s pixel on its line of sight from Earth, each colour;
+              w how that line of sight’s light is shared along it.
+            </>
+          }
+        >
+          The scene adds light as 1 − e<sup>−∫j ds</sup>, so along every line of sight from Earth it adds up to
+          the picture’s pixel however w shares it out. w is the depth: a shell’s, the Crab’s synchrotron’s
+          through its spheroid, or Cassiopeia A’s measured.
+        </Equation>
+        <Equation
+          title="A shell a twelfth of its radius thick"
+          code="web/src/scene/remnantVolume.ts"
+          math={math(
+            row(
+              mn('4'),
+              mi('π'),
+              sup(mi('R'), mn('2')),
+              mi('Δ'),
+              mi('R'),
+              mo('·'),
+              mn('4'),
+              mi('ρ'),
+              mo('='),
+              frac(mn('4'), mn('3')),
+              mi('π'),
+              sup(mi('R'), mn('3')),
+              mi('ρ'),
+              mo('⇒'),
+              mi('Δ'),
+              mi('R'),
+              mo('='),
+              frac(mi('R'), mn('12')),
+            ),
+          )}
+          symbols={<>R the shell’s radius; ρ the density of the gas it swept up.</>}
+        >
+          A strong shock in a monatomic gas compresses it four times (the Rankine–Hugoniot jump): all the gas
+          the blast wave swept up, at four times its density, is a shell R/12 thick. Where the depth is modelled
+          the shell is this thick.
+        </Equation>
+        <Equation
+          title="Cassiopeia A: velocity is depth"
+          code="tools/remnants/prepare.py"
+          cite="delaney2010"
+          math={math(row(mi('z'), mo('='), sub(mi('v'), up('r')), mi('t')))}
+          symbols={<>z a knot’s depth from the centre; v<sub>r</sub> its Doppler velocity; t the remnant’s age.</>}
+        >
+          Ejecta coasting since the explosion are where their speed has taken them, so each knot’s velocity along
+          the line of sight gives its depth as its proper motion gives its place on the sky. The surfaces are put
+          on the sky by fitting them to Hubble’s picture.
+        </Equation>
+        <Prose>
+          The lines’ colours are their wavelengths through the CIE 1931 colour-matching functions to linear sRGB,
+          H-alpha with H-beta at the Balmer decrement <Cite k="osterbrockFerland2006" />. The Crab is a spheroid
+          stretched along its pulsar’s spin axis, as a pulsar’s wind, pinched by its wound-up field, stretches its
+          nebula <Cite k={['begelmanLi1992', 'weisskopf2013']} />, its two axes chosen so that seen from Earth,
+          foreshortened, it is Green’s 7′ by 5′. Its synchrotron light is told from its filaments’ by colour: the
+          bluest bright pixels at its middle give the synchrotron’s colour <Cite k="hester2008" />, and each pixel
+          holds as much of it as it can.
+        </Prose>
 
         <Sub section="physics" id="galaxy">
           The galaxy

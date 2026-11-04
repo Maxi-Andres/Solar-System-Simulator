@@ -144,6 +144,23 @@ export const sourcesSection: AboutSection = {
             (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
           </Item>
           <Item>
+            The supernova remnants’ pictures, adapted — reprojected, their stars and sky taken out — as
+            web/public/remnants/CREDITS.md details: the Crab Nebula’s, ESO (eso9948f), CC BY 4.0; Cassiopeia A’s,
+            NASA, ESA, and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration. Acknowledgement: Robert A.
+            Fesen (Dartmouth College, USA) and James Long (ESA/Hubble) (heic0609a), CC BY 4.0; Kepler’s, NASA, ESA,
+            R. Sankrit and W. Blair (Johns Hopkins University) (opo0429i), CC BY 4.0. Tycho’s, NASA/CXC/Rutgers/J.Warren
+            &amp; J.Hughes et al.; SN 1006’s, NASA/CXC/Middlebury College/F.Winkler; Puppis A’s, X-ray:
+            NASA/CXC/IAFE/G.Dubner et al &amp; ESA/XMM-Newton; Cassiopeia A’s 3D map, Model: NASA/CXC/MIT/T. Delaney
+            et al. — Chandra’s, on which NASA asserts no copyright. Vela’s from the Southern H-Alpha Sky Survey
+            Atlas (SHASSA), which is supported by the National Science Foundation (Gaustad et al. 2001), © Las
+            Cumbres Observatory, for scientific and educational use. The Cygnus Loop’s and IC 443’s from the
+            Digitized Sky Surveys, which were produced at the Space Telescope Science Institute under U.S.
+            Government grant NAG W-2166, the images of these surveys based on photographic data obtained using
+            the Oschin Schmidt Telescope on Palomar Mountain (the Palomar Observatory Sky Surveys, made by the
+            California Institute of Technology), through NASA’s SkyView. Their stars found with Gaia DR3 and
+            Hipparcos.
+          </Item>
+          <Item>
             Globular clusters from Holger Baumgardt’s Galactic Globular Cluster Database
             (https://people.smp.uq.edu.au/HolgerBaumgardt/globular/) and the Harris catalogue, Harris 1996
             (2010 edition), https://physics.mcmaster.ca/~harris/mwgc.dat.

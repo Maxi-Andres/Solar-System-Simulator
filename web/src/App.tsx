@@ -11,7 +11,7 @@ import { useStoreVersion } from './core/useStoreVersion.ts';
 import { DETAIL_RELEASE_MS } from './scene/detailRelease.ts';
 import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
-import { useViewStore } from './state/store.ts';
+import { setFocusFraming, useViewStore } from './state/store.ts';
 import { AboutPanel } from './ui/AboutPanel.tsx';
 import {
   ALPHA_CEN_MEMBERS,
@@ -31,7 +31,7 @@ import { ensureArchiveSystem } from './core/archiveSystems.ts';
 import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
-import { ensureSupernovaRemnants } from './core/supernovaRemnants.ts';
+import { ensureSupernovaRemnants, remnantEarthView, remnantOf, remnantRadiusKm } from './core/supernovaRemnants.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -54,6 +54,13 @@ import { ReadoutPanel } from './ui/ReadoutPanel.tsx';
 import { SearchPanel } from './ui/SearchPanel.tsx';
 import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
+
+// A supernova remnant is gone to from Earth's side of it, as its photographs show it, six of its
+// radii out -- all of it in view: whichever way it is focused.
+setFocusFraming((id) => {
+  const remnant = remnantOf(id);
+  return remnant === null ? null : { km: 6 * remnantRadiusKm(remnant), view: remnantEarthView(remnant) };
+});
 
 /**
  * Step 4 -- the interface.
