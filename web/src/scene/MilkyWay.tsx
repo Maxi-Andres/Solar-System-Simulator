@@ -14,6 +14,7 @@ import type { SimClock } from '../core/time.ts';
 import type { FramingView } from '../state/store.ts';
 import { cieX, cieY, cieZ, starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
+import { homeNames } from './homeName.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
@@ -130,6 +131,25 @@ export const GALAXY_SAMPLE_FROM_LY = 500;
  * edge-on, the arms lie along one line and their names pile on top of each other.
  */
 const EDGE_ON_LABELS_DEG = 12;
+
+/**
+ * The centre's name as the model's parts are named, and as a galaxy's body is (App.tsx
+ * LABEL_STYLE) once the galaxy is a point and its name is the Milky Way's (homeName.ts).
+ */
+const MODEL_NAME_STYLE: Partial<CSSStyleDeclaration> = {
+  color: '#9aa4b4',
+  fontStyle: 'italic',
+  fontSize: '0.64rem',
+  letterSpacing: '0.12em',
+  textTransform: 'none',
+};
+const FOLDED_NAME_STYLE: Partial<CSSStyleDeclaration> = {
+  color: '#c0c0c0',
+  fontStyle: 'normal',
+  fontSize: '0.72rem',
+  letterSpacing: '0.16em',
+  textTransform: 'uppercase',
+};
 
 /** How far above its point the Galactic Centre's name stands, pixels. */
 const CENTRE_LABEL_GAP_PX = 8;
@@ -581,13 +601,21 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       (scratchCamera.x * pole.x + scratchCamera.y * pole.y + scratchCamera.z * pole.z) / scratchCamera.length(),
     );
     const edgeOn = outOfPlane < Math.sin((EDGE_ON_LABELS_DEG * Math.PI) / 180);
+    // From where the galaxy is a point, its centre's name is the galaxy's and the arms go.
+    const centreName = homeNames(scratchCamera.length() * PARSEC_KM, size.height, fov).centre;
+    const folded = centreName === 'Milky Way';
     LABEL_POINTS.forEach((point, index) => {
       const element = elements[index] ?? null;
       if (element === null) {
         return;
       }
+      if (index === 0 && element.textContent !== centreName) {
+        element.textContent = centreName;
+        // Named as a galaxy is, as Andromeda beside it is, not as a part of the model.
+        Object.assign(element.style, folded ? FOLDED_NAME_STYLE : MODEL_NAME_STYLE);
+      }
       // The Galactic Centre keeps its name from any side; the arms only off the plane.
-      if (visibility < 0.5 || (edgeOn && index > 0)) {
+      if (visibility < 0.5 || (index > 0 && (edgeOn || folded))) {
         hide(element);
         return;
       }
@@ -612,10 +640,13 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       // The Galactic Centre's name over its point, not on it: Sgr A*, a body with a name of
       // its own, is drawn there too -- 126 pc beyond the model's centre, the same point from
       // anywhere its name is shown (blackHoles.ts).
+      // Folded, to the left of its point: to the right, the Large Magellanic Cloud's name is.
       element.style.transform =
-        index === 0
-          ? `translate(${x}px, ${y - CENTRE_LABEL_GAP_PX}px) translate(-50%, -100%)`
-          : `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+        index > 0
+          ? `translate(${x}px, ${y}px) translate(-50%, -50%)`
+          : folded
+            ? `translate(${x - CENTRE_LABEL_GAP_PX}px, ${y}px) translate(-100%, -50%)`
+            : `translate(${x}px, ${y - CENTRE_LABEL_GAP_PX}px) translate(-50%, -100%)`;
       element.style.opacity = String(visibility);
     });
   });

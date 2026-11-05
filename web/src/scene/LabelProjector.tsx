@@ -12,7 +12,8 @@ import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
-import { angularRadiusPixels, kmToUnits } from './scale.ts';
+import { homeNames } from './homeName.ts';
+import { angularRadiusPixels, kmToUnits, unitsToKm } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
 
 /** Scratch for the frame loop, which must not allocate. */
@@ -397,6 +398,17 @@ export function LabelProjector({
       return true;
     };
     fold(systems.solar, 'sun', SOLAR_SYSTEM_EXTENT_KM, 'Solar System');
+    // Farther out, the Sun's point is named for the level that is a point from there, or
+    // not at all (homeName.ts).
+    const sunEntry = projected.find((entry) => entry.id === 'sun');
+    if (sunEntry !== undefined) {
+      const home = homeNames(unitsToKm(sunEntry.depth), size.height, fov).sun;
+      if (home === 'none') {
+        projected.splice(projected.indexOf(sunEntry), 1);
+      } else if (home !== 'own') {
+        alt.set('sun', home);
+      }
+    }
     // A planetary system folds onto its star when its planets' orbits are a few pixels
     // across: from the Sun, Tau Ceti and not its four candidates.
     for (const entry of systems.planetary.values()) {
