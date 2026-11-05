@@ -358,6 +358,34 @@ def without_points(face, sq, label):
     return np.where(bright, median, face)
 
 
+def unmatched_points(fuv, w4, sq):
+    """Compact sources in one of the two star formation bands with nothing in the other, taken
+    out: a star in front is bright in the far-UV and next to nothing at 22 um, a galaxy behind the
+    reverse, where a star-forming region shows in both -- its young stars and the dust they warm."""
+    def excess(face):
+        median = ndimage.median_filter(face, size=(31, 9))
+        noise = 1.4826 * np.median(np.abs(face - median)[face > 0])
+        return median, face > 1.5 * median + 3 * noise, face > 1.2 * median + 2 * noise
+    fuv_median, fuv_compact, fuv_any = excess(fuv)
+    w4_median, w4_compact, w4_any = excess(w4)
+    near = lambda mask: ndimage.binary_dilation(mask, iterations=3)
+    fuv_alone = ndimage.binary_dilation(fuv_compact & ~near(w4_any), iterations=2)
+    w4_alone = ndimage.binary_dilation(w4_compact & ~near(fuv_any), iterations=2)
+    print(f'  far-UV alone {fuv_alone.mean() * 100:.2f} %, 22 um alone {w4_alone.mean() * 100:.2f} % of the map taken out')
+    return np.where(fuv_alone, fuv_median, fuv), np.where(w4_alone, w4_median, w4)
+
+
+def softened(face, label):
+    """A map softened to the resolution its Y has -- a texel and a half across X, one along Y --
+    and faded out below twice its noise, measured where there is no disc: the corners past 24 kpc."""
+    face = ndimage.gaussian_filter(face, (1.0, 1.5))
+    x, y, _ = face_on_grid(1.0)
+    corners = (np.hypot(x, y) > 24_000) & (face != 0)
+    noise = 1.4826 * np.median(np.abs(face[corners] - np.median(face[corners])))
+    print(f'  {label}: noise {noise:.3g}, faded out below {2 * noise:.3g}')
+    return face * np.clip((face - noise) / noise, 0, 1)
+
+
 def sersic(r, n, re):
     b = 2 * n - 1 / 3 + 0.009876 / n
     return np.exp(-b * ((np.maximum(r, 1.0) / re) ** (1 / n) - 1))
@@ -432,18 +460,19 @@ def main():
     print(f'  squeezed to {old_sq:.3f} on the sky, the dust and young stars to {thin_sq:.3f}')
     w1 = without_points(face_on('PGC2557_w1_gauss7p5', maps, old_sq), old_sq, 'W1')
     shape = bulge_shape(w1, old_sq, 'W1')
-    old = without_bulge(w1, shape, old_sq, 'W1')
+    old = softened(without_bulge(w1, shape, old_sq, 'W1'), 'old stars')
 
     print('star formation')
     # The bulge's old stars shine in the far-UV and its dust at 22 um too: neither is star formation.
     fuv = without_bulge(face_on('PGC2557_fuv_gauss15', maps, thin_sq), shape, thin_sq, 'FUV')
     w4 = without_bulge(face_on('PGC2557_w4_gauss15', maps, thin_sq), shape, thin_sq, 'W4')
+    fuv, w4 = unmatched_points(fuv, w4, thin_sq)
     # Past the outer ring, what the far-UV shows is foreground stars the masks missed, each drawn
     # out along the minor axis by the deprojection: none of it, from SFR_TO_PC out.
     x, y, _ = face_on_grid(thin_sq)
     r_disc = np.hypot(x, y)
     taper = np.clip((SFR_TO_PC - r_disc) / 2000, 0, 1)
-    sfr = (SFR_PER_FUV * fuv + SFR_PER_24UM * w4) * taper * taper * (3 - 2 * taper)
+    sfr = softened(SFR_PER_FUV * fuv + SFR_PER_24UM * w4, 'star formation') * taper * taper * (3 - 2 * taper)
 
     print('dust')
     dust_data, dust_wcs, _ = read_fits(fetch(PPMAP + 'm31_cdens_05sig.fits', 'm31_cdens_05sig.fits'))

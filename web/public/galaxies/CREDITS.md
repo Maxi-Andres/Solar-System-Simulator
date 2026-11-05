@@ -29,7 +29,10 @@ Made by `tools/galaxies/prepare.py`, which downloads its sources itself
 - **The bulge** fitted and taken off (a Sérsic profile, n 2.0, R_e 0.9 kpc, flattened to 0.70,
   with the disc's exponential, inside 3 kpc on the sky): the app draws it as a body of its own.
 - **Star formation** ends at 22 kpc: past the outer ring, what the far-UV shows is foreground
-  stars.
+  stars. Inside, a compact source in the far-UV with nothing at 22 µm (a star in front) or the
+  reverse (a galaxy behind) is taken out: a star-forming region shows in both.
+- **Softened** to the resolution the minor axis leaves -- a texel and a half across, one along --
+  and faded out below twice the noise measured where there is no disc.
 - **R, old stars**: WISE 3.4 µm.
 - **G, star formation**, M☉/yr/kpc²: GALEX far-UV plus WISE 22 µm for the UV the dust took,
   Leroy et al. 2008's calibration.
