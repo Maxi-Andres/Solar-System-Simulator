@@ -210,8 +210,8 @@ describe('a galaxy’s light', () => {
     const scales = faceOnScales(m31, map)!;
     const disc = (1 - model.bulge!.share) * galaxyLuminosity(m31)!;
     expect((scales.old * map.oldSum + YOUNG_V_PER_SFR * map.sfrSum) / disc).toBeCloseTo(1, 10);
-    // 10^20 H2 per cm^2: 2 x 10^20 H, A_V 0.107, tau 0.0985.
-    expect(scales.dustTauV).toBeCloseTo(0.0985, 3);
+    // A magnitude of A_V: an optical depth of 0.921.
+    expect(scales.dustTauV).toBeCloseTo(0.921, 3);
     expect(scales.heightsPc[0]).toBeCloseTo(5300 / 7.3, 6);
   });
 

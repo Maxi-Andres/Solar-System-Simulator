@@ -36,7 +36,8 @@ Made by `tools/galaxies/prepare.py`, which downloads its sources itself
 - **R, old stars**: WISE 3.4 µm.
 - **G, star formation**, M☉/yr/kpc²: GALEX far-UV plus WISE 22 µm for the UV the dust took,
   Leroy et al. 2008's calibration.
-- **B, dust**: H₂ per cm², Marsh et al. 2018's column density.
+- **B, dust**: A_V face-on, from Marsh et al. 2018's column density, H₂ per cm², and Bohlin et
+  al. 1978's hydrogen per magnitude of reddening, 5.8 × 10²¹ cm⁻² per E(B−V), R_V 3.1.
 - Each channel log10 between the bounds in `m31.json`, in 8 bits, 0 for none.
 
 ### Sources
@@ -52,3 +53,23 @@ Made by `tools/galaxies/prepare.py`, which downloads its sources itself
   http://www.astro.cf.ac.uk/research/PPMAP_M31/. Herschel is an ESA space observatory with
   science instruments provided by European-led Principal Investigator consortia and with
   important participation from NASA.
+
+## m33.png, m33.json: Triangulum
+
+Made the same way, by the same script: 1024 × 1024 points 12 kpc either side of the centre;
+tipped 52°, its major axis at 22.5°, its west side taken as the nearer; squeezed by 0.616 for
+the old stars and 0.626 for the dust; no bulge to take off; star formation ending at 11 kpc.
+
+- **R, old stars**: WISE 3.4 µm. **G, star formation**: GALEX far-UV plus WISE 22 µm. Both from
+  z0MGS, as Andromeda's.
+- **B, dust**: A_V face-on, from z0MGS's dust surface density -- Draine & Li 2007's model fitted
+  to Herschel's PACS and SPIRE pictures, its `LOGSIGD` extension -- by Draine et al. 2014's
+  A_V = 0.74 Σ_d / (10⁵ M☉ kpc⁻²), divided by the 2.5 Dalcanton et al. 2015 found that model
+  overpredicts Andromeda's dust by, measuring it from its stars.
+
+### Sources
+
+- **WISE 3.4 and 22 µm, GALEX far-UV**: z0MGS, as above.
+- **Dust**: z0MGS's dust maps, IRSA, https://irsa.ipac.caltech.edu/data/Herschel/z0MGS_Dust/ --
+  Chastenet, J., et al. 2025, ApJS 276, 2; IRSA, doi:10.26131/IRSA581; from Herschel's PACS
+  and SPIRE, as above, and WISE.

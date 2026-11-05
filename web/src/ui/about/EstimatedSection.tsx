@@ -622,15 +622,19 @@ export const estimatedSection: AboutSection = {
               <Cite k={['kregel2002', 'drimmelSpergel2001']} />.
             </Why>
           </Item>
-          <Item title="Andromeda’s light, from its maps">
-            Its old stars’ map carries the disc’s V light less its young stars’. Its young stars give 2 × 10⁹
+          <Item title="Andromeda’s and Triangulum’s light, from their maps">
+            The old stars’ map carries the disc’s V light less its young stars’. The young stars give 2 × 10⁹
             solar luminosities in V for each solar mass a year they form — a population formed steadily over the
-            last hundred million years — in B−V 0.05: 4% of its disc’s light. Its dust dims V by a magnitude for
-            each 1.9 × 10²¹ hydrogen atoms per cm², as in the Milky Way, and blue more than red.
+            last hundred million years — in B−V 0.05: 4% of Andromeda’s disc’s light. Andromeda’s dust dims V by a
+            magnitude for each 1.9 × 10²¹ hydrogen atoms per cm², as in the Milky Way; Triangulum’s by 0.74 for
+            each 10⁵ solar masses of dust per kpc², over the 2.5 by which that dust model was found to
+            overpredict Andromeda’s — the 3.1 its makers divide its masses by is much the same; and both dim
+            blue more than red.
             <Why>
-              its maps show where the light and the dust are, not what colour the light is; these are the
-              conversions for the Milky Way and for a steadily forming population
-              <Cite k={['bohlin1978', 'cardelli1989']} />.
+              their maps show where the light and the dust are, not what colour the light is; these are the
+              conversions for the Milky Way, for a steadily forming population, and for that model as Andromeda’s
+              stars measure it
+              <Cite k={['bohlin1978', 'draine2014', 'dalcanton2015', 'chastenet2025', 'cardelli1989']} />.
             </Why>
           </Item>
           <Item title="Which side of Triangulum is nearer">
@@ -646,7 +650,7 @@ export const estimatedSection: AboutSection = {
             </Why>
           </Item>
           <Item title="What is not drawn">
-            Triangulum’s and the Clouds’ spiral arms, dust and star-forming regions, which Andromeda has from its
+            The Clouds’ spiral arms, dust and star-forming regions, which Andromeda and Triangulum have from their
             maps; the Large Cloud’s bar; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
             Stream; and each galaxy’s motion. A galaxy whose size or V is not measured is its mark only.
           </Item>

@@ -208,7 +208,7 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
       positionAngleDeg: 22.5,
       nearSideDeg: 22.5 + 270,
       bulge: null,
-      faceOnMap: null,
+      faceOnMap: 'm33',
     },
     shapeSource: 'Warner et al. 1973; Kam et al. 2015',
     giant: true,
@@ -444,14 +444,16 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
  * A disc's face-on map (tools/galaxies/prepare.py, galaxies/<name>.png and .json): its old
  * stars, its star formation and its dust where they are, as one would see them from straight
  * above, worked out by undoing its tilt in pictures of it -- a thin disc's picture is its
- * face-on map squeezed by cos i along its minor axis.
+ * face-on map squeezed by cos i along its minor axis. Andromeda's and Triangulum's.
  *
  * - **Old stars**, from WISE's 3.4 um, which dust hardly dims: where the disc's light is,
  *   scaled to the disc's V luminosity (less its young stars').
  * - **Star formation**, M_Sun/yr/kpc^2, from GALEX's far-UV and WISE's 22 um (Leroy et al.
  *   2008): its young stars' light, YOUNG_V_PER_SFR of it per unit.
- * - **Dust**, H2 per cm^2 (Marsh et al. 2018, from Herschel): A_V by Bohlin et al.'s gas
- *   to reddening, dimming each colour by Cardelli et al.'s curve.
+ * - **Dust**, as its A_V face-on, from Herschel: Andromeda's by its gas column (Marsh et al.
+ *   2018) and Bohlin et al.'s gas to reddening, Triangulum's by its dust mass (z0MGS) and
+ *   Draine et al. 2014's, less the 2.5 that overpredicts by Andromeda's stars (Dalcanton et al.
+ *   2015); dimming each colour by Cardelli et al.'s curve.
  *
  * Each is a sheet of its own thickness: the old stars the disc's (DISC_FLATTENING); the dust
  * the Milky Way's, the one dust layer whose thickness is measured, and the young stars in the
@@ -472,10 +474,6 @@ export interface FaceOnMap {
 export const YOUNG_V_PER_SFR = 2e9;
 /** Their colour, B-V: a population formed steadily over the last hundred million years. */
 export const YOUNG_COLOUR_INDEX = 0.05;
-/** Hydrogen atoms per cm^2 per magnitude of A_V: Bohlin, Savage & Drake 1978's 5.8e21 per E(B-V), R_V 3.1. */
-export const HYDROGEN_PER_AV = 5.8e21 / 3.1;
-/** The map's dust channel's unit: 10^20 H2 molecules per cm^2 (Marsh et al. 2018). */
-export const MAP_DUST_UNIT_H = 2e20;
 /** The colours' wavelengths, um, for their extinction: about where sRGB's red, green and blue are. */
 export const CHANNEL_WAVELENGTHS_UM = [0.61, 0.55, 0.46] as const;
 
@@ -519,7 +517,8 @@ export function faceOnScales(
     old: Math.max(0, disc - young) / map.oldSum,
     // Per M_Sun/yr/kpc^2: a kpc^2 is a million pc^2.
     young: YOUNG_V_PER_SFR / 1e6,
-    dustTauV: MAP_DUST_UNIT_H / HYDROGEN_PER_AV / 1.0857,
+    // The map's dust is A_V: an optical depth of A_V / 2.5 log10 e.
+    dustTauV: 1 / 1.0857,
     heightsPc: [model.scaleHeightPc, dust],
   };
 }
