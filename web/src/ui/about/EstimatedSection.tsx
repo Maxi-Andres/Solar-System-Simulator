@@ -615,18 +615,27 @@ export const estimatedSection: AboutSection = {
           </Item>
           <Item title="A disc’s thickness">
             Andromeda’s, Triangulum’s and the Large Cloud’s discs are drawn 7.3 times thinner than their scale
-            length, the mean of the discs measured edge-on; Andromeda’s dust, and its young stars in it, as thick
-            as the Milky Way’s dust, 134 pc. The thickness of their light is measured for none of the three.
+            length, the mean of the discs measured edge-on; their dust as thick as the Milky Way’s, 134 pc, and
+            their young stars as its OB stars, 45 pc. The thickness of their light is measured for none of the
+            three.
             <Why>
-              the nearest measured: other galaxies’ discs, our own dust
-              <Cite k={['kregel2002', 'drimmelSpergel2001']} />.
+              the nearest measured: other galaxies’ discs, our own dust and young stars
+              <Cite k={['kregel2002', 'drimmelSpergel2001', 'reed2000']} />.
             </Why>
+          </Item>
+          <Item title="The Large Cloud past Spitzer’s edge">
+            Spitzer mapped its central seven degrees. Its old stars past that edge are its exponential, fitted to
+            the outer half of what was mapped and joined to it smoothly; its star formation there is its Hα
+            alone, which SHASSA saw out to its whole disc.
+            <Why>its disc goes on past what was mapped; drawn as nothing it ended in a square.</Why>
           </Item>
           <Item title="Andromeda’s and Triangulum’s light, from their maps">
             The old stars’ map carries the disc’s V light less its young stars’. The young stars give 2 × 10⁹
             solar luminosities in V for each solar mass a year they form — a population formed steadily over the
             last hundred million years — in B−V 0.05: 4% of Andromeda’s disc’s light. Andromeda’s dust dims V by a
-            magnitude for each 1.9 × 10²¹ hydrogen atoms per cm², as in the Milky Way; Triangulum’s by 0.74 for
+            magnitude for each 1.9 × 10²¹ hydrogen atoms per cm², as in the Milky Way, and the Large Cloud’s by
+            the same through its dust’s mass, its opacity set to the Milky Way’s gas-to-dust of 150: 7.4
+            magnitudes per solar mass of dust per pc²; Triangulum’s by 0.74 for
             each 10⁵ solar masses of dust per kpc², over the 2.5 by which that dust model was found to
             overpredict Andromeda’s — the 3.1 its makers divide its masses by is much the same; and both dim
             blue more than red.
@@ -650,8 +659,8 @@ export const estimatedSection: AboutSection = {
             </Why>
           </Item>
           <Item title="What is not drawn">
-            The Clouds’ spiral arms, dust and star-forming regions, which Andromeda and Triangulum have from their
-            maps; the Large Cloud’s bar; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
+            The Small Cloud’s structure, deeper along our line of sight than it is wide, and no disc to draw
+            from above; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
             Stream; and each galaxy’s motion. A galaxy whose size or V is not measured is its mark only.
           </Item>
         </Items>

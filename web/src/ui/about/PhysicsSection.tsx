@@ -1281,7 +1281,7 @@ export const physicsSection: AboutSection = {
               sub(mi('C'), sub(mi('h'), mi('old'))),
               mo('+'),
               sub(mi('Σ'), mi('young')),
-              sub(mi('C'), sub(mi('h'), mi('d'))),
+              sub(mi('C'), sub(mi('h'), mi('y'))),
               t(',  '),
               sub(mi('C'), mi('h')),
               mo('='),
@@ -1304,7 +1304,7 @@ export const physicsSection: AboutSection = {
           }
         >
           The face-on map spread through a sheet of each one’s thickness — e<sup>−|z|/h</sup>/2h, the old stars’
-          h<sub>old</sub> and the dust’s h<sub>d</sub>, which the young stars share — and the bulge with them; the
+          h<sub>old</sub>, the young stars’ h<sub>y</sub> and the dust’s h<sub>d</sub> — and the bulge with them; the
           light of each step dimmed by all the dust in front of it, more in blue than in red. A sheet is the same
           profile all along a step, so its column across the step is exact however long the step: a layer 134 pc
           thick is not missed between steps a kiloparsec apart.

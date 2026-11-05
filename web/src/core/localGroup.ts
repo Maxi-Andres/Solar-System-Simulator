@@ -235,7 +235,7 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
       positionAngleDeg: 139.1,
       nearSideDeg: 139.1 - 90,
       bulge: null,
-      faceOnMap: null,
+      faceOnMap: 'lmc',
     },
     shapeSource: 'van der Marel & Kallivayalil 2014; van der Marel 2001',
     giant: true,
@@ -444,7 +444,8 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
  * A disc's face-on map (tools/galaxies/prepare.py, galaxies/<name>.png and .json): its old
  * stars, its star formation and its dust where they are, as one would see them from straight
  * above, worked out by undoing its tilt in pictures of it -- a thin disc's picture is its
- * face-on map squeezed by cos i along its minor axis. Andromeda's and Triangulum's.
+ * face-on map squeezed by cos i along its minor axis. Andromeda's, Triangulum's and the Large
+ * Cloud's.
  *
  * - **Old stars**, from WISE's 3.4 um, which dust hardly dims: where the disc's light is,
  *   scaled to the disc's V luminosity (less its young stars').
@@ -455,9 +456,9 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
  *   Draine et al. 2014's, less the 2.5 that overpredicts by Andromeda's stars (Dalcanton et al.
  *   2015); dimming each colour by Cardelli et al.'s curve.
  *
- * Each is a sheet of its own thickness: the old stars the disc's (DISC_FLATTENING); the dust
- * the Milky Way's, the one dust layer whose thickness is measured, and the young stars in the
- * dust they formed in.
+ * Each is a sheet of its own thickness, as the Milky Way's are: the old stars the disc's
+ * (DISC_FLATTENING); the dust the Milky Way's, the one dust layer whose thickness is measured;
+ * the young stars the Milky Way's OB stars', YOUNG_HEIGHT_PC, thinner still.
  */
 export interface FaceOnMap {
   /** Pixels a side, and how far the map reaches either side of the centre, pc. */
@@ -474,6 +475,8 @@ export interface FaceOnMap {
 export const YOUNG_V_PER_SFR = 2e9;
 /** Their colour, B-V: a population formed steadily over the last hundred million years. */
 export const YOUNG_COLOUR_INDEX = 0.05;
+/** Their scale height, pc: the Milky Way's OB stars', 45 +/- 20 (Reed 2000, AJ 120, 314). */
+export const YOUNG_HEIGHT_PC = 45;
 /** The colours' wavelengths, um, for their extinction: about where sRGB's red, green and blue are. */
 export const CHANNEL_WAVELENGTHS_UM = [0.61, 0.55, 0.46] as const;
 
@@ -499,12 +502,17 @@ export function decodeMapChannel(code: number, bounds: readonly [number, number]
 /**
  * What a disc's map stands for, per unit of each channel: the old stars' and the young stars'
  * V luminosity per pc^2, and the optical depth in V; and the scale heights, pc, of the old
- * stars' sheet and of the dust's, which the young stars share.
+ * stars' sheet, the young stars' and the dust's.
  */
 export function faceOnScales(
   galaxy: LocalGroupGalaxy,
   map: FaceOnMap,
-): { readonly old: number; readonly young: number; readonly dustTauV: number; readonly heightsPc: readonly [number, number] } | null {
+): {
+  readonly old: number;
+  readonly young: number;
+  readonly dustTauV: number;
+  readonly heightsPc: readonly [number, number, number];
+} | null {
   const luminosity = galaxyLuminosity(galaxy);
   const model = galaxy.model;
   if (luminosity === null || model === null || model.kind !== 'disc') {
@@ -519,7 +527,7 @@ export function faceOnScales(
     young: YOUNG_V_PER_SFR / 1e6,
     // The map's dust is A_V: an optical depth of A_V / 2.5 log10 e.
     dustTauV: 1 / 1.0857,
-    heightsPc: [model.scaleHeightPc, dust],
+    heightsPc: [model.scaleHeightPc, YOUNG_HEIGHT_PC, dust],
   };
 }
 

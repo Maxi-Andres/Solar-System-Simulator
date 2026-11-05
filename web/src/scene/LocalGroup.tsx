@@ -304,13 +304,13 @@ uniform float uNear;
 // 2, a disc from its face-on map (faceOnTexture.ts): the map -- old and young stars' light,
 // L_Sun/pc^2, and the dust's V optical depth -- and how far it reaches either side, pc; the
 // colours over the white column, the dust's depth in each colour per unit V, and the
-// heights, pc, of the old stars' sheet and of the dust's and young stars'.
+// heights, pc, of the old stars' sheet, the young stars' and the dust's.
 uniform sampler2D uMap;
 uniform float uMapHalf;
 uniform vec3 uOldGlow;
 uniform vec3 uYoungGlow;
 uniform vec3 uDustTau;
-uniform vec2 uHeights;
+uniform vec3 uHeights;
 // The bulge's profile against r / R_e, out to BULGE_REACH: a table, not two powers a step.
 uniform sampler2D uBulgeLut;
 // A screen pixel's angle, radians, and a texel's size, pc: which of the map's mipmaps to read.
@@ -344,9 +344,9 @@ float bulgeAt(vec3 p) {
   return pow(r, -uBulge.y) * exp(-uBulge.z * pow(r, uBulge.w));
 }
 
-// The share of a sheet's light -- e^(-|z|/h) / 2h, for the old stars' height and the thin
-// sheet's -- below the height z.
-vec2 sheetBelow(float z) {
+// The share of a sheet's light -- e^(-|z|/h) / 2h, for the old stars', the young stars' and
+// the dust's heights -- below the height z.
+vec3 sheetBelow(float z) {
   return 0.5 + 0.5 * sign(z) * (1.0 - exp(-abs(z) / uHeights));
 }
 
@@ -372,12 +372,12 @@ vec3 marchMapped(vec3 d, float jitter) {
   vec3 light = vec3(0.0);
   vec3 through = vec3(1.0);
   float z0 = uCamera.z + d.z * span.x;
-  vec2 below0 = sheetBelow(z0);
+  vec3 below0 = sheetBelow(z0);
   for (int i = 0; i < ${MAP_STEPS}; i++) {
     float t0 = span.x + float(i) * dt;
     float z1 = z0 + d.z * dt;
-    vec2 below1 = sheetBelow(z1);
-    vec2 column = level ? exp(-abs(z0) / uHeights) / (2.0 * uHeights) * dt : (below1 - below0) / d.z;
+    vec3 below1 = sheetBelow(z1);
+    vec3 column = level ? exp(-abs(z0) / uHeights) / (2.0 * uHeights) * dt : (below1 - below0) / d.z;
     float tj = t0 + jitter * dt;
     vec3 emitted = vec3(0.0);
     if (uBulge.x > 0.0) {
@@ -393,7 +393,7 @@ vec3 marchMapped(vec3 d, float jitter) {
       float lod = max(0.0, log2(ts * uPixelAngle / uTexelPc));
       vec3 m = textureLod(uMap, uv, lod).rgb;
       emitted += uOldGlow * (m.r * column.x) + uYoungGlow * (m.g * column.y);
-      tau = uDustTau * (m.b * column.y);
+      tau = uDustTau * (m.b * column.z);
     }
     // The step's light, then its dust on all that is behind it.
     light += through * emitted;
@@ -691,7 +691,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
           uOldGlow: { value: new THREE.Vector3() },
           uYoungGlow: { value: new THREE.Vector3() },
           uDustTau: { value: new THREE.Vector3() },
-          uHeights: { value: new THREE.Vector2(1, 1) },
+          uHeights: { value: new THREE.Vector3(1, 1, 1) },
           uPixelAngle: { value: 1e-3 },
           uTexelPc: { value: 1 },
         };

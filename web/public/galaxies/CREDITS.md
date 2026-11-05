@@ -73,3 +73,34 @@ the old stars and 0.626 for the dust; no bulge to take off; star formation endin
 - **Dust**: z0MGS's dust maps, IRSA, https://irsa.ipac.caltech.edu/data/Herschel/z0MGS_Dust/ --
   Chastenet, J., et al. 2025, ApJS 276, 2; IRSA, doi:10.26131/IRSA581; from Herschel's PACS
   and SPIRE, as above, and WISE.
+
+## lmc.png, lmc.json: the Large Magellanic Cloud
+
+Made the same way, by the same script, from its own surveys -- nine degrees across the sky, it
+is in neither z0MGS nor its dust maps: 1024 × 1024 points 6 kpc either side of the centre;
+tipped 34°, its line of nodes at 139°, its north-east side nearer; star formation ending at
+5.5 kpc. Each map only where it was observed: past its edge nothing, not light made up.
+
+- **R, old stars**: Spitzer IRAC 3.6 µm, SAGE's 2″ mosaic averaged to 10″; its compact sources --
+  its own resolved giants, foreground stars, background galaxies -- taken out on the map.
+- **G, star formation**, M☉/yr/kpc²: SHASSA's continuum-subtracted H-alpha (field 013), less the
+  Milky Way's own H-alpha in front of it (its median 5.5–6.3° from the centre), plus Spitzer MIPS
+  24 µm for what the dust hides, averaged to 12.5″: Kennicutt et al. 2009's
+  5.5 × 10⁻⁴² [L(Hα) + 0.020 νL_ν(24 µm)] M☉/yr per erg/s. A compact source in one with nothing
+  in the other taken out.
+- **B, dust**: A_V face-on from Clark et al. 2023's dust surface density, M☉/pc² -- its opacity
+  set so the Milky Way's diffuse gas has 150 times its dust's mass -- by that ratio and Bohlin et
+  al.'s hydrogen per magnitude: 7.36 magnitudes per M☉/pc².
+
+### Sources
+
+- **IRAC 3.6 µm and MIPS 24 µm**: SAGE, Meixner, M., et al. 2006, AJ 132, 2268; IRSA,
+  doi:10.26131/IRSA404. This work is based in part on observations made with the Spitzer Space
+  Telescope, which was operated by the Jet Propulsion Laboratory, California Institute of
+  Technology under a contract with NASA; it has made use of the NASA/IPAC Infrared Science Archive.
+- **H-alpha**: the Southern H-Alpha Sky Survey Atlas (SHASSA), which is supported by the
+  National Science Foundation -- Gaustad, J. E., McCullough, P. R., Rosing, W., Van Buren, D. 2001,
+  PASP 113, 1326. © Las Cumbres Observatory; free for scientific and educational use with
+  acknowledgement, not for commercial use.
+- **Dust**: Clark, C. J. R., et al. 2023, ApJ 946, 42, "The Quest for the Missing Dust: II";
+  Zenodo, doi:10.5281/zenodo.7392275, CC BY 4.0.

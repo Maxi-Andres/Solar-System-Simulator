@@ -30,14 +30,23 @@ as face-on, so each map is that times q.
   A_V = 0.74 Sigma_d / (10^5 M_Sun/kpc^2) less the 2.5 that model overpredicts (Dalcanton et
   al. 2015, who measured Andromeda's dust from its stars).
 
+The Large Magellanic Cloud, nine degrees across the sky, is in neither z0MGS nor its dust maps:
+its old stars from Spitzer's SAGE 3.6 um mosaic (Meixner et al. 2006), its star formation from
+SHASSA's H-alpha (Gaustad et al. 2001) and SAGE's 24 um for what the dust hides (Kennicutt et
+al. 2009), its dust from Clark et al. 2023's surface density, calibrated so the Milky Way's
+diffuse gas has 150 times the mass of its dust -- A_V by that and Bohlin et al.'s. Each only
+where it was observed: past a map's edge nothing, rather than light made up.
+
 The app turns these into light and opacity (<key>.json says how): the old stars normalised to
 the disc's V luminosity, the young by their V light per unit star formation.
 
 Each channel is encoded log10 between the bounds in <key>.json, 0 for none, in an 8-bit PNG:
 R old stars, G star formation, B dust.
 """
+import gzip
 import json
 import math
+import warnings
 import sys
 import time
 import urllib.request
@@ -61,13 +70,13 @@ class Galaxy:
     """A disc to map (core/localGroup.ts GIANTS): where it is, how it faces, how big its map."""
 
     def __init__(self, key, pgc, ngc, ra, dec, distance_pc, inclination, major_pa, near_pa, scale_length_pc,
-                 half_pc, sfr_to_pc, bulge, overlapping, dust):
+                 half_pc, sfr_to_pc, bulge, overlapping, dust, sources='z0mgs'):
         self.key, self.pgc, self.ngc = key, pgc, ngc
         self.ra, self.dec, self.distance_pc = ra, dec, distance_pc
         self.inclination, self.major_pa, self.far_pa = inclination, major_pa, near_pa + 180
         self.scale_length_pc = scale_length_pc
         self.half_pc, self.sfr_to_pc = half_pc, sfr_to_pc
-        self.bulge, self.overlapping, self.dust = bulge, overlapping, dust
+        self.bulge, self.overlapping, self.dust, self.sources = bulge, overlapping, dust, sources
         # The dust's sheet and the young stars': the Milky Way's dust layer, 134.4 pc (Drimmel &
         # Spergel 2001), over the disc's scale length.
         self.dust_flattening = 134.4 / scale_length_pc
@@ -80,6 +89,9 @@ GALAXIES = {
     'm33': Galaxy('m33', 'PGC5818', '0598', (1 + 33 / 60 + 50.9 / 3600) * 15, 30 + 39 / 60 + 37 / 3600,
                   10 ** (1 + 24.622 / 5), 52.0, 22.5, 22.5 + 270, 1600.0,
                   half_pc=12_000.0, sfr_to_pc=11_000.0, bulge=False, overlapping=(), dust='z0mgs'),
+    'lmc': Galaxy('lmc', None, None, (5 + 23 / 60 + 34.5 / 3600) * 15, -(69 + 45 / 60 + 22 / 3600),
+                  49_590.0, 34.0, 139.1, 139.1 - 90, 1400.0,
+                  half_pc=9_000.0, sfr_to_pc=5_500.0, bulge=False, overlapping=(), dust='clark', sources='lmc'),
 }
 # The galaxy being mapped.
 G = GALAXIES['m31']
@@ -102,6 +114,17 @@ BOUNDS = {
 # A_V per unit of each dust source.
 AV_PER_PPMAP = 2e20 / (5.8e21 / 3.1)   # 10^20 H2 per cm^2: 2 x 10^20 H over Bohlin et al.'s N_H per A_V
 AV_PER_DUST_MSUN_PC2 = 7.4 / 2.5      # Draine et al. 2014 eq. 7 (0.74 per 10^5 M_Sun/kpc^2), over Dalcanton et al.'s 2.5
+# Clark et al. 2023's dust, whose opacity makes the Milky Way's diffuse gas 150 times its dust:
+# 150 M_Sun/pc^2 of gas, 1.36 of it per hydrogen mass, in H per cm^2, over Bohlin et al.'s.
+AV_PER_DUST_MW150 = 150 * (1.98892e33 / 3.0857e18 ** 2) / (1.36 * 1.6735e-24) / (5.8e21 / 3.1)
+
+SAGE = 'https://irsa.ipac.caltech.edu/data/SPITZER/SAGE/images/'
+# Kennicutt et al. 2009 (ApJ 703, 1672) eq. 16, Kroupa's IMF: SFR = 5.5e-42 [L(Ha) + 0.020 nu L_nu(24)],
+# erg/s. Per unit intensity, 4 pi I over a kpc^2: SHASSA's decirayleigh is 10^5 / 4 pi photons of
+# 656.28 nm per cm^2 per s per sr; MIPS's MJy/sr times 24 um's frequency.
+SFR_PER_ERG = 5.5e-42 * 4 * math.pi * 3.0857e21 ** 2
+SFR_PER_DR = SFR_PER_ERG * 1e5 / (4 * math.pi) * 6.62607e-27 * 2.99792458e10 / 656.28e-7
+SFR_PER_MIPS24 = SFR_PER_ERG * 0.020 * 1e-17 * 2.99792458e10 / 24e-4
 
 
 def fetch(url, name):
@@ -259,6 +282,8 @@ def read_fits(path):
     w, h = int(head['NAXIS1']), int(head['NAXIS2'])
     dtype = {-32: '>f4', -64: '>f8', 16: '>i2', 32: '>i4', 8: 'u1'}[int(head['BITPIX'])]
     data = np.frombuffer(raw, dtype=dtype, count=w * h, offset=start).reshape(h, w).astype(np.float64)
+    if 'BLANK' in head:
+        data[data == head['BLANK']] = np.nan
     data = data * head.get('BSCALE', 1.0) + head.get('BZERO', 0.0)
     if 'CD1_1' in head:
         cd = np.array([[head['CD1_1'], head.get('CD1_2', 0.0)], [head.get('CD2_1', 0.0), head['CD2_2']]])
@@ -399,10 +424,13 @@ def without_points(face, sq, label):
     thickness would be a streak across it from any side. Where the map stands out by half again
     above its median over 1.5 kpc in Y and 450 pc in X, and by three times the noise, the median
     instead -- outside the bulge, whose middle is sharp of its own."""
-    median = ndimage.median_filter(face, size=(31, 9))
+    # As long along Y as the deprojection draws a source out: 9 texels across, 9 / q along.
+    median = ndimage.median_filter(face, size=(int(9 / sq) | 1, 9))
     noise = 1.4826 * np.median(np.abs(face - median)[face > 0])
     x, y, _ = face_on_grid(sq)
-    bright = (face > 1.5 * median + 3 * noise) & (np.hypot(x, y * sq) > 0.4 * G.scale_length_pc)
+    bright = face > 1.5 * median + 3 * noise
+    if G.bulge:
+        bright &= np.hypot(x, y * sq) > 0.4 * G.scale_length_pc
     bright = ndimage.binary_dilation(bright, iterations=2)
     print(f'  {label}: {bright.mean() * 100:.2f} % of the map taken as compact sources')
     return np.where(bright, median, face)
@@ -413,7 +441,7 @@ def unmatched_points(fuv, w4, sq):
     out: a star in front is bright in the far-UV and next to nothing at 22 um, a galaxy behind the
     reverse, where a star-forming region shows in both -- its young stars and the dust they warm."""
     def excess(face):
-        median = ndimage.median_filter(face, size=(31, 9))
+        median = ndimage.median_filter(face, size=(int(9 / sq) | 1, 9))
         noise = 1.4826 * np.median(np.abs(face - median)[face > 0])
         return median, face > 1.5 * median + 3 * noise, face > 1.2 * median + 2 * noise
     fuv_median, fuv_compact, fuv_any = excess(fuv)
@@ -431,6 +459,10 @@ def softened(face, label):
     face = ndimage.gaussian_filter(face, (1.0, 1.5))
     x, y, _ = face_on_grid(1.0)
     corners = (np.hypot(x, y) > 0.96 * G.half_pc) & (face != 0)
+    if corners.sum() < 1000:
+        # A map whose data stop short of its corners: its outermost tenth instead.
+        r = np.hypot(x, y)
+        corners = (face != 0) & (r > np.percentile(r[face != 0], 90))
     noise = 1.4826 * np.median(np.abs(face[corners] - np.median(face[corners])))
     print(f'  {label}: noise {noise:.3g}, faded out below {2 * noise:.3g}')
     return face * np.clip((face - noise) / noise, 0, 1)
@@ -501,11 +533,111 @@ def decode(code, bounds):
     return np.where(code > 0, 10 ** (lo + (code.astype(np.float64) - 1) / 254 * (hi - lo)), 0.0)
 
 
+def binned(path, factor):
+    """A big FITS image read a band of rows at a time and averaged factor by factor, blank pixels
+    left out; its WCS scaled to match. Cached as .npy beside it."""
+    npy, meta = Path(str(path) + f'.bin{factor}.npy'), Path(str(path) + f'.bin{factor}.json')
+    if npy.exists() and meta.exists():
+        info = json.loads(meta.read_text())
+        info['cd'] = np.array(info['cd'])
+        return np.load(npy), info
+    with open(path, 'rb') as f:
+        head, start = parse_header(f.read(2880 * 40))
+    width, height = int(head['NAXIS1']), int(head['NAXIS2'])
+    dtype = {-32: '>f4', -64: '>f8'}[int(head['BITPIX'])]
+    image = np.memmap(path, dtype=dtype, mode='r', offset=start, shape=(height, width))
+    w2, h2 = width // factor, height // factor
+    out = np.empty((h2, w2))
+    band = 64
+    for r in range(0, h2, band):
+        rows = min(band, h2 - r)
+        block = np.array(image[r * factor:(r + rows) * factor, :w2 * factor], dtype=np.float64)
+        block[block == 0] = np.nan
+        with np.errstate(invalid='ignore'), warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            out[r:r + rows] = np.nanmean(block.reshape(rows, factor, w2, factor), axis=(1, 3))
+    wcs = wcs_of(head)
+    info = dict(ref=wcs['ref'], pix=((wcs['pix'][0] - 0.5) / factor + 0.5, (wcs['pix'][1] - 0.5) / factor + 0.5),
+                cd=(wcs['cd'] * factor).tolist())
+    np.save(npy, out)
+    meta.write_text(json.dumps(info))
+    info['cd'] = np.array(info['cd'])
+    return out, info
+
+
+def face_on_observed(data, wcs, sq, label):
+    """A picture deprojected onto the map where it was observed, and nothing past its edge."""
+    valid = np.isfinite(data)
+    value, inside = resample(np.where(valid, data, 0.0), wcs, sq)
+    weight, _ = resample(valid.astype(np.float64), wcs, sq)
+    weight /= sq
+    seen = inside & (weight > 0.5)
+    print(f'  {label}: observed over {seen.mean() * 100:.0f} % of the map')
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(seen, value / np.maximum(weight, 1e-9), 0.0)
+
+
+def shassa_halpha():
+    """SHASSA's field 013, the LMC's: continuum-subtracted H-alpha, decirayleighs, less the Milky
+    Way's own H-alpha in front, its median 5.5 to 6.3 degrees from the LMC's centre."""
+    plain = CACHE / 'shassa_013.fl.fits'
+    if not plain.exists():
+        plain.write_bytes(gzip.decompress((CACHE / 'shassa_013.fl.fits.gz').read_bytes()))
+    data, wcs, _ = read_fits(plain)
+    row, col = pixel_of(wcs, G.ra, G.dec)
+    rows, cols = np.mgrid[0:data.shape[0], 0:data.shape[1]]
+    deg = np.hypot(rows - row, cols - col) * abs(np.linalg.det(wcs['cd'])) ** 0.5
+    ring = (deg > 5.5) & (deg < 6.3) & np.isfinite(data)
+    foreground = float(np.median(data[ring]))
+    print(f'  H-alpha: the Milky Way in front {foreground:.1f} dR, taken off')
+    return data - foreground, wcs
+
+
+def beyond_edge(face, seen, sq, label):
+    """A disc past the edge of what was observed: its exponential, fitted to the observed outer
+    half of it, matched to it just inside the edge and blended across 600 pc so the edge does not
+    show."""
+    x, y, _ = face_on_grid(sq)
+    r = np.hypot(x, y)
+    edge = np.percentile(r[seen], 99)
+    ring = seen & (r > 0.4 * edge) & (r < 0.95 * edge) & (face > 0)
+    slope, intercept = np.polyfit(r[ring], np.log(face[ring]), 1)
+    model = np.exp(intercept + slope * r)
+    distance = ndimage.distance_transform_edt(seen) * (2 * G.half_pc / N)
+    # Matched to the data just inside the edge, where the two meet.
+    band = seen & (distance > 200) & (distance < 800) & (face > 0)
+    model *= np.median(face[band] / model[band])
+    print(f'  {label}: past the observed edge, its exponential of scale length {-1 / slope:.0f} pc')
+    blend = np.clip(distance / 600.0, 0, 1)
+    return np.where(seen, blend * face + (1 - blend) * model, model)
+
+
+def lmc_maps(old_sq, thin_sq):
+    """The Large Magellanic Cloud's old stars and star formation, from its own surveys."""
+    print('old stars')
+    irac, irac_wcs = binned(CACHE / 'SAGE_LMC_IRAC3.6_2_mosaic.fits', 5)
+    old = without_points(face_on_observed(irac, irac_wcs, old_sq, 'IRAC 3.6 um'), old_sq, 'IRAC')
+    old = softened(beyond_edge(old, old > 0, old_sq, 'old stars'), 'old stars')
+    print('star formation')
+    ha, ha_wcs = shassa_halpha()
+    mips, mips_wcs = binned(CACHE / 'SAGE_LMC_MIPS24_E12.fits', 5)
+    ha = np.maximum(face_on_observed(ha, ha_wcs, thin_sq, 'H-alpha'), 0.0)
+    mips = np.maximum(face_on_observed(mips, mips_wcs, thin_sq, 'MIPS 24 um'), 0.0)
+    # A source in one band with nothing in the other only where both were observed.
+    both = ndimage.binary_erosion(mips > 0, iterations=5)
+    ha_clean, mips = unmatched_points(ha, mips, thin_sq)
+    ha = np.where(both, ha_clean, ha)
+    return old, SFR_PER_DR * ha + SFR_PER_MIPS24 * mips
+
+
 def dust_map(thin_sq):
     """The dust, as A_V face-on."""
     if G.dust == 'ppmap':
         data, wcs, _ = read_fits(fetch(PPMAP + 'm31_cdens_05sig.fits', 'm31_cdens_05sig.fits'))
         av = np.where(np.isfinite(data) & (data > 0), data, 0.0) * AV_PER_PPMAP
+    elif G.dust == 'clark':
+        data, wcs, _ = read_fits(CACHE / 'LMC_SED_Mass.fits')
+        av = np.where(np.isfinite(data) & (data > 0), data, 0.0) * AV_PER_DUST_MW150
     else:
         name = f'ngc{G.ngc}_dustparameters_conv250.fits'
         data, wcs = read_extension(fetch(f'{Z0MGS_DUST}ngc{G.ngc}/{name}', name), 'LOGSIGD')
@@ -519,12 +651,16 @@ def make(galaxy):
     global G
     G = galaxy
     print(f'== {G.key}')
+    old_sq, thin_sq = squeeze(OLD_FLATTENING), squeeze(G.dust_flattening)
+    print(f'  squeezed to {old_sq:.3f} on the sky, the dust and young stars to {thin_sq:.3f}')
+    if G.sources == 'lmc':
+        old, sfr = lmc_maps(old_sq, thin_sq)
+        finish(old, sfr, thin_sq)
+        return
     maps = {name: fetch_cutout(f'{Z0MGS}{G.pgc}/{G.pgc}_{name}.fits', f'{G.pgc}_{name}') for name in SOURCES}
     maps = {name: (data, {k: v for k, v in info.items() if k != 'unit'}) for name, (data, info) in maps.items()}
 
     print('old stars')
-    old_sq, thin_sq = squeeze(OLD_FLATTENING), squeeze(G.dust_flattening)
-    print(f'  squeezed to {old_sq:.3f} on the sky, the dust and young stars to {thin_sq:.3f}')
     w1 = without_points(face_on('w1_gauss7p5', maps, old_sq), old_sq, 'W1')
     shape = bulge_shape(w1, old_sq, 'W1') if G.bulge else None
     old = softened(without_bulge(w1, shape, old_sq, 'W1') if shape else w1, 'old stars')
@@ -537,15 +673,26 @@ def make(galaxy):
         fuv = without_bulge(fuv, shape, thin_sq, 'FUV')
         w4 = without_bulge(w4, shape, thin_sq, 'W4')
     fuv, w4 = unmatched_points(fuv, w4, thin_sq)
+    finish(old, SFR_PER_FUV * fuv + SFR_PER_24UM * w4, thin_sq)
+
+
+def finish(old, sfr, thin_sq):
+    """The star formation softened and ended past the disc, the dust, and the map written."""
     # Past the disc, what the far-UV shows is foreground stars the masks missed, each drawn out
     # along the minor axis by the deprojection: none of it, from G.sfr_to_pc out.
     x, y, _ = face_on_grid(thin_sq)
     r_disc = np.hypot(x, y)
     taper = np.clip((G.sfr_to_pc - r_disc) / (0.08 * G.half_pc), 0, 1)
-    sfr = softened(SFR_PER_FUV * fuv + SFR_PER_24UM * w4, 'star formation') * taper * taper * (3 - 2 * taper)
+    sfr = softened(sfr, 'star formation') * taper * taper * (3 - 2 * taper)
 
     print('dust')
     dust = dust_map(thin_sq)
+
+    # A round window, to nothing just inside the map's edge: a disc does not end in a square.
+    r = np.hypot(*face_on_grid(1.0)[:2])
+    window = np.clip((0.98 * G.half_pc - r) / (0.13 * G.half_pc), 0, 1)
+    window = window * window * (3 - 2 * window)
+    old, sfr, dust = old * window, sfr * window, dust * window
 
     codes = [encode(old, BOUNDS['old']), encode(sfr, BOUNDS['sfr']), encode(dust, BOUNDS['dust'])]
     pixel_pc2 = (2 * G.half_pc / N) ** 2
