@@ -17,7 +17,7 @@ const at = (km: number) => homeNames(km, 864, FOV_DEG);
 
 describe('the name of home from afar', () => {
   it('leaves the Sun and the Solar System to their own fold out to the nearest stars', () => {
-    expect(at(NEIGHBOURHOOD_FRAMING_KM)).toEqual({ sun: 'own', centre: 'Galactic Centre' });
+    expect(at(NEIGHBOURHOOD_FRAMING_KM)).toMatchObject({ sun: 'own', centre: 'Galactic Centre', galaxyFolded: false });
   });
 
   it('names nothing at the Sun among the neighbourhood’s stars', () => {
@@ -25,11 +25,18 @@ describe('the name of home from afar', () => {
   });
 
   it('calls it the Solar Neighbourhood from across the galaxy', () => {
-    expect(at(GALAXY_FRAMING_KM)).toEqual({ sun: 'Solar Neighbourhood', centre: 'Galactic Centre' });
+    expect(at(GALAXY_FRAMING_KM)).toEqual({ sun: 'Solar Neighbourhood', centre: 'Galactic Centre', arms: true, galaxyFolded: false });
   });
 
   it('calls the galaxy the Milky Way from the Local Group, and names nothing at the Sun', () => {
-    expect(at(LOCAL_GROUP_FRAMING_KM)).toEqual({ sun: 'none', centre: 'Milky Way' });
+    expect(at(LOCAL_GROUP_FRAMING_KM)).toEqual({ sun: 'none', centre: 'Milky Way', arms: false, galaxyFolded: true });
+  });
+
+  it('names the galaxy the Milky Way once it is a hundred and fifty pixels across, as Maxi saw it', () => {
+    // 50,000 ly at 150 px of radius on an 864 px screen: about 600,000 ly out.
+    expect(at(600_000 * LIGHT_YEAR_KM)).toMatchObject({ centre: 'Milky Way', galaxyFolded: true });
+    // Its arms' names go a little before.
+    expect(at(350_000 * LIGHT_YEAR_KM)).toMatchObject({ arms: false, galaxyFolded: false });
   });
 
   it('goes up a level and never back down as the camera goes out', () => {

@@ -400,13 +400,34 @@ export function LabelProjector({
     fold(systems.solar, 'sun', SOLAR_SYSTEM_EXTENT_KM, 'Solar System');
     // Farther out, the Sun's point is named for the level that is a point from there, or
     // not at all (homeName.ts).
+    const sunRebased = snapshot.bodies.get('sun');
+    const home =
+      sunRebased === undefined
+        ? null
+        : homeNames(
+            unitsToKm(
+              scratch
+                .set(kmToUnits(sunRebased.positionKm.x), kmToUnits(sunRebased.positionKm.y), kmToUnits(sunRebased.positionKm.z))
+                .distanceTo(camera.position),
+            ),
+            size.height,
+            fov,
+          );
     const sunEntry = projected.find((entry) => entry.id === 'sun');
-    if (sunEntry !== undefined) {
-      const home = homeNames(unitsToKm(sunEntry.depth), size.height, fov).sun;
-      if (home === 'none') {
+    if (sunEntry !== undefined && home !== null) {
+      if (home.sun === 'none') {
         projected.splice(projected.indexOf(sunEntry), 1);
-      } else if (home !== 'own') {
-        alt.set('sun', home);
+      } else if (home.sun !== 'own') {
+        alt.set('sun', home.sun);
+      }
+    }
+    // The Milky Way a small thing on screen: what is in it folds into its name, as a planet's
+    // into the Solar System's; the other galaxies keep theirs.
+    if (home?.galaxyFolded === true) {
+      for (let i = projected.length - 1; i >= 0; i -= 1) {
+        if (store.body(projected[i]!.id).kind !== 'galaxy') {
+          projected.splice(i, 1);
+        }
       }
     }
     // A planetary system folds onto its star when its planets' orbits are a few pixels

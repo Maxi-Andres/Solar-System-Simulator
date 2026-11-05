@@ -602,8 +602,11 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     );
     const edgeOn = outOfPlane < Math.sin((EDGE_ON_LABELS_DEG * Math.PI) / 180);
     // From where the galaxy is a point, its centre's name is the galaxy's and the arms go.
-    const centreName = homeNames(scratchCamera.length() * PARSEC_KM, size.height, fov).centre;
-    const folded = centreName === 'Milky Way';
+    const home = homeNames(scratchCamera.length() * PARSEC_KM, size.height, fov);
+    const centreName = home.centre;
+    // Named as one thing, the Milky Way; and, sooner, too small for its arms' names.
+    const folded = home.galaxyFolded;
+    const armsHidden = !home.arms;
     LABEL_POINTS.forEach((point, index) => {
       const element = elements[index] ?? null;
       if (element === null) {
@@ -615,7 +618,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         Object.assign(element.style, folded ? FOLDED_NAME_STYLE : MODEL_NAME_STYLE);
       }
       // The Galactic Centre keeps its name from any side; the arms only off the plane.
-      if (visibility < 0.5 || (index > 0 && (edgeOn || folded))) {
+      if (visibility < 0.5 || (index > 0 && (edgeOn || armsHidden))) {
         hide(element);
         return;
       }
