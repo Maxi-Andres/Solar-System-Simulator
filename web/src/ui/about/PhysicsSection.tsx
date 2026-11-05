@@ -1264,6 +1264,52 @@ export const physicsSection: AboutSection = {
           A sphere whose projection is, very nearly, the Sérsic profile measured on the sky.
           <Cite k={['prugnielSimien1997', 'limaNeto1999', 'courteau2011']} />
         </Equation>
+        <Equation
+          title="Andromeda’s disc, its stars behind its dust"
+          code="web/src/scene/LocalGroup.tsx"
+          math={math(
+            row(
+              mi('I'),
+              mo('='),
+              mo('∑'),
+              sub(mi('j'), mi('k')),
+              sup(mi('e'), row(mo('−'), sub(mi('τ'), row(mo('<'), mi('k'))))),
+              t(',  '),
+              sub(mi('j'), mi('k')),
+              mo('='),
+              sub(mi('Σ'), mi('old')),
+              sub(mi('C'), sub(mi('h'), mi('old'))),
+              mo('+'),
+              sub(mi('Σ'), mi('young')),
+              sub(mi('C'), sub(mi('h'), mi('d'))),
+              t(',  '),
+              sub(mi('C'), mi('h')),
+              mo('='),
+              frac(row(mi('F'), paren(sub(mi('z'), mn('1'))), mo('−'), mi('F'), paren(sub(mi('z'), mn('0')))), sub(mi('d'), mi('z'))),
+              t(',  '),
+              mi('F'),
+              paren(mi('z')),
+              mo('='),
+              frac(mn('1'), mn('2')),
+              paren(row(mn('1'), mo('+'), fn('sgn'), mi('z'), paren(row(mn('1'), mo('−'), sup(mi('e'), row(mo('−'), mo('|'), mi('z'), mo('|'), mo('/'), mi('h'))))))),
+            ),
+          )}
+          symbols={
+            <>
+              Each step k of the ray: Σ<sub>old</sub> and Σ<sub>young</sub> the map’s light there, L☉/pc²; C<sub>h</sub>
+              a sheet of height h’s column across the step, exactly, from z<sub>0</sub> to z<sub>1</sub> with d<sub>z</sub> the
+              ray’s slope; τ<sub>&lt;k</sub> the dust before it, τ<sub>V</sub> C<sub>h<sub>d</sub></sub> a step, times
+              A<sub>λ</sub>/A<sub>V</sub> for each colour.
+            </>
+          }
+        >
+          The face-on map spread through a sheet of each one’s thickness — e<sup>−|z|/h</sup>/2h, the old stars’
+          h<sub>old</sub> and the dust’s h<sub>d</sub>, which the young stars share — and the bulge with them; the
+          light of each step dimmed by all the dust in front of it, more in blue than in red. A sheet is the same
+          profile all along a step, so its column across the step is exact however long the step: a layer 134 pc
+          thick is not missed between steps a kiloparsec apart.
+          <Cite k={['cardelli1989', 'drimmelSpergel2001', 'kregel2002']} />
+        </Equation>
       </>
     );
   },

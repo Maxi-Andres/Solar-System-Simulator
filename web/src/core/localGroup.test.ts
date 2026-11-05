@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { LocalGroupCatalog } from '@sss/tools/types';
@@ -17,6 +17,9 @@ import {
   centralDensities,
   colourIndex,
   columnAt,
+  decodeMapChannel,
+  extinctionCurve,
+  faceOnScales,
   galaxyAxes,
   galaxyHalfLightPc,
   galaxyKey,
@@ -25,8 +28,10 @@ import {
   gamma,
   GIANTS,
   indexLocalGroup,
+  parseFaceOnMap,
   prugnielSimien,
   surfaceBrightness,
+  YOUNG_V_PER_SFR,
 } from './localGroup.ts';
 
 /**
@@ -182,6 +187,34 @@ describe('a galaxy’s light', () => {
     expect(inside / (8 * Math.PI)).toBeCloseTo(0.5, 2);
   });
 
+  it('dims each colour by Cardelli et al.’s curve: V by A_V, B by A_V (1 + 1 / R_V)', () => {
+    expect(extinctionCurve(0.55)).toBeCloseTo(1, 1);
+    // A_B / A_V = (E(B-V) + A_V) / A_V = 1 + 1 / 3.1, CCM's own, within its fit.
+    expect(Math.abs(extinctionCurve(0.44) - (1 + 1 / 3.1))).toBeLessThan(0.03);
+    expect(extinctionCurve(0.61)).toBeLessThan(extinctionCurve(0.55));
+    expect(extinctionCurve(0.46)).toBeGreaterThan(extinctionCurve(0.55));
+  });
+
+  it('decodes a map’s channel as the tool encodes it: log10 between its bounds, 0 for none', () => {
+    const bounds = [-2, 3] as const;
+    expect(decodeMapChannel(0, bounds)).toBe(0);
+    expect(decodeMapChannel(1, bounds)).toBeCloseTo(0.01, 10);
+    expect(decodeMapChannel(255, bounds)).toBeCloseTo(1000, 6);
+    expect(Math.log10(decodeMapChannel(128, bounds))).toBeCloseTo(-2 + (127 / 254) * 5, 10);
+  });
+
+  it('puts all of Andromeda’s disc light in its map, the young stars’ and the old', () => {
+    const m31 = byKey('m31');
+    const model = m31.model as Extract<(typeof m31)['model'], { kind: 'disc' }>;
+    const map = { size: 1024, halfPc: 25_000, bounds: { old: [-2, 3], sfr: [-5, 0], dust: [-1, 3] }, oldSum: 4.2e7, sfrSum: 0.4 } as const;
+    const scales = faceOnScales(m31, map)!;
+    const disc = (1 - model.bulge!.share) * galaxyLuminosity(m31)!;
+    expect((scales.old * map.oldSum + YOUNG_V_PER_SFR * map.sfrSum) / disc).toBeCloseTo(1, 10);
+    // 10^20 H2 per cm^2: 2 x 10^20 H, A_V 0.107, tau 0.0985.
+    expect(scales.dustTauV).toBeCloseTo(0.0985, 3);
+    expect(scales.heightsPc[0]).toBeCloseTo(5300 / 7.3, 6);
+  });
+
   it('converts surface brightness both ways', () => {
     expect(surfaceBrightness(columnAt(23.4))).toBeCloseTo(23.4, 10);
     expect(gamma(5)).toBeCloseTo(24, 10);
@@ -213,6 +246,24 @@ describe('where the galaxies are and which way they face', () => {
     expect(galaxyKey('*Tucana3')).toBe('tucana-3');
     expect(galaxyKey('NGC6822')).toBe('ngc-6822');
     expect(galaxyKey('CanesVenatici(1)')).toBe('canes-venatici-1');
+  });
+
+  it('has every face-on map credited, and every disc’s map there', async () => {
+    const folder = join(import.meta.dirname, '../../public/galaxies');
+    const credits = await readFile(join(folder, 'CREDITS.md'), 'utf8');
+    for (const name of await readdir(folder)) {
+      if (name !== 'CREDITS.md') {
+        expect(credits, name).toContain(name);
+      }
+    }
+    for (const galaxy of GIANTS) {
+      const model = galaxy.model;
+      if (model?.kind === 'disc' && model.faceOnMap !== null) {
+        const map = parseFaceOnMap(JSON.parse(await readFile(join(folder, `${model.faceOnMap}.json`), 'utf8')));
+        expect(map.size).toBeGreaterThan(0);
+        expect(credits).toContain(`${model.faceOnMap}.png`);
+      }
+    }
   });
 
   it('has every galaxy in the published data at the distance of its modulus', async () => {

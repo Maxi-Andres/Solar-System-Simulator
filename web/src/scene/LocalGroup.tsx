@@ -1,12 +1,15 @@
 import type { BodyId } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   centralDensities,
+  CHANNEL_WAVELENGTHS_UM,
   columnAt,
+  extinctionCurve,
+  faceOnScales,
   GALAXY_COLOR,
   galaxyAxes,
   galaxyBodyId,
@@ -16,7 +19,9 @@ import {
   galaxyPositionPc,
   GIANTS,
   indexLocalGroup,
+  parseFaceOnMap,
   prugnielSimien,
+  YOUNG_COLOUR_INDEX,
   type LocalGroupArchive,
   type LocalGroupGalaxy,
 } from '../core/localGroup.ts';
@@ -30,6 +35,7 @@ import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
+import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { mapStrength } from './Starfield.tsx';
@@ -60,6 +66,10 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * - **A disc, or the Small Cloud's ellipsoid**, has none: its ray is marched across its box
  *   in DISC_STEPS steps, each a little jittered so the steps do not show as bands, and
  *   Andromeda's bulge across a sphere of its own, finer.
+ * - **Andromeda's disc, from its face-on map** (core/localGroup.ts FaceOnMap): its old stars,
+ *   young stars and dust where they are, each a sheet of its own height, and its bulge, marched
+ *   together in MAP_STEPS steps, the light of each dimmed by the dust before it; each sheet's
+ *   column across a step taken exactly, so the thin dust is not missed between steps.
  *
  * Instanced: one draw for the dwarfs, one each for the four. Every box is placed about the
  * camera from float64 positions, as the stars are, and its numbers -- the camera in the
@@ -132,6 +142,11 @@ export const NEAR_SHARE = 0.3;
 
 /** Steps across a disc's box, and across Andromeda's bulge. */
 export const DISC_STEPS = 64;
+/** Steps along a ray through a disc drawn from its face-on map, and its bulge. */
+export const MAP_STEPS = 48;
+/** How far the bulge is drawn, effective radii, and how finely its profile is tabled for it. */
+export const BULGE_REACH = 8;
+const BULGE_TABLE = 1024;
 export const BULGE_STEPS = 32;
 
 /**
@@ -286,6 +301,21 @@ uniform vec3 uBulgeGlow;
 uniform vec4 uBulge;
 // Light nearer the camera than this, pc, is left out (see the header).
 uniform float uNear;
+// 2, a disc from its face-on map (faceOnTexture.ts): the map -- old and young stars' light,
+// L_Sun/pc^2, and the dust's V optical depth -- and how far it reaches either side, pc; the
+// colours over the white column, the dust's depth in each colour per unit V, and the
+// heights, pc, of the old stars' sheet and of the dust's and young stars'.
+uniform sampler2D uMap;
+uniform float uMapHalf;
+uniform vec3 uOldGlow;
+uniform vec3 uYoungGlow;
+uniform vec3 uDustTau;
+uniform vec2 uHeights;
+// The bulge's profile against r / R_e, out to BULGE_REACH: a table, not two powers a step.
+uniform sampler2D uBulgeLut;
+// A screen pixel's angle, radians, and a texel's size, pc: which of the map's mipmaps to read.
+uniform float uPixelAngle;
+uniform float uTexelPc;
 varying vec3 vRel;
 
 float hash(vec2 p) {
@@ -309,11 +339,83 @@ float density(vec3 p) {
   return exp(-length(p / uScale));
 }
 
+float bulgeAt(vec3 p) {
+  float r = max(length(p) / uBulge.x, 0.02);
+  return pow(r, -uBulge.y) * exp(-uBulge.z * pow(r, uBulge.w));
+}
+
+// The share of a sheet's light -- e^(-|z|/h) / 2h, for the old stars' height and the thin
+// sheet's -- below the height z.
+vec2 sheetBelow(float z) {
+  return 0.5 + 0.5 * sign(z) * (1.0 - exp(-abs(z) / uHeights));
+}
+
+// The light along the ray through a mapped disc and its bulge, dimmed by the dust in front of
+// it. Each step takes each sheet's column across it exactly -- a sheet is the same profile in z
+// all along the step -- and the map where the step crosses the disc's plane, or, if it does
+// not, at a jittered point: a thin layer is not missed between steps however long they are.
+vec3 marchMapped(vec3 d, float jitter) {
+  vec2 span = slab(uCamera, d, uExtent);
+  float reach = ${BULGE_REACH.toFixed(1)} * uBulge.x;
+  float mid = -dot(uCamera, d);
+  float miss2 = dot(uCamera, uCamera) - mid * mid;
+  if (uBulge.x > 0.0 && miss2 < reach * reach) {
+    float halfChord = sqrt(reach * reach - miss2);
+    span = span.y > span.x
+      ? vec2(min(span.x, mid - halfChord), max(span.y, mid + halfChord))
+      : vec2(mid - halfChord, mid + halfChord);
+  }
+  span.x = max(span.x, uNear);
+  if (span.y <= span.x) return vec3(0.0);
+  float dt = (span.y - span.x) / float(${MAP_STEPS});
+  bool level = abs(d.z) < 1e-5;
+  vec3 light = vec3(0.0);
+  vec3 through = vec3(1.0);
+  float z0 = uCamera.z + d.z * span.x;
+  vec2 below0 = sheetBelow(z0);
+  for (int i = 0; i < ${MAP_STEPS}; i++) {
+    float t0 = span.x + float(i) * dt;
+    float z1 = z0 + d.z * dt;
+    vec2 below1 = sheetBelow(z1);
+    vec2 column = level ? exp(-abs(z0) / uHeights) / (2.0 * uHeights) * dt : (below1 - below0) / d.z;
+    float tj = t0 + jitter * dt;
+    vec3 emitted = vec3(0.0);
+    if (uBulge.x > 0.0) {
+      float r = length(uCamera + d * tj) / uBulge.x;
+      if (r < ${BULGE_REACH.toFixed(1)}) {
+        emitted = uBulgeGlow * (textureLod(uBulgeLut, vec2(r / ${BULGE_REACH.toFixed(1)}, 0.5), 0.0).r * dt);
+      }
+    }
+    vec3 tau = vec3(0.0);
+    float ts = z0 * z1 < 0.0 ? t0 - z0 / d.z : tj;
+    vec2 uv = (uCamera.xy + d.xy * ts) / (2.0 * uMapHalf) + 0.5;
+    if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
+      float lod = max(0.0, log2(ts * uPixelAngle / uTexelPc));
+      vec3 m = textureLod(uMap, uv, lod).rgb;
+      emitted += uOldGlow * (m.r * column.x) + uYoungGlow * (m.g * column.y);
+      tau = uDustTau * (m.b * column.y);
+    }
+    // The step's light, then its dust on all that is behind it.
+    light += through * emitted;
+    through *= exp(-tau);
+    z0 = z1;
+    below0 = below1;
+  }
+  return light;
+}
+
 void main() {
   #include <logdepthbuf_fragment>
   vec3 d = uAxes * normalize(vRel);
   float jitter = hash(gl_FragCoord.xy);
   vec3 light = vec3(0.0);
+  if (uKind == 2) {
+    light = marchMapped(d, jitter);
+    light = (1.0 - exp(-light)) * uFade;
+    if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+    gl_FragColor = vec4(max(light + (hash(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 0.0), 1.0);
+    return;
+  }
   vec2 span = slab(uCamera, d, uExtent);
   span.x = max(span.x, uNear);
   if (span.y > span.x) {
@@ -430,6 +532,21 @@ void main() {
   gl_FragColor = vec4(uColor, alpha);
 }
 `;
+
+/** The Prugniel-Simien profile, (r/R_e)^-p e^(-b (r/R_e)^(1/n)), at BULGE_TABLE radii out to BULGE_REACH. */
+function bulgeTable(ps: { readonly p: number; readonly b: number }, n: number): THREE.DataTexture {
+  const data = new Uint16Array(BULGE_TABLE);
+  for (let i = 0; i < BULGE_TABLE; i += 1) {
+    const r = Math.max(((i + 0.5) / BULGE_TABLE) * BULGE_REACH, 0.02);
+    data[i] = THREE.DataUtils.toHalfFloat(r ** -ps.p * Math.exp(-ps.b * r ** (1 / n)));
+  }
+  const texture = new THREE.DataTexture(data, BULGE_TABLE, 1, THREE.RedFormat, THREE.HalfFloatType);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
 
 /** The colour of a galaxy's light, linear, times rho0 over the white column. */
 function glow(galaxy: LocalGroupGalaxy, rho0: number, colourIndex = galaxy.colourIndex): THREE.Vector3 {
@@ -567,6 +684,16 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
                 ? new THREE.Vector4(0, 0, 0, 0)
                 : new THREE.Vector4(bulge.effectiveRadiusPc, ps.p, ps.b, 1 / bulge.sersicN),
           },
+          // Its face-on map, once loaded (the effect below): until then a smooth disc.
+          uMap: { value: null as THREE.Texture | null },
+          uBulgeLut: { value: bulge === null || ps === null ? null : bulgeTable(ps, bulge.sersicN) },
+          uMapHalf: { value: 1 },
+          uOldGlow: { value: new THREE.Vector3() },
+          uYoungGlow: { value: new THREE.Vector3() },
+          uDustTau: { value: new THREE.Vector3() },
+          uHeights: { value: new THREE.Vector2(1, 1) },
+          uPixelAngle: { value: 1e-3 },
+          uTexelPc: { value: 1 },
         };
         const material = new THREE.ShaderMaterial({
           uniforms,
@@ -594,11 +721,58 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
             halfLightPc: galaxyHalfLightPc(galaxy)!,
             glow: uniforms.uGlow.value.clone(),
             bulgeGlow: uniforms.uBulgeGlow.value.clone(),
+            // The map's light per unit, set when it loads.
+            oldGlow: new THREE.Vector3(),
+            youngGlow: new THREE.Vector3(),
           },
         ];
       }),
     [],
   );
+
+  // The face-on maps, asked for with the catalogue: Andromeda's stars and dust from above.
+  const [mapsWanted, setMapsWanted] = useState(false);
+  useEffect(() => {
+    if (!mapsWanted) {
+      return;
+    }
+    let cancelled = false;
+    const textures: THREE.Texture[] = [];
+    for (const giant of giants) {
+      const model = giant.galaxy.model;
+      if (model?.kind !== 'disc' || model.faceOnMap === null) {
+        continue;
+      }
+      const base = `${import.meta.env.BASE_URL}galaxies/${model.faceOnMap}`;
+      void Promise.all([fetch(`${base}.json`).then((response) => response.json()).then(parseFaceOnMap), pngPixels(`${base}.png`)])
+        .then(([map, pixels]) => {
+          const scales = faceOnScales(giant.galaxy, map);
+          if (cancelled || scales === null) {
+            return;
+          }
+          const texture = faceOnTexture(faceOnLevels(pixels, map, [scales.old, scales.young, scales.dustTauV]));
+          textures.push(texture);
+          const u = giant.uniforms;
+          u.uMap.value = texture;
+          u.uMapHalf.value = map.halfPc;
+          u.uTexelPc.value = (2 * map.halfPc) / map.size;
+          // Light per L_Sun/pc^2 now: the map carries the rest.
+          giant.oldGlow.copy(glow(giant.galaxy, 1));
+          giant.youngGlow.copy(glow(giant.galaxy, 1, YOUNG_COLOUR_INDEX));
+          u.uDustTau.value.set(...(CHANNEL_WAVELENGTHS_UM.map((um) => extinctionCurve(um)) as [number, number, number]));
+          u.uHeights.value.set(...scales.heightsPc);
+          u.uKind.value = 2;
+          renderDemand.request();
+        })
+        .catch(() => {
+          // No map: the smooth disc stays.
+        });
+    }
+    return () => {
+      cancelled = true;
+      for (const texture of textures) texture.dispose();
+    };
+  }, [mapsWanted, giants]);
 
   // Every galaxy drawn as a volume, as a point too: its light when too small for a pixel.
   const pointUniforms = useMemo<Record<string, THREE.IUniform>>(
@@ -741,6 +915,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     if (!requested.current && fromSunKm > (MARKS_FROM_LY / 2) * LIGHT_YEAR_KM) {
       requested.current = true;
       void source.request();
+      setMapsWanted(true);
     }
     const fade = galaxyVisibility(fromSunKm);
     const markFade = showMarks
@@ -792,7 +967,8 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     }
 
     // The four: each box about the camera, and the camera in its frame.
-    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow } of giants) {
+    const pixelAngle = ((fov * Math.PI) / 180) / renderer.getDrawingBufferSize(scratchSize).y;
+    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow, oldGlow, youngGlow } of giants) {
       mesh.visible = fade > 0;
       uniforms.uFade.value = fade;
       const rx = centre.x - cameraPc.x;
@@ -801,6 +977,9 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       const share = volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
       uniforms.uGlow.value.copy(g).multiplyScalar(share);
       uniforms.uBulgeGlow.value.copy(bulgeGlow).multiplyScalar(share);
+      uniforms.uOldGlow.value.copy(oldGlow).multiplyScalar(share);
+      uniforms.uYoungGlow.value.copy(youngGlow).multiplyScalar(share);
+      uniforms.uPixelAngle.value = pixelAngle;
       uniforms.uNear.value = Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scale);
       uniforms.uCamera.value.set(
         -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z),

@@ -145,6 +145,15 @@ export const sourcesSection: AboutSection = {
             2012, AJ, 144, 4, The observed properties of dwarf galaxies in and around the Local Group.
           </Item>
           <Item>
+            Andromeda’s face-on maps, adapted — deprojected, its foreground stars, its bulge and M32 and NGC 205
+            taken out — by tools/galaxies/prepare.py, credited in web/public/galaxies/CREDITS.md: WISE 3.4 and 22
+            µm and GALEX far-UV from z0MGS, Leroy, A. K., et al. 2019, ApJS 244, 24, IRSA doi:10.26131/IRSA6 —
+            WISE a joint project of UCLA and JPL/Caltech, funded by NASA; GALEX operated for NASA by Caltech; its
+            dust column density from Marsh, K. A., et al. 2018, Dust in the Eye of Andromeda, MNRAS,
+            doi:10.1093/mnras/sty2037, from Herschel, an ESA space observatory with science instruments provided
+            by European-led Principal Investigator consortia and with important participation from NASA.
+          </Item>
+          <Item>
             Supernova remnants’ positions and sizes from D. A. Green’s Catalogue of Galactic Supernova Remnants
             (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
           </Item>

@@ -8,6 +8,8 @@ web/public/data/
 
 # The remnant maps' downloaded sources (tools/remnants/prepare.py).
 tools/remnants/.cache/
+# The galaxies' maps' downloaded sources (tools/galaxies/prepare.py).
+tools/galaxies/.cache/
 
 .env
 .env.local

@@ -5,6 +5,7 @@ import type { BeltFetchers } from './belt.ts';
 import type { Searchable } from './beltNames.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
+import { DUST_DISC } from './milkyWay.ts';
 import { normalizeName } from './search.ts';
 import { PARSEC_KM } from './stars3d.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
@@ -38,9 +39,11 @@ import type { StateVector, Vec3 } from './vec3.ts';
  *   the line of sight is not measured for any of them: it is given the geometric mean of the
  *   two, sqrt(a b) -- neither a disc seen face-on nor a cigar seen end-on.
  * - **A disc** (Andromeda, Triangulum, the Large Cloud): exponential in radius, of its
- *   measured scale length, and in height, a fifth of that -- Hubble's intrinsic flattening of
- *   0.2, the one inclinations are worked out with, since the thickness of the light is
- *   measured for none of the three -- at its measured inclination and position angle.
+ *   measured scale length, and in height, DISC_FLATTENING times thinner -- the mean of the
+ *   discs Kregel et al. measured edge-on, since the thickness of the light is measured for
+ *   none of the three -- at its measured inclination and position angle. Andromeda's from
+ *   above is its face-on map (FaceOnMap below): its stars and its dust as they are, not an
+ *   exponential.
  *   Andromeda's bulge beside it, a Prugniel-Simien sphere whose projection is the Sersic
  *   profile Courteau et al. fit (n 2.2, R_e 1.0 kpc), with the 24 % of its light they find
  *   in it.
@@ -77,6 +80,8 @@ export type GalaxyModel =
       readonly nearSideDeg: number;
       /** A bulge, its share of the light, and its Sersic fit. */
       readonly bulge: { readonly share: number; readonly effectiveRadiusPc: number; readonly sersicN: number } | null;
+      /** Its face-on map's name in galaxies/, where it has one (FaceOnMap). */
+      readonly faceOnMap: string | null;
     }
   | {
       readonly kind: 'exponential-ellipsoid';
@@ -114,6 +119,12 @@ export interface LocalGroupGalaxy {
   /** Is it one of the four big ones, a body from the start. */
   readonly giant: boolean;
 }
+
+/**
+ * A disc's scale length over its scale height: 7.3 +/- 2.2, the mean of the 34 edge-on discs
+ * Kregel, van der Kruit & de Grijs measured (2002, MNRAS 334, 646).
+ */
+export const DISC_FLATTENING = 7.3;
 
 const hms = (h: number, m: number, s: number): number => (h + m / 60 + s / 3600) * 15;
 const dms = (sign: 1 | -1, d: number, m: number, s: number): number => sign * (d + m / 60 + s / 3600);
@@ -165,11 +176,12 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
     model: {
       kind: 'disc',
       scaleLengthPc: 5300,
-      scaleHeightPc: 0.2 * 5300,
+      scaleHeightPc: 5300 / DISC_FLATTENING,
       inclinationDeg: 77,
       positionAngleDeg: 38,
       nearSideDeg: 38 + 270,
       bulge: { share: 0.23 / 0.96, effectiveRadiusPc: 1000, sersicN: 2.2 },
+      faceOnMap: 'm31',
     },
     shapeSource: 'Courteau et al. 2011',
     giant: true,
@@ -191,11 +203,12 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
     model: {
       kind: 'disc',
       scaleLengthPc: 1600,
-      scaleHeightPc: 0.2 * 1600,
+      scaleHeightPc: 1600 / DISC_FLATTENING,
       inclinationDeg: 52,
       positionAngleDeg: 22.5,
       nearSideDeg: 22.5 + 270,
       bulge: null,
+      faceOnMap: null,
     },
     shapeSource: 'Warner et al. 1973; Kam et al. 2015',
     giant: true,
@@ -217,11 +230,12 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
     model: {
       kind: 'disc',
       scaleLengthPc: 1400,
-      scaleHeightPc: 0.2 * 1400,
+      scaleHeightPc: 1400 / DISC_FLATTENING,
       inclinationDeg: 34,
       positionAngleDeg: 139.1,
       nearSideDeg: 139.1 - 90,
       bulge: null,
+      faceOnMap: null,
     },
     shapeSource: 'van der Marel & Kallivayalil 2014; van der Marel 2001',
     giant: true,
@@ -421,6 +435,101 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
       return { main, bulge: (share * luminosity) / (unitLuminosity * model.bulge.effectiveRadiusPc ** 3) };
     }
   }
+}
+
+// ---------------------------------------------------------------------------------------
+// A disc from above
+
+/**
+ * A disc's face-on map (tools/galaxies/prepare.py, galaxies/<name>.png and .json): its old
+ * stars, its star formation and its dust where they are, as one would see them from straight
+ * above, worked out by undoing its tilt in pictures of it -- a thin disc's picture is its
+ * face-on map squeezed by cos i along its minor axis.
+ *
+ * - **Old stars**, from WISE's 3.4 um, which dust hardly dims: where the disc's light is,
+ *   scaled to the disc's V luminosity (less its young stars').
+ * - **Star formation**, M_Sun/yr/kpc^2, from GALEX's far-UV and WISE's 22 um (Leroy et al.
+ *   2008): its young stars' light, YOUNG_V_PER_SFR of it per unit.
+ * - **Dust**, H2 per cm^2 (Marsh et al. 2018, from Herschel): A_V by Bohlin et al.'s gas
+ *   to reddening, dimming each colour by Cardelli et al.'s curve.
+ *
+ * Each is a sheet of its own thickness: the old stars the disc's (DISC_FLATTENING); the dust
+ * the Milky Way's, the one dust layer whose thickness is measured, and the young stars in the
+ * dust they formed in.
+ */
+export interface FaceOnMap {
+  /** Pixels a side, and how far the map reaches either side of the centre, pc. */
+  readonly size: number;
+  readonly halfPc: number;
+  /** Each channel's log10 at code 1 and 255 (0 is none): R old stars, G star formation, B dust. */
+  readonly bounds: { readonly old: readonly [number, number]; readonly sfr: readonly [number, number]; readonly dust: readonly [number, number] };
+  /** The decoded map summed over its area: old stars (its own units, pc^2), star formation (M_Sun/yr). */
+  readonly oldSum: number;
+  readonly sfrSum: number;
+}
+
+/** The young stars' V light per unit of star formation, L_Sun per M_Sun/yr: see the header. */
+export const YOUNG_V_PER_SFR = 2e9;
+/** Their colour, B-V: a population formed steadily over the last hundred million years. */
+export const YOUNG_COLOUR_INDEX = 0.05;
+/** Hydrogen atoms per cm^2 per magnitude of A_V: Bohlin, Savage & Drake 1978's 5.8e21 per E(B-V), R_V 3.1. */
+export const HYDROGEN_PER_AV = 5.8e21 / 3.1;
+/** The map's dust channel's unit: 10^20 H2 molecules per cm^2 (Marsh et al. 2018). */
+export const MAP_DUST_UNIT_H = 2e20;
+/** The colours' wavelengths, um, for their extinction: about where sRGB's red, green and blue are. */
+export const CHANNEL_WAVELENGTHS_UM = [0.61, 0.55, 0.46] as const;
+
+/** A_lambda / A_V at `um` microns, optical and near-infrared: Cardelli, Clayton & Mathis 1989, R_V 3.1. */
+export function extinctionCurve(um: number, rv = 3.1): number {
+  const x = 1 / um;
+  if (x < 1.1) {
+    return 0.574 * x ** 1.61 + (-0.527 * x ** 1.61) / rv;
+  }
+  const y = x - 1.82;
+  const a =
+    1 + 0.17699 * y - 0.50447 * y ** 2 - 0.02427 * y ** 3 + 0.72085 * y ** 4 + 0.01979 * y ** 5 - 0.7753 * y ** 6 + 0.32999 * y ** 7;
+  const b =
+    1.41338 * y + 2.28305 * y ** 2 + 1.07233 * y ** 3 - 5.38434 * y ** 4 - 0.62251 * y ** 5 + 5.3026 * y ** 6 - 2.09002 * y ** 7;
+  return a + b / rv;
+}
+
+/** A map's channel, decoded: its 8-bit code to its value (the shader does the same). */
+export function decodeMapChannel(code: number, bounds: readonly [number, number]): number {
+  return code < 0.5 ? 0 : 10 ** (bounds[0] + ((code - 1) / 254) * (bounds[1] - bounds[0]));
+}
+
+/**
+ * What a disc's map stands for, per unit of each channel: the old stars' and the young stars'
+ * V luminosity per pc^2, and the optical depth in V; and the scale heights, pc, of the old
+ * stars' sheet and of the dust's, which the young stars share.
+ */
+export function faceOnScales(
+  galaxy: LocalGroupGalaxy,
+  map: FaceOnMap,
+): { readonly old: number; readonly young: number; readonly dustTauV: number; readonly heightsPc: readonly [number, number] } | null {
+  const luminosity = galaxyLuminosity(galaxy);
+  const model = galaxy.model;
+  if (luminosity === null || model === null || model.kind !== 'disc') {
+    return null;
+  }
+  const disc = (1 - (model.bulge?.share ?? 0)) * luminosity;
+  const young = YOUNG_V_PER_SFR * map.sfrSum;
+  const dust = DUST_DISC.scaleHeightPc;
+  return {
+    old: Math.max(0, disc - young) / map.oldSum,
+    // Per M_Sun/yr/kpc^2: a kpc^2 is a million pc^2.
+    young: YOUNG_V_PER_SFR / 1e6,
+    dustTauV: MAP_DUST_UNIT_H / HYDROGEN_PER_AV / 1.0857,
+    heightsPc: [model.scaleHeightPc, dust],
+  };
+}
+
+export function parseFaceOnMap(raw: unknown): FaceOnMap {
+  const map = raw as FaceOnMap;
+  if (typeof map?.size !== 'number' || typeof map.halfPc !== 'number' || typeof map.oldSum !== 'number') {
+    throw new Error('not a face-on map');
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------------------------------

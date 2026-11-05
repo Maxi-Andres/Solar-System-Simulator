@@ -614,9 +614,24 @@ export const estimatedSection: AboutSection = {
             </Why>
           </Item>
           <Item title="A disc’s thickness">
-            Andromeda’s, Triangulum’s and the Large Cloud’s discs are drawn a fifth as thick as their scale
-            length: the flattening conventionally assumed when galaxies’ inclinations are worked out from their
-            shapes. The thickness of their light is measured for none of the three.
+            Andromeda’s, Triangulum’s and the Large Cloud’s discs are drawn 7.3 times thinner than their scale
+            length, the mean of the discs measured edge-on; Andromeda’s dust, and its young stars in it, as thick
+            as the Milky Way’s dust, 134 pc. The thickness of their light is measured for none of the three.
+            <Why>
+              the nearest measured: other galaxies’ discs, our own dust
+              <Cite k={['kregel2002', 'drimmelSpergel2001']} />.
+            </Why>
+          </Item>
+          <Item title="Andromeda’s light, from its maps">
+            Its old stars’ map carries the disc’s V light less its young stars’. Its young stars give 2 × 10⁹
+            solar luminosities in V for each solar mass a year they form — a population formed steadily over the
+            last hundred million years — in B−V 0.05: 4% of its disc’s light. Its dust dims V by a magnitude for
+            each 1.9 × 10²¹ hydrogen atoms per cm², as in the Milky Way, and blue more than red.
+            <Why>
+              its maps show where the light and the dust are, not what colour the light is; these are the
+              conversions for the Milky Way and for a steadily forming population
+              <Cite k={['bohlin1978', 'cardelli1989']} />.
+            </Why>
           </Item>
           <Item title="Which side of Triangulum is nearer">
             Not measured here: its west side is drawn nearer. From Earth it looks the same either way.
@@ -631,9 +646,9 @@ export const estimatedSection: AboutSection = {
             </Why>
           </Item>
           <Item title="What is not drawn">
-            Spiral arms, dust lanes and star-forming regions; the Large Cloud’s bar; Andromeda’s halo, 4% of its
-            light, and its streams; the Magellanic Stream; and each galaxy’s motion. A galaxy whose size or V is
-            not measured is its mark only.
+            Triangulum’s and the Clouds’ spiral arms, dust and star-forming regions, which Andromeda has from its
+            maps; the Large Cloud’s bar; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
+            Stream; and each galaxy’s motion. A galaxy whose size or V is not measured is its mark only.
           </Item>
         </Items>
       </>

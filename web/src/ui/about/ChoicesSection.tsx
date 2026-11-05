@@ -327,6 +327,14 @@ export const choicesSection: AboutSection = {
             their stars. Their marks show where they are.
             <Why>the same rule for every galaxy, so how bright one looks against another is how bright it is.</Why>
           </Item>
+          <Item title="Andromeda from its own pictures">
+            Its disc is its maps from above, spread through each sheet’s thickness, seen through from wherever the
+            camera is: from Earth its dust lanes cross its bulge on the near side, as in its photographs; from
+            above, its ring of star formation at 10 kpc and its dust. Never a picture laid in the sky. A cluster
+            or a star knot is drawn as deep as the sheet it is in, which the pictures cannot say; the stars of
+            the foreground the masks missed are taken out first, since in a sheet each would be a streak.
+            <Why>what can be measured of a disc tipped 77° to us is what it looks like from here.</Why>
+          </Item>
           <Item title="Too small for a pixel, a point">
             A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
             lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and
