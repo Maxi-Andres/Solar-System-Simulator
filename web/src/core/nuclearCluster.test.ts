@@ -67,9 +67,9 @@ describe('the sample', () => {
     expect(other.count).not.toBe(sample.count);
   }, 30_000);
 
-  it('holds 171,739 stars, every one brighter than the cut as seen from Sgr A*', () => {
+  it('holds 203,996 stars, every one brighter than the cut as seen from Sgr A* or than the floor', () => {
     expect(sample.count).toBe(SAMPLE_COUNT);
-    expect(SAMPLE_COUNT).toBe(171_739);
+    expect(SAMPLE_COUNT).toBe(203_996);
     expect(sample.count).toBeLessThan(candidateCount());
     let tooFaint = 0;
     let outside = 0;

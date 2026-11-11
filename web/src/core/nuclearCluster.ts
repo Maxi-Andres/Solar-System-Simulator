@@ -56,11 +56,14 @@ import { DWARF_ROWS, EVOLVED_ROWS, LF_STEP, STARS_PER_SOLAR_MASS, type Luminosit
  *
  *     M_V + 5 log10(r / 10 pc) < V_lim
  *
- * -- the dwarfs close in, the giants far out, as an eye at the centre would rank them. For
- * a camera near the black hole, where it is taken, it is the sky's brightest stars,
- * complete; a camera parsecs from it stands among stars this sample left out as too faint
- * from the hole, and sees fewer than there are near it. The cut is in the About, with the
- * number it leaves.
+ * -- the dwarfs close in, the giants far out, as an eye at the centre would rank them --
+ * and, wherever it is, every star brighter than SAMPLE_FLOOR_MV, the giants down to the
+ * red clump, so that from anywhere but the centre the giants are drawn to the same depth
+ * all through the cluster rather than only near the hole. For a camera near the black hole
+ * it is the sky's brightest stars, complete; a camera parsecs from it stands among stars
+ * this sample left out, and their light is drawn as the cluster's glow instead
+ * (nuclearClusterLight.ts), so none of the cluster's light is lost. The cut is in the
+ * About, with the number it leaves.
  *
  * ## What is not modelled
  *
@@ -95,8 +98,8 @@ export const FLATTENING = 0.71;
 export const CENTRE_EXTINCTION_V = 30;
 
 /**
- * The cut: every star of the model brighter than this from Sgr A*, V -- 171,739 of them
- * (nuclearCluster.test.ts). **A budget, not a measurement**: the sky from the centre holds
+ * The cut: every star of the model brighter than this from Sgr A*, V -- 171,739 of them,
+ * and with SAMPLE_FLOOR_MV 203,996 (nuclearCluster.test.ts). **A budget, not a measurement**: the sky from the centre holds
  * millions of stars down to the picture's own limit, V 8, which no point renderer can
  * draw, and this is where it stops. At V 0 there were 363,000, and seen from inside the
  * cluster's core the picture fell to 10 frames a second on the machine it was measured on,
@@ -104,8 +107,18 @@ export const CENTRE_EXTINCTION_V = 30;
  */
 export const SAMPLE_LIMIT_V = -1;
 
+/**
+ * And every star brighter than this M_V wherever it is: the giants, the red clump among
+ * them (M_V about +1 at this metallicity) -- 32,000 more stars, outside the 3.2 pc inside
+ * which the cut from the hole already holds them. Without it the cluster seen from outside
+ * was drawn complete to the dwarfs in its core and to the tip of the giant branch only
+ * farther out: a white ball of stars with a halo of identical ones, and an edge at 10 pc,
+ * where the cut from the hole passes the brightest giant.
+ */
+export const SAMPLE_FLOOR_MV = 1.5;
+
 /** How many stars that leaves: what sampleNuclearCluster() returns, held to it by the test. */
-export const SAMPLE_COUNT = 171_739;
+export const SAMPLE_COUNT = 203_996;
 
 /** Where the sampling starts, pc from the black hole: inside it the model holds a twentieth of a star. */
 export const INNER_RADIUS_PC = 1e-4;
@@ -215,8 +228,8 @@ export function shareBrighterThan(limit: number): number {
 }
 
 /** The faintest M_V a star at r pc from the black hole may have and still be sampled. */
-export function sampleMagnitudeLimit(radiusPc: number, limitV = SAMPLE_LIMIT_V): number {
-  return limitV - 5 * (Math.log10(radiusPc) - 1);
+export function sampleMagnitudeLimit(radiusPc: number, limitV = SAMPLE_LIMIT_V, floorMv = SAMPLE_FLOOR_MV): number {
+  return Math.max(floorMv, limitV - 5 * (Math.log10(radiusPc) - 1));
 }
 
 /**
@@ -226,8 +239,8 @@ export function sampleMagnitudeLimit(radiusPc: number, limitV = SAMPLE_LIMIT_V):
  * what the sampler draws from before it tests each star at its own distance. An upper
  * bound on what comes back.
  */
-export function candidateCount(limitV = SAMPLE_LIMIT_V, edgePc = CLUSTER_EDGE_PC): number {
-  return shells(limitV, edgePc).reduce((sum, shell) => sum + shell.candidates, 0);
+export function candidateCount(limitV = SAMPLE_LIMIT_V, edgePc = CLUSTER_EDGE_PC, floorMv = SAMPLE_FLOOR_MV): number {
+  return shells(limitV, edgePc, floorMv).reduce((sum, shell) => sum + shell.candidates, 0);
 }
 
 interface Shell {
@@ -239,7 +252,7 @@ interface Shell {
 
 const SHELLS = 600;
 
-function shells(limitV: number, edgePc: number): Shell[] {
+function shells(limitV: number, edgePc: number, floorMv: number): Shell[] {
   const out: Shell[] = [];
   const lo = Math.log(INNER_RADIUS_PC);
   const hi = Math.log(edgePc);
@@ -247,7 +260,7 @@ function shells(limitV: number, edgePc: number): Shell[] {
     const inner = Math.exp(lo + ((hi - lo) * k) / SHELLS);
     const outer = Math.exp(lo + ((hi - lo) * (k + 1)) / SHELLS);
     const stars = (massWithin(outer) - massWithin(inner)) * STARS_PER_SOLAR_MASS;
-    const magnitudeLimit = sampleMagnitudeLimit(FLATTENING * inner, limitV);
+    const magnitudeLimit = sampleMagnitudeLimit(FLATTENING * inner, limitV, floorMv);
     out.push({ inner, outer, magnitudeLimit, candidates: stars * shareBrighterThan(magnitudeLimit) });
   }
   return out;
@@ -314,23 +327,25 @@ function drawStar(limit: number, random: () => number): { mv: number; row: Lumin
 }
 
 /**
- * Samples the model: every star brighter than `limitV` from the black hole, deterministic
- * for a seed. Shell by shell in ellipsoidal radius, a Poisson number of candidates is drawn
- * at the shell's most generous magnitude limit; each is put at a radius in the shell by
- * the mass profile, in a random direction on the ellipsoid, given a magnitude from the
- * luminosity function, and kept if, at its own distance from the hole, it is bright enough.
+ * Samples the model: every star brighter than `limitV` from the black hole or than
+ * `floorMv` absolute, deterministic for a seed. Shell by shell in ellipsoidal radius, a
+ * Poisson number of candidates is drawn at the shell's most generous magnitude limit; each
+ * is put at a radius in the shell by the mass profile, in a random direction on the
+ * ellipsoid, given a magnitude from the luminosity function, and kept if, at its own
+ * distance from the hole, it is bright enough.
  * `edgePc` stops it short of the cluster's edge, for the tests.
  */
 export function sampleNuclearCluster(
   limitV = SAMPLE_LIMIT_V,
   seed = 20261030,
   edgePc = CLUSTER_EDGE_PC,
+  floorMv = SAMPLE_FLOOR_MV,
 ): NuclearClusterSample {
   const random = generator(seed);
   const positions: number[] = [];
   const absoluteV: number[] = [];
   const colorIndex: number[] = [];
-  for (const shell of shells(limitV, edgePc)) {
+  for (const shell of shells(limitV, edgePc, floorMv)) {
     const count = poisson(shell.candidates, random);
     // Radii within the shell by m^3 rho(m) per unit ln m, by rejection against its larger end.
     const weight = (m: number): number => m ** 3 * nukerShape(m);
@@ -348,7 +363,7 @@ export function sampleNuclearCluster(
       const y = m * s * Math.sin(phi);
       const z = m * cz * FLATTENING;
       const star = drawStar(shell.magnitudeLimit, random);
-      if (star.mv >= sampleMagnitudeLimit(Math.hypot(x, y, z), limitV)) {
+      if (star.mv >= sampleMagnitudeLimit(Math.hypot(x, y, z), limitV, floorMv)) {
         continue;
       }
       positions.push(x, y, z);

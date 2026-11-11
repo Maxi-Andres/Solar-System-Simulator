@@ -6,14 +6,30 @@ import * as THREE from 'three';
 import { SGR_A_ID } from '../core/blackHoles.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { PLACED_STARS, S_STARS, sStarPosition } from '../core/galacticCentreStars.ts';
-import { cameraExtinctionV, type NuclearClusterSample } from '../core/nuclearCluster.ts';
+import { columnAt } from '../core/localGroup.ts';
+import { cameraExtinctionV, sampleMagnitudeLimit, type NuclearClusterSample } from '../core/nuclearCluster.ts';
+import {
+  CLUSTER_LUMINOSITY_V,
+  clusterExposure,
+  column,
+  exposureWeight,
+  faintLightShare,
+  glowMeteredExposure,
+  HALF_LIGHT_RADIUS_PC,
+  meanColumn,
+  meanColumnAlong,
+  nthBrightestMagnitude,
+  starsMeteredExposure,
+} from '../core/nuclearClusterLight.ts';
 import { brightestMagnitude } from '../core/starCatalog.ts';
 import type { SimClock } from '../core/time.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { LENS_VERTEX_GLSL, lensState, lensUniforms } from './lens.ts';
-import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
+import { pointShare, WHITE_MU } from './LocalGroup.tsx';
+import { GLOW_COLOUR, makeClusterGlow } from './nuclearClusterGlow.ts';
+import { FOV_DEG, KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 import { DISPLAY_FLOOR } from './shading.ts';
 import {
   magnitudeToPeakCoefficients,
@@ -55,8 +71,16 @@ import { LIMIT_SLACK, MAX_STAR_SPRITE_PX, splitHigh, splitLow, UNITS_PER_PC } fr
  * is drawn brighter by its magnitude, as the catalogue stars' are. Below the display's
  * darkest step it is not drawn at all.
  *
- * The model's stars are the Nuclear Cluster Model layer; the measured ones are always
- * drawn, as the catalogue's are.
+ * ## Its glow and its exposure
+ *
+ * The light of the model's stars too faint to be drawn is drawn as a glow, and the cluster
+ * at exposures of its own near it, the stars' metered on its stars and the glow's on its
+ * glow (core/nuclearClusterLight.ts; the glow's shaders in nuclearClusterGlow.ts) -- the
+ * measured stars' with the model's; metered again as the camera's distance to the centre
+ * changes (METER_REFRESH_SHARE), the frame's meter every frame.
+ *
+ * The model's stars and its glow are the Nuclear Cluster Model layer; the measured ones are
+ * always drawn, as the catalogue's are, at the Sun's exposure when the layer is off.
  *
  * ## Precision
  *
@@ -81,6 +105,20 @@ const EXTINCTION_REFRESH_SHARE = 0.01;
 const LOG10_2 = 0.3010299956639812;
 
 /**
+ * The cluster's meters are read again when the camera's distance to the centre has changed by
+ * this share of it (or of 0.1 pc within it), or the camera has gone round it by METER_TURN_SHARE:
+ * both depend on little but the distance, and turning about the hole moves the camera every frame.
+ */
+const METER_REFRESH_SHARE = 0.02;
+const METER_TURN_SHARE = 0.2;
+
+/** The stars meter reads every this-many-th star of the sample (nthBrightestMagnitude). */
+const METER_STRIDE = 8;
+
+/** The glow's column 0.01 pc from the centre, L_Sun/pc^2: what decides whether it could show. */
+const CENTRAL_COLUMN = column([0.01, -100, 0], [0, 1, 0]);
+
+/**
  * The vertex shader: the 3D stars' (stars3dShader.ts), with the extinction added and the
  * lens for a star at a finite distance. Positions are parsecs about the point the camera
  * uniforms are taken from: Sgr A* for the sample, the camera itself for the measured stars.
@@ -92,6 +130,7 @@ uniform float uUnitsPerPc;
 uniform vec2 uMagnitudeToPeak;
 uniform float uMagnitudeLimit;
 uniform float uExtinction;
+uniform float uExposure;
 uniform float uFade;
 uniform float uSigmaPx;
 uniform float uDisplayFloor;
@@ -113,7 +152,7 @@ float srgbToLinear(float value) {
 void main() {
   vec3 rel = (position - uCameraHigh) - uCameraLow;
   float distancePc = max(length(rel), 1e-12);
-  float m = absMag + 5.0 * (log2(distancePc) * ${LOG10_2.toFixed(12)} - 1.0) + uExtinction;
+  float m = absMag + 5.0 * (log2(distancePc) * ${LOG10_2.toFixed(12)} - 1.0) + uExtinction + uExposure;
 
   // Where Sgr A* shows it, and how much brighter: lens.ts, for a star at a finite distance.
   // Brighter by its magnitude, as every image is drawn; fainter by its light: see the
@@ -170,6 +209,9 @@ export function clusterUniforms(coefficients: readonly [number, number], limit: 
     uMagnitudeToPeak: { value: new THREE.Vector2(coefficients[0], coefficients[1]) },
     uMagnitudeLimit: { value: limit },
     uExtinction: { value: 0 },
+    // Magnitudes shorter than the picture's exposure (core/nuclearClusterLight.ts): 0 but
+    // for the nuclear cluster's own.
+    uExposure: { value: 0 },
     uFade: { value: 1 },
     uSigmaPx: { value: PSF_SIGMA_PX },
     uDisplayFloor: { value: DISPLAY_FLOOR },
@@ -269,6 +311,30 @@ const scratchHole = new THREE.Vector3();
 const scratchCamera = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchPc = new THREE.Vector3();
+const scratchSize = new THREE.Vector2();
+const scratchRay = new THREE.Vector3();
+
+/** The frame's meter: its lines of sight on a grid this many across and down, inset from the edges. */
+const FRAME_METER = { across: 7, down: 4, inset: 0.85 } as const;
+
+/** The frame's lines of sight, Galactic axes, for the camera's turn and field. */
+function frameDirections(camera: THREE.Camera, tanHalfX: number, tanHalfY: number): [number, number, number][] {
+  const { x: bx, y: by, z: bz } = GALACTIC_BASIS;
+  const out: [number, number, number][] = [];
+  for (let i = 0; i < FRAME_METER.across; i += 1) {
+    for (let j = 0; j < FRAME_METER.down; j += 1) {
+      const u = ((2 * (i + 0.5)) / FRAME_METER.across - 1) * FRAME_METER.inset;
+      const v = ((2 * (j + 0.5)) / FRAME_METER.down - 1) * FRAME_METER.inset;
+      const r = scratchRay.set(u * tanHalfX, v * tanHalfY, -1).transformDirection(camera.matrixWorld);
+      out.push([
+        bx.x * r.x + bx.y * r.y + bx.z * r.z,
+        by.x * r.x + by.y * r.y + by.z * r.z,
+        bz.x * r.x + bz.y * r.y + bz.z * r.z,
+      ]);
+    }
+  }
+  return out;
+}
 
 export function NuclearCluster({ catalog, store, clock, focus, showModel }: NuclearClusterProps) {
   const group = useMemo(() => new THREE.Group(), []);
@@ -315,6 +381,23 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
   const asked = useRef(false);
   const worker = useRef<Worker | null>(null);
   const extinction = useRef<{ value: number; cameraKm: THREE.Vector3 | null }>({ value: 0, cameraKm: null });
+  // The sample as it came, Galactic pc: what the stars meter reads.
+  const sampleData = useRef<NuclearClusterSample | null>(null);
+  const meter = useRef<{ stars: number; cap: number; cameraKm: THREE.Vector3 | null; sampled: boolean }>({
+    stars: 0,
+    cap: 0,
+    cameraKm: null,
+    sampled: false,
+  });
+
+  const glow = useMemo(() => makeClusterGlow(UNITS_PER_PC), []);
+  useEffect(() => {
+    group.add(glow.volume, glow.point);
+    return () => {
+      group.remove(glow.volume, glow.point);
+    };
+  }, [group, glow]);
+  useEffect(() => () => glow.dispose(), [glow]);
 
   useEffect(
     () => () => {
@@ -361,7 +444,60 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     const limit = catalog.magnitudeLimit;
     const measuredShows = couldShow(BRIGHTEST_MEASURED_V, distancePc - 1, last.value, limit);
     const modelShows = showModel && couldShow(BRIGHTEST_MODEL_V, distancePc - 16, last.value, limit);
-    group.visible = measuredShows || modelShows;
+
+    // The cluster's size on the screen: how much of its own exposure is taken, and whether
+    // its glow is a volume or a point.
+    const tanHalf = Math.tan((((camera as THREE.PerspectiveCamera).fov ?? FOV_DEG) * Math.PI) / 360);
+    const devicePerRadian = gl.getDrawingBufferSize(scratchSize).y / (2 * tanHalf);
+    const cssPerRadian = devicePerRadian / gl.getPixelRatio();
+    const halfLightRadians = Math.atan(HALF_LIGHT_RADIUS_PC / Math.max(distancePc, 1e-9));
+    const toPoint = pointShare(halfLightRadians * devicePerRadian);
+    const transmission = 10 ** (-0.4 * last.value);
+
+    // The meters, again only once the camera has moved enough to change them. (The white
+    // column is read here, not at load: LocalGroup.tsx may not have loaded yet then.)
+    const whiteColumn = columnAt(WHITE_MU);
+    const metered = meter.current;
+    const sampled = sampleData.current;
+    const reach = Math.max(scratchCamera.length(), 0.1 * PARSEC_KM);
+    const weight = showModel ? exposureWeight(halfLightRadians * cssPerRadian) : 0;
+    if (
+      weight > 0 &&
+      (metered.cameraKm === null ||
+        Math.abs(metered.cameraKm.length() - scratchCamera.length()) > METER_REFRESH_SHARE * reach ||
+        metered.cameraKm.distanceTo(scratchCamera) > METER_TURN_SHARE * reach ||
+        metered.sampled !== (sampled !== null))
+    ) {
+      const galactic = sceneToGalacticPc(scratchCamera);
+      metered.cap = meanColumn(galactic);
+      metered.stars =
+        sampled === null
+          ? 0
+          : starsMeteredExposure(nthBrightestMagnitude(sampled, galactic, catalog.count, last.value, METER_STRIDE), limit);
+      metered.sampled = sampled !== null;
+      metered.cameraKm = (metered.cameraKm ?? new THREE.Vector3()).copy(scratchCamera);
+    }
+    // The frame's meter every frame: it turns with the camera, and is cheap.
+    let glowMetered = 0;
+    if (weight > 0) {
+      const e = camera.projectionMatrix.elements;
+      const frame = meanColumnAlong(sceneToGalacticPc(scratchCamera), frameDirections(camera, 1 / e[0]!, 1 / e[5]!));
+      glowMetered = glowMeteredExposure(Math.max(metered.cap, frame) * transmission, whiteColumn);
+    }
+    const exposure = clusterExposure(metered.stars, glowMetered, weight);
+    const white = whiteColumn * 10 ** (0.4 * exposure.glow);
+    // The brightest the glow could be drawn, over white: its centre as a volume, or as a point.
+    const pointSigmaPc = Math.max(HALF_LIGHT_RADIUS_PC / 1.1774, distancePc / devicePerRadian);
+    const glowStrength = showModel
+      ? (transmission / white) *
+        Math.max(
+          CENTRAL_COLUMN * (1 - toPoint),
+          (toPoint * CLUSTER_LUMINOSITY_V) / (2 * Math.PI * pointSigmaPc * pointSigmaPc),
+        )
+      : 0;
+    const glowShows = glowStrength > 1e-3;
+
+    group.visible = measuredShows || modelShows || glowShows;
     if (!group.visible) {
       return;
     }
@@ -372,6 +508,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
       const made = new Worker(new URL('../core/nuclearCluster.worker.ts', import.meta.url), { type: 'module' });
       worker.current = made;
       made.onmessage = (event: MessageEvent<NuclearClusterSample>) => {
+        sampleData.current = event.data;
         const geometry = buildSampleGeometry(event.data);
         const points = new THREE.Points(geometry, materials.sample);
         const twin = new THREE.Points(geometry, materials.sampleTwin);
@@ -396,7 +533,36 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     (sampleUniforms['uCameraLow']!.value as THREE.Vector3).set(splitLow(cameraPc.x), splitLow(cameraPc.y), splitLow(cameraPc.z));
     for (const uniforms of [sampleUniforms, measuredUniforms]) {
       uniforms['uExtinction']!.value = last.value;
+      uniforms['uExposure']!.value = exposure.stars;
       uniforms['uPixelRatio']!.value = pixelRatio;
+    }
+
+    // The glow: what of the model's light the stars drawn leave out.
+    const limitAt10Pc = limit + LIMIT_SLACK - last.value - exposure.stars;
+    glow.volume.visible = glowShows && toPoint < 1;
+    glow.point.visible = glowShows && toPoint > 0;
+    (glow.volumeUniforms['uCamera']!.value as THREE.Vector3).copy(cameraPc);
+    if (glow.volume.visible) {
+      const u = glow.volumeUniforms;
+      const e = camera.projectionMatrix.elements;
+      (u['uTanHalf']!.value as THREE.Vector2).set(1 / e[0]!, 1 / e[5]!);
+      (u['uCameraRotation']!.value as THREE.Matrix3).setFromMatrix4(camera.matrixWorld);
+      (u['uLight']!.value as THREE.Vector3).copy(GLOW_COLOUR).multiplyScalar((transmission * (1 - toPoint)) / white);
+      u['uLimitAt10Pc']!.value = limitAt10Pc;
+      u['uSampled']!.value = sample.current !== null ? 1 : 0;
+    }
+    if (glow.point.visible) {
+      const u = glow.pointUniforms;
+      u['uPixelsPerRadian']!.value = devicePerRadian;
+      u['uHalfLightPc']!.value = HALF_LIGHT_RADIUS_PC;
+      // Its stars' light, less those drawn: reckoned at its half-light radius.
+      const drawn =
+        sample.current === null
+          ? -Infinity
+          : Math.min(limitAt10Pc - 5 * (Math.log10(distancePc) - 1), sampleMagnitudeLimit(HALF_LIGHT_RADIUS_PC));
+      (u['uLight']!.value as THREE.Vector3)
+        .copy(GLOW_COLOUR)
+        .multiplyScalar((transmission * toPoint * CLUSTER_LUMINOSITY_V * faintLightShare(drawn)) / white);
     }
 
     // The measured stars, from the camera, pc.
