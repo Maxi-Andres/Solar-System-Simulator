@@ -32,8 +32,17 @@ import { DWARF_ROWS, EVOLVED_ROWS, LF_STEP, STARS_PER_SOLAR_MASS, type Luminosit
  *   million inside 3 pc against their 7.8 (nuclearCluster.test.ts).
  * - **Extent**: the law falls off slowly, and carried to infinity it holds 38 million; the
  *   cluster's whole mass is 2.5 +- 0.4 million (Schödel et al. 2014, A&A 566, A47; arXiv
- *   1403.6657). So the model stops where it has gathered that: 15 pc out. Beyond it the
- *   nuclear stellar disc and the bulge take over, and those are the galaxy model's.
+ *   1403.6657). So the model ends where it has gathered that. Beyond it the nuclear stellar
+ *   disc and the bulge take over, and those are the galaxy model's.
+ * - **Its edge, tapered**: cut off sharp where the mass is gathered -- 15.7 pc -- the model
+ *   ended in a hard-edged egg, its glow and its giants stopping on a line at a few percent of
+ *   its centre's brightness, where a real cluster fades into the bulge round it. So over the
+ *   outer factor of TAPER_RATIO in radius the density is brought smoothly to nothing (a
+ *   smoothstep in ln m, flat at both ends), and the edge is put where the tapered law holds
+ *   the whole 2.5 million: 22.3 pc (CLUSTER_EDGE_PC), the taper from 11.1. The mass, and so the light, is the measured
+ *   one; how it thins out past 10 pc is not measured apart from the disc's, and is a choice.
+ *   Extending the r^-3.5 law until it fell below what shows was the other way, and would
+ *   have added mass the cluster is measured not to have.
  * - **Flattening**: q = 0.71 +- 0.02, the minor axis along the Galactic pole (Schödel et
  *   al. 2014). The density is a function of the ellipsoidal radius m, m^2 = x^2 + y^2 +
  *   (z / q)^2, so "inside 1 pc" means inside the ellipsoid of semi-major axis 1 pc. Their
@@ -98,8 +107,8 @@ export const FLATTENING = 0.71;
 export const CENTRE_EXTINCTION_V = 30;
 
 /**
- * The cut: every star of the model brighter than this from Sgr A*, V -- 171,739 of them,
- * and with SAMPLE_FLOOR_MV 203,996 (nuclearCluster.test.ts). **A budget, not a measurement**: the sky from the centre holds
+ * The cut: every star of the model brighter than this from Sgr A*, V -- 172,382 of them,
+ * and with SAMPLE_FLOOR_MV 204,455 (nuclearCluster.test.ts). **A budget, not a measurement**: the sky from the centre holds
  * millions of stars down to the picture's own limit, V 8, which no point renderer can
  * draw, and this is where it stops. At V 0 there were 363,000, and seen from inside the
  * cluster's core the picture fell to 10 frames a second on the machine it was measured on,
@@ -118,7 +127,7 @@ export const SAMPLE_LIMIT_V = -1;
 export const SAMPLE_FLOOR_MV = 1.5;
 
 /** How many stars that leaves: what sampleNuclearCluster() returns, held to it by the test. */
-export const SAMPLE_COUNT = 203_996;
+export const SAMPLE_COUNT = 204_455;
 
 /** Where the sampling starts, pc from the black hole: inside it the model holds a twentieth of a star. */
 export const INNER_RADIUS_PC = 1e-4;
@@ -129,32 +138,82 @@ export function nukerShape(m: number): number {
   return x ** -NUKER.gamma * (1 + x ** NUKER.alpha) ** ((NUKER.gamma - NUKER.beta) / NUKER.alpha);
 }
 
+/** The share of the edge's radius over which the density is tapered to nothing (see the header). */
+export const TAPER_RATIO = 2;
+
+/** The taper at ellipsoidal radius m for a model ending at `edge`: 1 inside edge / TAPER_RATIO, 0 at the edge. */
+export function taper(m: number, edge: number): number {
+  const t = Math.min(1, Math.max(0, Math.log((m * TAPER_RATIO) / edge) / Math.log(TAPER_RATIO)));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/** Log-spaced radii the mass is tabulated at, pc, and the integrand's step in ln m. */
+const TABLE = { n: 4000, lo: Math.log(1e-6), hi: Math.log(1e4) } as const;
+
 /**
- * The mass inside each ellipsoidal radius, tabulated once: log-spaced radii from 1e-6 to
- * 1e4 pc, the integral of 4 pi q m^2 rho(m) by the trapezoid rule in ln m, and analytic
- * below the first, where rho is the pure cusp. Normalised to MASS_WITHIN_1PC.
+ * The mass inside each ellipsoidal radius, the law tapered to end at `edge` (or not, for
+ * Infinity): the integral of 4 pi q m^2 rho(m) by the trapezoid rule in ln m, and analytic
+ * below the first radius, where rho is the pure cusp. Unnormalised.
  */
-const MASS_TABLE = (() => {
-  const n = 4000;
-  const lo = Math.log(1e-6);
-  const hi = Math.log(1e4);
-  const step = (hi - lo) / (n - 1);
-  const radii = new Float64Array(n);
-  const cumulative = new Float64Array(n);
-  const integrand = (m: number): number => 4 * Math.PI * FLATTENING * m ** 3 * nukerShape(m);
-  radii[0] = Math.exp(lo);
+function massTable(edge: number): { radii: Float64Array; cumulative: Float64Array } {
+  const step = (TABLE.hi - TABLE.lo) / (TABLE.n - 1);
+  const radii = new Float64Array(TABLE.n);
+  const cumulative = new Float64Array(TABLE.n);
+  const integrand = (m: number): number => 4 * Math.PI * FLATTENING * m ** 3 * nukerShape(m) * taper(m, edge);
+  radii[0] = Math.exp(TABLE.lo);
   // Inside the first radius: 4 pi q r_b^gamma m^(3 - gamma) / (3 - gamma).
   cumulative[0] =
     (4 * Math.PI * FLATTENING * NUKER.breakPc ** NUKER.gamma * radii[0] ** (3 - NUKER.gamma)) / (3 - NUKER.gamma);
-  for (let k = 1; k < n; k += 1) {
-    radii[k] = Math.exp(lo + k * step);
+  for (let k = 1; k < TABLE.n; k += 1) {
+    radii[k] = Math.exp(TABLE.lo + k * step);
     cumulative[k] = cumulative[k - 1]! + 0.5 * step * (integrand(radii[k - 1]!) + integrand(radii[k]!));
   }
-  const at1 = interpolate(radii, cumulative, 1);
-  for (let k = 0; k < n; k += 1) {
-    cumulative[k] = (cumulative[k]! / at1) * MASS_WITHIN_1PC;
+  return { radii, cumulative };
+}
+
+/**
+ * The mass inside each ellipsoidal radius, tabulated once: normalised to MASS_WITHIN_1PC,
+ * which the taper does not reach; and the edge, the radius at which the tapered law holds
+ * CLUSTER_MASS, found by bisection.
+ */
+const MASS_TABLE = (() => {
+  const law = massTable(Infinity);
+  const at1 = interpolate(law.radii, law.cumulative, 1);
+  const densityScale = MASS_WITHIN_1PC / at1;
+  const totalWithEdge = (edge: number): number => {
+    // The tapered part alone, finely: from edge / TAPER_RATIO to the edge.
+    const from = edge / TAPER_RATIO;
+    const n = 400;
+    const step = Math.log(TAPER_RATIO) / n;
+    let sum = 0;
+    for (let k = 0; k <= n; k += 1) {
+      const m = from * Math.exp(k * step);
+      sum += (k === 0 || k === n ? 0.5 : 1) * 4 * Math.PI * FLATTENING * m ** 3 * nukerShape(m) * taper(m, edge);
+    }
+    return (interpolate(law.radii, law.cumulative, from) + sum * step) * densityScale;
+  };
+  let lo = 1;
+  let hi = 1e3;
+  for (let k = 0; k < 60; k += 1) {
+    const mid = Math.sqrt(lo * hi);
+    if (totalWithEdge(mid) < CLUSTER_MASS) lo = mid;
+    else hi = mid;
   }
-  return { radii, cumulative, densityScale: MASS_WITHIN_1PC / at1 };
+  const edge = Math.sqrt(lo * hi);
+  // Where the law alone, untapered, holds it.
+  lo = 1;
+  hi = 1e3;
+  for (let k = 0; k < 60; k += 1) {
+    const mid = Math.sqrt(lo * hi);
+    if (interpolate(law.radii, law.cumulative, mid) * densityScale < CLUSTER_MASS) lo = mid;
+    else hi = mid;
+  }
+  const lawEdge = Math.sqrt(lo * hi);
+  const { radii, cumulative } = massTable(edge);
+  for (let k = 0; k < TABLE.n; k += 1) {
+    cumulative[k] = cumulative[k]! * densityScale;
+  }
+  return { radii, cumulative, densityScale, edge, lawEdge };
 })();
 
 function interpolate(xs: Float64Array, ys: Float64Array, x: number): number {
@@ -180,22 +239,31 @@ export function massWithin(m: number): number {
   return interpolate(MASS_TABLE.radii, MASS_TABLE.cumulative, m);
 }
 
-/** The stellar mass density at ellipsoidal radius m, solar masses per cubic parsec. */
-export function massDensity(m: number): number {
-  return MASS_TABLE.densityScale * nukerShape(m);
+/**
+ * Where the model ends: the ellipsoidal radius at which the law, tapered over its outer
+ * factor of TAPER_RATIO, holds CLUSTER_MASS, pc (22.3; see the header).
+ */
+export const CLUSTER_EDGE_PC = MASS_TABLE.edge;
+
+/**
+ * Where the law, untapered, would hold CLUSTER_MASS, pc (15.7): the edge the model had before
+ * its taper, and the cap its glow's meter still reads (nuclearClusterLight.ts meanColumn), so
+ * that the taper changes how its edge looks and not the exposure it is drawn at.
+ */
+export const LAW_EDGE_PC = MASS_TABLE.lawEdge;
+
+/** Where the taper starts, pc: inside it the density is the law's. */
+export const TAPER_FROM_PC = CLUSTER_EDGE_PC / TAPER_RATIO;
+
+/** The law, tapered, without its normalisation: the shape the model's density has. */
+export function clusterShape(m: number): number {
+  return nukerShape(m) * taper(m, CLUSTER_EDGE_PC);
 }
 
-/** Where the model stops: the ellipsoidal radius holding CLUSTER_MASS, pc (about 15). */
-export const CLUSTER_EDGE_PC = (() => {
-  let lo = 1;
-  let hi = 1e4;
-  for (let k = 0; k < 100; k += 1) {
-    const mid = Math.sqrt(lo * hi);
-    if (massWithin(mid) < CLUSTER_MASS) lo = mid;
-    else hi = mid;
-  }
-  return Math.sqrt(lo * hi);
-})();
+/** The stellar mass density at ellipsoidal radius m, solar masses per cubic parsec. */
+export function massDensity(m: number): number {
+  return MASS_TABLE.densityScale * clusterShape(m);
+}
 
 // ---------------------------------------------------------------------------------------
 // The luminosity function
@@ -348,7 +416,7 @@ export function sampleNuclearCluster(
   for (const shell of shells(limitV, edgePc, floorMv)) {
     const count = poisson(shell.candidates, random);
     // Radii within the shell by m^3 rho(m) per unit ln m, by rejection against its larger end.
-    const weight = (m: number): number => m ** 3 * nukerShape(m);
+    const weight = (m: number): number => m ** 3 * clusterShape(m);
     const peak = Math.max(weight(shell.inner), weight(shell.outer)) * 1.0001;
     for (let k = 0; k < count; k += 1) {
       let m = shell.inner;

@@ -6,7 +6,11 @@ import { boxMatrix, NEAR_SHARE, plummerColumn, WHITE_MU } from '../scene/LocalGr
 import { UNITS_PER_PC } from '../scene/stars3dShader.ts';
 import { brightestStarV, CUT_SCALES } from './dwarfStars.ts';
 import {
+  BOX_FLOOR,
   brightestStarsV,
+  catalogueShape,
+  centralDensities,
+  columnAt,
   FRAMING_NEAREST_RADII,
   FRAMING_STARS_V,
   galaxyAxes,
@@ -18,6 +22,7 @@ import {
   indexLocalGroup,
   plummerCentreMu,
   type LocalGroupGalaxy,
+  UNDRAWN_REASONS,
 } from './localGroup.ts';
 import { PARSEC_KM } from './stars3d.ts';
 
@@ -169,5 +174,125 @@ describe('a galaxy’s box', () => {
       expect(Number.isFinite(column)).toBe(true);
       expect(column).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('the dwarfs McConnachie gives no size, sized from their own papers', () => {
+  // As the published catalogue has them: V and distance, no half-light radius.
+  const catalogue: LocalGroupCatalog = {
+    source: { url: '', version: '', queriedAt: '' },
+    frame: '',
+    count: 3,
+    catalogueName: ['LeoP', 'KK258', '*Hydra1'],
+    name: ['Leo P', 'KK 258', 'Hydra I'],
+    otherNames: [[], [], []],
+    ambiguous: [false, false, true],
+    raDeg: [155.43792, 340.18292, 133.9],
+    decDeg: [18.08806, -30.79972, 3.6],
+    x: [0, 0, 0],
+    y: [0, 0, 0],
+    z: [0, 0, 0],
+    distanceModulus: [26.05, 26.85, 15.52],
+    distanceModulusUp: [0.2, 0.07, 0.05],
+    distanceModulusDown: [0.2, 0.07, 0.05],
+    distancePc: [1621810, 2344229, 12706],
+    ebv: [0.026, 0.013, 0.039],
+    vMag: [16.9, 16.3, 13.02],
+    muV0: [null, 26, null],
+    halfLightArcmin: [null, null, null],
+    ellipticity: [null, 0.5, null],
+    positionAngleDeg: [null, null, null],
+    radialVelocityKmS: [264, 92, 89.4],
+    sigmaStarsKmS: [null, null, 8.4],
+    hiMassMillionSun: [0.94, null, null],
+    feH: [null, -1.6, -0.91],
+    pmRaMasYr: [null, null, null],
+    pmDecMasYr: [null, null, null],
+  } as unknown as LocalGroupCatalog;
+  const [leoP, kk258, hydra] = indexLocalGroup(catalogue).galaxies.slice(GIANTS.length) as [
+    LocalGroupGalaxy,
+    LocalGroupGalaxy,
+    LocalGroupGalaxy,
+  ];
+  const arcsec = (pc: number, galaxy: LocalGroupGalaxy): number => (Math.atan(pc / galaxy.distancePc) * 180 * 3600) / Math.PI;
+
+  it('draws Leo P as a Plummer ellipsoid of half its stars’ 70″ edge, at McQuinn et al.’s 0.52 and 335°', () => {
+    const model = leoP.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
+    expect(model.kind).toBe('plummer');
+    expect(arcsec(model.majorPc, leoP)).toBeCloseTo(35, 3);
+    expect(model.minorPc / model.majorPc).toBeCloseTo(0.48, 6);
+    expect(model.positionAngleDeg).toBe(335);
+    expect(leoP.shapeSource).toContain('McQuinn et al. 2013');
+    expect(catalogueShape(catalogue, 0).ellipticity).toBe(0.52);
+  });
+
+  it('draws KK 258 by ESO-LV’s half-light ellipse: 30.15″ along its major axis, b/a 0.65, at 43.1°', () => {
+    const model = kk258.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
+    expect(arcsec(model.majorPc, kk258)).toBeCloseTo(30.15, 3);
+    expect(model.minorPc / model.majorPc).toBeCloseTo(1 / 1.54, 6);
+    expect(model.positionAngleDeg).toBe(43.1);
+    expect(kk258.shapeSource).toContain('ESO-LV');
+  });
+
+  it('frames both whole, their glow showing: 21 half-light radii out', () => {
+    for (const galaxy of [leoP, kk258]) {
+      expect(plummerCentreMu(galaxy)!).toBeLessThan(GLOW_SHOWN_MU);
+      expect(framingPc(galaxy)).toBeCloseTo(21 * majorPc(galaxy), 6);
+    }
+    // Leo P 5.8 kpc out, KK 258 7.2.
+    expect(framingPc(leoP) / 1000).toBeCloseTo(5.8, 1);
+    expect(framingPc(kk258) / 1000).toBeCloseTo(7.2, 1);
+  });
+
+  it('leaves the ones with no size as marks, and says why', () => {
+    expect(hydra.model).toBeNull();
+    expect(UNDRAWN_REASONS['*Hydra1']).toBeDefined();
+    for (const name of ['*Bootes3', '*CanisMajor', 'HIZSS3(A)', 'HIZSS3B']) {
+      expect(UNDRAWN_REASONS[name]).toBeDefined();
+    }
+    // An override never replaces a size the catalogue has.
+    const sized = { ...catalogue, halfLightArcmin: [1, null, null] } as unknown as LocalGroupCatalog;
+    expect(catalogueShape(sized, 0).halfLightArcmin).toBe(1);
+    expect(catalogueShape(sized, 0).source).toContain('McConnachie');
+  });
+});
+
+describe('a bright galaxy’s box', () => {
+  it('reaches past where its light could show: M32’s, 77 times white at its centre, 30 scale radii out', () => {
+    // M32 as McConnachie has it: V 8.1, (m-M)0 24.53, r_h 0.47', e 0.25.
+    const m32 = indexLocalGroup({
+      ...CATALOGUE,
+      count: 1,
+      catalogueName: ['M32'],
+      name: ['M32'],
+      otherNames: [[]],
+      ambiguous: [false],
+      raDeg: [10.67417],
+      decDeg: [40.86528],
+      distanceModulus: [24.53],
+      distancePc: [10 ** (1 + 24.53 / 5)],
+      vMag: [8.1],
+      halfLightArcmin: [0.47],
+      ellipticity: [0.25],
+      positionAngleDeg: [170],
+    } as unknown as LocalGroupCatalog).galaxies.slice(GIANTS.length)[0]!;
+    const white = columnAt(WHITE_MU);
+    const model = m32.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
+    const extent = galaxyExtentPc(m32, white)!;
+    expect(extent[0] / model.majorPc).toBeGreaterThan(20);
+    // Its brightest line of sight past the box is below the floor.
+    const peak = ((4 / 3) * centralDensities(m32)!.main * Math.max(model.majorPc, model.minorPc, model.depthPc)) / white;
+    const k = extent[0] / model.majorPc;
+    expect(peak * (1 + k * k) ** -2).toBeLessThanOrEqual(BOX_FLOOR * 1.0001);
+    // A faint one keeps its 8.
+    expect(galaxyExtentPc(HERCULES, white)![0]).toBeCloseTo(8 * majorPc(HERCULES), 6);
+    // And a disc reaches its floor edge-on, along its plane and off it.
+    const m31 = GIANTS[0]!;
+    const disc = m31.model as Extract<LocalGroupGalaxy['model'], { kind: 'disc' }>;
+    const box = galaxyExtentPc(m31, white)!;
+    const along = (centralDensities(m31)!.main / white) * disc.scaleLengthPc;
+    const kr = box[0] / disc.scaleLengthPc;
+    expect(along * Math.sqrt(2 * Math.PI * kr) * Math.exp(-kr)).toBeLessThan(BOX_FLOOR * 1.01);
+    expect(2 * along * Math.exp(-box[2] / disc.scaleHeightPc)).toBeLessThan(BOX_FLOOR * 1.01);
   });
 });

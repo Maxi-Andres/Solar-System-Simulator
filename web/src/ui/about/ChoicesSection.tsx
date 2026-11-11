@@ -242,7 +242,7 @@ export const choicesSection: AboutSection = {
             </Why>
           </Item>
           <Item title="The cluster’s budget">
-            The model draws the stars brighter than magnitude −1 as seen from Sgr A*: 171,739.
+            The model draws the stars brighter than magnitude −1 as seen from Sgr A*: 172,382.
             <Why>
               a frame-rate budget. At magnitude 0 there were 363,000, and inside the cluster’s core the picture
               fell to ten frames a second on an integrated GPU; at −1, 15 to 20 there, 40 to 50 at the black
@@ -359,6 +359,23 @@ export const choicesSection: AboutSection = {
             from the Sun with the depth measured there. From Earth it is exactly its maps; from beside it, a
             cigar pointing at the Sun, a compact nebula a streak as deep as its population.
             <Why>its stars measure how deep it is, and in no other way is its shape known.</Why>
+          </Item>
+          <Item title="The nuclear cluster’s edge, tapered">
+            Its measured law, cut sharp where it holds the cluster’s 25 million Suns, ended in a hard egg. Its
+            density is instead brought smoothly to nothing over its outer half, ending 22.3 pc out with the same
+            mass and light.
+            <Why>how it thins past 10 pc is not measured, apart from the nuclear disc’s.</Why>
+          </Item>
+          <Item title="A galaxy drawn to where its light fades">
+            A bright galaxy’s volume reaches until its light is a ten-thousandth of white, not a fixed eight
+            scale radii; each point of light, a galaxy’s, a cluster’s or a model star’s, is drawn round, out to
+            where it is below an eighth of a display step.
+            <Why>cut sooner, M32 showed as a faint square and the clusters’ points as squares.</Why>
+          </Item>
+          <Item title="Marks only, where no size is measured">
+            Hydra I, Boötes III and the Canis Major Overdensity have no size measured and a disputed nature,
+            debris or a dwarf; HIZSS 3A and 3B lie behind the Milky Way’s plane, found by their gas, with no V.
+            Each is a mark, its panel saying why.
           </Item>
           <Item title="Every galaxy at least a dot">
             A galaxy too small for a few pixels is drawn as a dot at least faintly bright, in its own colour,

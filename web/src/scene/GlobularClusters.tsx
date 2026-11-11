@@ -23,6 +23,7 @@ import { julianYearsSinceJ2000, KM_S_TO_PC_PER_YEAR, PARSEC_KM, STARS3D_FROM_KM 
 import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
+import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { lensState } from './lens.ts';
 import { MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
 import { galaxyVisibility } from './MilkyWay.tsx';
@@ -60,7 +61,8 @@ import { mapStrength } from './Starfield.tsx';
  * Where its stars are not drawn, each cluster is its light taken whole
  * (core/globularClusterLight.ts): a point, as a galaxy too small for a pixel is
  * (LocalGroup.tsx), on the galaxies' exposure -- a Gaussian of its half-light radius, never
- * narrower than MIN_SIGMA_PX, holding all its luminosity, its column over WHITE_MU's. So from
+ * narrower than MIN_SIGMA_PX, holding all its luminosity, its column over WHITE_MU's, drawn out to
+ * where it fades below a display step however far past white its centre is (gaussianSprite.ts). So from
  * outside the Milky Way 47 Tuc and Omega Cen are where they are with the marks off, as they
  * are in a photograph, on the exposure the Clouds beside them are drawn with.
  *
@@ -135,7 +137,8 @@ uniform vec3 uCameraLow;
 uniform float uMotion;
 uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
-attribute vec3 velocity;
+attribute vec3 aCentre;
+attribute vec3 aVelocity;
 // The colour times the luminosity over the white column; the half-light radius, pc; the
 // share drawn (the fade, the dust, the stars' handover: worked out on the CPU each frame).
 attribute vec3 aLight;
@@ -143,20 +146,19 @@ attribute float aHalfLightPc;
 attribute float aShare;
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_VERTEX_GLSL}
 
 void main() {
-  vec3 rel = ((position - uCameraHigh) - uCameraLow) + velocity * uMotion;
+  vec3 rel = ((aCentre - uCameraHigh) - uCameraLow) + aVelocity * uMotion;
   float distancePc = length(rel);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
-  #include <logdepthbuf_vertex>
   float sigmaPx = max(${MIN_SIGMA_PX.toFixed(2)}, aHalfLightPc / distancePc * uPixelsPerRadian / ${HALF_LIGHT_SIGMAS.toFixed(4)});
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   // LocalGroup.tsx pointPeak: L / (2 pi sigma^2).
   vPeak = aLight * aShare / (6.2831853 * sigmaPc * sigmaPc);
   vSigmaPx = sigmaPx;
-  vSizePx = ceil(6.0 * sigmaPx) + 1.0;
-  gl_PointSize = aShare > 0.0 ? vSizePx : 0.0;
+  // Out to where its light falls below the floor, however far past white its centre is.
+  gl_Position = spriteCorner(projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0), spriteRadiusPx(vPeak, sigmaPx));
+  #include <logdepthbuf_vertex>
 }
 `;
 
@@ -165,15 +167,11 @@ const POINT_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  vec2 offset = (gl_PointCoord - 0.5) * vSizePx;
-  vec3 x = vPeak * exp(-0.5 * dot(offset, offset) / (vSigmaPx * vSigmaPx));
-  vec3 light = 1.0 - exp(-x);
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  gl_FragColor = vec4(light, 1.0);
+  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
 }
 `;
 
@@ -199,7 +197,6 @@ const noRaycast = (): void => {};
 const scratchCamera = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchCluster = new THREE.Vector3();
-const scratchSize = new THREE.Vector2();
 
 export function GlobularClusters({
   source,
@@ -285,14 +282,10 @@ export function GlobularClusters({
       uMotion: markerUniforms['uMotion']!,
       uUnitsPerPc: { value: UNITS_PER_PC },
       uPixelsPerRadian: { value: 1 },
+      uViewportPx: { value: new THREE.Vector2(1, 1) },
     }),
     [markerUniforms],
   );
-  const maxPointPx = useMemo(() => {
-    const context = gl.getContext();
-    const range = context.getParameter(context.ALIASED_POINT_SIZE_RANGE) as Float32Array | null;
-    return range?.[1] ?? 64;
-  }, [gl]);
   const points = useMemo(() => {
     if (archive === null || markers === null) {
       return null;
@@ -309,15 +302,15 @@ export function GlobularClusters({
       const scale = clusterLuminosity(c, k).luminosity / white;
       light.set([r * scale, g * scale, b * scale], k * 3);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(markers.position, 3));
-    geometry.setAttribute('velocity', new THREE.BufferAttribute(markers.velocity, 3));
-    geometry.setAttribute('aLight', new THREE.BufferAttribute(light, 3));
-    geometry.setAttribute('aHalfLightPc', new THREE.BufferAttribute(Float32Array.from(c.halfLightRadiusPc), 1));
-    const share = new THREE.BufferAttribute(new Float32Array(c.count), 1);
+    const geometry = spriteGeometry(c.count);
+    geometry.setAttribute('aCentre', new THREE.InstancedBufferAttribute(markers.position, 3));
+    geometry.setAttribute('aVelocity', new THREE.InstancedBufferAttribute(markers.velocity, 3));
+    geometry.setAttribute('aLight', new THREE.InstancedBufferAttribute(light, 3));
+    geometry.setAttribute('aHalfLightPc', new THREE.InstancedBufferAttribute(Float32Array.from(c.halfLightRadiusPc), 1));
+    const share = new THREE.InstancedBufferAttribute(new Float32Array(c.count), 1);
     share.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('aShare', share);
-    const object = new THREE.Points(
+    const object = new THREE.Mesh(
       geometry,
       new THREE.ShaderMaterial({
         uniforms: pointUniforms,
@@ -485,9 +478,8 @@ export function GlobularClusters({
     lightGroup.visible = lightFade > 0;
     if (lightGroup.visible) {
       lightGroup.position.copy(frameCamera.position);
-      const pixelsPerRadian =
-        renderer.getDrawingBufferSize(scratchSize).y /
-        (2 * Math.tan(((frameCamera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
+      const viewport = renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
+      const pixelsPerRadian = viewport.y / (2 * Math.tan(((frameCamera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
       // The dust between, again once the camera has moved enough to change it.
       let nearestPc = Infinity;
@@ -512,11 +504,7 @@ export function GlobularClusters({
       for (let k = 0; k < c.count; k += 1) {
         const d = points.distancePc[k]!;
         const halfLight = c.halfLightRadiusPc[k]!;
-        // A sprite too big for the GPU would be cut square: it goes before it gets there.
-        const sigmaPx = Math.max(MIN_SIGMA_PX, ((halfLight / d) * pixelsPerRadian) / HALF_LIGHT_SIGMAS);
-        const sizePx = Math.ceil(6 * sigmaPx) + 1;
         let share = lightFade * points.transmission[k]! * smoothstep(POINT_NEAR_FROM, POINT_NEAR_FULL, d / halfLight);
-        share *= 1 - smoothstep(maxPointPx / 2, maxPointPx, sizePx);
         if (resolved !== null && resolved.k === k && share > 0) {
           // Only the light of its stars too faint to be drawn.
           const fromCamera = catalog.magnitudeLimit - 5 * (Math.log10(d) - 1) - points.extinction[k]!;

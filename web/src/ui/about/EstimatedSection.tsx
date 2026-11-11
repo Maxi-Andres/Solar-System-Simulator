@@ -283,7 +283,7 @@ export const estimatedSection: AboutSection = {
         <Items>
           <Item title="A model, not a census">
             Round Sgr A* tens of millions of stars crowd into a few parsecs. Past the stars measured one by one,
-            they are a model: 171,739 stars sampled from the cluster’s measured shape — density rising as
+            they are a model: 172,382 stars sampled from the cluster’s measured shape — density rising as
             r<sup>−1.13</sup> into the black hole and falling as r<sup>−3.5</sup> past 3.1 pc, a million Suns
             inside one parsec <Cite k="schoedel2018" />, 25 million in all, flattened to 0.71 along the
             Galactic plane <Cite k="schoedel2014" /> — each a star of its own brightness and colour, from stellar
@@ -630,6 +630,12 @@ export const estimatedSection: AboutSection = {
               the nearest measured: other galaxies’ discs, our own dust and young stars
               <Cite k={['kregel2002', 'drimmelSpergel2001', 'reed2000']} />.
             </Why>
+          </Item>
+          <Item title="Leo P’s size">
+            No half-light radius has been measured: it was found by counting its stars, which reach the field
+            70″ out <Cite k={['mcquinn2013', 'rhode2013']} />. It is drawn with half that, 35″ — a Plummer
+            sphere’s stars at twice its half-light radius are 4% as crowded as at its centre, about where so
+            faint a galaxy’s are lost.
           </Item>
           <Item title="A dwarf’s stars, near it">
             No catalogue lists a dwarf’s stars one by one: the one the camera is near is sampled from a model —

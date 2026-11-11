@@ -953,8 +953,8 @@ export const physicsSection: AboutSection = {
         >
           A 3D Nuker law, fitted to the light of the cluster’s unresolved stars; scaled to their million Suns
           inside 1 pc, it gives back, within their errors, their 180 inside 0.01 pc and 13,000 inside 0.1, and
-          is cut where it holds the
-          cluster’s 25 million, 15.7 pc out <Cite k="schoedel2014" />. Its stars, 3.15 to each solar mass, are
+          is tapered smoothly to nothing over its outer half, ending where it holds the
+          cluster’s 25 million, 22.3 pc out <Cite k="schoedel2014" />. Its stars, 3.15 to each solar mass, are
           sampled from it in shells, each kept if bright enough as seen from the black hole:
         </Equation>
         <Equation

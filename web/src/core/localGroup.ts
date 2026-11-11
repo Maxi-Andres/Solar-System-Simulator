@@ -290,11 +290,80 @@ export function colourIndex(hiMassMillionSun: number | null, luminositySun: numb
 
 const ARCMIN = Math.PI / 180 / 60;
 
+/** A galaxy's size and shape on the sky: half-light radius along its major axis, ellipticity, position angle. */
+export interface SkyShape {
+  readonly halfLightArcmin: number | null;
+  readonly ellipticity: number | null;
+  readonly positionAngleDeg: number | null;
+  /** Whose they are. */
+  readonly source: string;
+}
+
+/**
+ * Sizes McConnachie's catalogue has none for, from the galaxies' own papers, by catalogue name.
+ *
+ * - **Leo P**: no half-light radius has been published -- its size was found by counting its
+ *   stars, the light of so faint a galaxy being lost in the sky's. McQuinn et al. 2013 (AJ 146,
+ *   145, Table 1) give the ellipse its stars fill: semi-major axis 70 +- 5 arcsec,
+ *   ellipticity 0.52, position angle 335 deg, the 70 arcsec where their counts fall to the
+ *   field's (Rhode et al. 2013, AJ 145, 149, find its stars reach the field 0.725 arcmin from
+ *   its centre). The ellipticity and angle are theirs; the half-light radius is estimated as
+ *   half that edge, 35 arcsec: a Plummer sphere's stars at twice its half-light radius are 4 %
+ *   as crowded as at its centre, about where so faint a galaxy's are lost in the field's. A
+ *   choice, and the About says so. (Two compilations give the 70 arcsec itself as a half-light
+ *   radius: it is not one.)
+ * - **KK 258**: the ESO-LV catalogue's surface photometry (Lauberts & Valentijn 1989, its B
+ *   growth curve): a half-light ellipse 60.3 arcsec along its major axis, axis ratio 0.65, at
+ *   43.1 deg -- the one half-light measurement of it there is. (McConnachie's 0.5 is the
+ *   Karachentsev catalogues' axis ratio of its isophotal size, by eye.)
+ */
+export const SHAPE_OVERRIDES: Readonly<Record<string, SkyShape>> = {
+  LeoP: {
+    halfLightArcmin: 35 / 60,
+    ellipticity: 0.52,
+    positionAngleDeg: 335,
+    source: 'McQuinn et al. 2013; radius estimated',
+  },
+  KK258: {
+    halfLightArcmin: 60.3 / 2 / 60,
+    ellipticity: 1 - 1 / 1.54,
+    positionAngleDeg: 43.1,
+    source: 'Lauberts & Valentijn 1989 (ESO-LV)',
+  },
+};
+
+/** A catalogue entry's shape on the sky: the catalogue's, or its override where the catalogue has no size. */
+export function catalogueShape(c: LocalGroupCatalog, k: number): SkyShape {
+  const override = SHAPE_OVERRIDES[c.catalogueName[k]!];
+  if (override !== undefined && c.halfLightArcmin[k] == null) {
+    return override;
+  }
+  return {
+    halfLightArcmin: c.halfLightArcmin[k] ?? null,
+    ellipticity: c.ellipticity[k] ?? null,
+    positionAngleDeg: c.positionAngleDeg[k] ?? null,
+    source: 'McConnachie 2012 (2021 version)',
+  };
+}
+
+/**
+ * Why a galaxy has no light drawn, its mark only, by catalogue name: those the catalogue gives
+ * no size or no V. Short, for its panel.
+ */
+export const UNDRAWN_REASONS: Readonly<Record<string, string>> = {
+  '*Hydra1': 'An overdensity of stars, maybe debris; no size measured',
+  '*Bootes3': 'Likely a disrupting dwarf’s debris; no size measured',
+  '*CanisMajor': 'A dwarf or the disc’s warp, disputed; no size measured',
+  'HIZSS3(A)': 'Behind the Milky Way’s plane: found in HI, no optical V',
+  HIZSS3B: 'Behind the Milky Way’s plane: found in HI, no optical V',
+};
+
 /** A catalogue entry as a galaxy. */
 export function catalogueGalaxy(c: LocalGroupCatalog, k: number): LocalGroupGalaxy {
   const distancePc = c.distancePc[k]!;
-  const rh = c.halfLightArcmin[k] ?? null;
-  const e = c.ellipticity[k] ?? null;
+  const shape = catalogueShape(c, k);
+  const rh = shape.halfLightArcmin;
+  const e = shape.ellipticity;
   const major = rh === null ? null : Math.tan(rh * ARCMIN) * distancePc;
   const minor = major === null ? null : major * (1 - Math.min(Math.max(e ?? 0, 0), 0.95));
   const modulus = c.distanceModulus[k]!;
@@ -322,9 +391,9 @@ export function catalogueGalaxy(c: LocalGroupCatalog, k: number): LocalGroupGala
             majorPc: major,
             minorPc: minor,
             depthPc: Math.sqrt(major * minor),
-            positionAngleDeg: c.positionAngleDeg[k] ?? 0,
+            positionAngleDeg: shape.positionAngleDeg ?? 0,
           },
-    shapeSource: 'McConnachie 2012 (2021 version)',
+    shapeSource: shape.source,
     giant: false,
   };
 }
@@ -615,25 +684,58 @@ export function galaxyAxes(galaxy: LocalGroupGalaxy): { readonly u: Vec3; readon
 }
 
 /**
- * Half the extent of its box, pc, along its own axes (galaxyAxes): out to where its light is
- * a ten-thousandth of its centre's, or less.
+ * The faintest column a galaxy's box may cut, over the white column: a fifth of the light the
+ * volumes' shaders stop drawing at (0.0005), so the box's faces never show.
  */
-export function galaxyExtentPc(galaxy: LocalGroupGalaxy): readonly [number, number, number] | null {
+export const BOX_FLOOR = 1e-4;
+
+/**
+ * Half the extent of its box, pc, along its own axes (galaxyAxes): out to where its light is
+ * a ten-thousandth of its centre's -- 8 scale radii of a Plummer sphere or an exponential
+ * ellipsoid, 7 of a disc -- and, for one bright enough that even that is seen against
+ * `whiteColumn` (L_Sun/pc^2 drawn white), on to where its brightest line of sight past the box
+ * is below BOX_FLOOR of white. M32 is 77 times white at its centre and at 8 scale radii still
+ * 2 % of it: its box showed, a faint square about it; it reaches 30 scale radii. A disc seen
+ * edge-on is brightest along its plane, 2 h rho0 through its centre, and that is what its
+ * faces are reckoned against.
+ */
+export function galaxyExtentPc(galaxy: LocalGroupGalaxy, whiteColumn = Infinity): readonly [number, number, number] | null {
   const model = galaxy.model;
   if (model === null) {
     return null;
   }
+  const densities = centralDensities(galaxy);
+  const rho0 = densities === null || !Number.isFinite(whiteColumn) ? 0 : densities.main / whiteColumn;
   switch (model.kind) {
-    case 'plummer':
-      // The column at 8 scale radii is (1 + 64)^-2 of the centre's.
-      return [8 * model.majorPc, 8 * model.minorPc, 8 * model.depthPc];
-    case 'exponential-ellipsoid':
-      return [8 * model.majorPc, 8 * model.minorPc, 8 * model.depthPc];
+    case 'plummer': {
+      // Its column at k scale radii off its centre is (1 + k^2)^-2 of that through it, 4/3 rho0 a.
+      const peak = (4 / 3) * rho0 * Math.max(model.majorPc, model.minorPc, model.depthPc);
+      const k = Math.max(8, Math.sqrt(Math.max(0, Math.sqrt(peak / BOX_FLOOR) - 1)));
+      return [k * model.majorPc, k * model.minorPc, k * model.depthPc];
+    }
+    case 'exponential-ellipsoid': {
+      // e^-m: through its centre 2 rho0 a, k scale lengths off it about rho0 a sqrt(2 pi k) e^-k.
+      const k = Math.max(8, exponentialReach(rho0 * Math.max(model.majorPc, model.minorPc, model.depthPc)));
+      return [k * model.majorPc, k * model.minorPc, k * model.depthPc];
+    }
     case 'disc': {
-      const r = 7 * model.scaleLengthPc;
-      return [r, r, 7 * model.scaleHeightPc];
+      // Edge-on, along its plane k scale lengths off its centre, about rho0 h sqrt(2 pi k) e^-k;
+      // through its centre k scale heights off its plane, 2 rho0 h e^-k.
+      const along = rho0 * model.scaleLengthPc;
+      const r = Math.max(7, exponentialReach(along)) * model.scaleLengthPc;
+      const z = Math.max(7, Math.log(Math.max(1, (2 * along) / BOX_FLOOR))) * model.scaleHeightPc;
+      return [r, r, z];
     }
   }
+}
+
+/** The k at which peak sqrt(2 pi k) e^-k falls to BOX_FLOOR: by iteration, from 8. */
+function exponentialReach(peak: number): number {
+  let k = 8;
+  for (let i = 0; i < 8; i += 1) {
+    k = Math.max(1, Math.log(Math.max(1e-30, (peak * Math.sqrt(2 * Math.PI * k)) / BOX_FLOOR)));
+  }
+  return k;
 }
 
 /**

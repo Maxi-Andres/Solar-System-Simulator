@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 
-import { CLUSTER_EDGE_PC, FLATTENING, NUKER, SAMPLE_FLOOR_MV, SAMPLE_LIMIT_V } from '../core/nuclearCluster.ts';
+import {
+  CLUSTER_EDGE_PC,
+  FLATTENING,
+  NUKER,
+  SAMPLE_FLOOR_MV,
+  SAMPLE_LIMIT_V,
+  TAPER_FROM_PC,
+  TAPER_RATIO,
+} from '../core/nuclearCluster.ts';
 import {
   FAINT_TABLE,
   FAINT_TABLE_FROM,
@@ -12,6 +20,7 @@ import {
 } from '../core/nuclearClusterLight.ts';
 import { starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
+import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { MIN_SIGMA_PX } from './LocalGroup.tsx';
 
 /**
@@ -30,13 +39,15 @@ import { MIN_SIGMA_PX } from './LocalGroup.tsx';
  * glow has no detail for it to bend.
  */
 
-/** The density law in GLSL, normalised to the model's light: L_Sun per cubic parsec. */
+/** The density law in GLSL, tapered to nothing at its edge, normalised to the model's light: L_Sun per cubic parsec. */
 const DENSITY_GLSL = /* glsl */ `
 float luminosityDensity(float m) {
   float x = max(m, 1e-7) / ${NUKER.breakPc.toFixed(4)};
+  float t = clamp(log(max(m, 1e-7) / ${TAPER_FROM_PC.toFixed(6)}) / ${Math.log(TAPER_RATIO).toFixed(8)}, 0.0, 1.0);
   return ${(luminosityDensity(NUKER.breakPc) / (2 ** ((NUKER.gamma - NUKER.beta) / NUKER.alpha))).toExponential(8)}
     * pow(x, ${(-NUKER.gamma).toFixed(4)})
-    * pow(1.0 + pow(x, ${NUKER.alpha.toFixed(1)}), ${((NUKER.gamma - NUKER.beta) / NUKER.alpha).toFixed(6)});
+    * pow(1.0 + pow(x, ${NUKER.alpha.toFixed(1)}), ${((NUKER.gamma - NUKER.beta) / NUKER.alpha).toFixed(6)})
+    * (1.0 - t * t * (3.0 - 2.0 * t));
 }
 `;
 
@@ -120,7 +131,7 @@ void main() {
 }
 `;
 
-/** The point, as GlobularClusters.tsx's: a Gaussian of the half-light radius, through the shoulder. */
+/** The point, as GlobularClusters.tsx's: a Gaussian of the half-light radius, through the shoulder, out to the floor. */
 export const POINT_VERTEX = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
@@ -133,19 +144,17 @@ uniform float uMinSigmaPx;
 uniform vec3 uLight;
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_VERTEX_GLSL}
 
 void main() {
   vec3 rel = -uCamera;
   float distancePc = length(rel);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
-  #include <logdepthbuf_vertex>
   float sigmaPx = max(uMinSigmaPx, uHalfLightPc / distancePc * uPixelsPerRadian / 1.1774);
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   vPeak = uLight / (6.2831853 * sigmaPc * sigmaPc);
   vSigmaPx = sigmaPx;
-  vSizePx = ceil(6.0 * sigmaPx) + 1.0;
-  gl_PointSize = vSizePx;
+  gl_Position = spriteCorner(projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0), spriteRadiusPx(vPeak, sigmaPx));
+  #include <logdepthbuf_vertex>
 }
 `;
 
@@ -153,15 +162,11 @@ export const POINT_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  vec2 offset = (gl_PointCoord - 0.5) * vSizePx;
-  vec3 x = vPeak * exp(-0.5 * dot(offset, offset) / (vSigmaPx * vSigmaPx));
-  vec3 light = 1.0 - exp(-x);
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  gl_FragColor = vec4(light, 1.0);
+  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
 }
 `;
 
@@ -170,7 +175,7 @@ export const GLOW_COLOUR = new THREE.Vector3(...starColor(POPULATION_COLOUR_INDE
 
 export interface ClusterGlow {
   readonly volume: THREE.Mesh;
-  readonly point: THREE.Points;
+  readonly point: THREE.Mesh;
   readonly volumeUniforms: Record<string, THREE.IUniform>;
   readonly pointUniforms: Record<string, THREE.IUniform>;
   dispose(): void;
@@ -218,11 +223,10 @@ export function makeClusterGlow(unitsPerPc: number): ClusterGlow {
     // neighbours, and at load it may not be there yet.
     uMinSigmaPx: { value: MIN_SIGMA_PX },
     uLight: { value: new THREE.Vector3() },
+    uViewportPx: { value: new THREE.Vector2(1, 1) },
   };
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
-  const point = new THREE.Points(
-    geometry,
+  const point = new THREE.Mesh(
+    spriteGeometry(1),
     new THREE.ShaderMaterial({
       uniforms: pointUniforms,
       vertexShader: POINT_VERTEX,

@@ -8,12 +8,16 @@ import {
   CLUSTER_EDGE_PC,
   CLUSTER_MASS,
   FLATTENING,
+  massDensity,
   massWithin,
+  nukerShape,
   sampleMagnitudeLimit,
   sampleNuclearCluster,
   SAMPLE_COUNT,
   SAMPLE_LIMIT_V,
   shareBrighterThan,
+  taper,
+  TAPER_FROM_PC,
 } from './nuclearCluster.ts';
 import { DWARF_ROWS, EVOLVED_BY_K, EVOLVED_ROWS, STARS_PER_SOLAR_MASS } from './nuclearClusterPopulation.ts';
 
@@ -43,10 +47,30 @@ describe('the density law', () => {
     expect(Math.abs(massWithin(3) - 7.8e6)).toBeLessThan(0.6e6);
   });
 
-  it('stops where it has gathered the cluster’s 25 million solar masses, 15.7 pc out', () => {
+  it('ends where, tapered over its outer half, it has gathered the cluster’s 25 million solar masses, 22.3 pc out', () => {
     expect(massWithin(CLUSTER_EDGE_PC)).toBeCloseTo(CLUSTER_MASS, -4);
-    expect(CLUSTER_EDGE_PC).toBeGreaterThan(15);
-    expect(CLUSTER_EDGE_PC).toBeLessThan(16.5);
+    expect(CLUSTER_EDGE_PC).toBeCloseTo(22.3, 1);
+    expect(TAPER_FROM_PC).toBeCloseTo(CLUSTER_EDGE_PC / 2, 10);
+    // Nothing past the edge, the law itself inside the taper.
+    expect(massWithin(2 * CLUSTER_EDGE_PC)).toBeCloseTo(CLUSTER_MASS, -4);
+    expect(massDensity(TAPER_FROM_PC * 0.999) / massDensity(TAPER_FROM_PC * 0.998)).toBeCloseTo(
+      (nukerShape(TAPER_FROM_PC * 0.999) / nukerShape(TAPER_FROM_PC * 0.998)),
+      6,
+    );
+    expect(massDensity(CLUSTER_EDGE_PC)).toBe(0);
+  });
+
+  it('fades to nothing at its edge, with no step: the density and its slope both go to zero', () => {
+    // The smoothstep in ln m: the last tenth of a percent of the radius holds a millionth of the density at the taper's start.
+    expect(taper(CLUSTER_EDGE_PC * 0.999, CLUSTER_EDGE_PC)).toBeLessThan(1e-5);
+    expect(taper(TAPER_FROM_PC * 1.001, CLUSTER_EDGE_PC)).toBeGreaterThan(1 - 1e-5);
+    let last = Infinity;
+    for (let k = 0; k <= 100; k += 1) {
+      const m = TAPER_FROM_PC * 2 ** (k / 100);
+      const rho = massDensity(m);
+      expect(rho).toBeLessThanOrEqual(last);
+      last = rho;
+    }
   });
 
   it('is a cusp inside the break: the mass grows as m^(3 - 1.13) close in', () => {
@@ -67,9 +91,9 @@ describe('the sample', () => {
     expect(other.count).not.toBe(sample.count);
   }, 30_000);
 
-  it('holds 203,996 stars, every one brighter than the cut as seen from Sgr A* or than the floor', () => {
+  it('holds 204,455 stars, every one brighter than the cut as seen from Sgr A* or than the floor', () => {
     expect(sample.count).toBe(SAMPLE_COUNT);
-    expect(SAMPLE_COUNT).toBe(203_996);
+    expect(SAMPLE_COUNT).toBe(204_455);
     expect(sample.count).toBeLessThan(candidateCount());
     let tooFaint = 0;
     let outside = 0;

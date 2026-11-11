@@ -7,7 +7,7 @@ import { SGR_A_ID } from '../core/blackHoles.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { PLACED_STARS, S_STARS, sStarPosition } from '../core/galacticCentreStars.ts';
 import { columnAt } from '../core/localGroup.ts';
-import { cameraExtinctionV, sampleMagnitudeLimit, type NuclearClusterSample } from '../core/nuclearCluster.ts';
+import { cameraExtinctionV, CLUSTER_EDGE_PC, sampleMagnitudeLimit, type NuclearClusterSample } from '../core/nuclearCluster.ts';
 import {
   CLUSTER_LUMINOSITY_V,
   clusterExposure,
@@ -84,7 +84,7 @@ import { LIMIT_SLACK, MAX_STAR_SPRITE_PX, splitHigh, splitLow, UNITS_PER_PC } fr
  *
  * ## Precision
  *
- * The sample is float32 parsecs about Sgr A*, at most 16 pc out: 1e-6 pc, 0.2 AU, at the
+ * The sample is float32 parsecs about Sgr A*, at most 23 pc out: 2e-6 pc, 0.4 AU, at the
  * edge. The camera about the hole comes as a float32 pair, as the 3D stars' does about the
  * Sun. The measured stars are placed from the camera in float64 every frame and handed
  * over as offsets.
@@ -443,7 +443,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     }
     const limit = catalog.magnitudeLimit;
     const measuredShows = couldShow(BRIGHTEST_MEASURED_V, distancePc - 1, last.value, limit);
-    const modelShows = showModel && couldShow(BRIGHTEST_MODEL_V, distancePc - 16, last.value, limit);
+    const modelShows = showModel && couldShow(BRIGHTEST_MODEL_V, distancePc - CLUSTER_EDGE_PC, last.value, limit);
 
     // The cluster's size on the screen: how much of its own exposure is taken, and whether
     // its glow is a volume or a point.
@@ -554,6 +554,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     if (glow.point.visible) {
       const u = glow.pointUniforms;
       u['uPixelsPerRadian']!.value = devicePerRadian;
+      gl.getDrawingBufferSize(u['uViewportPx']!.value as THREE.Vector2);
       u['uHalfLightPc']!.value = HALF_LIGHT_RADIUS_PC;
       // Its stars' light, less those drawn: reckoned at its half-light radius.
       const drawn =

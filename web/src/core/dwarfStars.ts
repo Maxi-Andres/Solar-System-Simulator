@@ -54,7 +54,11 @@ import { galaxyAxes, galaxyLuminosity, type LocalGroupGalaxy } from './localGrou
  * its centre; a camera inside it, away from the centre, misses the faint dwarfs nearest it.
  */
 
-/** How far out the stars are drawn, in scale radii: where the volume's box ends (localGroup.ts galaxyExtentPc). */
+/**
+ * How far out the stars are drawn, in scale radii: where a faint dwarf's box ends (localGroup.ts
+ * galaxyExtentPc). Their surface density there is (1 + 64)^-2, a four-thousandth of the
+ * centre's, and 2 % of them lie beyond: a thinning field, not an edge.
+ */
 export const CUT_SCALES = 8;
 /** Inside this, pc from the centre, a star is taken as this far for the limit. */
 const INNER_PC = 0.1;

@@ -125,6 +125,41 @@ describe('the glow and the stars', () => {
     expect(Math.abs((stars + glow) / inside - 1)).toBeLessThan(0.02);
   }, 60_000);
 
+  it('holds the model’s whole light, tapered edge and all, as its lines of sight sum it from afar: within 2%', () => {
+    // From 1 kpc along x, each line of sight's column times the area it stands for, over the
+    // projected ellipse: polar in (y, z / q), log-spaced in radius from the hole outward.
+    const far = 1000;
+    const rings = 160;
+    const turns = 24;
+    const lo = Math.log(1e-5);
+    const hi = Math.log(CLUSTER_EDGE_PC);
+    let light = 0;
+    for (let i = 0; i < rings; i += 1) {
+      const b0 = Math.exp(lo + ((hi - lo) * i) / rings);
+      const b1 = Math.exp(lo + ((hi - lo) * (i + 1)) / rings);
+      const b = Math.sqrt(b0 * b1);
+      for (let j = 0; j < turns; j += 1) {
+        const phi = (2 * Math.PI * (j + 0.5)) / turns;
+        const y = b * Math.cos(phi);
+        const z = FLATTENING * b * Math.sin(phi);
+        light += column([-far, y, z], [1, 0, 0], undefined, 128) * FLATTENING * b * (b1 - b0) * ((2 * Math.PI) / turns);
+      }
+    }
+    // Inside the first ring, the cusp's column (r^-1.13 projects to b^-0.13): the rest.
+    light += (column([-far, 1e-5, 0], [1, 0, 0], undefined, 128) * FLATTENING * Math.PI * 1e-10) / 0.935;
+    expect(Math.abs(light / CLUSTER_LUMINOSITY_V - 1)).toBeLessThan(0.02);
+    // And the density, shell by shell, the same: 4 pi q m^2 rho dm.
+    let shells = 0;
+    const n = 4000;
+    const from = Math.log(1e-6);
+    const to = Math.log(CLUSTER_EDGE_PC * 1.01);
+    for (let k = 0; k < n; k += 1) {
+      const m = Math.exp(from + ((to - from) * (k + 0.5)) / n);
+      shells += 4 * Math.PI * FLATTENING * m ** 3 * luminosityDensity(m) * ((to - from) / n);
+    }
+    expect(Math.abs(shells / CLUSTER_LUMINOSITY_V - 1)).toBeLessThan(0.02);
+  });
+
   it('integrates a line of sight as finely stepped sums do: within 2%, through the cusp and past it', () => {
     // Its 32 steps against 20,000 of the same, where the line passes close to the hole, and
     // against plain steps in distance where it does not.

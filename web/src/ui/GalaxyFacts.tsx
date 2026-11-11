@@ -3,12 +3,14 @@ import type { BodyId } from '@sss/tools/types';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   absoluteMagnitude,
+  catalogueShape,
   centralDensities,
   galaxyLuminosity,
   galaxyOf,
   localGroupCatalog,
   surfaceBrightness,
   type LocalGroupGalaxy,
+  UNDRAWN_REASONS,
 } from '../core/localGroup.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { LIGHT_YEAR_KM, PARSEC_KM } from '../scene/scale.ts';
@@ -75,9 +77,11 @@ export function GalaxyPanel({
   const absolute = absoluteMagnitude(galaxy);
   const model = galaxy.model;
   const densities = centralDensities(galaxy);
-  const rh = at(c?.halfLightArcmin);
-  const ellipticity = at(c?.ellipticity);
-  const pa = at(c?.positionAngleDeg);
+  const shape = c === null || k === null ? null : catalogueShape(c, k);
+  const rh = shape?.halfLightArcmin ?? null;
+  const ellipticity = shape?.ellipticity ?? null;
+  const pa = shape?.positionAngleDeg ?? null;
+  const undrawn = c === null || k === null || model !== null ? undefined : UNDRAWN_REASONS[c.catalogueName[k]!];
   const muV0 = at(c?.muV0);
   const vh = at(c?.radialVelocityKmS);
   const sigma = at(c?.sigmaStarsKmS);
@@ -109,7 +113,9 @@ export function GalaxyPanel({
         <Row label="V">{galaxy.vMag === null ? 'Not measured' : `${galaxy.vMag.toFixed(2)}, dereddened`}</Row>
         {absolute !== null && <Row label="M_V">{absolute.toFixed(2)}</Row>}
         {luminosity !== null && <Row label="Luminosity">{formatLuminosity(luminosity)}</Row>}
-        {rh !== null && <Row label="Half-light radius">{`${rh}′ · ${Math.round(Math.tan((rh / 60) * (Math.PI / 180)) * galaxy.distancePc)} pc`}</Row>}
+        {rh !== null && (
+          <Row label="Half-light radius">{`${Number(rh.toFixed(2))}′ · ${Math.round(Math.tan((rh / 60) * (Math.PI / 180)) * galaxy.distancePc)} pc`}</Row>
+        )}
         {ellipticity !== null && <Row label="Ellipticity">{ellipticity.toFixed(2)}</Row>}
         {pa !== null && <Row label="Position angle">{`${pa}°`}</Row>}
         {model?.kind === 'disc' && (
@@ -128,6 +134,7 @@ export function GalaxyPanel({
         <Row label="Source">{galaxy.shapeSource}</Row>
         <Divider />
         <Row label="Drawn as">{shapeText(galaxy)}</Row>
+        {undrawn !== undefined && <Row label="">{undrawn}</Row>}
         {densities !== null && model?.kind === 'plummer' && (
           <Row label="Centre, drawn">
             {/* A Plummer ellipsoid's column through its centre along its depth axis: (4/3) rho0 c. */}

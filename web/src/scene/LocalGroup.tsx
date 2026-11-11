@@ -32,6 +32,7 @@ import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
+import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
@@ -98,7 +99,8 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * does not lose it, its light lands on the pixel it is in. So as a galaxy's half-light radius
  * (galaxyHalfLightPc) shrinks from RESOLVED_PX to UNRESOLVED_PX pixels its light goes over
  * from its volume to a point: a Gaussian of that radius, never narrower than MIN_SIGMA_PX,
- * holding all of its luminosity (pointPeak), through the same exposure. From the Local
+ * holding all of its luminosity (pointPeak), through the same exposure, drawn out to where it
+ * fades below a display step however bright (gaussianSprite.ts). From the Local
  * Group's view Andromeda, Triangulum, the Clouds and a dozen more are dots, some forty in all
  * show, and the faintest dwarfs still do not.
  *
@@ -513,20 +515,19 @@ uniform vec3 uCameraPc;
 uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uFade;
-// The colour times the luminosity over the white column; the half-light radius, pc; the
-// share drawn as a point (pointShare, worked out on the CPU each frame).
+// Where it is, pc; the colour times the luminosity over the white column; the half-light
+// radius, pc; the share drawn as a point (pointShare, worked out on the CPU each frame).
+attribute vec3 aCentre;
 attribute vec3 aLight;
 attribute float aHalfLightPc;
 attribute float aShare;
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_VERTEX_GLSL}
 
 void main() {
-  vec3 rel = position - uCameraPc;
+  vec3 rel = aCentre - uCameraPc;
   float distancePc = length(rel);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
-  #include <logdepthbuf_vertex>
   float sigmaPx = max(${MIN_SIGMA_PX.toFixed(2)}, aHalfLightPc / distancePc * uPixelsPerRadian / 1.1774);
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   // pointPeak: L / (2 pi sigma^2).
@@ -536,8 +537,10 @@ void main() {
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
   vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toFixed(3)} * aShare * uFade);
   vSigmaPx = sigmaPx;
-  vSizePx = ceil(6.0 * sigmaPx) + 1.0;
-  gl_PointSize = aShare * uFade > 0.0 ? vSizePx : 0.0;
+  // Out to where its light falls below the floor (gaussianSprite.ts): a bright one's wing
+  // is not cut square.
+  gl_Position = spriteCorner(projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0), spriteRadiusPx(vPeak, sigmaPx));
+  #include <logdepthbuf_vertex>
 }
 `;
 
@@ -545,15 +548,11 @@ const POINT_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 varying vec3 vPeak;
 varying float vSigmaPx;
-varying float vSizePx;
+${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  vec2 offset = (gl_PointCoord - 0.5) * vSizePx;
-  vec3 x = vPeak * exp(-0.5 * dot(offset, offset) / (vSigmaPx * vSigmaPx));
-  vec3 light = 1.0 - exp(-x);
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  gl_FragColor = vec4(light, 1.0);
+  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
 }
 `;
 
@@ -691,7 +690,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     const fixed = list.map(({ galaxy }) => {
       const model = galaxy.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
       const axes = galaxyAxes(galaxy);
-      const extent = galaxyExtentPc(galaxy)!;
+      const extent = galaxyExtentPc(galaxy, columnAt(WHITE_MU))!;
       return {
         key: galaxy.key,
         centre: galaxyPositionPc(galaxy),
@@ -716,7 +715,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       GIANTS.flatMap((galaxy) => {
         const model = galaxy.model;
         const densities = centralDensities(galaxy);
-        const extent = galaxyExtentPc(galaxy);
+        const extent = galaxyExtentPc(galaxy, columnAt(WHITE_MU));
         if (model === null || densities === null || extent === null || model.kind === 'plummer') {
           return [];
         }
@@ -857,6 +856,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       uCameraPc: { value: new THREE.Vector3() },
       uUnitsPerPc: { value: UNITS_PER_PC },
       uPixelsPerRadian: { value: 1 },
+      uViewportPx: { value: new THREE.Vector2(1, 1) },
       uFade: { value: 0 },
     }),
     [],
@@ -877,14 +877,14 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       const g = glow(galaxy, galaxyLuminosity(galaxy)!);
       light.set([g.x, g.y, g.z], i * 3);
     });
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
-    geometry.setAttribute('aLight', new THREE.BufferAttribute(light, 3));
-    geometry.setAttribute('aHalfLightPc', new THREE.BufferAttribute(new Float32Array(halfLightPc), 1));
-    const share = new THREE.BufferAttribute(new Float32Array(list.length), 1);
+    const geometry = spriteGeometry(list.length);
+    geometry.setAttribute('aCentre', new THREE.InstancedBufferAttribute(position, 3));
+    geometry.setAttribute('aLight', new THREE.InstancedBufferAttribute(light, 3));
+    geometry.setAttribute('aHalfLightPc', new THREE.InstancedBufferAttribute(new Float32Array(halfLightPc), 1));
+    const share = new THREE.InstancedBufferAttribute(new Float32Array(list.length), 1);
     share.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('aShare', share);
-    const object = new THREE.Points(
+    const object = new THREE.Mesh(
       geometry,
       new THREE.ShaderMaterial({
         uniforms: pointUniforms,
@@ -1080,6 +1080,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       points.share.needsUpdate = true;
       (pointUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
+      renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
       pointUniforms['uFade']!.value = fade;
     }
 

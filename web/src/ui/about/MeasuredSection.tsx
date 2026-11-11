@@ -585,7 +585,9 @@ export const measuredSection: AboutSection = {
             ellipticity and position angle, its central surface brightness, and — where they are measured — its
             radial velocity, its stars’ velocity dispersion, its gas, its [Fe/H] and its proper motion. Two dozen
             faint ones the catalogue marks as of uncertain nature, a dwarf galaxy or a star cluster; their panels
-            say so.
+            say so. Two it gives no size are measured elsewhere: <Strong>KK 258</Strong>’s half-light ellipse,
+            30″ along its major axis, axis ratio 0.65 at 43° <Cite k="lauberts1989" />, and{' '}
+            <Strong>Leo P</Strong>’s shape, ellipticity 0.52 at 335° <Cite k="mcquinn2013" />.
           </Item>
           <Item>
             The four big ones from their own papers. <Strong>Andromeda</Strong> at 761 ± 11 kpc, from Hubble’s

@@ -189,6 +189,26 @@ export function galaxyVisibility(cameraFromSunKm: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/**
+ * The sprite's profile: a Gaussian of sigma a fifth of the sprite, e^(-r^2 / 2 sigma^2), less
+ * its value at the sprite's half-width, 2.5 sigma -- so it goes to nothing at the circle the
+ * sprite's square holds, with no edge -- times `scale`, the light the whole Gaussian held over
+ * the square over the light this holds: each point's light the same as before.
+ */
+export const SPRITE_KERNEL = (() => {
+  const edge = Math.exp(-0.5 * 2.5 * 2.5);
+  // Over the square, in sigmas: (sqrt(2 pi) erf(2.5 / sqrt 2))^2; over the disc, 2 pi (1 - edge - edge 2.5^2 / 2).
+  const erf = (x: number): number => {
+    // Abramowitz & Stegun 7.1.26, to 1.5e-7.
+    const t = 1 / (1 + 0.3275911 * x);
+    const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return y;
+  };
+  const square = 2 * Math.PI * erf(2.5 / Math.SQRT2) ** 2;
+  const disc = 2 * Math.PI * (1 - edge - edge * 3.125);
+  return { edge, scale: square / disc };
+})();
+
 const VERTEX_SHADER = /* glsl */ `
 uniform vec3 uCameraHigh;
 uniform vec3 uCameraLow;
@@ -242,9 +262,11 @@ varying float vPeak;
 
 void main() {
   vec2 offset = gl_PointCoord - vec2(0.5);
-  // A Gaussian reaching the sprite's edge at 2.5 sigma.
+  // A Gaussian reaching the sprite's edge at 2.5 sigma, less its value there, so that it
+  // falls to nothing at a circle inside the sprite rather than stopping at the sprite's
+  // square at 4 % of its peak (SPRITE_KERNEL); scaled to hold the light it held.
   float r2 = dot(offset, offset) * 25.0;
-  float profile = exp(-0.5 * r2);
+  float profile = max(exp(-0.5 * r2) - ${SPRITE_KERNEL.edge.toFixed(6)}, 0.0) * ${SPRITE_KERNEL.scale.toFixed(6)};
   if (vPeak * profile < 1.0 / 1024.0) discard;
   float amount = vPeak * profile;
   gl_FragColor = uDust > 0.5 ? vec4(vec3(1.0 - exp(-amount)), 1.0) : vec4(vColor * amount, 1.0);

@@ -3,6 +3,7 @@ import {
   CLUSTER_EDGE_PC,
   CLUSTER_MASS,
   FLATTENING,
+  LAW_EDGE_PC,
   massDensity,
   sampleMagnitudeLimit,
   type NuclearClusterSample,
@@ -188,14 +189,15 @@ const METER_STEPS = 32;
 /**
  * The cluster's mean surface brightness over the part of the sky it fills, from `camera`
  * (pc about the hole, Galactic axes), L_Sun/pc^2: from inside the whole sky, from outside
- * the cap of its bounding sphere -- each line of sight's column, on a Fibonacci lattice.
+ * the cap of the sphere it ended at before its edge was tapered (LAW_EDGE_PC) -- each line of
+ * sight's column, on a Fibonacci lattice.
  */
 export function meanColumn(camera: readonly [number, number, number]): number {
   const distance = Math.hypot(camera[0], camera[1], camera[2]);
-  const inside = distance <= CLUSTER_EDGE_PC;
+  const inside = distance <= LAW_EDGE_PC;
   // The cap's axis, toward the hole, and its edge, as the cosine of its angular radius.
   const axis = inside ? [0, 0, 1] : [-camera[0] / distance, -camera[1] / distance, -camera[2] / distance];
-  const cosEdge = inside ? -1 : Math.sqrt(1 - (CLUSTER_EDGE_PC / distance) ** 2);
+  const cosEdge = inside ? -1 : Math.sqrt(1 - (LAW_EDGE_PC / distance) ** 2);
   const helper = Math.abs(axis[0]!) < 0.9 ? [1, 0, 0] : [0, 1, 0];
   const e1 = normalise(cross(axis, helper));
   const e2 = cross(axis, e1);
