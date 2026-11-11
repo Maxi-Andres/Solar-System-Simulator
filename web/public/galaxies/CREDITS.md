@@ -7,7 +7,8 @@ camera is out of the Milky Way's disc.
 None is shown as a picture. Each is a disc seen from straight above -- where its old stars, its
 star formation and its dust are -- that the app turns into a volume of light and of dust, of
 each one's own thickness, and sees through from wherever the camera is (see About, "The Local
-Group").
+Group"). The Small Magellanic Cloud, which is no disc, is mapped as seen from Earth instead, with
+how deep along the line of sight its stars lie (below).
 
 Every file added here must be recorded below with its sources and credit.
 `web/src/core/localGroup.test.ts` enforces that: an uncredited map fails the build.
@@ -126,3 +127,93 @@ log10 between `lmc.json`'s `nebula.bounds`, 0 for none. Made by the same script.
   acknowledgement, not for commercial use.
 - **Dust**: Clark, C. J. R., et al. 2023, ApJ 946, 42, "The Quest for the Missing Dust: II";
   Zenodo, doi:10.5281/zenodo.7392275, CC BY 4.0.
+
+## smc.png, smc-nebula.png, smc.json: the Small Magellanic Cloud
+
+Made by the same script (`python tools/galaxies/prepare.py smc`). Torn by the LMC, the SMC is
+no disc: it is deeper along our line of sight than it is wide on the sky, so a face-on map of it
+would be a map of nothing. Its maps are of the sky as seen from Earth, not deprojected, and
+`smc.json` says how deep its light lies at each place.
+
+- **The sky**: 1024 × 1024 points on the tangent (gnomonic) plane about RA 12.75°, Dec −73.12°,
+  5° either side; the column number grows to the east, the row number to the north -- so the
+  picture's left is west, unlike a photograph of the sky. Each value per pc² of sky at 62.44 kpc
+  (Graczyk et al. 2020). Each map only where it was observed, as the LMC's.
+- **R, old stars**: Spitzer IRAC 3.6 µm, SAGE-SMC's 2″ mosaic averaged to 10″; its compact
+  sources taken out on the map. The Milky Way's globular clusters 47 Tucanae and NGC 362, in
+  front of it, masked to their tidal radii, 42′ and 10′ (Harris 1996, 2010 edition) -- 47 Tuc's
+  light is still a fifth above the SMC's at 40′. There and past the mosaic's edge, the SMC's own
+  exponential on the sky (a scale length of 2.35 kpc), fitted to the mosaic and joined to it
+  smoothly.
+- **G, star formation**, M☉/yr/kpc² of sky: SHASSA's continuum-subtracted H-alpha (field 510),
+  less the Milky Way's H-alpha in front of it, 7.0 dR -- its median 4.5–6° from the centre, the
+  third of that ring towards the LMC (position angles 50–170°, the Bridge's gas) left out -- plus
+  Spitzer MIPS 24 µm averaged to 12.5″, by Kennicutt et al. 2009's calibration, as the LMC's. A
+  compact source in one with nothing in the other taken out where both were observed; past the
+  24 µm mosaic, which covers all the SMC's star formation, the residuals SHASSA left of the Milky
+  Way's bright stars -- each more than 500 dR below nothing beside as much above, which no HII
+  region is -- taken out with 3′ round them; 47 Tuc and NGC 362 masked to 10′ and 5′, where their
+  continuum left a residual. Ending 4° from the centre, where the Bridge begins; spread by 200 pc,
+  as the LMC's. In all, 0.033 M☉/yr.
+- **B, dust**: A_V as seen from Earth, from Clark et al. 2023's dust surface density, as the
+  LMC's (7.36 magnitudes per M☉/pc²): 1.68 × 10⁵ M☉ of dust, where Herschel observed it -- some
+  4.3° × 4.9° about the bar and the Wing's start. Past Clark's map, no dust: unlike the old stars
+  there is no profile of it to carry on honestly. And the dust fades out at its edge rather than
+  ending in a square that the volume would show from every side: its outermost 0.3°, where the
+  far-infrared is faint and the fit's rows come out as streaks, dropped, then a smooth ramp to the
+  whole map by 0.7° inside the edge -- 1.48 × 10⁵ M☉ kept, 12 % lost.
+- **smc-nebula.png**: its ionised gas's Balmer light, L☉,V per pc² of sky, made from the H-alpha
+  above exactly as `lmc-nebula.png`, not spread. Its H-alpha, 5.5 × 10³⁹ erg/s in all.
+- Each channel log10 between the bounds in `smc.json`, in 8 bits, 0 for none.
+
+### Its depth: smc.json's `depth`
+
+On a 32 × 32 grid over the same square, for its old stars and its young: the mean distance from
+the Sun, kpc, and the intrinsic spread about it along the line of sight, kpc -- the app spreads
+each point of the sky maps along the line of sight by the Gaussian of its place (the dust by the
+young stars').
+
+- **Old** from OGLE-IV's RR Lyrae (3458 in the SMC), **young** from its classical Cepheids
+  younger than 150 Myr (1556), each star's distance from its period-luminosity relation, with
+  its error.
+- At each point, the mean and spread that best explain the stars round it, each counted by a
+  Gaussian of its distance on the sky -- 0.5°, widened where they are sparse until it holds 50
+  stars -- the likelihood of each star's distance N(mean, spread² + its error²), so its own error
+  is taken out; stars more than three times the width from the mean left out and the fit made
+  again. Where no star is within some 2°, the whole SMC's mean, and the spread typical of a place
+  in it, blended in smoothly. The spread kept within the 5–95 % range found in squares of 0.625°
+  with 30 stars or more.
+- **Zero points**: the two catalogues' period-luminosity relations disagree by some 4 kpc at the
+  SMC. Each is scaled so that the median distance of all its stars within 1° of the centre is the
+  eclipsing binaries' 62.44 kpc (Graczyk et al. 2020) -- the RR Lyrae's by 1.017, the Cepheids'
+  by 0.954 -- a zero point in distance modulus being a factor in distance. The young Cepheids keep
+  their offset from the older ones on the same scale.
+- At the centre the old stars lie at 62.1 kpc, spread by 3.7 kpc (3.1–4.3 over the grid); the
+  young at 61.3 kpc, spread by 2.8 kpc (1.6–3.3), and the young lie nearer to the north-east,
+  farther by 2.3 kpc per degree towards position angle 237° (the Wing and N66 nearer, the
+  south-west bar farther).
+
+### Sources
+
+- **IRAC 3.6 µm and MIPS 24 µm**: SAGE-SMC, Gordon, K. D., et al. 2011, AJ 142, 102,
+  doi:10.1088/0004-6256/142/4/102; IRSA, doi:10.26131/IRSA431. This work is based in part on
+  observations made with the Spitzer Space Telescope, which was operated by the Jet Propulsion
+  Laboratory, California Institute of Technology under a contract with NASA; it has made use of
+  the NASA/IPAC Infrared Science Archive.
+- **H-alpha**: SHASSA, as the LMC's -- Gaustad, J. E., McCullough, P. R., Rosing, W., Van Buren,
+  D. 2001, PASP 113, 1326. © Las Cumbres Observatory; free for scientific and educational use
+  with acknowledgement, not for commercial use.
+- **Dust**: Clark, C. J. R., et al. 2023, ApJ 946, 42; Zenodo, doi:10.5281/zenodo.7392275,
+  CC BY 4.0.
+- **Classical Cepheids**: Jacyszyn-Dobrzeniecka, A. M., et al. 2016, "OGLE-ing the Magellanic
+  System: Three-Dimensional Structure of the Clouds and the Bridge Using Classical Cepheids",
+  Acta Astronomica 66, 149, arXiv:1602.09141 -- its table 3,
+  https://ogle.astrouw.edu.pl/cont/4_main/str/3_dim_str/.
+- **RR Lyrae**: Jacyszyn-Dobrzeniecka, A. M., et al. 2017, "OGLE-ing the Magellanic System:
+  Three-Dimensional Structure of the Clouds and the Bridge using RR Lyrae Stars", Acta
+  Astronomica 67, 1, arXiv:1611.02709 -- its table 2,
+  https://ogle.astrouw.edu.pl/cont/4_main/str/3_dim_rrl/. OGLE asks, of both: "PLEASE cite the
+  following paper when using the data or referring to these OGLE results".
+- **Distance**: Graczyk, D., et al. 2020, ApJ 904, 13, doi:10.3847/1538-4357/abbb2b.
+- **47 Tucanae and NGC 362**: Harris, W. E. 1996, AJ 112, 1487 (2010 edition),
+  doi:10.1086/118116 -- their positions, half-light and tidal radii.
