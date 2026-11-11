@@ -646,6 +646,15 @@ export const estimatedSection: AboutSection = {
               <Cite k={['bohlin1978', 'draine2014', 'dalcanton2015', 'chastenet2025', 'cardelli1989']} />.
             </Why>
           </Item>
+          <Item title="The Large Cloud’s young stars and glowing gas">
+            Its young stars’ light is spread 200 pc from where Hα and 24 µm show stars forming, and its glowing
+            gas’s light drawn on the starlight’s exposure by its energy, as so many of the Sun’s V luminosities.
+            <Why>
+              the 10–100 million year old stars, which give most of a young population’s V light, have drifted
+              that far from their birth clouds at about 10 km/s; and a line’s light is its energy, whatever band
+              it falls in.
+            </Why>
+          </Item>
           <Item title="Which side of Triangulum is nearer">
             Not measured here: its west side is drawn nearer. From Earth it looks the same either way.
           </Item>

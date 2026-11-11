@@ -37,11 +37,25 @@ al. 2009), its dust from Clark et al. 2023's surface density, calibrated so the 
 diffuse gas has 150 times the mass of its dust -- A_V by that and Bohlin et al.'s. Each only
 where it was observed: past a map's edge nothing, rather than light made up.
 
+Where the star formation is traced by H-alpha -- the LMC's -- it shows stars younger than some
+10 Myr, still in the clouds they formed in; but most of the young population's V light is from
+stars 10 to 100 Myr old, which have drifted from where they formed at some 10 km/s, a few hundred
+pc. So that map is spread by a Gaussian of Galaxy.young_drift_pc, 200 pc, its total kept: a
+star-forming region a knot of young stars round it, not a point. (The far-UV, Andromeda's and
+Triangulum's, is from stars up to some 100 Myr old: already where they drifted to.)
+
+And the LMC's ionised gas, which glows in its Balmer lines -- the pink of every photograph of its
+HII regions, 30 Doradus first -- a map of its own, <key>-nebula.png: SHASSA's H-alpha face-on,
+where the gas is (not spread), with H-beta's 1 / 2.86 of its energy on top (Case B, Osterbrock &
+Ferland 2006), as V-band-equivalent light, L_Sun,V per pc^2 face-on -- the lines' energy over the
+Sun's V luminosity, so the app draws it on the same exposure as the starlight.
+
 The app turns these into light and opacity (<key>.json says how): the old stars normalised to
 the disc's V luminosity, the young by their V light per unit star formation.
 
 Each channel is encoded log10 between the bounds in <key>.json, 0 for none, in an 8-bit PNG:
-R old stars, G star formation, B dust.
+R old stars, G star formation, B dust; the nebula alone in an 8-bit grey one, its bounds
+<key>.json's nebula.bounds.
 """
 import gzip
 import json
@@ -70,12 +84,16 @@ class Galaxy:
     """A disc to map (core/localGroup.ts GIANTS): where it is, how it faces, how big its map."""
 
     def __init__(self, key, pgc, ngc, ra, dec, distance_pc, inclination, major_pa, near_pa, scale_length_pc,
-                 half_pc, sfr_to_pc, bulge, overlapping, dust, sources='z0mgs'):
+                 half_pc, sfr_to_pc, bulge, overlapping, dust, sources='z0mgs', young_drift_pc=0.0):
         self.key, self.pgc, self.ngc = key, pgc, ngc
         self.ra, self.dec, self.distance_pc = ra, dec, distance_pc
         self.inclination, self.major_pa, self.far_pa = inclination, major_pa, near_pa + 180
         self.scale_length_pc = scale_length_pc
         self.half_pc, self.sfr_to_pc = half_pc, sfr_to_pc
+        # How far the young stars that make most of their V light, 10 to 100 Myr old, have drifted
+        # from where they formed: a Gaussian's sigma, pc, over a star formation map that shows
+        # only where they form (H-alpha); 0 for one that already shows them (the far-UV).
+        self.young_drift_pc = young_drift_pc
         self.bulge, self.overlapping, self.dust, self.sources = bulge, overlapping, dust, sources
         # The dust's sheet and the young stars': the Milky Way's dust layer, 134.4 pc (Drimmel &
         # Spergel 2001), over the disc's scale length.
@@ -91,7 +109,8 @@ GALAXIES = {
                   half_pc=12_000.0, sfr_to_pc=11_000.0, bulge=False, overlapping=(), dust='z0mgs'),
     'lmc': Galaxy('lmc', None, None, (5 + 23 / 60 + 34.5 / 3600) * 15, -(69 + 45 / 60 + 22 / 3600),
                   49_590.0, 34.0, 139.1, 139.1 - 90, 1400.0,
-                  half_pc=9_000.0, sfr_to_pc=5_500.0, bulge=False, overlapping=(), dust='clark', sources='lmc'),
+                  half_pc=9_000.0, sfr_to_pc=5_500.0, bulge=False, overlapping=(), dust='clark', sources='lmc',
+                  young_drift_pc=200.0),
 }
 # The galaxy being mapped.
 G = GALAXIES['m31']
@@ -123,8 +142,18 @@ SAGE = 'https://irsa.ipac.caltech.edu/data/SPITZER/SAGE/images/'
 # erg/s. Per unit intensity, 4 pi I over a kpc^2: SHASSA's decirayleigh is 10^5 / 4 pi photons of
 # 656.28 nm per cm^2 per s per sr; MIPS's MJy/sr times 24 um's frequency.
 SFR_PER_ERG = 5.5e-42 * 4 * math.pi * 3.0857e21 ** 2
-SFR_PER_DR = SFR_PER_ERG * 1e5 / (4 * math.pi) * 6.62607e-27 * 2.99792458e10 / 656.28e-7
+ERG_PER_DR = 1e5 / (4 * math.pi) * 6.62607e-27 * 2.99792458e10 / 656.28e-7   # erg/s/cm^2/sr
+SFR_PER_DR = SFR_PER_ERG * ERG_PER_DR
 SFR_PER_MIPS24 = SFR_PER_ERG * 0.020 * 1e-17 * 2.99792458e10 / 24e-4
+
+# The Sun's V luminosity, erg/s: M_V 4.81 (Willmer 2018, ApJS 236, 47) at 10 pc, V = 0 being
+# 3.631e-9 erg/s/cm^2/A (Bessell, Castelli & Plez 1998, A&A 333, 231, table A2) over the V band's
+# 880 A (its FWHM, Binney & Merrifield 1998, Galactic Astronomy, table 2.1): 4.55e32.
+L_SUN_V = 4 * math.pi * (10 * 3.0857e18) ** 2 * 3.631e-9 * 880 * 10 ** (-0.4 * 4.81)
+# A decirayleigh of H-alpha face-on as Balmer light, L_Sun,V per pc^2: 4 pi I over a pc^2, with
+# H-beta's energy on top, Case B's F(Ha) / F(Hb) = 2.86 (Osterbrock & Ferland 2006).
+NEBULA_PER_DR = ERG_PER_DR * 4 * math.pi * 3.0857e18 ** 2 * (1 + 1 / 2.86) / L_SUN_V
+NEBULA_BOUNDS = (-3.0, 3.0)
 
 
 def fetch(url, name):
@@ -613,7 +642,14 @@ def beyond_edge(face, seen, sq, label):
 
 
 def lmc_maps(old_sq, thin_sq):
-    """The Large Magellanic Cloud's old stars and star formation, from its own surveys."""
+    """The Large Magellanic Cloud's old stars, star formation and nebulae, from its own surveys.
+
+    The nebulae: its ionised gas, which glows in its Balmer lines -- the pink of every photograph
+    of its HII regions. SHASSA's H-alpha face-on as the star formation has it (the Milky Way's in
+    front taken off, the compact sources with nothing at 24 um taken out), where the gas is,
+    before finish() spreads the star formation by the young stars' drift; in L_Sun,V per pc^2,
+    NEBULA_PER_DR: 4 pi I over a pc^2, H-beta's 1 / 2.86 of H-alpha's energy on top (Case B), over
+    the Sun's V luminosity, so that it is drawn on the same exposure as the stars."""
     print('old stars')
     irac, irac_wcs = binned(CACHE / 'SAGE_LMC_IRAC3.6_2_mosaic.fits', 5)
     old = without_points(face_on_observed(irac, irac_wcs, old_sq, 'IRAC 3.6 um'), old_sq, 'IRAC')
@@ -627,7 +663,7 @@ def lmc_maps(old_sq, thin_sq):
     both = ndimage.binary_erosion(mips > 0, iterations=5)
     ha_clean, mips = unmatched_points(ha, mips, thin_sq)
     ha = np.where(both, ha_clean, ha)
-    return old, SFR_PER_DR * ha + SFR_PER_MIPS24 * mips
+    return old, SFR_PER_DR * ha + SFR_PER_MIPS24 * mips, NEBULA_PER_DR * ha
 
 
 def dust_map(thin_sq):
@@ -654,8 +690,8 @@ def make(galaxy):
     old_sq, thin_sq = squeeze(OLD_FLATTENING), squeeze(G.dust_flattening)
     print(f'  squeezed to {old_sq:.3f} on the sky, the dust and young stars to {thin_sq:.3f}')
     if G.sources == 'lmc':
-        old, sfr = lmc_maps(old_sq, thin_sq)
-        finish(old, sfr, thin_sq)
+        old, sfr, nebula = lmc_maps(old_sq, thin_sq)
+        finish(old, sfr, thin_sq, nebula)
         return
     maps = {name: fetch_cutout(f'{Z0MGS}{G.pgc}/{G.pgc}_{name}.fits', f'{G.pgc}_{name}') for name in SOURCES}
     maps = {name: (data, {k: v for k, v in info.items() if k != 'unit'}) for name, (data, info) in maps.items()}
@@ -676,14 +712,25 @@ def make(galaxy):
     finish(old, SFR_PER_FUV * fuv + SFR_PER_24UM * w4, thin_sq)
 
 
-def finish(old, sfr, thin_sq):
-    """The star formation softened and ended past the disc, the dust, and the map written."""
+def finish(old, sfr, thin_sq, nebula=None):
+    """The star formation softened, ended past the disc and, where it shows only where stars form,
+    spread by the young stars' drift; the dust; the nebulae, if any, softened and ended as the star
+    formation, not spread -- the gas is where it is; and the maps written."""
     # Past the disc, what the far-UV shows is foreground stars the masks missed, each drawn out
-    # along the minor axis by the deprojection: none of it, from G.sfr_to_pc out.
+    # along the minor axis by the deprojection, and H-alpha the Milky Way's own: none of it, from
+    # G.sfr_to_pc out.
     x, y, _ = face_on_grid(thin_sq)
     r_disc = np.hypot(x, y)
     taper = np.clip((G.sfr_to_pc - r_disc) / (0.08 * G.half_pc), 0, 1)
     sfr = softened(sfr, 'star formation') * taper * taper * (3 - 2 * taper)
+    if G.young_drift_pc:
+        # Spread, its total kept: it ends well inside the map, so none is lost past its edge.
+        before = sfr.sum()
+        sfr = ndimage.gaussian_filter(sfr, G.young_drift_pc / (2 * G.half_pc / N))
+        print(f'  star formation spread by {G.young_drift_pc:.0f} pc: its total {before * (2 * G.half_pc / N) ** 2 / 1e6:.6g} '
+              f'-> {sfr.sum() * (2 * G.half_pc / N) ** 2 / 1e6:.6g} M_Sun/yr')
+    if nebula is not None:
+        nebula = softened(nebula, 'nebulae') * taper * taper * (3 - 2 * taper)
 
     print('dust')
     dust = dust_map(thin_sq)
@@ -704,13 +751,23 @@ def finish(old, sfr, thin_sq):
         sfrSum=float(decode(codes[1], BOUNDS['sfr']).sum() * pixel_pc2 / 1e6),
     )
     OUT.mkdir(parents=True, exist_ok=True)
+    channels = [('old', old, BOUNDS['old']), ('sfr', sfr, BOUNDS['sfr']), ('dust', dust, BOUNDS['dust'])]
+    if nebula is not None:
+        nebula = nebula * window
+        meta['nebula'] = dict(bounds=list(NEBULA_BOUNDS))
+        Image.fromarray(encode(nebula, NEBULA_BOUNDS), 'L').save(OUT / f'{G.key}-nebula.png', optimize=True)
+        channels.append(('nebula', nebula, NEBULA_BOUNDS))
     Image.fromarray(np.stack(codes, -1), 'RGB').save(OUT / f'{G.key}.png', optimize=True)
     (OUT / f'{G.key}.json').write_text(json.dumps(meta, indent=2) + '\n')
-    for label, channel, bounds in zip(('old', 'sfr', 'dust'), (old, sfr, dust), BOUNDS.values()):
+    for label, channel, bounds in channels:
         positive = channel[channel > 0]
         print(f'  {label}: 1/50/99/99.9 % {np.percentile(positive, [1, 50, 99, 99.9])}, bounds {bounds}, '
               f'below {np.mean(positive < 10 ** bounds[0]) * 100:.1f} %, above {np.mean(positive > 10 ** bounds[1]) * 100:.2f} %')
     print('  total star formation', meta['sfrSum'], 'M_Sun/yr; written', OUT / f'{G.key}.png')
+    if nebula is not None:
+        # H-alpha alone, 4 pi I over the map, erg/s; its brightest point, 30 Doradus.
+        print(f'  nebulae: H-alpha {nebula.sum() * pixel_pc2 * L_SUN_V / (1 + 1 / 2.86):.3g} erg/s in all, '
+              f'at most {nebula.max():.4g} L_Sun,V/pc^2 face-on (L_Sun,V {L_SUN_V:.4g} erg/s)')
 
 
 def main():

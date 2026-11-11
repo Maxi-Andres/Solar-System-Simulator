@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { decodeMapChannel } from '../core/localGroup.ts';
 import { faceOnLevels } from './faceOnTexture.ts';
+import { balmerColour } from './LocalGroup.tsx';
 
 /** A face-on map decoded once, linear, and averaged down its mipmaps (faceOnTexture.ts). */
 describe('a disc’s face-on map, decoded', () => {
@@ -23,5 +24,37 @@ describe('a disc’s face-on map, decoded', () => {
     expect(levels.map((level) => level.width)).toEqual([4, 2, 1]);
     const mean = (c: number) => levels[0]!.data.filter((_, i) => i % 4 === c).reduce((a, b) => a + b, 0) / 16;
     for (const c of [0, 1, 2]) expect(levels[2]!.data[c]).toBeCloseTo(mean(c), 6);
+  });
+
+  it('has no glowing gas without a map of it', () => {
+    const levels = faceOnLevels(rgba, map, [1, 1, 1]);
+    for (const level of levels) expect(level.data.filter((_, i) => i % 4 === 3).every((a) => a === 0)).toBe(true);
+    // Its pixels without bounds to read them by are none too.
+    const [base] = faceOnLevels(rgba, map, [1, 1, 1], new Uint8ClampedArray(4 * 4 * 4).fill(200));
+    expect(base!.data[3]).toBe(0);
+  });
+
+  it('puts the glowing gas in alpha, as it is: a grey PNG’s red, through its bounds', () => {
+    const withGas = { ...map, nebula: { bounds: [-4, 2] } } as const;
+    const grey = new Uint8ClampedArray(4 * 4 * 4);
+    for (let i = 0; i < 16; i += 1) grey.set([i * 16, i * 16, i * 16, 255], i * 4);
+    const levels = faceOnLevels(rgba, withGas, [2, 3, 5], grey);
+    expect(levels[0]!.data[5 * 4 + 3]).toBeCloseTo(decodeMapChannel(80, withGas.nebula.bounds), 5);
+    expect(levels[0]!.data[3]).toBe(0);
+    // The stars' channels as without it.
+    expect(levels[0]!.data[5 * 4]).toBeCloseTo(decodeMapChannel(80, map.bounds.old) * 2, 5);
+    const mean = levels[0]!.data.filter((_, i) => i % 4 === 3).reduce((a, b) => a + b, 0) / 16;
+    expect(levels[2]!.data[3]).toBeCloseTo(mean, 5);
+    expect(() => faceOnLevels(rgba, withGas, [1, 1, 1], new Uint8ClampedArray(8 * 8 * 4))).toThrow();
+  });
+});
+
+/** The Balmer lines' light on the starlight's exposure (LocalGroup.tsx). */
+describe('the glowing gas’s colour', () => {
+  it('is as bright as starlight for the same V-band luminosity, and pink', () => {
+    const [r, g, b] = balmerColour();
+    expect(0.2126 * r + 0.7152 * g + 0.0722 * b).toBeCloseTo(1, 12);
+    expect(r).toBeGreaterThan(b);
+    expect(b).toBeGreaterThan(g);
   });
 });

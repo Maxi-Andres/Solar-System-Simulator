@@ -1307,8 +1307,9 @@ export const physicsSection: AboutSection = {
           h<sub>old</sub>, the young stars’ h<sub>y</sub> and the dust’s h<sub>d</sub> — and the bulge with them; the
           light of each step dimmed by all the dust in front of it, more in blue than in red. A sheet is the same
           profile all along a step, so its column across the step is exact however long the step: a layer 134 pc
-          thick is not missed between steps a kiloparsec apart.
-          <Cite k={['cardelli1989', 'drimmelSpergel2001', 'kregel2002']} />
+          thick is not missed between steps a kiloparsec apart. The Large Cloud’s glowing gas adds its Balmer
+          lines’ light in the young stars’ sheet, which lights it: H-alpha and H-beta at Case B’s 2.86.
+          <Cite k={['cardelli1989', 'drimmelSpergel2001', 'kregel2002', 'osterbrockFerland2006']} />
         </Equation>
       </>
     );

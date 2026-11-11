@@ -36,9 +36,10 @@ import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
-import { galaxyVisibility } from './MilkyWay.tsx';
+import { BALMER_HUE, galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { mapStrength } from './Starfield.tsx';
+import { srgbToLinear } from './starRendering.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
 
 /**
@@ -69,7 +70,8 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * - **Andromeda's disc, from its face-on map** (core/localGroup.ts FaceOnMap): its old stars,
  *   young stars and dust where they are, each a sheet of its own height, and its bulge, marched
  *   together in MAP_STEPS steps, the light of each dimmed by the dust before it; each sheet's
- *   column across a step taken exactly, so the thin dust is not missed between steps.
+ *   column across a step taken exactly, so the thin dust is not missed between steps. The
+ *   Large Cloud's glowing gas too, in the young stars' sheet, which is what lights it.
  *
  * Instanced: one draw for the dwarfs, one each for the four. Every box is placed about the
  * camera from float64 positions, as the stars are, and its numbers -- the camera in the
@@ -309,6 +311,9 @@ uniform sampler2D uMap;
 uniform float uMapHalf;
 uniform vec3 uOldGlow;
 uniform vec3 uYoungGlow;
+// The glowing gas's Balmer light (the map's alpha, none where there is no map of it), over
+// the white column as the stars' are.
+uniform vec3 uNebulaGlow;
 uniform vec3 uDustTau;
 uniform vec3 uHeights;
 // The bulge's profile against r / R_e, out to BULGE_REACH: a table, not two powers a step.
@@ -391,8 +396,9 @@ vec3 marchMapped(vec3 d, float jitter) {
     vec2 uv = (uCamera.xy + d.xy * ts) / (2.0 * uMapHalf) + 0.5;
     if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
       float lod = max(0.0, log2(ts * uPixelAngle / uTexelPc));
-      vec3 m = textureLod(uMap, uv, lod).rgb;
-      emitted += uOldGlow * (m.r * column.x) + uYoungGlow * (m.g * column.y);
+      vec4 m = textureLod(uMap, uv, lod);
+      // The gas lies with the young stars that ionise it, in their sheet.
+      emitted += uOldGlow * (m.r * column.x) + (uYoungGlow * m.g + uNebulaGlow * m.a) * column.y;
       tau = uDustTau * (m.b * column.z);
     }
     // The step's light, then its dust on all that is behind it.
@@ -555,6 +561,17 @@ function glow(galaxy: LocalGroupGalaxy, rho0: number, colourIndex = galaxy.colou
   return new THREE.Vector3(r * scale, g * scale, b * scale);
 }
 
+/**
+ * The Balmer lines' colour (MilkyWay.tsx BALMER_HUE, H-alpha and H-beta at Case B's 2.86),
+ * linear, at unit luminance as starColor's are: so a L_Sun/pc^2 of the lines' light, as the
+ * V-band luminosity carrying the same energy, is as bright as a L_Sun/pc^2 of starlight.
+ */
+export function balmerColour(): readonly [number, number, number] {
+  const [r, g, b] = BALMER_HUE.map(srgbToLinear) as [number, number, number];
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return [r / luminance, g / luminance, b / luminance];
+}
+
 export interface LocalGroupProps {
   readonly source: LazySource<LocalGroupArchive>;
   readonly store: EphemerisStore;
@@ -690,6 +707,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
           uMapHalf: { value: 1 },
           uOldGlow: { value: new THREE.Vector3() },
           uYoungGlow: { value: new THREE.Vector3() },
+          uNebulaGlow: { value: new THREE.Vector3() },
           uDustTau: { value: new THREE.Vector3() },
           uHeights: { value: new THREE.Vector3(1, 1, 1) },
           uPixelAngle: { value: 1e-3 },
@@ -724,6 +742,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
             // The map's light per unit, set when it loads.
             oldGlow: new THREE.Vector3(),
             youngGlow: new THREE.Vector3(),
+            nebulaGlow: new THREE.Vector3(),
           },
         ];
       }),
@@ -744,13 +763,16 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
         continue;
       }
       const base = `${import.meta.env.BASE_URL}galaxies/${model.faceOnMap}`;
-      void Promise.all([fetch(`${base}.json`).then((response) => response.json()).then(parseFaceOnMap), pngPixels(`${base}.png`)])
-        .then(([map, pixels]) => {
+      const described = fetch(`${base}.json`).then((response) => response.json()).then(parseFaceOnMap);
+      // Its glowing gas, where it has a map of it, fetched alongside its stars'.
+      const gas = described.then((map) => (map.nebula === undefined ? null : pngPixels(`${base}-nebula.png`)));
+      void Promise.all([described, pngPixels(`${base}.png`), gas])
+        .then(([map, pixels, nebula]) => {
           const scales = faceOnScales(giant.galaxy, map);
           if (cancelled || scales === null) {
             return;
           }
-          const texture = faceOnTexture(faceOnLevels(pixels, map, [scales.old, scales.young, scales.dustTauV]));
+          const texture = faceOnTexture(faceOnLevels(pixels, map, [scales.old, scales.young, scales.dustTauV], nebula));
           textures.push(texture);
           const u = giant.uniforms;
           u.uMap.value = texture;
@@ -759,6 +781,10 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
           // Light per L_Sun/pc^2 now: the map carries the rest.
           giant.oldGlow.copy(glow(giant.galaxy, 1));
           giant.youngGlow.copy(glow(giant.galaxy, 1, YOUNG_COLOUR_INDEX));
+          if (nebula !== null) {
+            const [r, g, b] = balmerColour();
+            giant.nebulaGlow.set(r, g, b).divideScalar(columnAt(WHITE_MU));
+          }
           u.uDustTau.value.set(...(CHANNEL_WAVELENGTHS_UM.map((um) => extinctionCurve(um)) as [number, number, number]));
           u.uHeights.value.set(...scales.heightsPc);
           u.uKind.value = 2;
@@ -968,7 +994,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
 
     // The four: each box about the camera, and the camera in its frame.
     const pixelAngle = ((fov * Math.PI) / 180) / renderer.getDrawingBufferSize(scratchSize).y;
-    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow, oldGlow, youngGlow } of giants) {
+    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow, oldGlow, youngGlow, nebulaGlow } of giants) {
       mesh.visible = fade > 0;
       uniforms.uFade.value = fade;
       const rx = centre.x - cameraPc.x;
@@ -979,6 +1005,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       uniforms.uBulgeGlow.value.copy(bulgeGlow).multiplyScalar(share);
       uniforms.uOldGlow.value.copy(oldGlow).multiplyScalar(share);
       uniforms.uYoungGlow.value.copy(youngGlow).multiplyScalar(share);
+      uniforms.uNebulaGlow.value.copy(nebulaGlow).multiplyScalar(share);
       uniforms.uPixelAngle.value = pixelAngle;
       uniforms.uNear.value = Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scale);
       uniforms.uCamera.value.set(

@@ -5,8 +5,10 @@ import { decodeMapChannel, type FaceOnMap } from '../core/localGroup.ts';
 /**
  * A disc's face-on map (core/localGroup.ts FaceOnMap) as the shader reads it: decoded once,
  * here, into what each channel stands for -- the old stars' and the young stars' V light,
- * L_Sun/pc^2, and the dust's optical depth in V, face-on -- in half floats, with a mipmap
- * chain made by averaging those, light and depth, rather than their logarithms.
+ * L_Sun/pc^2, and the dust's optical depth in V, face-on; and in alpha the glowing gas's
+ * Balmer light, L_Sun/pc^2 of V-band equivalent, where there is a map of it, else none -- in
+ * half floats, with a mipmap chain made by averaging those, light and depth, rather than their
+ * logarithms.
  *
  * The 8-bit PNG is only how the map travels: decoded in the shader, three powers of ten at
  * each of a ray's 128 steps held a frame of Andromeda filling the screen to 66 ms.
@@ -19,23 +21,30 @@ export interface FaceOnLevel {
 
 /**
  * The map's levels, linear: RGBA pixels (as a canvas gives them) through the bounds, each
- * channel times its scale; then halved, two by two, down to one texel.
+ * channel times its scale, and the glowing gas's map, a grey PNG's pixels (its red), into
+ * alpha as it is -- already L_Sun/pc^2; then halved, two by two, down to one texel.
  */
 export function faceOnLevels(
   rgba: Uint8ClampedArray,
   map: FaceOnMap,
   scales: readonly [number, number, number],
+  nebula: Uint8ClampedArray | null = null,
 ): FaceOnLevel[] {
   const n = map.size;
   const bounds = [map.bounds.old, map.bounds.sfr, map.bounds.dust] as const;
   // A lookup per channel: 256 codes.
   const tables = bounds.map((b, c) => Float32Array.from({ length: 256 }, (_, code) => decodeMapChannel(code, b) * scales[c]!));
+  if (nebula !== null && nebula.length !== n * n * 4) {
+    throw new Error('the glowing gas’s map is not the size of the stars’');
+  }
+  const gas = map.nebula === undefined || nebula === null ? null : map.nebula.bounds;
+  const gasTable = Float32Array.from({ length: 256 }, (_, code) => (gas === null ? 0 : decodeMapChannel(code, gas)));
   const base = new Float32Array(n * n * 4);
   for (let i = 0; i < n * n; i += 1) {
     base[i * 4] = tables[0]![rgba[i * 4]!]!;
     base[i * 4 + 1] = tables[1]![rgba[i * 4 + 1]!]!;
     base[i * 4 + 2] = tables[2]![rgba[i * 4 + 2]!]!;
-    base[i * 4 + 3] = 1;
+    base[i * 4 + 3] = nebula === null ? 0 : gasTable[nebula[i * 4]!]!;
   }
   const levels: FaceOnLevel[] = [{ width: n, data: base }];
   for (let width = n >> 1; width >= 1; width >>= 1) {

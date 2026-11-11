@@ -215,6 +215,14 @@ describe('a galaxy’s light', () => {
     expect(scales.heightsPc[0]).toBeCloseTo(5300 / 7.3, 6);
   });
 
+  it('reads a face-on map with its glowing gas or without', () => {
+    const map = { size: 4, halfPc: 100, bounds: { old: [-3, 1], sfr: [-6, -2], dust: [-2, 1] }, oldSum: 1, sfrSum: 1 };
+    expect(parseFaceOnMap(map).nebula).toBeUndefined();
+    expect(parseFaceOnMap({ ...map, nebula: { bounds: [-4, 2] } }).nebula?.bounds).toEqual([-4, 2]);
+    expect(() => parseFaceOnMap({ ...map, nebula: {} })).toThrow();
+    expect(() => parseFaceOnMap({ size: 4 })).toThrow();
+  });
+
   it('converts surface brightness both ways', () => {
     expect(surfaceBrightness(columnAt(23.4))).toBeCloseTo(23.4, 10);
     expect(gamma(5)).toBeCloseTo(24, 10);

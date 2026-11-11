@@ -41,7 +41,7 @@ import type { StateVector, Vec3 } from './vec3.ts';
  * - **A disc** (Andromeda, Triangulum, the Large Cloud): exponential in radius, of its
  *   measured scale length, and in height, DISC_FLATTENING times thinner -- the mean of the
  *   discs Kregel et al. measured edge-on, since the thickness of the light is measured for
- *   none of the three -- at its measured inclination and position angle. Andromeda's from
+ *   none of the three -- at its measured inclination and position angle. Each one's from
  *   above is its face-on map (FaceOnMap below): its stars and its dust as they are, not an
  *   exponential.
  *   Andromeda's bulge beside it, a Prugniel-Simien sphere whose projection is the Sersic
@@ -455,10 +455,15 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
  *   2018) and Bohlin et al.'s gas to reddening, Triangulum's by its dust mass (z0MGS) and
  *   Draine et al. 2014's, less the 2.5 that overpredicts by Andromeda's stars (Dalcanton et al.
  *   2015); dimming each colour by Cardelli et al.'s curve.
+ * - **Glowing gas**, the Large Cloud's alone, from SHASSA's H-alpha (galaxies/lmc-nebula.png,
+ *   one channel): its HII regions' Balmer light, H-alpha and H-beta at Case B's 2.86
+ *   (Osterbrock & Ferland 2006), as the V-band luminosity that carries the same energy,
+ *   L_Sun/pc^2 -- drawn on the same exposure as the starlight, in the lines' own pink.
  *
  * Each is a sheet of its own thickness, as the Milky Way's are: the old stars the disc's
  * (DISC_FLATTENING); the dust the Milky Way's, the one dust layer whose thickness is measured;
- * the young stars the Milky Way's OB stars', YOUNG_HEIGHT_PC, thinner still.
+ * the young stars the Milky Way's OB stars', YOUNG_HEIGHT_PC, thinner still, and the glowing
+ * gas with the young stars that light it.
  */
 export interface FaceOnMap {
   /** Pixels a side, and how far the map reaches either side of the centre, pc. */
@@ -469,6 +474,8 @@ export interface FaceOnMap {
   /** The decoded map summed over its area: old stars (its own units, pc^2), star formation (M_Sun/yr). */
   readonly oldSum: number;
   readonly sfrSum: number;
+  /** Its glowing gas, where it has a map of it (<name>-nebula.png): that map's log10 at code 1 and 255. */
+  readonly nebula?: { readonly bounds: readonly [number, number] };
 }
 
 /** The young stars' V light per unit of star formation, L_Sun per M_Sun/yr: see the header. */
@@ -535,6 +542,9 @@ export function parseFaceOnMap(raw: unknown): FaceOnMap {
   const map = raw as FaceOnMap;
   if (typeof map?.size !== 'number' || typeof map.halfPc !== 'number' || typeof map.oldSum !== 'number') {
     throw new Error('not a face-on map');
+  }
+  if (map.nebula !== undefined && !(Array.isArray(map.nebula?.bounds) && map.nebula.bounds.length === 2)) {
+    throw new Error('not a face-on map: its nebula has no bounds');
   }
   return map;
 }

@@ -335,6 +335,9 @@ export const choicesSection: AboutSection = {
             the foreground the masks missed are taken out first, since in a sheet each would be a streak.
             <Why>what can be measured of a disc tipped 77° to us is what it looks like from here.</Why>
           </Item>
+          <Item title="The Large Cloud’s HII regions pink">
+            As in its photographs, because they are: their light is Hα’s red and Hβ’s blue-green.
+          </Item>
           <Item title="Too small for a pixel, a point">
             A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
             lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and

@@ -77,7 +77,7 @@ the old stars and 0.626 for the dust; no bulge to take off; star formation endin
 ## lmc.png, lmc.json: the Large Magellanic Cloud
 
 Made the same way, by the same script, from its own surveys -- nine degrees across the sky, it
-is in neither z0MGS nor its dust maps: 1024 × 1024 points 6 kpc either side of the centre;
+is in neither z0MGS nor its dust maps: 1024 × 1024 points 9 kpc either side of the centre;
 tipped 34°, its line of nodes at 139°, its north-east side nearer; star formation ending at
 5.5 kpc. Each map only where it was observed: past its edge nothing, not light made up.
 
@@ -87,10 +87,32 @@ tipped 34°, its line of nodes at 139°, its north-east side nearer; star format
   Milky Way's own H-alpha in front of it (its median 5.5–6.3° from the centre), plus Spitzer MIPS
   24 µm for what the dust hides, averaged to 12.5″: Kennicutt et al. 2009's
   5.5 × 10⁻⁴² [L(Hα) + 0.020 νL_ν(24 µm)] M☉/yr per erg/s. A compact source in one with nothing
-  in the other taken out.
+  in the other taken out. Then spread by a Gaussian of 200 pc, its total kept: H-alpha and 24 µm
+  show stars younger than some 10 Myr, still in their birth clouds, but most of the young stars'
+  V light is from stars 10–100 Myr old, which have drifted a few hundred pc from where they
+  formed, at some 10 km/s.
 - **B, dust**: A_V face-on from Clark et al. 2023's dust surface density, M☉/pc² -- its opacity
   set so the Milky Way's diffuse gas has 150 times its dust's mass -- by that ratio and Bohlin et
   al.'s hydrogen per magnitude: 7.36 magnitudes per M☉/pc².
+
+## lmc-nebula.png: the Large Magellanic Cloud's nebulae
+
+Its ionised gas, which glows in its Balmer lines -- the pink of every photograph of its HII
+regions, 30 Doradus first -- on the same 1024 × 1024 points as `lmc.png`, one 8-bit grey channel,
+log10 between `lmc.json`'s `nebula.bounds`, 0 for none. Made by the same script.
+
+- **What**: the Balmer lines' light face-on, as V-band-equivalent luminosity, L☉,V per pc²: the
+  lines' energy over the Sun's V luminosity, so that it is drawn on the same exposure as the stars.
+- **From** SHASSA's H-alpha, as in `lmc.png`'s star formation -- the Milky Way's in front taken
+  off, a compact source with nothing at 24 µm taken out, deprojected, softened, ending at 5.5 kpc --
+  but not spread: the gas is where it is. A decirayleigh is 10⁵/4π photons of 656.28 nm per cm²
+  per s per sr, 2.41 × 10⁻⁸ erg/s/cm²/sr; 4π I over a pc².
+- **H-beta** on top, 1/2.86 of H-alpha's energy: Case B's Balmer decrement (Osterbrock &
+  Ferland 2006, Astrophysics of Gaseous Nebulae and Active Galactic Nuclei, 2nd ed.).
+- **The Sun's V luminosity**, 4.55 × 10³² erg/s: its absolute V magnitude, 4.81 (Willmer 2018,
+  ApJS 236, 47), with V = 0 at 3.631 × 10⁻⁹ erg/s/cm²/Å (Bessell, Castelli & Plez 1998, A&A 333,
+  231) over the V band's 880 Å (Binney & Merrifield 1998, Galactic Astronomy, table 2.1).
+- Its H-alpha, 2.6 × 10⁴⁰ erg/s in all; 30 Doradus, at its brightest, some 500 L☉,V per pc².
 
 ### Sources
 
