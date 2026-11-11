@@ -642,6 +642,13 @@ export const estimatedSection: AboutSection = {
             the old population. Its glow keeps only the light of the stars too faint to show, so no light is
             counted twice.
           </Item>
+          <Item title="The Small Cloud’s depth">
+            How each place’s light is spread along our line of sight: a Gaussian of its measured mean and depth,
+            since its stars give a spread of distances, not a shape. Its glowing gas and its dust are put with
+            its young stars, as the south-west bar’s dust is found in front of its old stars
+            <Cite k="yanchulovaMericaJones2021" />. Where no star is near, the whole cloud’s mean and a typical
+            depth fill in.
+          </Item>
           <Item title="The Large Cloud past Spitzer’s edge">
             Spitzer mapped its central seven degrees. Its old stars past that edge are its exponential, fitted to
             the outer half of what was mapped and joined to it smoothly; its star formation there is its Hα

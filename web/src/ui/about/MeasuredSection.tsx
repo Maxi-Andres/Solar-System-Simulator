@@ -618,7 +618,12 @@ export const measuredSection: AboutSection = {
             old stars from Spitzer’s 3.6 µm, its star formation from SHASSA’s Hα and Spitzer’s 24 µm{' '}
             <Cite k={['meixner2006', 'gaustad2001', 'kennicutt2009']} /> — 0.17 solar masses a year, within the
             0.1–0.2 measured — and its dust from Herschel, Planck, IRAS and COBE <Cite k="clark2023" />; its
-            bar and 30 Doradus at the bar’s east end, as in its photographs. Its <Strong>glowing gas</Strong>,
+            bar and 30 Doradus at the bar’s east end, as in its photographs. The{' '}
+            <Strong>Small Cloud</Strong> as seen from Earth, from the same surveys and its dust from Clark et
+            al. — 0.033 solar masses a year — and how deep it lies along each line of sight, on a 32 × 32 grid:
+            the mean distance and intrinsic depth of its old stars from OGLE’s RR Lyrae, of its young stars from
+            its Cepheids under 150 million years, anchored to 62.44 kpc <Cite k="graczyk2020" />. The young lie
+            nearer in the north-east, by 2.3 kpc a degree. Its <Strong>glowing gas</Strong>,
             its HII regions’ light, from SHASSA’s Hα <Cite k="gaustad2001" />.
           </Item>
           <Item>

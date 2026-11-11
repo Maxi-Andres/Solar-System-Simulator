@@ -354,6 +354,12 @@ export const choicesSection: AboutSection = {
             nearer than three half-light radii, where it fills the frame: Hercules 380 pc out, not 4.8 kpc, and
             a few of its giants show. The largest faint ones stop at three radii with their stars still faint.
           </Item>
+          <Item title="The Small Cloud along our line of sight">
+            It is no disc, so it is not drawn from above: each point of its sky is spread along its own line
+            from the Sun with the depth measured there. From Earth it is exactly its maps; from beside it, a
+            cigar pointing at the Sun, a compact nebula a streak as deep as its population.
+            <Why>its stars measure how deep it is, and in no other way is its shape known.</Why>
+          </Item>
           <Item title="Every galaxy at least a dot">
             A galaxy too small for a few pixels is drawn as a dot at least faintly bright, in its own colour,
             however faint it is: on one exposure most dwarfs would not show at all. Its brightness above that

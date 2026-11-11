@@ -37,6 +37,7 @@ import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
 import { dwarfStarsDrawn } from './DwarfStars.tsx';
+import { skyVolumesDrawn } from '../core/skyMap.ts';
 import { BALMER_HUE, galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { mapStrength } from './Starfield.tsx';
@@ -1041,13 +1042,15 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
 
     // The four: each box about the camera, and the camera in its frame.
     const pixelAngle = ((fov * Math.PI) / 180) / renderer.getDrawingBufferSize(scratchSize).y;
-    for (const { mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow, oldGlow, youngGlow, nebulaGlow } of giants) {
-      mesh.visible = fade > 0;
+    for (const { galaxy, mesh, uniforms, axes, extent, centre, scale, halfLightPc, glow: g, bulgeGlow, oldGlow, youngGlow, nebulaGlow } of giants) {
+      // Drawn from its sky map instead (SkyVolume.tsx): its light is not counted twice.
+      const drawnElsewhere = skyVolumesDrawn.has(galaxy.key);
+      mesh.visible = fade > 0 && !drawnElsewhere;
       uniforms.uFade.value = fade;
       const rx = centre.x - cameraPc.x;
       const ry = centre.y - cameraPc.y;
       const rz = centre.z - cameraPc.z;
-      const share = volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
+      const share = drawnElsewhere ? 0 : volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
       uniforms.uGlow.value.copy(g).multiplyScalar(share);
       uniforms.uBulgeGlow.value.copy(bulgeGlow).multiplyScalar(share);
       uniforms.uOldGlow.value.copy(oldGlow).multiplyScalar(share);

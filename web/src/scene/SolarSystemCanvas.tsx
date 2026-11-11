@@ -30,6 +30,7 @@ import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
+import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -339,6 +340,7 @@ export function SolarSystemCanvas({
         onPick={onPickGalaxy}
       />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
+      <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <GlobularClusters
         source={globularClusters}
         catalog={stars}

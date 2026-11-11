@@ -1153,6 +1153,13 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         use: 'that dust model’s extinction, 2.5 times what Andromeda’s stars show',
       },
       {
+        key: 'yanchulovaMericaJones2021',
+        who: 'Yanchulova Merica-Jones et al. 2021',
+        title: 'Three-dimensional Structure and Dust Extinction in the Small Magellanic Cloud',
+        where: 'ApJ 907, 50',
+        use: 'the Small Cloud’s dust in front of its old stars, with its young',
+      },
+      {
         key: 'reed2000',
         who: 'Reed 2000',
         title: 'New Estimates of the Scale Height and Surface Density of OB Stars in the Solar Neighborhood',
