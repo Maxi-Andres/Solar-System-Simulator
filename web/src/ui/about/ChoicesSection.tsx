@@ -346,6 +346,14 @@ export const choicesSection: AboutSection = {
             dwarf’s giants show only within about 1.5 kpc of them.
             <Why>an ultra-faint dwarf is a few thousand stars and no glow at all: what is there to see is its stars.</Why>
           </Item>
+          <Item title="Going to a dwarf">
+            A galaxy whose light shows is framed whole, its light out to three half-light radii in the middle
+            of the frame. A faint dwarf, fainter than 26 mag/arcsec² at its centre, shows no light from
+            anywhere: it is seen by its stars, as it was found. So it is gone to where its fifth-brightest star,
+            counted from its population and its light, is V 6, two magnitudes above the stars’ limit, and never
+            nearer than three half-light radii, where it fills the frame: Hercules 380 pc out, not 4.8 kpc, and
+            a few of its giants show. The largest faint ones stop at three radii with their stars still faint.
+          </Item>
           <Item title="Too small for a pixel, a point">
             A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
             lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and

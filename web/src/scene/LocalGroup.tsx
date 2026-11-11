@@ -75,8 +75,9 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  *   Large Cloud's glowing gas too, in the young stars' sheet, which is what lights it.
  *
  * Instanced: one draw for the dwarfs, one each for the four. Every box is placed about the
- * camera from float64 positions, as the stars are, and its numbers -- the camera in the
- * galaxy's units -- worked out in float64 each frame and handed over per galaxy.
+ * camera from float64 positions, as the stars are, the right way round (boxMatrix) so that
+ * its inside faces are drawn from within it, and its numbers -- the camera in the galaxy's
+ * units -- worked out in float64 each frame and handed over per galaxy.
  *
  * ## How bright
  *
@@ -214,6 +215,35 @@ export function plummerColumn(
   const s0 = (u0[0] * v[0] + u0[1] * v[1] + u0[2] * v[2]) / Math.sqrt(vv) + nearPc * Math.sqrt(vv);
   const f = (s: number) => (s * (2 * s * s + 3 * c2)) / (3 * c2 * c2 * (s * s + c2) ** 1.5);
   return (2 / (3 * c2 * c2) - f(s0)) / Math.sqrt(vv);
+}
+
+/**
+ * A galaxy's box about the camera, into `out`: its axes, scaled by its half extents
+ * (`extent`, pc), at its centre `centre` (pc from the camera) -- the right way round whatever
+ * its axes are. A dwarf's -- its major axis, its minor axis, away from the Sun -- are a mirror
+ * image of a right-handed set, and three.js turns a mirrored object's faces round by its own
+ * matrix alone, not an instance's: the dwarfs' back faces were then their near ones, which
+ * from inside a box there are none of, and a dwarf went dark as the camera entered its box.
+ * The box is the same box either way round, and the shaders take the galaxy's axes from
+ * their own inputs.
+ */
+export function boxMatrix(
+  axes: { readonly u: { x: number; y: number; z: number }; readonly v: { x: number; y: number; z: number }; readonly w: { x: number; y: number; z: number } },
+  extent: readonly [number, number, number],
+  centre: { readonly x: number; readonly y: number; readonly z: number },
+  out: THREE.Matrix4,
+): THREE.Matrix4 {
+  const { u, v, w } = axes;
+  const handed = Math.sign(u.x * (v.y * w.z - v.z * w.y) + u.y * (v.z * w.x - v.x * w.z) + u.z * (v.x * w.y - v.y * w.x)) || 1;
+  const a = extent[0] * UNITS_PER_PC;
+  const b = extent[1] * UNITS_PER_PC;
+  const c = handed * extent[2] * UNITS_PER_PC;
+  return out.set(
+    u.x * a, v.x * b, w.x * c, centre.x * UNITS_PER_PC,
+    u.y * a, v.y * b, w.y * c, centre.y * UNITS_PER_PC,
+    u.z * a, v.z * b, w.z * c, centre.z * UNITS_PER_PC,
+    0, 0, 0, 1,
+  );
 }
 
 const COMMON_VERTEX = /* glsl */ `
@@ -593,7 +623,6 @@ export interface LocalGroupProps {
 
 const noRaycast = (): void => {};
 const scratchMatrix = new THREE.Matrix4();
-const scratchBasis = new THREE.Matrix4();
 const scratchSize = new THREE.Vector2();
 
 export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick }: LocalGroupProps) {
@@ -989,13 +1018,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
           -(rx * axes.v.x + ry * axes.v.y + rz * axes.v.z) / scales[1],
           -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z) / scales[2],
         );
-        scratchBasis.makeBasis(
-          new THREE.Vector3(axes.u.x, axes.u.y, axes.u.z).multiplyScalar(extent[0] * UNITS_PER_PC),
-          new THREE.Vector3(axes.v.x, axes.v.y, axes.v.z).multiplyScalar(extent[1] * UNITS_PER_PC),
-          new THREE.Vector3(axes.w.x, axes.w.y, axes.w.z).multiplyScalar(extent[2] * UNITS_PER_PC),
-        );
-        scratchMatrix.copy(scratchBasis).setPosition(rx * UNITS_PER_PC, ry * UNITS_PER_PC, rz * UNITS_PER_PC);
-        dwarfs.mesh.setMatrixAt(i, scratchMatrix);
+        dwarfs.mesh.setMatrixAt(i, boxMatrix(axes, extent, { x: rx, y: ry, z: rz }, scratchMatrix));
       });
       dwarfs.u0.needsUpdate = true;
       dwarfs.near.needsUpdate = true;
@@ -1025,12 +1048,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
         -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z),
       );
       mesh.matrixAutoUpdate = false;
-      scratchBasis.makeBasis(
-        new THREE.Vector3(axes.u.x, axes.u.y, axes.u.z).multiplyScalar(extent[0] * UNITS_PER_PC),
-        new THREE.Vector3(axes.v.x, axes.v.y, axes.v.z).multiplyScalar(extent[1] * UNITS_PER_PC),
-        new THREE.Vector3(axes.w.x, axes.w.y, axes.w.z).multiplyScalar(extent[2] * UNITS_PER_PC),
-      );
-      mesh.matrix.copy(scratchBasis).setPosition(rx * UNITS_PER_PC, ry * UNITS_PER_PC, rz * UNITS_PER_PC);
+      boxMatrix(axes, extent, { x: rx, y: ry, z: rz }, mesh.matrix);
       uniforms.uLocal.value.copy(mesh.matrix);
       mesh.matrixWorldNeedsUpdate = true;
     }

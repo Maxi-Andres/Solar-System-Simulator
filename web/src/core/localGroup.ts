@@ -5,6 +5,8 @@ import type { BeltFetchers } from './belt.ts';
 import type { Searchable } from './beltNames.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
+import { CLUSTER_LF_STEP } from './globularClusterPopulation.ts';
+import { clusterPopulation, meanLuminosity } from './globularClusters.ts';
 import { DUST_DISC } from './milkyWay.ts';
 import { normalizeName } from './search.ts';
 import { PARSEC_KM } from './stars3d.ts';
@@ -657,21 +659,105 @@ export function galaxyHalfLightPc(galaxy: LocalGroupGalaxy): number | null {
 }
 
 /**
- * How far from its centre the camera stands when going to it, km: all of it in view, its
- * light out to where it fades into the dark -- four scale lengths of a disc, three scale radii
- * of a dwarf -- in the inner half of the frame's height.
+ * A dwarf's glow shows if its centre is this bright or brighter, mag/arcsec^2: five magnitudes
+ * below the column drawn white (scene/LocalGroup.tsx WHITE_MU, 21), a hundredth of full
+ * strength -- a tenth of the screen's brightness once encoded. Fornax's centre as drawn, 23.5,
+ * shows; Draco's, 25.4, faintly; Hercules's, 27.5, and every ultra-faint's, do not.
+ */
+export const GLOW_SHOWN_MU = 26;
+
+/**
+ * How many of a faint dwarf's brightest stars, and how bright, V, the camera brings them when
+ * going to it: its fifth brightest at V 6, two magnitudes above the stars' limit, V 8 -- the
+ * stars' response is a line in magnitude from the brightest star in the sky to that limit
+ * (scene/starRendering.ts), and a star near it is a dot at the edge of seeing.
+ */
+export const FRAMING_STARS = 5;
+export const FRAMING_STARS_V = 6;
+
+/** Nearer than this, in half-light radii (galaxyHalfLightPc), a dwarf is about the camera, not in front of it. */
+export const FRAMING_NEAREST_RADII = 3;
+
+/**
+ * The M_V its `count` brightest stars are as bright as, expected: as many stars as give its
+ * light, of the population its stars are drawn from (core/dwarfStars.ts) -- the globular
+ * clusters' 12 Gyr table nearest its [Fe/H], the clusters' default where none is measured --
+ * counted down from the brightest. Hercules, of 9 x 10^4 stars at [Fe/H] -2.41, has its
+ * brightest at M_V -2.4 and its fifth at -1.6; Segue 1, of 1,400, its brightest at +0.5 and its
+ * fifth at +3.3.
+ */
+export function brightestStarsV(galaxy: LocalGroupGalaxy, feH: number | null, count = FRAMING_STARS): number | null {
+  const luminosity = galaxyLuminosity(galaxy);
+  if (luminosity === null) {
+    return null;
+  }
+  const population = clusterPopulation(feH);
+  const stars = luminosity / meanLuminosity(population);
+  let brighter = 0;
+  for (const [mv, share] of population.rows) {
+    const here = share * stars;
+    if (brighter + here >= count) {
+      return mv + (CLUSTER_LF_STEP * (count - brighter)) / here;
+    }
+    brighter += here;
+  }
+  return population.rows[population.rows.length - 1]![0] + CLUSTER_LF_STEP;
+}
+
+/**
+ * Its centre's surface brightness, mag/arcsec^2, as drawn: a Plummer ellipsoid's column
+ * through its centre is its luminosity over pi a b, whatever its depth.
+ */
+export function plummerCentreMu(galaxy: LocalGroupGalaxy): number | null {
+  const model = galaxy.model;
+  const luminosity = galaxyLuminosity(galaxy);
+  if (model === null || model.kind !== 'plummer' || luminosity === null) {
+    return null;
+  }
+  return surfaceBrightness(luminosity / (Math.PI * model.majorPc * model.minorPc));
+}
+
+/**
+ * How far from its centre the camera stands when going to it, km: where it can be seen.
+ *
+ * - **All of it in view**: its light out to where it fades into the dark -- four scale
+ *   lengths of a disc or of the Small Cloud, three scale radii of a dwarf -- in the inner half
+ *   of the frame's height, seven times that out: 21 half-light radii of a dwarf. Fornax's
+ *   glow, 23.5 mag/arcsec^2 at its centre, is seen from there, 16.5 kpc out.
+ * - **A faint dwarf, its stars**: one whose centre is fainter than GLOW_SHOWN_MU is no light,
+ *   from there or from anywhere -- it is seen by its stars, as it was found. From 21 half-light
+ *   radii none show: Hercules's brightest, M_V -2.4, is V 11.1 4.8 kpc out, past the stars'
+ *   limit, V 8. So it is gone to no farther than where its FRAMING_STARS brightest are V
+ *   FRAMING_STARS_V -- five at V 6 -- and no nearer than FRAMING_NEAREST_RADII half-light
+ *   radii, three, where its body fills the frame. Hercules is gone to 380 pc out, not 4.8
+ *   kpc -- its fifth brightest would be V 6 at 320 -- its brightest V 5.6 and twenty stars
+ *   brighter than V 7.5; Segue 1 64 pc out, its brightest V 4.6. The largest and faintest stop
+ *   at the three radii short of it, their stars still faint: Antlia II 6.9 kpc out, Crater II
+ *   3.1, Sextans 1.7, Andromeda's faint dwarfs 0.5 to 4 kpc.
+ *
+ * Discs, the Small Cloud and the dwarfs whose light shows are framed whole, as before.
  */
 export function galaxyFramingKm(galaxy: LocalGroupGalaxy): number {
   const model = galaxy.model;
-  const pc =
-    model === null
-      ? 2000
-      : model.kind === 'disc'
-        ? 7 * 4 * model.scaleLengthPc
-        : model.kind === 'plummer'
-          ? 7 * 3 * model.majorPc
-          : 7 * 4 * model.majorPc;
-  return pc * PARSEC_KM;
+  if (model === null) {
+    return 2000 * PARSEC_KM;
+  }
+  if (model.kind === 'disc') {
+    return 7 * 4 * model.scaleLengthPc * PARSEC_KM;
+  }
+  if (model.kind === 'exponential-ellipsoid') {
+    return 7 * 4 * model.majorPc * PARSEC_KM;
+  }
+  const whole = 7 * 3 * model.majorPc;
+  const mu = plummerCentreMu(galaxy);
+  const k = galaxy.catalogueIndex;
+  const brightest = brightestStarsV(galaxy, k === null ? null : (readCatalog?.feH[k] ?? null));
+  if (mu === null || mu <= GLOW_SHOWN_MU || brightest === null) {
+    return whole * PARSEC_KM;
+  }
+  const shown = 10 ** ((FRAMING_STARS_V - brightest) / 5 + 1);
+  const nearest = FRAMING_NEAREST_RADII * galaxyHalfLightPc(galaxy)!;
+  return Math.max(nearest, Math.min(whole, shown)) * PARSEC_KM;
 }
 
 /** Earth's view of it: the camera on the Sun's side, looking out, north up. */
