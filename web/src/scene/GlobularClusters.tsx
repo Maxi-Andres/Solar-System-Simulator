@@ -4,14 +4,17 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { clusterLuminosity, populationColourIndex, unresolvedShare } from '../core/globularClusterLight.ts';
 import {
   CLUSTER_COLOR,
   clusterDisplayName,
   clusterExtinctionV,
+  clusterPopulation,
   clusterSampleRequest,
   type ClusterSample,
   type GlobularClusterArchive,
 } from '../core/globularClusters.ts';
+import { columnAt } from '../core/localGroup.ts';
 import { dustColumn } from '../core/nuclearCluster.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { LazySource } from '../core/satellites.ts';
@@ -21,6 +24,8 @@ import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { lensState } from './lens.ts';
+import { MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
+import { galaxyVisibility } from './MilkyWay.tsx';
 import { clusterMaterial, clusterUniforms, sceneToGalacticPc } from './NuclearCluster.tsx';
 import { KM_PER_UNIT } from './scale.ts';
 import { magnitudeToPeakCoefficients } from './starRendering.ts';
@@ -49,6 +54,28 @@ import { mapStrength } from './Starfield.tsx';
  * Sun's dust column to the cluster that lies between the camera and it, in the galaxy model's
  * dust disc -- as the nuclear cluster's (nuclearCluster.ts cameraExtinctionV). A cluster
  * Harris gives no reddening for is drawn with none, and its panel says so.
+ *
+ * ## Its light from far off
+ *
+ * Where its stars are not drawn, each cluster is its light taken whole
+ * (core/globularClusterLight.ts): a point, as a galaxy too small for a pixel is
+ * (LocalGroup.tsx), on the galaxies' exposure -- a Gaussian of its half-light radius, never
+ * narrower than MIN_SIGMA_PX, holding all its luminosity, its column over WHITE_MU's. So from
+ * outside the Milky Way 47 Tuc and Omega Cen are where they are with the marks off, as they
+ * are in a photograph, on the exposure the Clouds beside them are drawn with.
+ *
+ * - **Dimmed by the dust in front**, as its stars are: its A_V from the Sun times the share of
+ *   that dust column between the camera and it, worked out again as the camera moves. Grey,
+ *   as the stars' is: the reddening is not drawn.
+ * - **Giving way to its stars**: for the cluster whose stars are drawn the point holds only
+ *   the light of those too faint to be -- fainter than the picture's limit from the camera, or
+ *   than the sample's limit at its half-light radius (unresolvedShare) -- so no light is
+ *   drawn twice; nearer than POINT_NEAR_FULL half-light radii it fades, gone by
+ *   POINT_NEAR_FROM, where the light round the camera is its stars.
+ * - **Where**: as the galaxies' light, once out of the Sun's neighbourhood (galaxyVisibility).
+ *   From the Solar System the sky is the star catalogues', Hipparcos and Tycho-2, which hold
+ *   single stars and not a cluster's light taken whole -- as they hold no galaxy's.
+ * - The Icons layer does not touch it: it is the cluster's light, not a mark.
  */
 
 /** The brightest a cluster's stars are, M_V: the 12 Gyr populations' AGB tip. */
@@ -60,6 +87,13 @@ const DOT_RADIUS_PX = 1.1;
 const CLICK_SLOP_PX = 5;
 /** The extinction is worked out again when the camera has moved this share of its distance to the cluster. */
 const EXTINCTION_REFRESH_SHARE = 0.01;
+/** The points' dust is worked out again when the camera has moved this share of its distance to the nearest cluster. */
+const POINT_DUST_REFRESH_SHARE = 0.05;
+/** The point fades between these distances from the cluster's centre, half-light radii (see the header). */
+export const POINT_NEAR_FROM = 4;
+export const POINT_NEAR_FULL = 10;
+/** A Gaussian's half-light radius in units of its sigma: sqrt(2 ln 2). */
+export const HALF_LIGHT_SIGMAS = Math.sqrt(2 * Math.LN2);
 
 const VERTEX_SHADER = /* glsl */ `
 uniform vec3 uCameraHigh;
@@ -93,6 +127,62 @@ void main() {
 }
 `;
 
+const POINT_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+uniform vec3 uCameraHigh;
+uniform vec3 uCameraLow;
+uniform float uMotion;
+uniform float uUnitsPerPc;
+uniform float uPixelsPerRadian;
+attribute vec3 velocity;
+// The colour times the luminosity over the white column; the half-light radius, pc; the
+// share drawn (the fade, the dust, the stars' handover: worked out on the CPU each frame).
+attribute vec3 aLight;
+attribute float aHalfLightPc;
+attribute float aShare;
+varying vec3 vPeak;
+varying float vSigmaPx;
+varying float vSizePx;
+
+void main() {
+  vec3 rel = ((position - uCameraHigh) - uCameraLow) + velocity * uMotion;
+  float distancePc = length(rel);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
+  #include <logdepthbuf_vertex>
+  float sigmaPx = max(${MIN_SIGMA_PX.toFixed(2)}, aHalfLightPc / distancePc * uPixelsPerRadian / ${HALF_LIGHT_SIGMAS.toFixed(4)});
+  float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
+  // LocalGroup.tsx pointPeak: L / (2 pi sigma^2).
+  vPeak = aLight * aShare / (6.2831853 * sigmaPc * sigmaPc);
+  vSigmaPx = sigmaPx;
+  vSizePx = ceil(6.0 * sigmaPx) + 1.0;
+  gl_PointSize = aShare > 0.0 ? vSizePx : 0.0;
+}
+`;
+
+/** As LocalGroup.tsx's points': the Gaussian, through the galaxies' soft shoulder. */
+const POINT_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+varying vec3 vPeak;
+varying float vSigmaPx;
+varying float vSizePx;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec2 offset = (gl_PointCoord - 0.5) * vSizePx;
+  vec3 x = vPeak * exp(-0.5 * dot(offset, offset) / (vSigmaPx * vSigmaPx));
+  vec3 light = 1.0 - exp(-x);
+  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+  gl_FragColor = vec4(light, 1.0);
+}
+`;
+
+/** 0 to 1 across [from, to], smoothly. */
+function smoothstep(from: number, to: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - from) / (to - from)));
+  return t * t * (3 - 2 * t);
+}
+
 export interface GlobularClustersProps {
   readonly source: LazySource<GlobularClusterArchive>;
   readonly catalog: StarCatalog;
@@ -109,6 +199,7 @@ const noRaycast = (): void => {};
 const scratchCamera = new THREE.Vector3();
 const scratchSun = new THREE.Vector3();
 const scratchCluster = new THREE.Vector3();
+const scratchSize = new THREE.Vector2();
 
 export function GlobularClusters({
   source,
@@ -124,6 +215,7 @@ export function GlobularClusters({
   const archive = useSyncExternalStore(source.subscribe, () => source.value);
   const markersRef = useRef<THREE.Group>(null);
   const starsGroup = useMemo(() => new THREE.Group(), []);
+  const lightGroup = useMemo(() => new THREE.Group(), []);
   const requested = useRef(false);
   const frame = useRef({ fade: 0, cameraPc: new THREE.Vector3(), jd: 0 });
   const pickRef = useRef(onPick);
@@ -185,6 +277,84 @@ export function GlobularClusters({
     };
   }, [markers]);
 
+  // Each cluster's light, as a point (see the header).
+  const pointUniforms = useMemo<Record<string, THREE.IUniform>>(
+    () => ({
+      uCameraHigh: markerUniforms['uCameraHigh']!,
+      uCameraLow: markerUniforms['uCameraLow']!,
+      uMotion: markerUniforms['uMotion']!,
+      uUnitsPerPc: { value: UNITS_PER_PC },
+      uPixelsPerRadian: { value: 1 },
+    }),
+    [markerUniforms],
+  );
+  const maxPointPx = useMemo(() => {
+    const context = gl.getContext();
+    const range = context.getParameter(context.ALIASED_POINT_SIZE_RANGE) as Float32Array | null;
+    return range?.[1] ?? 64;
+  }, [gl]);
+  const points = useMemo(() => {
+    if (archive === null || markers === null) {
+      return null;
+    }
+    const c = archive.catalog;
+    const white = columnAt(WHITE_MU);
+    const light = new Float32Array(c.count * 3);
+    const populations = [];
+    for (let k = 0; k < c.count; k += 1) {
+      const population = clusterPopulation(c.feH[k] ?? null);
+      populations.push(population);
+      // Its whole light, in its population's colour, over the white column.
+      const [r, g, b] = starColor(populationColourIndex(population));
+      const scale = clusterLuminosity(c, k).luminosity / white;
+      light.set([r * scale, g * scale, b * scale], k * 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(markers.position, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(markers.velocity, 3));
+    geometry.setAttribute('aLight', new THREE.BufferAttribute(light, 3));
+    geometry.setAttribute('aHalfLightPc', new THREE.BufferAttribute(Float32Array.from(c.halfLightRadiusPc), 1));
+    const share = new THREE.BufferAttribute(new Float32Array(c.count), 1);
+    share.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aShare', share);
+    const object = new THREE.Points(
+      geometry,
+      new THREE.ShaderMaterial({
+        uniforms: pointUniforms,
+        vertexShader: POINT_VERTEX,
+        fragmentShader: POINT_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    );
+    object.frustumCulled = false;
+    object.raycast = noRaycast;
+    return {
+      object,
+      share,
+      populations,
+      distancePc: new Float64Array(c.count),
+      // A_V from the camera, and the share of the light it lets through.
+      extinction: new Float64Array(c.count),
+      transmission: new Float64Array(c.count).fill(1),
+      dustFrom: null as THREE.Vector3 | null,
+    };
+  }, [archive, markers, pointUniforms]);
+  useEffect(() => {
+    if (points === null) {
+      return;
+    }
+    lightGroup.add(points.object);
+    renderDemand.request();
+    return () => {
+      lightGroup.remove(points.object);
+      points.object.geometry.dispose();
+      (points.object.material as THREE.Material).dispose();
+    };
+  }, [points, lightGroup]);
+
   // The stars of the cluster the camera is near.
   const coefficients = useMemo(
     () => magnitudeToPeakCoefficients(brightestMagnitude(catalog), catalog.magnitudeLimit),
@@ -195,7 +365,7 @@ export function GlobularClusters({
     () => ({ stars: clusterMaterial(starUniforms), twin: clusterMaterial({ ...starUniforms, uLensImage: { value: 1 } }) }),
     [starUniforms],
   );
-  const drawn = useRef<{ k: number; points: THREE.Points; twin: THREE.Points } | null>(null);
+  const drawn = useRef<{ k: number; points: THREE.Points; twin: THREE.Points; limitV: number } | null>(null);
   const pending = useRef<number | null>(null);
   const worker = useRef<Worker | null>(null);
   const extinction = useRef<{ k: number; value: number; cameraKm: THREE.Vector3 | null }>({ k: -1, value: 0, cameraKm: null });
@@ -217,6 +387,7 @@ export function GlobularClusters({
     if (markersGroup === null || sun === null || !visible) {
       if (markersGroup !== null) markersGroup.visible = false;
       starsGroup.visible = false;
+      lightGroup.visible = false;
       frame.current.fade = 0;
       return;
     }
@@ -229,9 +400,10 @@ export function GlobularClusters({
       requested.current = true;
       void source.request();
     }
-    if (archive === null || markers === null) {
+    if (archive === null || markers === null || points === null) {
       markersGroup.visible = false;
       starsGroup.visible = false;
+      lightGroup.visible = false;
       return;
     }
     const c = archive.catalog;
@@ -259,6 +431,7 @@ export function GlobularClusters({
       const dy = c.y[k]! + c.vy[k]! * motion - cameraPc.y;
       const dz = c.z[k]! + c.vz[k]! * motion - cameraPc.z;
       const d = Math.hypot(dx, dy, dz);
+      points.distancePc[k] = d;
       const near = Math.max(1e-3, d - c.tidalRadiusPc[k]!);
       const could = BRIGHTEST_V + 5 * (Math.log10(near) - 1) <= catalog.magnitudeLimit;
       if (could && d < bestPc) {
@@ -295,7 +468,7 @@ export function GlobularClusters({
           each.renderOrder = -1;
           starsGroup.add(each);
         }
-        drawn.current = { k, points, twin };
+        drawn.current = { k, points, twin, limitV: sample.limitV };
         pending.current = null;
         made.terminate();
         worker.current = null;
@@ -306,6 +479,55 @@ export function GlobularClusters({
 
     const current = drawn.current;
     starsGroup.visible = current !== null && current.k === best;
+
+    // Each cluster's light as a point: what its stars, where drawn, do not hold.
+    const lightFade = galaxyVisibility(scratchSun.length());
+    lightGroup.visible = lightFade > 0;
+    if (lightGroup.visible) {
+      lightGroup.position.copy(frameCamera.position);
+      const pixelsPerRadian =
+        renderer.getDrawingBufferSize(scratchSize).y /
+        (2 * Math.tan(((frameCamera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
+      pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
+      // The dust between, again once the camera has moved enough to change it.
+      let nearestPc = Infinity;
+      for (let k = 0; k < c.count; k += 1) nearestPc = Math.min(nearestPc, points.distancePc[k]!);
+      if (points.dustFrom === null || points.dustFrom.distanceTo(cameraPc) > POINT_DUST_REFRESH_SHARE * nearestPc) {
+        const cameraGalactic = sceneToGalacticPc(scratchSun);
+        for (let k = 0; k < c.count; k += 1) {
+          const fromSun = clusterExtinctionV(c, k);
+          let value = 0;
+          if (fromSun !== null && fromSun > 0) {
+            scratchCluster.set(c.x[k]! + c.vx[k]! * motion, c.y[k]! + c.vy[k]! * motion, c.z[k]! + c.vz[k]! * motion);
+            const centre = sceneToGalacticPc(scratchCluster.multiplyScalar(PARSEC_KM));
+            const share = dustColumn(cameraGalactic, centre) / Math.max(dustColumn([0, 0, 0], centre), 1e-30);
+            value = fromSun * Math.min(1, share);
+          }
+          points.extinction[k] = value;
+          points.transmission[k] = 10 ** (-0.4 * value);
+        }
+        points.dustFrom = (points.dustFrom ?? new THREE.Vector3()).copy(cameraPc);
+      }
+      const resolved = starsGroup.visible ? current : null;
+      for (let k = 0; k < c.count; k += 1) {
+        const d = points.distancePc[k]!;
+        const halfLight = c.halfLightRadiusPc[k]!;
+        // A sprite too big for the GPU would be cut square: it goes before it gets there.
+        const sigmaPx = Math.max(MIN_SIGMA_PX, ((halfLight / d) * pixelsPerRadian) / HALF_LIGHT_SIGMAS);
+        const sizePx = Math.ceil(6 * sigmaPx) + 1;
+        let share = lightFade * points.transmission[k]! * smoothstep(POINT_NEAR_FROM, POINT_NEAR_FULL, d / halfLight);
+        share *= 1 - smoothstep(maxPointPx / 2, maxPointPx, sizePx);
+        if (resolved !== null && resolved.k === k && share > 0) {
+          // Only the light of its stars too faint to be drawn.
+          const fromCamera = catalog.magnitudeLimit - 5 * (Math.log10(d) - 1) - points.extinction[k]!;
+          const fromSample = resolved.limitV - 5 * (Math.log10(halfLight) - 1);
+          share *= unresolvedShare(points.populations[k]!, Math.min(fromCamera, fromSample));
+        }
+        points.share.setX(k, share);
+      }
+      points.share.needsUpdate = true;
+    }
+
     if (current === null || !starsGroup.visible) {
       return;
     }
@@ -441,6 +663,7 @@ export function GlobularClusters({
     <>
       <group ref={markersRef} />
       <primitive object={starsGroup} />
+      <primitive object={lightGroup} />
     </>
   );
 }

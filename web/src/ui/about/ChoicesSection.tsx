@@ -338,6 +338,14 @@ export const choicesSection: AboutSection = {
           <Item title="The Large Cloud’s HII regions pink">
             As in its photographs, because they are: their light is Hα’s red and Hβ’s blue-green.
           </Item>
+          <Item title="Clusters and dwarfs, from far and near">
+            From far off a globular cluster is a point of light, as another galaxy’s are in its photographs, on
+            the galaxies’ exposure, so 47 Tucanae beside the Small Cloud is as bright as it is. Near a cluster or
+            a dwarf galaxy its stars are drawn one by one — one at a time, the nearest whose brightest giant
+            could show, at most 120,000 — and its glow gives way to them. At the picture’s limit of V 8 a
+            dwarf’s giants show only within about 1.5 kpc of them.
+            <Why>an ultra-faint dwarf is a few thousand stars and no glow at all: what is there to see is its stars.</Why>
+          </Item>
           <Item title="Too small for a pixel, a point">
             A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
             lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and

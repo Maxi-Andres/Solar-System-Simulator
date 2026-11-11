@@ -29,6 +29,7 @@ import { Pulsars } from './Pulsars.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
+import { DwarfStars } from './DwarfStars.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -337,6 +338,7 @@ export function SolarSystemCanvas({
         showMarks={showIcons}
         onPick={onPickGalaxy}
       />
+      <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <GlobularClusters
         source={globularClusters}
         catalog={stars}

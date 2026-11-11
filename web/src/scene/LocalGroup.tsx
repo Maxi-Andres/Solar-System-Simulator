@@ -36,6 +36,7 @@ import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
+import { dwarfStarsDrawn } from './DwarfStars.tsx';
 import { BALMER_HUE, galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { mapStrength } from './Starfield.tsx';
@@ -106,6 +107,12 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * points round the camera: there a galaxy is its stars, one by one, which are not drawn, and
  * summed as a glow they would fill the sky white. From inside a disc, what is left is the disc
  * across the sky as a band -- as the Milky Way is from here.
+ *
+ * ## Near a dwarf
+ *
+ * Near enough to a dwarf, its brightest stars show one by one (DwarfStars.tsx), and its volume
+ * and its point keep only the light of those too faint to: the share DwarfStars works out
+ * (dwarfStarsDrawn), so no light is counted twice.
  *
  * ## Where
  *
@@ -643,6 +650,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       const axes = galaxyAxes(galaxy);
       const extent = galaxyExtentPc(galaxy)!;
       return {
+        key: galaxy.key,
         centre: galaxyPositionPc(galaxy),
         axes,
         scales: [model.majorPc, model.minorPc, model.depthPc] as const,
@@ -816,6 +824,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     );
     const centres = list.map((galaxy) => galaxyPositionPc(galaxy));
     const halfLightPc = list.map((galaxy) => galaxyHalfLightPc(galaxy)!);
+    const keys = list.map((galaxy) => galaxy.key);
     const position = new Float32Array(list.length * 3);
     const light = new Float32Array(list.length * 3);
     list.forEach((galaxy, i) => {
@@ -846,7 +855,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     );
     object.frustumCulled = false;
     object.raycast = noRaycast;
-    return { object, centres, halfLightPc, share };
+    return { object, centres, halfLightPc, keys, share };
   }, [archive, pointUniforms]);
 
   // The dwarfs' marks.
@@ -964,11 +973,13 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     dwarfUniforms.uFade.value = fade;
     dwarfs.mesh.visible = fade > 0;
     if (fade > 0) {
-      dwarfs.fixed.forEach(({ centre, axes, scales, extent, halfLightPc, glow: g }, i) => {
+      dwarfs.fixed.forEach(({ key, centre, axes, scales, extent, halfLightPc, glow: g }, i) => {
         const rx = centre.x - cameraPc.x;
         const ry = centre.y - cameraPc.y;
         const rz = centre.z - cameraPc.z;
-        const share = volumeShare(halfLightPc, Math.hypot(rx, ry, rz));
+        // Less what its stars drawn one by one carry (see the header).
+        const share =
+          volumeShare(halfLightPc, Math.hypot(rx, ry, rz)) * (key === dwarfStarsDrawn.key ? dwarfStarsDrawn.glowShare : 1);
         dwarfs.glow.setXYZ(i, g.x * share, g.y * share, g.z * share);
         // u0 = the camera minus the centre, along each axis over its scale.
         dwarfs.near.setX(i, Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scales[0]));
@@ -1029,7 +1040,8 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     if (fade > 0) {
       points.centres.forEach((centre, i) => {
         const distancePc = Math.hypot(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z);
-        points.share.setX(i, 1 - volumeShare(points.halfLightPc[i]!, distancePc));
+        const kept = points.keys[i] === dwarfStarsDrawn.key ? dwarfStarsDrawn.glowShare : 1;
+        points.share.setX(i, (1 - volumeShare(points.halfLightPc[i]!, distancePc)) * kept);
       });
       points.share.needsUpdate = true;
       (pointUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);

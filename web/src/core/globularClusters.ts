@@ -69,7 +69,7 @@ export const SAMPLE_LIMIT_V = 7.5;
 const INNER_PC = 0.02;
 
 /** The Sun's absolute V (Willmer 2018, ApJS 236, 47). */
-const SUN_ABSOLUTE_V = 4.81;
+export const SUN_ABSOLUTE_V = 4.81;
 
 /** Plummer's half-mass radius in units of its scale: (2^(2/3) - 1)^(-1/2). */
 export const PLUMMER_HALF_MASS = 1 / Math.sqrt(2 ** (2 / 3) - 1);
@@ -170,7 +170,7 @@ export function clusterPopulation(feH: number | null): ClusterPopulation {
 }
 
 /** A population's mean V luminosity per living star, solar units. */
-function meanLuminosity(population: ClusterPopulation): number {
+export function meanLuminosity(population: ClusterPopulation): number {
   let sum = 0;
   for (const [mv, share] of population.rows) {
     sum += share * 10 ** (-0.4 * (mv + CLUSTER_LF_STEP / 2 - SUN_ABSOLUTE_V));

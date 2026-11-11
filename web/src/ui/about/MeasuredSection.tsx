@@ -493,7 +493,8 @@ export const measuredSection: AboutSection = {
             <Xref to="estimated" sub="globular-clusters">
               How their stars are drawn
             </Xref>
-            .
+            . Each one’s light, from far off, from its V and distance less the dust in front, A_V = 3.1 E(B−V):
+            47 Tucanae M_V −9.3, Omega Centauri −10.5.
           </Item>
         </Items>
 

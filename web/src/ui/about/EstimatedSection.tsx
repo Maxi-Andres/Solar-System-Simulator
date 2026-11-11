@@ -404,9 +404,15 @@ export const estimatedSection: AboutSection = {
           <Item title="Left out">
             Each one’s particular shape and flattening (a round Plummer sphere for all), the several
             populations some have, blue horizontal branches and blue stragglers, binaries, the motion of its
-            stars; and the reddening of the clusters Harris does not list, drawn with none. Nor the light of
-            the stars too faint to draw one by one: from far off a cluster is its brightest giants alone, a
-            sprinkle, where a telescope shows their light and the light of all the others as one ball.
+            stars; and the reddening of the clusters Harris does not list, drawn with none.
+          </Item>
+          <Item title="Their light from far off">
+            Each one’s whole light, its V less its distance and the dust in front, as a soft point the size of
+            its half-light radius; its colour the integrated B−V of the 12-billion-year population nearest its
+            metallicity, 0.62 to 0.87, since Harris’s measured B−V is reddened. The 14 with no reddening take
+            their mass times that population’s light per solar mass. From anywhere but the Sun its dust is the
+            Sun’s A_V times the share of the dust disc’s column that lies between; it dims, it does not redden.
+            Near a cluster whose stars are drawn, the point keeps only the light of the stars too faint to draw.
           </Item>
         </Items>
 
@@ -622,6 +628,14 @@ export const estimatedSection: AboutSection = {
               the nearest measured: other galaxies’ discs, our own dust and young stars
               <Cite k={['kregel2002', 'drimmelSpergel2001', 'reed2000']} />.
             </Why>
+          </Item>
+          <Item title="A dwarf’s stars, near it">
+            No catalogue lists a dwarf’s stars one by one: the one the camera is near is sampled from a model —
+            as many stars as give its light, from the globular clusters’ 12-billion-year population nearest its
+            [Fe/H] + 0.21, on its own Plummer ellipsoid and cut at eight scale radii. Fornax’s and Leo I’s stars
+            are younger than that, and the irregulars’ young blue stars are not sampled: all their light goes to
+            the old population. Its glow keeps only the light of the stars too faint to show, so no light is
+            counted twice.
           </Item>
           <Item title="The Large Cloud past Spitzer’s edge">
             Spitzer mapped its central seven degrees. Its old stars past that edge are its exponential, fitted to
