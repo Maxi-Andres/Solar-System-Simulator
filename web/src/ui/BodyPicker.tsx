@@ -12,6 +12,8 @@ import {
 } from '../core/alphaCenBodies.ts';
 import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf, type BlackHoleSystem } from '../core/blackHoles.ts';
+import { clusterFramingKm, globularClusterOf } from '../core/globularClusters.ts';
+import { pulsarFramingKm } from '../core/pulsars.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import type { Signal } from '../core/signal.ts';
 import type { SimClock } from '../core/time.ts';
@@ -63,6 +65,18 @@ import { Presence, useClosing } from './Presence.tsx';
  * The named Earth satellites after them, folded under one heading: a hundred rows would
  * otherwise be most of the list. One outside the days its elements are good for is listed
  * and cannot be chosen, as a craft before launch.
+ *
+ * **What each list holds.** A crumb's list is what is in the place that crumb names, and
+ * nothing from anywhere else: Local Group's, its galaxies -- the big ones, then any dwarf gone
+ * to; Milky Way's, its places -- home, the black holes, the supernova remnants, and the pulsars
+ * and globular clusters gone to; Solar Neighbourhood's, its star systems and the stars gone to.
+ * The last crumb, the body in focus, drops down the system it is in (crumbMenuFor): the Solar
+ * System's bodies for anything of the Sun's, Alpha Centauri's stars and planets for one of
+ * them, a planetary system's star and planets, a black hole and the star about it. A body that
+ * is a place on its own -- a galaxy, a star of the neighbourhood, a pulsar, a cluster, a
+ * remnant -- has no system to drop down, and no caret: it is in the list of the crumb just
+ * before it, among the others like it. So a galaxy's crumb does not repeat the Local Group's
+ * list beside it, and nothing out of the Solar System ever lists the planets.
  */
 
 const ACCENT = '#3ddc84';
@@ -104,6 +118,35 @@ export interface AlphaCenNavigator {
   readonly go: (key: AlphaCenKey, framingKm?: number) => void;
 }
 
+/**
+ * What the focused body's crumb drops down: the system it is in -- the Solar System, Alpha
+ * Centauri, a planetary system, a black hole's -- or nothing, for a body that is a place on
+ * its own and is listed by the crumb before it (see the header).
+ */
+export type CrumbMenu = 'solar-system' | 'alpha-centauri' | 'planetary-system' | 'black-hole' | 'none';
+
+export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
+  if (
+    body.kind === 'galaxy' ||
+    body.kind === 'neutron-star' ||
+    body.kind === 'globular-cluster' ||
+    body.kind === 'supernova-remnant'
+  ) {
+    return 'none';
+  }
+  if (blackHoleSystemOf(body.id) !== null) {
+    return 'black-hole';
+  }
+  if (alphaCenMember(body.id) !== null || (body.parent !== null && alphaCenMember(body.parent) !== null)) {
+    return 'alpha-centauri';
+  }
+  if (planetarySystemOf(body.id) !== null) {
+    return 'planetary-system';
+  }
+  // Any other star than the Sun is in the neighbourhood, and listed there.
+  return isCatalogueStar(body) ? 'none' : 'solar-system';
+}
+
 export function BodyPicker({
   store,
   focus,
@@ -131,15 +174,11 @@ export function BodyPicker({
     focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
   // Another galaxy: out of the Milky Way altogether.
   const inOtherGalaxy = focusBody.kind === 'galaxy';
-  // A star other than the Sun is in the neighbourhood, not in the Solar System; nor is
-  // anything of Alpha Centauri's or another star's, nor a black hole's, nor a pulsar.
-  const inSolarSystem =
-    !isCatalogueStar(focusBody) &&
-    !inAlphaCen &&
-    planetSystem === null &&
-    blackHoleSystem === null &&
-    !inGalaxy &&
-    !inOtherGalaxy;
+  // What the focus's own crumb drops down. A star other than the Sun is in the
+  // neighbourhood, not in the Solar System; nor is anything of Alpha Centauri's or another
+  // star's, nor a black hole's, nor a pulsar.
+  const menu = crumbMenuFor(focusBody);
+  const inSolarSystem = menu === 'solar-system';
   const requestFraming = useViewStore((state) => state.requestFraming);
   const toNeighbourhood = (): void => {
     // Asked for before the focus moves, so the camera rig takes it with the new focus.
@@ -171,26 +210,47 @@ export function BodyPicker({
     onFocus(system.id);
     renderDemand.request();
   };
+  // A pulsar, a cluster or a remnant from Milky Way's list, framed as search frames it (App.tsx):
+  // a cluster from four half-light radii out, a neutron star from ten of its radii; a remnant
+  // frames itself whichever way it is focused.
+  const toGalaxyPlace = (id: BodyId): void => {
+    const cluster = globularClusterOf(id);
+    const body = store.body(id);
+    if (cluster !== null) {
+      requestFraming(clusterFramingKm(cluster.catalog, cluster.k));
+    } else if (body.kind === 'neutron-star') {
+      requestFraming(pulsarFramingKm(body.radiusEquatorialKm));
+    }
+    onFocus(id);
+    renderDemand.request();
+  };
+  // Opening one list closes the others.
+  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies'): void => {
+    setOpen((value) => which === 'bodies' && !value);
+    setSystemsOpen((value) => which === 'systems' && !value);
+    setBlackHolesOpen((value) => which === 'places' && !value);
+    setGalaxiesOpen((value) => which === 'galaxies' && !value);
+  };
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
     if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen) {
       return;
     }
+    const closeAll = (): void => {
+      setOpen(false);
+      setSystemsOpen(false);
+      setBlackHolesOpen(false);
+      setGalaxiesOpen(false);
+    };
     const onPointerDown = (event: PointerEvent): void => {
       if (root.current !== null && !root.current.contains(event.target as Node)) {
-        setOpen(false);
-        setSystemsOpen(false);
-        setBlackHolesOpen(false);
-        setGalaxiesOpen(false);
+        closeAll();
       }
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        setOpen(false);
-        setSystemsOpen(false);
-        setBlackHolesOpen(false);
-        setGalaxiesOpen(false);
+        closeAll();
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -200,6 +260,13 @@ export function BodyPicker({
       document.removeEventListener('keydown', onKey);
     };
   }, [open, systemsOpen, blackHolesOpen, galaxiesOpen]);
+
+  // A focus with no list of its own closes the one left open, rather than keep it to reopen later.
+  useEffect(() => {
+    if (menu === 'none') {
+      setOpen(false);
+    }
+  }, [menu]);
 
   const choose = (id: BodyId): void => {
     onFocus(id);
@@ -233,12 +300,7 @@ export function BodyPicker({
           aria-haspopup="listbox"
           aria-expanded={galaxiesOpen}
           title="Go to a galaxy of the Local Group"
-          onClick={() => {
-            setGalaxiesOpen((value) => !value);
-            setBlackHolesOpen(false);
-            setSystemsOpen(false);
-            setOpen(false);
-          }}
+          onClick={() => only('galaxies')}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
           <Caret open={galaxiesOpen} />
@@ -255,12 +317,7 @@ export function BodyPicker({
               aria-haspopup="listbox"
               aria-expanded={blackHolesOpen}
               title="Go to a place in the Milky Way"
-              onClick={() => {
-                setBlackHolesOpen((value) => !value);
-                setSystemsOpen(false);
-                setGalaxiesOpen(false);
-                setOpen(false);
-              }}
+              onClick={() => only('places')}
               style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
             >
               <Caret open={blackHolesOpen} />
@@ -279,11 +336,7 @@ export function BodyPicker({
               aria-haspopup="listbox"
               aria-expanded={systemsOpen}
               title="Go to a star system"
-              onClick={() => {
-                setSystemsOpen((value) => !value);
-                setBlackHolesOpen(false);
-                setOpen(false);
-              }}
+              onClick={() => only('systems')}
               style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
             >
               <Caret open={systemsOpen} />
@@ -317,30 +370,41 @@ export function BodyPicker({
             <Separator />
           </>
         )}
-        <button
-          type="button"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => {
-            setOpen((value) => !value);
-            setSystemsOpen(false);
-            setBlackHolesOpen(false);
-          }}
-          style={{
-            ...crumbStyle,
-            color: '#fff',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-          }}
-        >
-          {focusBody.name}
-          <Caret open={open} />
-        </button>
+        {/* The focus: dropping down the system it is in, or, a place on its own, only its name. */}
+        {menu === 'none' ? (
+          <span aria-current="location" style={{ ...crumbStyle, color: '#fff', cursor: 'default' }}>
+            {focusBody.name}
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-current="location"
+            onClick={() => only('bodies')}
+            style={{
+              ...crumbStyle,
+              color: '#fff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            {focusBody.name}
+            <Caret open={open} />
+          </button>
+        )}
       </nav>
 
       <Presence show={systemsOpen}>
         <SystemList
+          store={store}
+          focus={focus}
+          onStar={(id) => {
+            onFocus(id);
+            renderDemand.request();
+            setSystemsOpen(false);
+          }}
           inSolarSystem={inSolarSystem}
           inAlphaCen={inAlphaCen}
           inPlanetSystem={planetSystem?.key ?? null}
@@ -369,6 +433,8 @@ export function BodyPicker({
 
       <Presence show={galaxiesOpen}>
         <GalaxyList
+          store={store}
+          visibleKinds={visibleKinds}
           active={inOtherGalaxy ? focus : null}
           onMilkyWay={() => {
             toGalaxy();
@@ -383,7 +449,10 @@ export function BodyPicker({
       </Presence>
 
       <Presence show={blackHolesOpen}>
-        <BlackHoleList
+        <PlaceList
+          store={store}
+          visibleKinds={visibleKinds}
+          focus={focus}
           active={blackHoleSystem?.id ?? null}
           inSolarSystem={inSolarSystem}
           onSolarSystem={() => {
@@ -399,11 +468,16 @@ export function BodyPicker({
             toBlackHole(system);
             setBlackHolesOpen(false);
           }}
+          onChoosePlace={(id) => {
+            toGalaxyPlace(id);
+            setBlackHolesOpen(false);
+          }}
         />
       </Presence>
 
-      <Presence show={open}>
+      <Presence show={open && menu !== 'none'}>
         <BodyList
+          menu={menu}
           store={store}
           focus={focus}
           visibleKinds={visibleKinds}
@@ -540,7 +614,14 @@ function calendarYear(jd: number): number {
   return new Date((jd - 2440587.5) * 86_400_000).getUTCFullYear();
 }
 
+/**
+ * The focus's own list: the system it is in (crumbMenuFor). The Solar System's is the Sun,
+ * the planets with their moons, the small bodies, the spacecraft and the satellites; Alpha
+ * Centauri's, its three stars and Proxima's planets; a planetary system's, its star and
+ * planets; a black hole's, it and the star about it.
+ */
 function BodyList({
+  menu,
   store,
   focus,
   visibleKinds,
@@ -552,6 +633,7 @@ function BodyList({
   onChooseSystem,
   onChooseBlackHole,
 }: {
+  menu: CrumbMenu;
   store: EphemerisStore;
   focus: BodyId;
   visibleKinds: ReadonlySet<string>;
@@ -583,8 +665,10 @@ function BodyList({
         : new Set([system]),
   );
 
+  const solar = menu === 'solar-system';
   const primaries = store.bodies.filter(
     (body) =>
+      solar &&
       body.parent === null &&
       body.kind !== 'spacecraft' &&
       body.kind !== 'asteroid' &&
@@ -597,27 +681,21 @@ function BodyList({
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
-  // The catalogue stars gone to from search (starBodies.ts), listed apart: they are not
-  // in the Solar System. Alpha Centauri's have a section of their own, below, and so does
-  // each planetary system's.
-  const stars = store.bodies.filter(
-    (body) => isCatalogueStar(body) && alphaCenMember(body.id) === null && planetarySystemOf(body.id) === null,
-  );
-  // The planetary systems' stars that are bodies, by system key.
-  const hosts = new Map<string, BodyDefinition>();
-  for (const body of store.bodies) {
-    const owner = isCatalogueStar(body) ? planetarySystemOf(body.id) : null;
-    if (owner !== null) {
-      hosts.set(owner.key, body);
-    }
-  }
+  // The planetary system in focus, and its star, which is a body while it is.
+  const planetSystem = menu === 'planetary-system' ? planetarySystemOf(focus) : null;
+  const host =
+    planetSystem === null
+      ? undefined
+      : store.bodies.find((body) => isCatalogueStar(body) && planetarySystemOf(body.id)?.key === planetSystem.key);
+  // The black hole in focus, or the one whose star is.
+  const blackHole = menu === 'black-hole' ? blackHoleSystemOf(focus) : null;
   const focusMember = alphaCenMember(focus);
   // Listed apart: between the planets they would push Neptune off the bottom.
-  const asteroids = visibleKinds.has('asteroid')
+  const asteroids = solar && visibleKinds.has('asteroid')
     ? store.bodies.filter((body) => body.kind === 'asteroid')
     : [];
   // The comets likewise: one gone to from search is a body until the next (cometBodies.ts).
-  const cometBodies = visibleKinds.has('comet')
+  const cometBodies = solar && visibleKinds.has('comet')
     ? store.bodies.filter((body) => body.kind === 'comet')
     : [];
   // Moons only: JWST hangs off Earth in the frame tree, and is listed with the craft.
@@ -627,12 +705,12 @@ function BodyList({
           (body) => body.parent === id && body.kind === 'moon' && isShown(body, visibleKinds),
         )
       : [];
-  const craft = visibleKinds.has('spacecraft')
+  const craft = solar && visibleKinds.has('spacecraft')
     ? store.bodies.filter((body) => body.kind === 'spacecraft')
     : [];
   // The named satellites whose chip is on; a bulk one gone to from search is among them.
   const satellites = store.bodies.filter(
-    (body) => body.kind === 'satellite' && isShown(body, visibleKinds),
+    (body) => solar && body.kind === 'satellite' && isShown(body, visibleKinds),
   );
   const satellitesOpen = expanded.has('satellites:named') || focusBody.kind === 'satellite';
 
@@ -651,7 +729,11 @@ function BodyList({
   return (
     <div
       role="listbox"
-      aria-label="Bodies"
+      aria-label={
+        menu === 'alpha-centauri'
+          ? ALPHA_CEN_SYSTEM
+          : (planetSystem?.name ?? blackHole?.name ?? 'Bodies')
+      }
       className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
       style={{
         marginTop: '0.55rem',
@@ -784,9 +866,9 @@ function BodyList({
           ))}
         </>
       )}
-      {alphaCen !== null && (
+      {menu === 'alpha-centauri' && alphaCen !== null && (
         <>
-          <div style={SECTION_HEADING}>{ALPHA_CEN_SYSTEM}</div>
+          <div style={TOP_HEADING}>{ALPHA_CEN_SYSTEM}</div>
           {ALPHA_CEN_MEMBERS.map(({ key }) => {
             // The star's planets, once it is a body with planets: Proxima's (D3c).
             const star = store.bodies.find((body) => alphaCenMember(body.id) === key);
@@ -810,17 +892,13 @@ function BodyList({
           })}
         </>
       )}
-      {allPlanetarySystems().map((system) => {
-        const host = hosts.get(system.key);
-        if (host === undefined) {
-          return null;
-        }
-        const planets = store.bodies.filter((body) => body.parent === host.id);
-        return (
-          <div key={system.key}>
-            <div style={SECTION_HEADING}>{system.name}</div>
-            <MemberRow name={host.name} active={host.id === focus} onChoose={() => onChooseSystem(system.key)} />
-            {planets.map((planet) => (
+      {planetSystem !== null && host !== undefined && (
+        <>
+          {planetSystem.name !== host.name && <div style={TOP_HEADING}>{planetSystem.name}</div>}
+          <MemberRow name={host.name} active={host.id === focus} onChoose={() => onChooseSystem(planetSystem.key)} />
+          {store.bodies
+            .filter((body) => body.parent === host.id)
+            .map((planet) => (
               <Row
                 key={planet.id}
                 body={planet}
@@ -831,42 +909,21 @@ function BodyList({
                 trailing={null}
               />
             ))}
-          </div>
-        );
-      })}
-      {BLACK_HOLE_SYSTEMS.some((system) => store.isPropagatedBody(system.id)) && (
-        <>
-          <div style={SECTION_HEADING}>Black holes</div>
-          {BLACK_HOLE_SYSTEMS.filter((system) => store.isPropagatedBody(system.id)).map((system) => (
-            <div key={system.id}>
-              <MemberRow name={system.name} active={system.id === focus} onChoose={() => onChooseBlackHole(system)} />
-              {store.isPropagatedBody(system.companion) && (
-                <Row
-                  body={store.body(system.companion)}
-                  active={system.companion === focus}
-                  inSystem={false}
-                  indent
-                  onChoose={onChoose}
-                  trailing={null}
-                />
-              )}
-            </div>
-          ))}
         </>
       )}
-      {stars.length > 0 && (
+      {blackHole !== null && (
         <>
-          <div style={SECTION_HEADING}>Stars</div>
-          {stars.map((body) => (
+          <MemberRow name={blackHole.name} active={blackHole.id === focus} onChoose={() => onChooseBlackHole(blackHole)} />
+          {store.isPropagatedBody(blackHole.companion) && (
             <Row
-              key={body.id}
-              body={body}
-              active={body.id === focus}
+              body={store.body(blackHole.companion)}
+              active={blackHole.companion === focus}
               inSystem={false}
+              indent
               onChoose={onChoose}
               trailing={null}
             />
-          ))}
+          )}
         </>
       )}
       {craft.length > 0 && (
@@ -1011,6 +1068,9 @@ const SECTION_HEADING: React.CSSProperties = {
   textTransform: 'uppercase',
 };
 
+/** The caption of a list's first section: no rule above it. */
+const TOP_HEADING: React.CSSProperties = { ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' };
+
 /**
  * A planet's small moons, folded behind one row: Saturn has 284 of them, and listed
  * with the major moons they would bury Titan.
@@ -1101,8 +1161,13 @@ function SmallMoons({
  * The star systems under Solar Neighbourhood: where the camera can go as a whole. The
  * Solar System, Alpha Centauri (D3) -- framed as a system, from out of the pair's orbital
  * plane -- and the nearby stars with planets (D4a), each framed with its planets' orbits.
+ * Then the stars gone to from search (starBodies.ts) and Sirius's two: stars of the
+ * neighbourhood on their own, with no list of their own on the breadcrumb.
  */
 function SystemList({
+  store,
+  focus,
+  onStar,
   inSolarSystem,
   inAlphaCen,
   inPlanetSystem,
@@ -1110,6 +1175,9 @@ function SystemList({
   onAlphaCen,
   onPlanetSystem,
 }: {
+  store: EphemerisStore;
+  focus: BodyId;
+  onStar: (id: BodyId) => void;
   inSolarSystem: boolean;
   inAlphaCen: boolean;
   inPlanetSystem: string | null;
@@ -1118,21 +1186,17 @@ function SystemList({
   onPlanetSystem: ((key: string) => void) | null;
 }) {
   const closing = useClosing();
+  // Redrawn as stars are made bodies and let go.
+  useStoreVersion(store);
+  const stars = store.bodies.filter((body) => crumbMenuFor(body) === 'none' && isCatalogueStar(body));
   return (
     <div
       role="listbox"
       aria-label="Star systems"
-      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
-      style={{
-        marginTop: '0.55rem',
-        width: '13.5rem',
-        background: 'rgba(14,14,17,0.97)',
-        border: '1px solid #262626',
-        borderRadius: '0.4rem',
-        padding: '0.35rem',
-      }}
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, maxHeight: '70vh', overflowY: 'auto' }}
     >
-      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Star systems</div>
+      <div style={TOP_HEADING}>Star systems</div>
       <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
       {onAlphaCen !== null && <MemberRow name={ALPHA_CEN_SYSTEM} active={inAlphaCen} onChoose={onAlphaCen} />}
       {onPlanetSystem !== null &&
@@ -1144,39 +1208,47 @@ function SystemList({
             onChoose={() => onPlanetSystem(system.key)}
           />
         ))}
+      {stars.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Stars</div>
+          {stars.map((body) => (
+            <Row key={body.id} body={body} active={body.id === focus} inSystem={false} onChoose={onStar} trailing={null} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
 
 /**
- * The places under Milky Way: home -- the Solar System, the Solar Neighbourhood -- and the
- * black holes (D5), each framed with the star on its orbit: Sgr A* first, at the centre of
- * the Galaxy; then the two nearest known, by distance.
+ * The Local Group's galaxies: the Milky Way, the four big ones that are bodies from the
+ * start, then any dwarf gone to from search, while the Local Group is shown.
  */
-/** The Local Group's big galaxies: the Milky Way, and the four that are bodies from the start. */
 function GalaxyList({
+  store,
+  visibleKinds,
   active,
   onMilkyWay,
   onChoose,
 }: {
+  store: EphemerisStore;
+  visibleKinds: ReadonlySet<string>;
   active: BodyId | null;
   onMilkyWay: () => void;
   onChoose: (id: BodyId) => void;
 }) {
   const closing = useClosing();
+  useStoreVersion(store);
+  const giants = new Set(GIANTS.map(galaxyBodyId));
+  const dwarfs = visibleKinds.has('galaxy')
+    ? store.bodies.filter((body) => body.kind === 'galaxy' && !giants.has(body.id))
+    : [];
   return (
     <div
       role="listbox"
       aria-label="Galaxies of the Local Group"
-      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
-      style={{
-        marginTop: '0.55rem',
-        width: '13.5rem',
-        background: 'rgba(14,14,17,0.97)',
-        border: '1px solid #262626',
-        borderRadius: '0.4rem',
-        padding: '0.35rem',
-      }}
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, maxHeight: '70vh', overflowY: 'auto' }}
     >
       <MemberRow name="Milky Way" active={false} onChoose={onMilkyWay} />
       {GIANTS.map((galaxy) => (
@@ -1187,39 +1259,63 @@ function GalaxyList({
           onChoose={() => onChoose(galaxyBodyId(galaxy))}
         />
       ))}
+      {dwarfs.length > 0 && (
+        <>
+          <div style={SECTION_HEADING}>Dwarfs</div>
+          {dwarfs.map((body) => (
+            <MemberRow key={body.id} name={body.name} active={active === body.id} onChoose={() => onChoose(body.id)} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
 
-function BlackHoleList({
+/** The kinds out in the galaxy listed under Milky Way, in their order, with their headings. */
+const GALAXY_PLACES: readonly { readonly kind: string; readonly label: string }[] = [
+  { kind: 'supernova-remnant', label: 'Supernova remnants' },
+  { kind: 'neutron-star', label: 'Pulsars' },
+  { kind: 'globular-cluster', label: 'Globular clusters' },
+];
+
+/**
+ * The places under Milky Way: home -- the Solar System, the Solar Neighbourhood -- and the
+ * black holes (D5), each framed with the star on its orbit: Sgr A* first, at the centre of
+ * the Galaxy; then the nearest known, by distance. Then what else is out in the galaxy and a
+ * body: the supernova remnants, bodies from the start, and the pulsars and globular clusters
+ * gone to -- each a place on its own, with no list of its own on the breadcrumb.
+ */
+function PlaceList({
+  store,
+  visibleKinds,
+  focus,
   active,
   inSolarSystem,
   onSolarSystem,
   onNeighbourhood,
   onChoose,
+  onChoosePlace,
 }: {
+  store: EphemerisStore;
+  visibleKinds: ReadonlySet<string>;
+  focus: BodyId;
   active: BodyId | null;
   inSolarSystem: boolean;
   onSolarSystem: () => void;
   onNeighbourhood: () => void;
   onChoose: (system: BlackHoleSystem) => void;
+  onChoosePlace: (id: BodyId) => void;
 }) {
   const closing = useClosing();
+  useStoreVersion(store);
   return (
     <div
       role="listbox"
       aria-label="Places in the Milky Way"
-      className={closing ? 'dropdown-exit' : 'dropdown-enter'}
-      style={{
-        marginTop: '0.55rem',
-        width: '13.5rem',
-        background: 'rgba(14,14,17,0.97)',
-        border: '1px solid #262626',
-        borderRadius: '0.4rem',
-        padding: '0.35rem',
-      }}
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, maxHeight: '70vh', overflowY: 'auto' }}
     >
-      <div style={{ ...SECTION_HEADING, borderTop: 'none', paddingTop: 0, marginTop: '0.2rem' }}>Home</div>
+      <div style={TOP_HEADING}>Home</div>
       <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
       <MemberRow name="Solar Neighbourhood" active={false} onChoose={onNeighbourhood} />
       <div style={SECTION_HEADING}>Black holes</div>
@@ -1231,9 +1327,40 @@ function BlackHoleList({
           onChoose={() => onChoose(system)}
         />
       ))}
+      {GALAXY_PLACES.map(({ kind, label }) => {
+        const members = visibleKinds.has(kind) ? store.bodies.filter((body) => body.kind === kind) : [];
+        return (
+          members.length > 0 && (
+            <div key={kind}>
+              <div style={SECTION_HEADING}>{label}</div>
+              {members.map((body) => (
+                <Row
+                  key={body.id}
+                  body={body}
+                  active={body.id === focus}
+                  inSystem={false}
+                  onChoose={onChoosePlace}
+                  trailing={null}
+                />
+              ))}
+            </div>
+          )
+        );
+      })}
     </div>
   );
 }
+
+/** A dropdown's box, as every list under the breadcrumb has it. */
+const LIST_STYLE: React.CSSProperties = {
+  marginTop: '0.55rem',
+  width: '13.5rem',
+  // Opaque enough to need no blur behind it. See Panel.tsx.
+  background: 'rgba(14,14,17,0.97)',
+  border: '1px solid #262626',
+  borderRadius: '0.4rem',
+  padding: '0.35rem',
+};
 
 /**
  * A star of Alpha Centauri in the list: a row like any body's, but for a star that may not
