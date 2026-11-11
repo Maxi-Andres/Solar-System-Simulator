@@ -496,6 +496,15 @@ void main() {
 }
 `;
 
+/**
+ * The least a galaxy's point is drawn at, in white columns: about 40 of 255 at its centre. A
+ * choice, not the light (Maxi, 2026-11-11: "me gusta, dejalo así"): on one exposure most dwarfs
+ * are far too faint to show at all, and a galaxy at least a faint dot, in its own colour, is
+ * where it is. Only its point -- an unresolved galaxy; once it is a few pixels across, its
+ * volume is its own light alone.
+ */
+export const FAINT_GALAXY_FLOOR = 0.17;
+
 const POINT_VERTEX = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
@@ -521,6 +530,10 @@ void main() {
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   // pointPeak: L / (2 pi sigma^2).
   vPeak = aLight * aShare * uFade / (6.2831853 * sigmaPc * sigmaPc);
+  // Every galaxy at least a faint dot, its own colour at FAINT_GALAXY_FLOOR whatever its
+  // light: a choice, not what a photograph shows.
+  vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toFixed(3)} * aShare * uFade);
   vSigmaPx = sigmaPx;
   vSizePx = ceil(6.0 * sigmaPx) + 1.0;
   gl_PointSize = aShare * uFade > 0.0 ? vSizePx : 0.0;

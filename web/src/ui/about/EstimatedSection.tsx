@@ -395,6 +395,8 @@ export const estimatedSection: AboutSection = {
             Its faint dwarfs are too many: the Galaxy’s tides strip a cluster’s low-mass stars first, and its
             measured mass function is flatter than the initial one <Cite k="baumgardt2023" />. They are the
             stars least seen; the giants and the stars about the turnoff, which give its light, come out right.
+            Each star’s own place is drawn at random within that shape: right in number, light and where they
+            crowd, not star by star — no catalogue lists them.
           </Item>
           <Item title="Which are drawn">
             Every star brighter, seen from the cluster’s centre, than a limit solved for each cluster so that
@@ -632,7 +634,10 @@ export const estimatedSection: AboutSection = {
           <Item title="A dwarf’s stars, near it">
             No catalogue lists a dwarf’s stars one by one: the one the camera is near is sampled from a model —
             as many stars as give its light, from the globular clusters’ 12-billion-year population nearest its
-            [Fe/H] + 0.21, on its own Plummer ellipsoid and cut at eight scale radii. Fornax’s and Leo I’s stars
+            [Fe/H] + 0.21, on its own Plummer ellipsoid and cut at eight scale radii, each star’s own place drawn
+            at random within it: right in number, light and where they crowd, not star by star. Gaia has
+            measured the brightest giants of the nearest dwarfs, which could take their own places; they do
+            not yet. Fornax’s and Leo I’s stars
             are younger than that, and the irregulars’ young blue stars are not sampled: all their light goes to
             the old population. Its glow keeps only the light of the stars too faint to show, so no light is
             counted twice.

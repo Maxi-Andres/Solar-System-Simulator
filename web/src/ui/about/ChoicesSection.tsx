@@ -354,6 +354,12 @@ export const choicesSection: AboutSection = {
             nearer than three half-light radii, where it fills the frame: Hercules 380 pc out, not 4.8 kpc, and
             a few of its giants show. The largest faint ones stop at three radii with their stars still faint.
           </Item>
+          <Item title="Every galaxy at least a dot">
+            A galaxy too small for a few pixels is drawn as a dot at least faintly bright, in its own colour,
+            however faint it is: on one exposure most dwarfs would not show at all. Its brightness above that
+            is its own; once it is a few pixels across, it is its light alone.
+            <Why>so that where a galaxy is shows, as a faint dot, without its mark.</Why>
+          </Item>
           <Item title="Too small for a pixel, a point">
             A galaxy smaller on the screen than a few pixels is drawn as a dot holding all of its light, as it
             lands on a photograph’s pixel. From the Local Group’s view Triangulum and the Clouds are bright dots and
