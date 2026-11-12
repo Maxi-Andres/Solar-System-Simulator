@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { clusterLuminosity, populationColourIndex, unresolvedShare } from '../core/globularClusterLight.ts';
+import {
+  clusterLuminosity,
+  populationColourIndex,
+  unresolvedOnset,
+  unresolvedShare,
+} from '../core/globularClusterLight.ts';
 import {
   CLUSTER_COLOR,
   clusterDisplayName,
@@ -24,6 +29,7 @@ import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
+import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { lensState } from './lens.ts';
 import { MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
 import { galaxyVisibility } from './MilkyWay.tsx';
@@ -72,8 +78,11 @@ import { mapStrength } from './Starfield.tsx';
  * - **Giving way to its stars**: for the cluster whose stars are drawn the point holds only
  *   the light of those too faint to be -- fainter than the picture's limit from the camera, or
  *   than the sample's limit at its half-light radius (unresolvedShare) -- so no light is
- *   drawn twice; nearer than POINT_NEAR_FULL half-light radii it fades, gone by
- *   POINT_NEAR_FROM, where the light round the camera is its stars.
+ *   drawn twice; and that light comes in only as the cluster shrinks on the screen
+ *   (unresolvedOnset): while its half-light radius spans more than UNRESOLVED_HIDDEN_PX its
+ *   stars alone carry the picture, a choice that leaves that light out. Nearer than
+ *   POINT_NEAR_FULL half-light radii any cluster's point fades, gone by POINT_NEAR_FROM, where
+ *   the light round the camera is its stars.
  * - **Where**: as the galaxies' light, once out of the Sun's neighbourhood (galaxyVisibility).
  *   From the Solar System the sky is the star catalogues', Hipparcos and Tycho-2, which hold
  *   single stars and not a cluster's light taken whole -- as they hold no galaxy's.
@@ -162,7 +171,7 @@ void main() {
 }
 `;
 
-/** As LocalGroup.tsx's points': the Gaussian, through the galaxies' soft shoulder. */
+/** As LocalGroup.tsx's points': the Gaussian, into the glow buffer (glowBuffer.ts). */
 const POINT_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 varying vec3 vPeak;
@@ -171,7 +180,7 @@ ${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
+  gl_FragColor = spriteLight(vPeak, vSigmaPx);
 }
 `;
 
@@ -324,6 +333,7 @@ export function GlobularClusters({
     );
     object.frustumCulled = false;
     object.raycast = noRaycast;
+    drawIntoGlow(object);
     return {
       object,
       share,
@@ -343,6 +353,7 @@ export function GlobularClusters({
     renderDemand.request();
     return () => {
       lightGroup.remove(points.object);
+      releaseFromGlow(points.object);
       points.object.geometry.dispose();
       (points.object.material as THREE.Material).dispose();
     };
@@ -510,6 +521,8 @@ export function GlobularClusters({
           const fromCamera = catalog.magnitudeLimit - 5 * (Math.log10(d) - 1) - points.extinction[k]!;
           const fromSample = resolved.limitV - 5 * (Math.log10(halfLight) - 1);
           share *= unresolvedShare(points.populations[k]!, Math.min(fromCamera, fromSample));
+          // And that only as the cluster shrinks on the screen (unresolvedOnset).
+          share *= unresolvedOnset(((halfLight / d) * pixelsPerRadian) / renderer.getPixelRatio());
         }
         points.share.setX(k, share);
       }

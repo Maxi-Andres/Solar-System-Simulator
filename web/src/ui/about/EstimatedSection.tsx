@@ -414,7 +414,7 @@ export const estimatedSection: AboutSection = {
             metallicity, 0.62 to 0.87, since Harris’s measured B−V is reddened. The 14 with no reddening take
             their mass times that population’s light per solar mass. From anywhere but the Sun its dust is the
             Sun’s A_V times the share of the dust disc’s column that lies between; it dims, it does not redden.
-            Near a cluster whose stars are drawn, the point keeps only the light of the stars too faint to draw.
+            Near a cluster whose stars are drawn, the point keeps only the light of the stars too faint to draw, and that only once the cluster is small on the screen.
           </Item>
         </Items>
 
@@ -649,11 +649,21 @@ export const estimatedSection: AboutSection = {
             counted twice.
           </Item>
           <Item title="The Small Cloud’s depth">
-            How each place’s light is spread along our line of sight: a Gaussian of its measured mean and depth,
-            since its stars give a spread of distances, not a shape. Its glowing gas and its dust are put with
-            its young stars, as the south-west bar’s dust is found in front of its old stars
-            <Cite k="yanchulovaMericaJones2021" />. Where no star is near, the whole cloud’s mean and a typical
-            depth fill in.
+            How each place’s light is spread along our line of sight, from how its stars spread in distance:
+            its old stars evenly about their mean, a Gaussian 2 to 3.9 kpc wide either side, 3.1 typically; its
+            young stars in a sharp core with long wings, a Laplace, 2.9 kpc typically — as wide, half as deep at
+            its core. Each is what OGLE’s RR Lyrae or young Cepheids round each place show, less what their
+            distances scatter by themselves — 0.10 and 0.068 magnitudes, measured in the same catalogues’ Large
+            Cloud stars, not the catalogues’ errors, which are a zero point every star shares — and less the
+            mean’s change across them <Cite k={['jacyszynDobrzeniecka2016', 'jacyszynDobrzeniecka2017']} />. For
+            the old stars that scatter is at most the method’s, so their depth is if anything short; red clump
+            stars and RR Lyrae measured in other ways give 3.4 to 4.6 kpc, with less of that scatter taken out{' '}
+            <Cite k={['subramanian2012', 'muraveva2018']} />. What stands above the map’s large scale, a third
+            of a degree (340 pc) — HII regions, clusters, knots of dust — is put at its population’s mean, 150
+            pc deep, as deep as the widest of them is wide; where along the line of sight each really lies is not
+            measured. Its glowing gas and its dust are put with its young stars, as the south-west bar’s dust is
+            found in front of its old stars <Cite k="yanchulovaMericaJones2021" />. Where no star is near, the
+            whole cloud’s mean and a typical depth fill in.
           </Item>
           <Item title="The Large Cloud past Spitzer’s edge">
             Spitzer mapped its central seven degrees. Its old stars past that edge are its exponential, fitted to

@@ -30,21 +30,47 @@ import type { Vec3 } from './vec3.ts';
  *
  * On a coarser grid over the same square, `depth`: for its old stars (from RR Lyrae) and its
  * young (from Cepheids under 150 Myr), the mean distance from the Sun along each direction and
- * the intrinsic spread about it, a Gaussian's sigma, kpc.
+ * the intrinsic spread about it, a standard deviation, kpc, and its shape (DepthShape): what
+ * the stars round each place spread by once the distance method's own scatter is taken out --
+ * the period-luminosity relation's width and each star's photometry, 0.068 mag in distance
+ * modulus for the Cepheids and 0.10 for the RR Lyrae, measured in the same catalogues' LMC
+ * stars -- and a mean that changes across them is not counted as depth.
  *
  * ## As a volume
  *
  * A point P at a distance D from the Sun, in the direction (xi, eta), glows
  *
- *   j(P) = Sigma(xi, eta) N(D; mu(xi, eta), sigma(xi, eta)),   N the unit Gaussian in D,
+ *   j(P) = Sigma(xi, eta) N(D; mu(xi, eta), sigma(xi, eta)),   N the profile in D,
  *
  * L_Sun per pc^2 per pc of path: the old stars' light by the old stars' profile, the young
  * stars' and the gas's by the young's; and its dust's optical depth per pc is A_V / 1.0857
  * times the young stars' N -- the dust lies with the young stars, as Yanchulova Merica-Jones
  * et al. 2021 (ApJ 907, 50) find the south-west bar's 3.2 kpc in front of its old stars. Along
- * a ray from the Sun xi and eta stay put and the Gaussian sums to one: the column is the map,
+ * a ray from the Sun xi and eta stay put and the profile sums to one: the column is the map,
  * exactly, so from Earth the cloud is its photographs. From anywhere else, each point is lit by
  * the map at its own direction from the Sun, and the cloud shows its depth.
+ *
+ * ## Two scales
+ *
+ * But sigma is a population's spread along the line of sight, 1.4 to 3.9 kpc, not each thing's
+ * in it: spread by it, an HII region 100 pc across, a cluster, a knot of dust would each be a
+ * tube kilo-parsecs long pointing at the Sun, and from beside the cloud nothing but tubes. So
+ * each channel is split in two. Its large-scale part, the map averaged over SMOOTH_DEG of sky
+ * (smoothLevel's mipmap, a texel 0.31 degrees, 341 pc at 62.44 kpc), keeps the population's
+ * depth; what stands above that, the compact part, lies at the population's mean distance as
+ * deep as the widest compact thing is wide -- a Gaussian of COMPACT_SIGMA_PC:
+ *
+ *   j = S_large N(D; mu, sigma) + S_compact N(D; mu, COMPACT_SIGMA_PC),
+ *
+ *   S_large = min(S_smooth, S),   S_compact = S - S_large   (twoScales).
+ *
+ * The min makes the two sum to the map everywhere, so from Earth the cloud is still exactly its
+ * photographs: a plain S_smooth for the large part, with the excess clamped from the compact
+ * one, would add wherever the map is darker than its surroundings -- 3 % of the old stars'
+ * light, 7 % of the young's, 16 % of the dust and 37 % of the glowing gas, as much as their
+ * compact parts hold. The price is that a hole in the map is a hole through the cloud's whole
+ * depth, a darker tube rather than a brighter one. Where along the population's depth each
+ * compact thing lies is not measured: each is put at the mean, an estimate.
  *
  * The volume's whole light is the map's times the mean of (D / referencePc)^2 over the
  * profile -- a pixel of sky is that much bigger at D than at referencePc: 0.98 for the old
@@ -52,8 +78,18 @@ import type { Vec3 } from './vec3.ts';
  * for: what is matched is what is measured, its light on the sky.
  */
 
-/** One kind of star's depth on the grid: index j M + i, kpc. */
+/**
+ * The shape of a population's spread along the line of sight, the same over the whole grid: a
+ * Gaussian, or a Laplace -- e^(-sqrt 2 |x|) / sqrt 2 in standard deviations, a sharp core with
+ * long wings -- whichever its stars show (tools/galaxies/prepare.py depth_shape): the old
+ * stars' a Gaussian, the young's a Laplace. Both have a cumulative in closed form, so a step's
+ * column is exact.
+ */
+export type DepthShape = 'gaussian' | 'laplace';
+
+/** One kind of star's depth on the grid: index j M + i, kpc; sigma a standard deviation. */
 export interface SkyDepthProfile {
+  readonly shape: DepthShape;
   readonly meanKpc: readonly number[];
   readonly sigmaKpc: readonly number[];
 }
@@ -84,16 +120,21 @@ const finite = (value: unknown): value is number => typeof value === 'number' &&
 const pair = (value: unknown): boolean => Array.isArray(value) && value.length === 2 && value.every(finite);
 
 function parseProfile(raw: unknown, cells: number, label: string): SkyDepthProfile {
-  const profile = raw as SkyDepthProfile | undefined;
+  const profile = raw as Partial<SkyDepthProfile> | undefined;
   const mean = profile?.meanKpc;
   const sigma = profile?.sigmaKpc;
+  // A map from before shapes were fitted: Gaussian, as it was drawn.
+  const shape = profile?.shape ?? 'gaussian';
+  if (shape !== 'gaussian' && shape !== 'laplace') {
+    throw new Error(`not a sky map: its ${label} depth has no shape it knows`);
+  }
   if (!Array.isArray(mean) || !Array.isArray(sigma) || mean.length !== cells || sigma.length !== cells) {
     throw new Error(`not a sky map: its ${label} depth is not one value a cell`);
   }
   if (!mean.every((v) => finite(v) && v > 0) || !sigma.every((v) => finite(v) && v > 0)) {
     throw new Error(`not a sky map: its ${label} depth has a distance or spread that is not one`);
   }
-  return { meanKpc: mean, sigmaKpc: sigma };
+  return { shape, meanKpc: mean, sigmaKpc: sigma };
 }
 
 export function parseSkyMap(raw: unknown): SkyMap {
@@ -213,28 +254,148 @@ export function depthAt(depth: SkyDepth, xiDeg: number, etaDeg: number): readonl
   return [at(depth.old.meanKpc), at(depth.old.sigmaKpc), at(depth.young.meanKpc), at(depth.young.sigmaKpc)];
 }
 
-/** The unit Gaussian in D, per pc. */
-export function depthDensity(dPc: number, meanPc: number, sigmaPc: number): number {
+/** The profile in D, per pc, of standard deviation sigmaPc: a Gaussian, or a Laplace. */
+export function depthDensity(dPc: number, meanPc: number, sigmaPc: number, shape: DepthShape = 'gaussian'): number {
   const x = (dPc - meanPc) / sigmaPc;
-  return Math.exp(-0.5 * x * x) / (sigmaPc * Math.sqrt(2 * Math.PI));
+  return (shape === 'laplace' ? laplaceDensity(x) : density(x)) / sigmaPc;
 }
 
 /**
- * Steps along a ray across its box (scene/SkyVolume.tsx). The depth profiles are smooth --
- * sigma 1.6 kpc at the least -- and across the 35 kpc of the box seen from Earth's side 32
- * steps give each column to 0.012 % at a single jitter (skyMap.test.ts); from beside it each
- * step reads the map averaged over what it crosses. 48 cost half again as much, for nothing
- * that shows.
+ * The large-scale part's scale on the sky, degrees: the map's mipmap whose texel is nearest
+ * it is the smooth map (smoothLevel). A third of a degree: above it, the bar, the wing and the
+ * depth grid's own cells, 0.31 degrees; below it, HII regions, clusters, knots of dust.
+ */
+export const SMOOTH_DEG = 0.3;
+
+/** The mipmap of the map read as its large-scale part: the Small Cloud's, 5 -- 0.31 degrees. */
+export function smoothLevel(map: Pick<SkyMap, 'size' | 'halfDeg'>): number {
+  return Math.max(0, Math.round(Math.log2((SMOOTH_DEG * map.size) / (2 * map.halfDeg))));
+}
+
+/**
+ * The compact part's depth, a Gaussian's sigma, pc: as deep as the widest thing the split
+ * leaves compact is wide -- one smooth texel, 341 pc, a full width at half maximum, sigma
+ * 341 / 2.355 = 145 pc on the sky; 150.
+ */
+export const COMPACT_SIGMA_PC = 150;
+
+/** A channel's value split in its two scales, [large, compact]: summing to it, neither negative. */
+export function twoScales(fine: number, smooth: number): readonly [number, number] {
+  const large = Math.min(smooth, fine);
+  return [large, fine - large];
+}
+
+/**
+ * The unit Gaussian's tail past a >= 0, 1 - Phi(a): Abramowitz and Stegun 7.1.26's erfc, to
+ * 1.5e-7 -- the shader's (scene/SkyVolume.tsx), here to test it.
+ */
+export function normalTail(a: number): number {
+  const t = 1 / (1 + (0.3275911 / Math.SQRT2) * a);
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  return 0.5 * poly * Math.exp(-0.5 * a * a);
+}
+
+/** The unit Gaussian's density at x. */
+function density(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
+
+/** The unit Laplace's -- standard deviation one, scale 1 / sqrt 2 -- density at x. */
+function laplaceDensity(x: number): number {
+  return Math.exp(-Math.SQRT2 * Math.abs(x)) / Math.SQRT2;
+}
+
+/** The unit Laplace's tail past a >= 0, e^(-sqrt 2 a) / 2: the shader's (scene/SkyVolume.tsx). */
+export function laplaceTail(a: number): number {
+  return 0.5 * Math.exp(-Math.SQRT2 * a);
+}
+
+/**
+ * The unit Laplace's mean over [x0, x1], as gaussianAcross the Gaussian's, the difference of
+ * its cumulative over the width, exactly however thin: across its cusp, one less its two tails;
+ * to one side, the nearer end's tail times 1 - e^(-sqrt 2 |dx|) -- for a sliver, a hundredth or
+ * less, its series to the third order, 3e-7 of it, so that nothing is lost to rounding. Along a
+ * ray from the Sun, where x runs straight and the profile stays put, the steps' columns sum to
+ * the difference of its cumulative at the ray's ends: its sharp core is not missed between
+ * steps. The shader's (scene/SkyVolume.tsx).
+ */
+export function laplaceAcross(x0: number, x1: number): number {
+  const width = Math.abs(x1 - x0);
+  const a = Math.abs(x0);
+  const b = Math.abs(x1);
+  if (x0 >= 0 !== x1 >= 0) {
+    // Across the cusp, one less the two tails: for a sliver, each tail's series to the third order.
+    return width < 0.01
+      ? Math.SQRT1_2 + (-0.5 * (a * a + b * b) + (Math.SQRT2 / 6) * (a * a * a + b * b * b)) / width
+      : (1 - laplaceTail(a) - laplaceTail(b)) / width;
+  }
+  const u = Math.SQRT2 * width;
+  const share = width < 0.01 ? Math.SQRT2 * (1 - u / 2 + (u * u) / 6) : (1 - Math.exp(-u)) / width;
+  return laplaceTail(Math.min(a, b)) * share;
+}
+
+/**
+ * The unit Gaussian's mean over [x0, x1], as the shader takes it: the difference of its
+ * cumulative over the width -- of the two tails when both ends are on one side, so nothing is
+ * lost to rounding near one -- or, the ends within a hundredth, the mean of its two ends'
+ * densities. A step whose x = (D - mu) / sigma runs from x0 to x1 holds that times its length
+ * over sigma of the light: all of a layer it crosses, however thin and however long the step.
+ */
+export function gaussianAcross(x0: number, x1: number): number {
+  const dx = x1 - x0;
+  if (Math.abs(dx) < 0.01) {
+    return 0.5 * (density(x0) + density(x1));
+  }
+  const a = normalTail(Math.abs(x0));
+  const b = normalTail(Math.abs(x1));
+  const s0 = x0 >= 0 ? 1 : -1;
+  const s1 = x1 >= 0 ? 1 : -1;
+  return (s0 === s1 ? s1 * (a - b) : s1 * (1 - a - b)) / dx;
+}
+
+/**
+ * Where along a step, a share of it, the light of a Gaussian layer it runs through from x0 to
+ * x1 is centred: its mean x there, (phi(x0) - phi(x1)) over its cumulative across, back to the
+ * step. The map read there is right for any map that changes evenly along the step. Null where
+ * the step runs along the layer, the ends within a hundredth: its light is then even along it.
+ */
+export function gaussianCentroid(x0: number, x1: number): number | null {
+  const dx = x1 - x0;
+  const across = gaussianAcross(x0, x1) * dx;
+  if (Math.abs(dx) < 0.01 || Math.abs(across) < 1e-7) {
+    return null;
+  }
+  const mean = (density(x0) - density(x1)) / across;
+  return Math.min(Math.max((mean - x0) / dx, 0), 1);
+}
+
+/**
+ * Steps along a ray across its box (scene/SkyVolume.tsx). Each step takes a Gaussian
+ * population's column across it by the trapezoid between its ends -- the profiles 2.0 kpc deep
+ * at the least, the steps under a sigma -- a Laplace population's, whose core is a cusp the
+ * trapezoid would cut, and the compact layers' exactly (laplaceAcross, gaussianAcross), x = (D
+ * - mu) / sigma straight along the step: from Earth's side an even map's column is the map to
+ * 0.01 % (skyMap.test.ts), and the compact layers, 150 pc deep against steps of 500, are never
+ * missed between them; from beside the cloud each step reads the map averaged over what it
+ * crosses. 48 cost half again as much, for nothing that shows.
  */
 export const SKY_STEPS = 32;
 
-/** How far either side of each place's mean distance its light is drawn: its sigmas. */
+/** How far either side of each place's mean distance a Gaussian's light is drawn: its sigmas. */
 export const DEPTH_REACH = 3.5;
+
+/**
+ * How far either side a profile's light is drawn, its standard deviations: as much of it left
+ * outside as a Gaussian's DEPTH_REACH leaves, 4.7e-4 -- a Laplace's, its wings long, 5.4.
+ */
+export function depthReach(shape: DepthShape): number {
+  return shape === 'laplace' ? -Math.log(2 * normalTail(DEPTH_REACH)) / Math.SQRT2 : DEPTH_REACH;
+}
 
 /**
  * The box the cloud's light is drawn in, in the map's frame about its centre (east, north, away;
  * pc): every direction of the map, from the nearest any of its light lies to the farthest --
- * DEPTH_REACH sigmas either side of the mean, of whichever kind reaches further. Its half sides
+ * depthReach sigmas either side of the mean, of whichever kind reaches further. Its half sides
  * and its centre.
  */
 export function skyBox(map: Pick<SkyMap, 'halfDeg' | 'referencePc' | 'depth'>): {
@@ -245,10 +406,11 @@ export function skyBox(map: Pick<SkyMap, 'halfDeg' | 'referencePc' | 'depth'>): 
   let near = Number.POSITIVE_INFINITY;
   let far = 0;
   for (const profile of [depth.old, depth.young]) {
+    const reach = depthReach(profile.shape);
     profile.meanKpc.forEach((mean, k) => {
       const sigma = profile.sigmaKpc[k]!;
-      near = Math.min(near, (mean - DEPTH_REACH * sigma) * 1000);
-      far = Math.max(far, (mean + DEPTH_REACH * sigma) * 1000);
+      near = Math.min(near, (mean - reach * sigma) * 1000);
+      far = Math.max(far, (mean + reach * sigma) * 1000);
     });
   }
   near = Math.max(near, 0);
@@ -259,6 +421,51 @@ export function skyBox(map: Pick<SkyMap, 'halfDeg' | 'referencePc' | 'depth'>): 
   const zFar = far - map.referencePc;
   const side = far * halfRad;
   return { half: { x: side, y: side, z: (zFar - zNear) / 2 }, centre: { x: 0, y: 0, z: (zFar + zNear) / 2 } };
+}
+
+/**
+ * The stretch of a ray within the maps' circle, as seen from the Sun -- the cone xi^2 + eta^2 <
+ * halfRad^2 in front of it, where all of the light is -- inside `span`; null if none. From `o`
+ * along `d`, both in the map's frame about the Sun: |q.xy|^2 - halfRad^2 q.z^2, a quadratic in
+ * t, is negative inside it and inside its mirror behind the Sun. The cone in front of the Sun is
+ * convex, so the stretch is one interval.
+ * The shader (scene/SkyVolume.tsx) marches only it: rays past the cloud's edge cost nothing,
+ * and those through it spend every step where there is light.
+ */
+export function coneSpan(
+  o: Vec3,
+  d: Vec3,
+  halfRad: number,
+  span: readonly [number, number],
+): readonly [number, number] | null {
+  const r2 = halfRad * halfRad;
+  const a = d.x * d.x + d.y * d.y - r2 * d.z * d.z;
+  const b = o.x * d.x + o.y * d.y - r2 * o.z * d.z;
+  const c = o.x * o.x + o.y * o.y - r2 * o.z * o.z;
+  const disc = b * b - a * c;
+  let lo = span[0];
+  let hi = span[1];
+  if (disc < 0) {
+    // Never on the cone: all inside or all outside.
+    if (a > 0) return null;
+  } else if (Math.abs(a) > 1e-12) {
+    const s = Math.sqrt(disc);
+    const t1 = Math.min((-b - s) / a, (-b + s) / a);
+    const t2 = Math.max((-b - s) / a, (-b + s) / a);
+    if (a > 0) {
+      // Between the roots, in one sheet of the double cone: the one behind the Sun is not the maps'.
+      if (o.z + d.z * 0.5 * (t1 + t2) <= 0) return null;
+      lo = Math.max(lo, t1);
+      hi = Math.min(hi, t2);
+    } else if (d.z > 0) {
+      // Steeper than the cone: inside it from the far root on, going away from the Sun...
+      lo = Math.max(lo, t2);
+    } else {
+      // ...or up to the near one, coming back.
+      hi = Math.min(hi, t1);
+    }
+  }
+  return hi > lo ? [lo, hi] : null;
 }
 
 /**

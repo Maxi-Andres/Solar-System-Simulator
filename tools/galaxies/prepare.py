@@ -74,9 +74,13 @@ And what the sky maps cannot say, how each place's light is spread in depth, fro
 measured one by one: OGLE's RR Lyrae for the old stars (Jacyszyn-Dobrzeniecka et al. 2017) and
 its classical Cepheids younger than 150 Myr for the young (Jacyszyn-Dobrzeniecka et al. 2016),
 each star's distance from its period-luminosity relation. At each point of a coarse grid, the
-mean distance and the intrinsic spread about it that best explain the stars round it, each
-star's own error taken out (depth_profile); the app spreads each sky point's light along the
-line of sight by the Gaussian of its place, the dust by the young stars'.
+mean distance and the intrinsic spread about it that best explain the stars round it, the
+method's own scatter taken out -- measured where the same catalogue's stars lie in a galaxy
+that is thin, the LMC (ogle_noise), not the tables' error column, a zero point common to every
+star -- and the mean let change across the stars counted, so that a slope is not taken for
+depth (depth_profile) -- the old stars' spread a Gaussian, the young's a Laplace, a sharp core
+with long wings, as their stars show (depth_shape); the app spreads each sky point's light
+along the line of sight by the profile of its place, the dust by the young stars'.
 """
 import gzip
 import json
@@ -90,7 +94,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
+from scipy import ndimage, optimize, special
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parent.parent / 'web' / 'public' / 'galaxies'
@@ -240,6 +244,10 @@ DEPTH_STARS = 50
 # Where it had to widen to DEPTH_FAR_DEG -- no tracer within some two degrees -- the whole
 # galaxy's profile, blended in smoothly from DEPTH_NEAR_DEG.
 DEPTH_FAR_DEG = 2.0
+# The method's own scatter, measured in the LMC's stars of the same table (ogle_noise): squares
+# of NOISE_CELL_DEG with NOISE_STARS or more stars in them.
+NOISE_CELL_DEG = 0.5
+NOISE_STARS = 40
 # Where Clark et al.'s dust map of the SMC ends: dropped within the first of these, degrees, of its
 # edge (its streaks), faded in by the second (dust_faded).
 DUST_EDGE_DEG = (0.3, 0.7)
@@ -889,14 +897,15 @@ def sexagesimal(text, scale):
     return sign * scale * (a + b / 60 + c / 3600)
 
 
-def ogle_stars(url, name, ages):
-    """An OGLE table's stars of the galaxy (its location column, G.key in capitals): each one's
-    place on the tangent plane, degrees east and north, its distance and that distance's error,
-    kpc, and, ages True, its age, Myr."""
+def ogle_stars(url, name, ages, where=None, ref=None):
+    """An OGLE table's stars of a galaxy (its location column, G.key in capitals unless where
+    says another): each one's place on the tangent plane about ref (G's centre unless given),
+    degrees east and north, its distance and the table's error of it, kpc, and, ages True, its
+    age, Myr."""
     rows = []
     for line in fetch(url, name).read_text(encoding='latin-1').splitlines():
         p = line.split()
-        if not p or p[0] != G.key.upper():
+        if not p or p[0] != (where or G.key.upper()):
             continue
         # Its RA the first column with colons: the Cepheids' table has a pulsation mode the RR
         # Lyrae's has not, the RR Lyrae's two metallicity columns the Cepheids' has not.
@@ -904,37 +913,150 @@ def ogle_stars(url, name, ages):
         rows.append((sexagesimal(p[k], 15), sexagesimal(p[k + 1], 1), float(p[k + 2]), float(p[k + 3]),
                      float(p[17]) if ages else math.nan))
     ra, dec, d, e, age = np.array(rows).T
-    x, y = gnomonic(ra, dec, (G.ra, G.dec))
+    x, y = gnomonic(ra, dec, ref or (G.ra, G.dec))
     return x, y, d, e, age
 
 
+def ogle_noise(url, name, ages):
+    """How far an OGLE table's distances scatter where the stars do not, in distance modulus:
+    the method's own scatter, which is not depth. Its error column is not it: there it is the
+    OGLE-IV photometry's zero point, 0.02 mag in I and in V, through the Wesenheit index I - 1.55
+    (V - I) -- 0.060 mag, the same for every Cepheid to 0.0002 and every RR Lyrae to 0.003 (the
+    RR Lyrae's metallicity's error with it), a calibration shared by the stars round a place
+    that does not spread them -- and it leaves out what does: the period-luminosity relation's
+    own width, each star's photometry and, for the RR Lyrae, its photometric metallicity. So it
+    is measured, in the same table's LMC stars, a disc seen 25 to 35 degrees from face-on: in
+    each square of NOISE_CELL_DEG holding NOISE_STARS or more, the scatter of their distance
+    moduli about a plane, the LMC's tilt and warp across it taken out, clipped at three times
+    it; the median of the squares'. Its young disc is some 0.1 to 0.3 kpc thick, 0.01 mag, so
+    for the Cepheids it is all but the method's: 0.068 mag. Its old stars have a depth of their
+    own, so for the RR Lyrae, 0.10 mag, it is at most the method's: the SMC's old stars' depth
+    found with it, if anything, a little short of theirs. (Checked against the 264 SMC RR Lyrae
+    in Muraveva et al. 2018's VMC table, distances from Ks alone: what the two disagree by puts
+    0.061 mag of OGLE's distances' scatter in OGLE alone, the least it can be.)"""
+    lmc = GALAXIES['lmc']
+    x, y, d, _, _ = ogle_stars(url, name, ages, where='LMC', ref=(lmc.ra, lmc.dec))
+    mu = 5 * np.log10(d * 100)
+    i, j = np.floor(x / NOISE_CELL_DEG).astype(int), np.floor(y / NOISE_CELL_DEG).astype(int)
+    scatter = []
+    for cell in set(zip(i, j)):
+        inside = (i == cell[0]) & (j == cell[1])
+        if inside.sum() < NOISE_STARS:
+            continue
+        a = np.stack([np.ones(inside.sum()), x[inside], y[inside]], 1)
+        r = mu[inside] - a @ np.linalg.lstsq(a, mu[inside], rcond=None)[0]
+        keep = np.ones(len(r), bool)
+        for _ in range(10):
+            new = np.abs(r - r[keep].mean()) < 3 * r[keep].std()
+            if (new == keep).all():
+                break
+            keep = new
+        scatter.append(r[keep].std())
+    noise = float(np.median(scatter))
+    print(f'  {name}: in the LMC, {len(scatter)} squares of {NOISE_STARS} stars or more scatter by {noise:.3f} mag '
+          f'(10-90 %: {np.percentile(scatter, 10):.3f}-{np.percentile(scatter, 90):.3f}) about their plane')
+    return noise
+
+
 SIGMA_GRID = np.arange(0.0, 15.001, 0.05)
+# How far from the plane, in total widths (the spread's and the method's in quadrature), a star
+# is still counted, by the profile's shape: a Gaussian's 99.7 %, three; a Laplace's tails are
+# its own, and clipped at three they are taken for strays -- at five, where the shape found no
+# longer changes (it does not from five to eight).
+DEPTH_CLIP = {'gaussian': 3.0, 'laplace': 5.0}
 
 
-def depth_fit(d, e, w):
-    """The mean distance mu and intrinsic spread sigma that best explain stars at distances d,
-    each measured to e, kpc: the maximum of their likelihood, d ~ N(mu, sigma^2 + e^2), each
-    counted by its weight w. For each sigma the best mu is the weighted mean, so sigma is found on
-    a grid of it, 0 to 15 kpc, then refined. Clipped: stars more than three times the total width
-    from the mean left out, and the fit made again, until none change -- a star of the Milky
-    Way's halo or of the Bridge behind does not widen it."""
+def gaussian_nll(r, e, w, s):
+    """Minus the log likelihood of residuals r about the plane, each scattered by e and counted
+    by w, for a Gaussian spread of standard deviation s."""
+    var = s * s + e * e
+    return 0.5 * float((w * (np.log(2 * math.pi * var) + r * r / var)).sum())
+
+
+def laplace_nll(r, e, w, s):
+    """The same for a Laplace spread of standard deviation s, scale b = s / sqrt 2, convolved
+    with each star's Gaussian scatter e: in closed form, e^(a^2 / 2) / 2b [e^(r/b) Phi(-r/e - a)
+    + e^(-r/b) Phi(r/e - a)], a = e / b."""
+    b = max(s, 1e-3) / math.sqrt(2)
+    a = e / b
+    log = (a * a / 2 - math.log(2 * b)
+           + np.logaddexp(r / b + special.log_ndtr(-r / e - a), -r / b + special.log_ndtr(r / e - a)))
+    return -float((w * log).sum())
+
+
+def best_spread(nll, r, e, w):
+    """The standard deviation, kpc, between 0.02 and 15, that best explains the residuals."""
+    res = optimize.minimize_scalar(lambda ls: nll(r, e, w, math.exp(ls)), bounds=(math.log(0.02), math.log(15.0)),
+                                   method='bounded', options=dict(xatol=1e-4))
+    return math.exp(res.x)
+
+
+def depth_fit(x, y, d, e, w, shape='gaussian', residuals=False):
+    """The mean distance mu and intrinsic spread sigma, a standard deviation, that best explain
+    stars at distances d, each scattered by the method by e, kpc: the maximum of their
+    likelihood, each counted by its weight w, d about mu + gx x + gy y by a Gaussian of sigma, or
+    by a Laplace (shape), convolved with the Gaussian of e -- the mean let change across them,
+    as a plane in their places x and y on the sky about their weighted centroid, so that mu is
+    the mean distance where they are and a mean that changes across them is not taken for
+    depth. The plane is the Gaussian's: for each sigma the weighted least squares one, sigma
+    found on a grid of it, 0 to 15 kpc, then refined; a Laplace's spread is then the best for
+    the stars about that plane. Clipped: stars more than DEPTH_CLIP total widths from the plane
+    left out, and the fit made again, until none change -- a star of the Milky Way's halo or of
+    the Bridge behind does not widen it. With residuals, also each kept star's distance from the
+    plane, its e and its w."""
     keep = w > 0
+    x = x - (w * x).sum() / w.sum()
+    y = y - (w * y).sum() / w.sum()
+    a_all = np.stack([np.ones_like(x), x, y])
     for _ in range(10):
-        ww, dd, ee = w[keep], d[keep], e[keep]
+        ww, dd, ee, aa = w[keep], d[keep], e[keep], a_all[:, keep]
         sigma = SIGMA_GRID
         for _ in range(2):
             var = sigma[:, None] ** 2 + ee ** 2
-            a = ww / var
-            mus = (a * dd).sum(1) / a.sum(1)
-            nll = (ww * (np.log(var) + (dd - mus[:, None]) ** 2 / var)).sum(1)
+            c = ww / var
+            normal = np.einsum('sn,in,jn->sij', c, aa, aa) + 1e-9 * np.eye(3)
+            plane = np.linalg.solve(normal, np.einsum('sn,in,n->si', c, aa, dd)[..., None])[..., 0]
+            nll = (ww * (np.log(var) + (dd - plane @ aa) ** 2 / var)).sum(1)
             best = int(np.argmin(nll))
-            s, mu = sigma[best], mus[best]
+            s, coef = sigma[best], plane[best]
             sigma = np.linspace(max(0.0, s - 0.05), s + 0.05, 101)
-        new = (w > 0) & (np.abs(d - mu) < 3 * np.sqrt(s * s + e * e))
+        if shape == 'laplace':
+            s = best_spread(laplace_nll, dd - coef @ aa, ee, ww)
+        new = (w > 0) & (np.abs(d - coef @ a_all) < DEPTH_CLIP[shape] * np.sqrt(s * s + e * e))
         if (new == keep).all():
             break
         keep = new
-    return float(mu), float(s), int(keep.sum())
+    if residuals:
+        return float(coef[0]), float(s), int(keep.sum()), (d - coef @ a_all)[keep], e[keep], w[keep]
+    return float(coef[0]), float(s), int(keep.sum())
+
+
+def depth_shape(x, y, d, e, label):
+    """The shape of a population's spread along the line of sight, the same everywhere: a
+    Gaussian or a Laplace, whichever explains the stars of the squares of two grid steps holding
+    30 or more better -- each square's own plane and spread, the stars within the Laplace's
+    clip of it for both, so that neither is judged on stars the other left out. The two have
+    closed forms the app draws exactly (core/skyMap.ts). A generalized normal, e^-|x|^beta, its
+    beta fitted across the squares, puts the young Cepheids at beta 1.0, a Laplace, and the RR
+    Lyrae at 2.0, a Gaussian: the young lie in a sharp core along each line of sight, with long
+    wings, the old evenly about their mean."""
+    step = 2 * G.half_deg / DEPTH_SIZE
+    i = np.floor((x + G.half_deg) / (2 * step)).astype(int)
+    j = np.floor((y + G.half_deg) / (2 * step)).astype(int)
+    better = []
+    for cell in set(zip(i, j)):
+        inside = (i == cell[0]) & (j == cell[1])
+        if inside.sum() < 30:
+            continue
+        *_, r, ee, ww = depth_fit(x, y, d, e, inside.astype(np.float64), 'laplace', residuals=True)
+        g = gaussian_nll(r, ee, ww, best_spread(gaussian_nll, r, ee, ww))
+        lap = laplace_nll(r, ee, ww, best_spread(laplace_nll, r, ee, ww))
+        better.append(g - lap)
+    better = np.array(better)
+    shape = 'laplace' if better.sum() > 0 else 'gaussian'
+    print(f'  {label}: a Laplace explains its {len(better)} squares better than a Gaussian by {better.sum():.1f} in '
+          f'log likelihood ({(better > 0).sum()} of them): its spread {shape}')
+    return shape
 
 
 def depth_profile(x, y, d, e, label):
@@ -945,11 +1067,14 @@ def depth_profile(x, y, d, e, label):
     whole galaxy's instead, blended in smoothly: its mean distance, and the spread typical of a
     place in it -- not the whole galaxy's, which its mean's changing across the sky widens. The
     stars of each square of two grid steps fitted too, alone, where they are 30 or more: that
-    typical spread is their median, and the spread is kept within what they find."""
+    typical spread is their median, and the spread is kept within what they find -- their 5th
+    to 95th percentiles: the least a place's stars resolve, where they cannot tell a depth from
+    the method's scatter, the 5th. Every fit of the population's own shape (depth_shape)."""
+    shape = depth_shape(x, y, d, e, label)
     m = DEPTH_SIZE
     step = 2 * G.half_deg / m
     centres = ((np.arange(m) + 0.5) / m * 2 - 1) * G.half_deg
-    whole = depth_fit(d, e, np.ones_like(d))
+    whole = depth_fit(x, y, d, e, np.ones_like(d), shape)
     print(f'  {label}: {len(d)} stars; the whole galaxy {whole[0]:.2f} kpc, spread {whole[1]:.2f} kpc '
           f'({whole[2]} kept)')
     i = np.floor((x + G.half_deg) / (2 * step)).astype(int)
@@ -960,7 +1085,7 @@ def depth_profile(x, y, d, e, label):
             inside = (i == ci) & (j == cj)
             if inside.sum() >= 30:
                 cells.append(((ci + 0.5) * 2 * step - G.half_deg, (cj + 0.5) * 2 * step - G.half_deg,
-                              *depth_fit(d, e, inside.astype(np.float64))))
+                              *depth_fit(x, y, d, e, inside.astype(np.float64), shape)))
     cells = np.array(cells)
     lo, typical, hi = np.percentile(cells[:, 3], [5, 50, 95])
     # The mean's gradient over the squares, each counted by its stars: a plane.
@@ -983,7 +1108,7 @@ def depth_profile(x, y, d, e, label):
             h = hi_h
         w = np.exp(-r2 / (2 * h * h))
         w[w < 1e-3] = 0.0
-        mu, s, _ = depth_fit(d, e, w)
+        mu, s, _ = depth_fit(x, y, d, e, w, shape)
         t = np.clip((h - DEPTH_NEAR_DEG) / (DEPTH_FAR_DEG - DEPTH_NEAR_DEG), 0, 1)
         t = t * t * (3 - 2 * t)
         mean[k] = (1 - t) * mu + t * whole[0]
@@ -992,7 +1117,7 @@ def depth_profile(x, y, d, e, label):
     middle = [(m // 2 - 1) * m + m // 2 - 1, (m // 2 - 1) * m + m // 2, m // 2 * m + m // 2 - 1, m // 2 * m + m // 2]
     print(f'  {label}: at the centre {mean[middle].mean():.2f} kpc, spread {spread[middle].mean():.2f}; '
           f'over the grid mean {mean.min():.2f}-{mean.max():.2f}, spread {spread.min():.2f}-{spread.max():.2f} kpc')
-    return dict(meanKpc=[round(float(v), 3) for v in mean], sigmaKpc=[round(float(v), 3) for v in spread])
+    return dict(shape=shape, meanKpc=[round(float(v), 3) for v in mean], sigmaKpc=[round(float(v), 3) for v in spread])
 
 
 def depth_grids():
@@ -1001,15 +1126,19 @@ def depth_grids():
     period-luminosity relation, and the two disagree by some 4 kpc at the SMC; so each is scaled
     to G.distance_pc, the eclipsing binaries' (Graczyk et al. 2020), by the median of all its
     stars within a degree of the centre -- a zero point in distance modulus, a factor in
-    distance, the errors scaled with them. The young Cepheids keep their offset from the older
-    ones of the same catalogue: nearer by some 2.6 kpc."""
+    distance. Each star's distance scattered by the method's own scatter in distance modulus
+    (ogle_noise), that share of it. The young Cepheids keep their offset from the older ones of
+    the same catalogue: nearer by some 2.6 kpc."""
     out = dict(size=DEPTH_SIZE, halfDeg=G.half_deg)
     for kind, url, name, ages in (('old', OGLE_RR_LYRAE, 'ogle_rr_lyrae_table2.dat', False),
                                   ('young', OGLE_CEPHEIDS, 'ogle_cepheids_table3.dat', True)):
-        x, y, d, e, age = ogle_stars(url, name, ages)
+        x, y, d, table_e, age = ogle_stars(url, name, ages)
         scale = G.distance_pc / 1000 / np.median(d[np.hypot(x, y) < 1.0])
-        print(f'  {name}: its distances times {scale:.4f}')
-        d, e = d * scale, e * scale
+        noise = ogle_noise(url, name, ages)
+        print(f'  {name}: its distances times {scale:.4f}; their error column {np.median(5 / math.log(10) * table_e / d):.3f} mag '
+              f'(a zero point, not used), the method\'s scatter {noise:.3f} mag')
+        d = d * scale
+        e = noise * math.log(10) / 5 * d
         if ages:
             young = age < YOUNG_MYR
             print(f'  Cepheids younger than {YOUNG_MYR:.0f} Myr {np.median(d[young & (np.hypot(x, y) < 1.0)]):.2f} kpc '

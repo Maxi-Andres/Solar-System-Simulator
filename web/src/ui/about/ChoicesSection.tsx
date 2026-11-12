@@ -342,8 +342,11 @@ export const choicesSection: AboutSection = {
             From far off a globular cluster is a point of light, as another galaxy’s are in its photographs, on
             the galaxies’ exposure, so 47 Tucanae beside the Small Cloud is as bright as it is. Near a cluster or
             a dwarf galaxy its stars are drawn one by one — one at a time, the nearest whose brightest giant
-            could show, at most 120,000 — and its glow gives way to them. At the picture’s limit of V 8 a
-            dwarf’s giants show only within about 1.5 kpc of them.
+            could show, at most 120,000 — and its glow gives way to them. A cluster’s glow of the stars too faint
+            to draw is left out while its half-light radius spans more than 140 pixels, and comes in until it
+            spans 35: closer in its stars alone carry the picture, and that light is not drawn — for Djor 2 or
+            the nuclear cluster, within about 200 light years. At the picture’s limit of V 8 a dwarf’s giants
+            show only within about 1.5 kpc of them.
             <Why>an ultra-faint dwarf is a few thousand stars and no glow at all: what is there to see is its stars.</Why>
           </Item>
           <Item title="Going to a dwarf">
@@ -357,7 +360,11 @@ export const choicesSection: AboutSection = {
           <Item title="The Small Cloud along our line of sight">
             It is no disc, so it is not drawn from above: each point of its sky is spread along its own line
             from the Sun with the depth measured there. From Earth it is exactly its maps; from beside it, a
-            cigar pointing at the Sun, a compact nebula a streak as deep as its population.
+            cigar pointing at the Sun some three times longer than wide, as its stars measure it, the young in
+            a sharp core along it. Its large-scale part is the map smoothed over 0.3°, never brighter than the
+            map, its compact part the rest, the two summing to it: smoothing and adding only what rises above
+            would have added light where the map dips — 16% of the dust, 37% of the glowing gas. The price: a
+            hole in the map is a hole through the cloud’s whole depth.
             <Why>its stars measure how deep it is, and in no other way is its shape known.</Why>
           </Item>
           <Item title="The nuclear cluster’s edge, tapered">
@@ -376,6 +383,19 @@ export const choicesSection: AboutSection = {
             Hydra I, Boötes III and the Canis Major Overdensity have no size measured and a disputed nature,
             debris or a dwarf; HIZSS 3A and 3B lie behind the Milky Way’s plane, found by their gas, with no V.
             Each is a mark, its panel saying why.
+          </Item>
+          <Item title="Light past white, a halo">
+            Every glow — the galaxies’, the clusters’, the Milky Way’s, the remnants’ gas — is added up linear
+            and shown through one soft shoulder. Up to white, a column of 21 mag/arcsec², it is shown as it is.
+            Past white its light is not thrown away: it spreads by the stars’ own point spread — the 0.54-pixel
+            core and the tail carrying a tenth of the light, falling as r<sup>−2</sup> — out to the frame’s
+            size, the light it holds kept. So a cluster’s or a galaxy’s core far past white is a bright star’s
+            core and halo, not a flat white plate with an edge. Drawn as a sum of blurs, one per octave of
+            radius each carrying the profile’s light there, it is within 4% of the profile from 8 to 64 pixels.
+            <Why>
+              the photographs the glows are calibrated against carry their own spread below white; past white
+              the shoulder crushed every step into one, where a star as bright keeps a halo that grows with it.
+            </Why>
           </Item>
           <Item title="Every galaxy at least a dot">
             A galaxy too small for a few pixels is drawn as a dot at least faintly bright, in its own colour,

@@ -19,6 +19,7 @@ import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
 import { projectToScreen } from './screenProjection.ts';
+import { milkyWayGlow } from './glowBuffer.ts';
 import { splitHigh, splitLow } from './stars3dShader.ts';
 
 /**
@@ -38,8 +39,10 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * A glow has no detail finer than its sprites, so it is drawn into a buffer at a quarter
  * of the canvas's pixels (GLOW_SCALE each way), in half floats so a hundred faint sprites
  * add up without rounding to nothing, and that buffer is laid over the frame first, under
- * everything else, with a soft shoulder (1 - e^-x) instead of a hard clip where the bulge
- * piles up. A quarter of the fragments, and the upsampling's filtering smooths the grain.
+ * everything else, with every other glow, by the one composite (GlowComposite.tsx): through
+ * one soft shoulder (1 - e^-x), the light past white -- where the bulge piles up -- spilled
+ * into a halo by the stars' point spread rather than thrown away (glowBuffer.ts). A quarter
+ * of the fragments, and the upsampling's filtering smooths the grain.
  *
  * ## Dust, drawn as what it does
  *
@@ -273,7 +276,10 @@ void main() {
 }
 `;
 
-/** The glow buffer over the frame: clip-space quad, soft shoulder, added under everything. */
+/**
+ * The glow buffer through the soft shoulder alone: what the black hole's lens draws into its
+ * cube (BlackHoleLens.tsx). On the frame the buffer goes through GlowComposite.tsx.
+ */
 export const COMPOSITE_VERTEX_SHADER = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -416,29 +422,13 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       }),
     [],
   );
-  const composite = useMemo(() => {
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
-      new THREE.ShaderMaterial({
-        uniforms: { uGlow: { value: target.texture } },
-        vertexShader: COMPOSITE_VERTEX_SHADER,
-        fragmentShader: COMPOSITE_FRAGMENT_SHADER,
-        blending: THREE.AdditiveBlending,
-        depthTest: false,
-        depthWrite: false,
-        // Drawn with the opaque things, not after them, though it adds: three draws every
-        // opaque mesh before anything transparent, so a see-through quad laid down last
-        // lit up the bodies in front of the galaxy -- a star's disc, a black hole's black
-        // (blackHoles.ts) -- with the glow behind them. Additive blending holds either way.
-        transparent: false,
-        toneMapped: false,
-      }),
-    );
-    quad.frustumCulled = false;
-    // First of all: the stars and everything else go over it.
-    quad.renderOrder = -2;
-    quad.visible = false;
-    return quad;
+  // The buffer, for the one composite that lays every glow over the frame (GlowComposite.tsx).
+  useEffect(() => {
+    milkyWayGlow.texture = target.texture;
+    return () => {
+      milkyWayGlow.texture = null;
+      milkyWayGlow.on = false;
+    };
   }, [target]);
 
   // The light and the dust share every uniform but their peak.
@@ -488,10 +478,8 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       material.dispose();
       dustMaterial.dispose();
       target.dispose();
-      composite.geometry.dispose();
-      (composite.material as THREE.Material).dispose();
     },
-    [material, dustMaterial, target, composite],
+    [material, dustMaterial, target],
   );
 
   // This frame's slabs: worked out in the frame, read again by the lens's capture.
@@ -580,14 +568,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     // For a black hole's lens, which draws this glow again into its own cube (lens.ts).
     skyCapture.visibility = visibility;
     if (visibility === 0) {
-      composite.visible = false;
+      milkyWayGlow.on = false;
       for (const element of elements) {
         hide(element);
       }
       return;
     }
 
-    composite.visible = true;
+    milkyWayGlow.on = true;
     group.position.copy(camera.position);
     const cameraPc = scratchCamera.multiplyScalar(1 / PARSEC_KM);
     const uniforms = material.uniforms;
@@ -676,7 +664,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     });
   });
 
-  return <primitive object={composite} />;
+  return null;
 }
 
 function hide(element: HTMLElement | null | undefined): void {

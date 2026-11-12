@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
+
 import { skyAxes } from '../core/exoplanets.ts';
 import {
   remnantRadiusKm,
@@ -302,6 +304,7 @@ export const REMNANT_MAP_FRAGMENT_SHADER = /* glsl */ `
   precision highp sampler3D;
   #include <common>
   #include <logdepthbuf_pars_fragment>
+${GLOW_OUTPUT_GLSL}
 
   uniform sampler2D uMap;
   uniform sampler2D uContinuum;
@@ -380,7 +383,8 @@ export const REMNANT_MAP_FRAGMENT_SHADER = /* glsl */ `
       sum += emission(origin + direction * t, max(log2(t * uPixelAngle / uMapTexel), 0.0));
     }
     sum *= dt;
-    gl_FragColor = vec4((1.0 - exp(-sum)) * uFade, 1.0);
+    // Linear, into the glow buffer: one shoulder over every glow, the light past white spilled (glowBuffer.ts).
+    gl_FragColor = glowLight(sum * uFade);
   }
 `;
 

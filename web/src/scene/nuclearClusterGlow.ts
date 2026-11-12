@@ -21,6 +21,7 @@ import {
 import { starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
+import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { MIN_SIGMA_PX } from './LocalGroup.tsx';
 
 /**
@@ -29,8 +30,11 @@ import { MIN_SIGMA_PX } from './LocalGroup.tsx';
  * the cluster is too small on the screen for its lines of sight to find it, a point holding
  * that light, as a galaxy's is (LocalGroup.tsx).
  *
- * The volume is a quad over the whole screen, drawn first and added, as the Milky Way's glow
- * is (MilkyWay.tsx): every pixel's ray from the camera through the model's ellipsoid, the
+ * Both are drawn into the glow buffer, linear, as every glow is (glowBuffer.ts): one shoulder
+ * over them all, and the light past white spilled into a halo by the stars' own point spread
+ * -- so its centre from afar is a bright star's core and halo, not a white plate.
+ *
+ * The volume is a quad over the whole screen: every pixel's ray from the camera through the model's ellipsoid, the
  * luminosity density times the share of it in stars fainter than those drawn at each point
  * (the faint-light table, by the limit there: from the camera, and the sample's from the
  * hole), stepped evenly in v about the ray's nearest approach to the hole as column() is.
@@ -79,6 +83,7 @@ uniform float uFaint[${FAINT_TABLE_SIZE}];
 varying vec3 vDirection;
 
 ${DENSITY_GLSL}
+${GLOW_OUTPUT_GLSL}
 
 float log10f(float x) {
   return log2(x) * ${LOG10_2.toFixed(12)};
@@ -122,16 +127,11 @@ void main() {
     float limit = uSampled > 0.5 ? min(fromCamera, fromHole) : -100.0;
     sum += luminosityDensity(b * cosh(v)) * faintShare(limit) * s * cosh(v);
   }
-  vec3 x = uLight * sum * dv;
-  vec3 light = 1.0 - exp(-x);
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  // Half a display step of noise: a faint gradient in 8 bits is otherwise rings.
-  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  gl_FragColor = vec4(max(light + (n - 0.5) / 255.0, 0.0), 1.0);
+  gl_FragColor = glowLight(uLight * sum * dv);
 }
 `;
 
-/** The point, as GlobularClusters.tsx's: a Gaussian of the half-light radius, through the shoulder, out to the floor. */
+/** The point, as GlobularClusters.tsx's: a Gaussian of the half-light radius, into the glow buffer, out to the floor. */
 export const POINT_VERTEX = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
@@ -166,7 +166,7 @@ ${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
+  gl_FragColor = spriteLight(vPeak, vSigmaPx);
 }
 `;
 
@@ -204,15 +204,14 @@ export function makeClusterGlow(unitsPerPc: number): ClusterGlow {
       blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false,
-      // With the opaque things, first, as the Milky Way's glow (MilkyWay.tsx): the hole's
-      // black and anything else opaque is drawn over it.
-      transparent: false,
       toneMapped: false,
     }),
   );
   volume.frustumCulled = false;
-  volume.renderOrder = -2;
   volume.visible = false;
+  // Into the glow buffer, laid over the frame before anything opaque: the hole's black and
+  // anything else opaque is drawn over it.
+  drawIntoGlow(volume);
 
   const pointUniforms: Record<string, THREE.IUniform> = {
     uCamera: volumeUniforms['uCamera']!,
@@ -239,6 +238,7 @@ export function makeClusterGlow(unitsPerPc: number): ClusterGlow {
   );
   point.frustumCulled = false;
   point.visible = false;
+  drawIntoGlow(point);
 
   return {
     volume,
@@ -246,6 +246,8 @@ export function makeClusterGlow(unitsPerPc: number): ClusterGlow {
     volumeUniforms,
     pointUniforms,
     dispose() {
+      releaseFromGlow(volume);
+      releaseFromGlow(point);
       volume.geometry.dispose();
       (volume.material as THREE.Material).dispose();
       point.geometry.dispose();

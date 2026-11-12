@@ -63,3 +63,29 @@ export function unresolvedShare(population: ClusterPopulation, limit: number): n
   }
   return fainter / total;
 }
+
+/**
+ * Where a cluster's unresolved light comes in, by the size of its half-light radius on the
+ * screen, CSS pixels: none while it spans more than UNRESOLVED_HIDDEN_PX, all of it once it
+ * spans UNRESOLVED_FULL_PX or less, smoothly in the logarithm between.
+ *
+ * **A choice, and it drops light.** Near a cluster whose stars are drawn, its stars carry the
+ * picture: the light of those too faint to be drawn, which a long exposure would show as a glow
+ * under them, is left out while the cluster is large on the screen, and comes in as it shrinks
+ * -- for every cluster alike, since it goes by what is on the screen, not by a distance. 140
+ * pixels is where Maxi asked it to begin for Djor 2 (2026-11-11: twice as far as the 4 half-light
+ * radii it began at, a scale bar of 10 ly rather than 5); the nuclear cluster, of nearly the
+ * same half-light radius, begins with it at about 180 light years. From four times farther it is
+ * all there, and stars and glow hold the cluster's light again.
+ */
+export const UNRESOLVED_HIDDEN_PX = 140;
+export const UNRESOLVED_FULL_PX = 35;
+
+/** The share of a sampled cluster's unresolved light drawn, its half-light radius `halfLightPx` CSS pixels across. */
+export function unresolvedOnset(halfLightPx: number): number {
+  const t = Math.min(
+    1,
+    Math.max(0, Math.log(UNRESOLVED_HIDDEN_PX / halfLightPx) / Math.log(UNRESOLVED_HIDDEN_PX / UNRESOLVED_FULL_PX)),
+  );
+  return t * t * (3 - 2 * t);
+}

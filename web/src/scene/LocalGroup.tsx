@@ -33,6 +33,7 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
+import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
@@ -85,7 +86,9 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  *
  * One exposure for all of them: a column of WHITE_MU mag/arcsec^2 is drawn at full
  * strength, 1 - e^(-Sigma / Sigma_white) -- a soft shoulder, as the Milky Way's, so a bright
- * centre does not cut off. Andromeda's disc is about 20 mag/arcsec^2 seen at its tilt;
+ * centre does not cut off; every glow is written linear into one buffer, the shoulder applied
+ * once over their sum, and the light past white spilled into a halo by the stars' own point
+ * spread rather than thrown away (glowBuffer.ts). Andromeda's disc is about 20 mag/arcsec^2 seen at its tilt;
  * Fornax's centre 23.4; the faintest dwarfs 28 to 31, and those do not show, as they do not
  * show in any photograph: they were found by counting their stars. Their marks show where
  * they are.
@@ -286,6 +289,7 @@ void main() {
 
 const DWARF_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
+${GLOW_OUTPUT_GLSL}
 uniform float uFade;
 varying vec3 vRel;
 varying vec3 vM0;
@@ -307,12 +311,8 @@ void main() {
   float fs = s0 * (2.0 * s0 * s0 + 3.0 * c2) / (3.0 * c2 * c2 * pow(s0 * s0 + c2, 1.5));
   float column = (2.0 / (3.0 * c2 * c2) - fs) / sqrt(vv);
   // vGlow is the colour times rho0 over the white column.
-  vec3 x = vGlow * max(column, 0.0);
-  vec3 light = (1.0 - exp(-x)) * uFade;
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  // Half a display step of noise: a faint gradient in 8 bits is otherwise rings.
-  float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  gl_FragColor = vec4(max(light + (n - 0.5) / 255.0, 0.0), 1.0);
+  // Linear, into the glow buffer: its shoulder and dither are the composite's (glowBuffer.ts).
+  gl_FragColor = glowLight(vGlow * max(column, 0.0) * uFade);
 }
 `;
 
@@ -329,6 +329,7 @@ void main() {
 
 const GIANT_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
+${GLOW_OUTPUT_GLSL}
 uniform float uFade;
 // The galaxy's axes (rows), the camera in its frame, pc, and its box's half extents, pc.
 uniform mat3 uAxes;
@@ -456,10 +457,7 @@ void main() {
   float jitter = hash(gl_FragCoord.xy);
   vec3 light = vec3(0.0);
   if (uKind == 2) {
-    light = marchMapped(d, jitter);
-    light = (1.0 - exp(-light)) * uFade;
-    if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-    gl_FragColor = vec4(max(light + (hash(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 0.0), 1.0);
+    gl_FragColor = glowLight(marchMapped(d, jitter) * uFade);
     return;
   }
   vec2 span = slab(uCamera, d, uExtent);
@@ -492,10 +490,8 @@ void main() {
       }
     }
   }
-  light = (1.0 - exp(-light)) * uFade;
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
-  // Half a display step of noise, as the dwarfs'.
-  gl_FragColor = vec4(max(light + (hash(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 0.0), 1.0);
+  // Linear, into the glow buffer, as the dwarfs'.
+  gl_FragColor = glowLight(light * uFade);
 }
 `;
 
@@ -552,7 +548,7 @@ ${SPRITE_FRAGMENT_GLSL}
 
 void main() {
   #include <logdepthbuf_fragment>
-  gl_FragColor = vec4(spriteLight(vPeak, vSigmaPx), 1.0);
+  gl_FragColor = spriteLight(vPeak, vSigmaPx);
 }
 `;
 
@@ -686,6 +682,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     mesh.count = count;
     mesh.frustumCulled = false;
     mesh.raycast = noRaycast;
+    drawIntoGlow(mesh);
     // Per galaxy, fixed: its centre, axes over their scales, and its box.
     const fixed = list.map(({ galaxy }) => {
       const model = galaxy.model as Extract<LocalGroupGalaxy['model'], { kind: 'plummer' }>;
@@ -776,6 +773,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), material);
         mesh.frustumCulled = false;
         mesh.raycast = noRaycast;
+        drawIntoGlow(mesh);
         const scale = model.kind === 'disc' ? model.scaleLengthPc : model.majorPc;
         return [
           {
@@ -898,6 +896,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     );
     object.frustumCulled = false;
     object.raycast = noRaycast;
+    drawIntoGlow(object);
     return { object, centres, halfLightPc, keys, share };
   }, [archive, pointUniforms]);
 
@@ -957,6 +956,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     return () => {
       group.remove(dwarfs.mesh, points.object, marks.points);
       for (const giant of giants) group.remove(giant.mesh);
+      for (const object of [dwarfs.mesh, points.object, ...giants.map((giant) => giant.mesh)]) releaseFromGlow(object);
       dwarfs.mesh.geometry.dispose();
       (dwarfs.mesh.material as THREE.Material).dispose();
       points.object.geometry.dispose();

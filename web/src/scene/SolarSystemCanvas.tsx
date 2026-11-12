@@ -26,6 +26,7 @@ import { CometField } from './Comets.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
+import { GlowComposite } from './GlowComposite.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
@@ -301,6 +302,8 @@ export function SolarSystemCanvas({
         censusVisible={showStarMap && stars3d !== null}
         labels={ringLabels}
       />
+      {/* Every glow, laid over the frame once, its light past white spilled into a halo (glowBuffer.ts). */}
+      <GlowComposite />
       <MilkyWay store={store} clock={clock} focus={focus} visible={showMilkyWay} labels={galaxyLabels} />
       <NuclearCluster catalog={stars} store={store} clock={clock} focus={focus} showModel={showNuclearCluster} />
       {/* After the glow: it draws the glow again, into its cube, with this frame's uniforms. */}

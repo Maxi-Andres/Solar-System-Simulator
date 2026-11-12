@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
+
 import { remnantShape, type RemnantEmission, type SupernovaRemnant } from '../core/supernovaRemnants.ts';
 import { cieX, cieY, cieZ, type Rgb } from './blackbody.ts';
 
@@ -346,6 +348,7 @@ export const REMNANT_FRAGMENT_SHADER = /* glsl */ `
   precision highp sampler3D;
   #include <common>
   #include <logdepthbuf_pars_fragment>
+${GLOW_OUTPUT_GLSL}
 
   uniform sampler3D uNoise;
   uniform vec3 uCameraLocal;
@@ -439,8 +442,9 @@ export const REMNANT_FRAGMENT_SHADER = /* glsl */ `
       sum += emission(origin + direction * t);
     }
     sum *= dt * uGain;
-    // A soft shoulder rather than a clip where the limb piles light up.
-    gl_FragColor = vec4((1.0 - exp(-sum)) * uFade, 1.0);
+    // Linear, into the glow buffer: its soft shoulder, rather than a clip where the limb piles
+    // light up, and the halo of what is past white are the composite's (glowBuffer.ts).
+    gl_FragColor = glowLight(sum * uFade);
   }
 `;
 

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { GLOW_FLOOR, GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
+
 /**
  * A light too small to be drawn as a volume, drawn as a Gaussian on the screen: a globular
  * cluster's (GlobularClusters.tsx), a galaxy's (LocalGroup.tsx), the nuclear cluster's
@@ -7,8 +9,9 @@ import * as THREE from 'three';
  *
  *     x(r) = peak e^(-r^2 / 2 sigma^2)
  *
- * through the soft shoulder 1 - e^-x, and it is drawn out to where that has fallen to
- * SPRITE_FLOOR:
+ * written linear into the glow buffer, which shows it through the soft shoulder 1 - e^-x and
+ * spills what is past white into a halo (glowBuffer.ts); it is drawn out to where it has
+ * fallen to SPRITE_FLOOR:
  *
  *     r = sigma sqrt(2 ln(peak / SPRITE_FLOOR))
  *
@@ -27,10 +30,11 @@ import * as THREE from 'three';
  */
 
 /**
- * The faintest light a sprite draws, display units: an eighth of a display step -- the shaders
- * write it as it is, so it rounds to black, and the edge where a sprite stops never shows.
+ * The faintest light a sprite draws, white columns: an eighth of a display step -- the glow
+ * buffer's own floor (GLOW_FLOOR), so it rounds to black, and the edge where a sprite stops
+ * never shows.
  */
-export const SPRITE_FLOOR = 0.0005;
+export const SPRITE_FLOOR = GLOW_FLOOR;
 
 /** How far out a Gaussian of centre `peak` (columns over white) is drawn, in its sigmas. */
 export function spriteRadiusSigmas(peak: number, floor = SPRITE_FLOOR): number {
@@ -61,15 +65,16 @@ vec4 spriteCorner(vec4 centre, float radiusPx) {
 }
 `;
 
-/** The fragment side: the Gaussian at this fragment, through the shoulder, cut at SPRITE_FLOOR. */
+/**
+ * The fragment side: the Gaussian at this fragment, linear, into the glow buffer (glowLight
+ * cuts it at the floor). The shoulder and the halo are the buffer's, once, over every glow.
+ */
 export const SPRITE_FRAGMENT_GLSL = /* glsl */ `
 varying vec2 vOffsetPx;
+${GLOW_OUTPUT_GLSL}
 
-vec3 spriteLight(vec3 peak, float sigmaPx) {
-  vec3 x = peak * exp(-0.5 * dot(vOffsetPx, vOffsetPx) / (sigmaPx * sigmaPx));
-  vec3 light = 1.0 - exp(-x);
-  if (max(light.r, max(light.g, light.b)) < ${SPRITE_FLOOR.toFixed(6)}) discard;
-  return light;
+vec4 spriteLight(vec3 peak, float sigmaPx) {
+  return glowLight(peak * exp(-0.5 * dot(vOffsetPx, vOffsetPx) / (sigmaPx * sigmaPx)));
 }
 `;
 

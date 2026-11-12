@@ -12,6 +12,7 @@ import {
   type SupernovaRemnant,
 } from '../core/supernovaRemnants.ts';
 import type { SimClock } from '../core/time.ts';
+import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { remnantMapMaterial, remnantMapReach } from './remnantMap.ts';
@@ -92,6 +93,7 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
         (entry.ring.material as THREE.Material).dispose();
         if (entry.gas !== null) {
           group.remove(entry.gas);
+          releaseFromGlow(entry.gas);
           const material = entry.gas.material as THREE.ShaderMaterial;
           (material.uniforms.uMap?.value as THREE.Texture | undefined)?.dispose();
           material.dispose();
@@ -130,6 +132,8 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
             : remnantMapMaterial(remnant, remnant.map, () => renderDemand.request());
         entry.gas = new THREE.Mesh(drawn.gasGeometry, material);
         entry.gas.frustumCulled = false;
+        // Into the glow buffer, with every other glow (glowBuffer.ts).
+        drawIntoGlow(entry.gas);
         group.add(entry.gas);
       }
       if (entry.gas !== null) {

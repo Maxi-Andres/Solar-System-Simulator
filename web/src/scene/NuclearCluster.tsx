@@ -21,6 +21,7 @@ import {
   nthBrightestMagnitude,
   starsMeteredExposure,
 } from '../core/nuclearClusterLight.ts';
+import { unresolvedOnset } from '../core/globularClusterLight.ts';
 import { brightestMagnitude } from '../core/starCatalog.ts';
 import type { SimClock } from '../core/time.ts';
 import { renderDemand } from '../core/renderDemand.ts';
@@ -452,6 +453,9 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     const cssPerRadian = devicePerRadian / gl.getPixelRatio();
     const halfLightRadians = Math.atan(HALF_LIGHT_RADIUS_PC / Math.max(distancePc, 1e-9));
     const toPoint = pointShare(halfLightRadians * devicePerRadian);
+    // The glow comes in as the cluster shrinks on the screen, as a globular cluster's does: near
+    // it, its stars carry the picture (unresolvedOnset; a choice, said so in the About).
+    const onset = unresolvedOnset(halfLightRadians * cssPerRadian);
     const transmission = 10 ** (-0.4 * last.value);
 
     // The meters, again only once the camera has moved enough to change them. (The white
@@ -489,7 +493,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
     // The brightest the glow could be drawn, over white: its centre as a volume, or as a point.
     const pointSigmaPc = Math.max(HALF_LIGHT_RADIUS_PC / 1.1774, distancePc / devicePerRadian);
     const glowStrength = showModel
-      ? (transmission / white) *
+      ? ((transmission * onset) / white) *
         Math.max(
           CENTRAL_COLUMN * (1 - toPoint),
           (toPoint * CLUSTER_LUMINOSITY_V) / (2 * Math.PI * pointSigmaPc * pointSigmaPc),
@@ -547,7 +551,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
       const e = camera.projectionMatrix.elements;
       (u['uTanHalf']!.value as THREE.Vector2).set(1 / e[0]!, 1 / e[5]!);
       (u['uCameraRotation']!.value as THREE.Matrix3).setFromMatrix4(camera.matrixWorld);
-      (u['uLight']!.value as THREE.Vector3).copy(GLOW_COLOUR).multiplyScalar((transmission * (1 - toPoint)) / white);
+      (u['uLight']!.value as THREE.Vector3).copy(GLOW_COLOUR).multiplyScalar((transmission * onset * (1 - toPoint)) / white);
       u['uLimitAt10Pc']!.value = limitAt10Pc;
       u['uSampled']!.value = sample.current !== null ? 1 : 0;
     }
@@ -563,7 +567,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
           : Math.min(limitAt10Pc - 5 * (Math.log10(distancePc) - 1), sampleMagnitudeLimit(HALF_LIGHT_RADIUS_PC));
       (u['uLight']!.value as THREE.Vector3)
         .copy(GLOW_COLOUR)
-        .multiplyScalar((transmission * toPoint * CLUSTER_LUMINOSITY_V * faintLightShare(drawn)) / white);
+        .multiplyScalar((transmission * onset * toPoint * CLUSTER_LUMINOSITY_V * faintLightShare(drawn)) / white);
     }
 
     // The measured stars, from the camera, pc.
