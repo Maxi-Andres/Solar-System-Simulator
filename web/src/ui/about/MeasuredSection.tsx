@@ -36,6 +36,7 @@ export const measuredSection: AboutSection = {
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The Milky Way' },
     { id: 'local-group', label: 'The Local Group' },
+    { id: 'local-volume', label: 'Beyond the Local Group' },
   ],
   Body: ({ data }) => {
     const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog, pulsarCatalog } = data;
@@ -632,6 +633,46 @@ export const measuredSection: AboutSection = {
             Each stands still at its place. Their motions are measured for some — a few hundred km/s at most —
             and over the clock’s centuries they would move a galaxy less than a parsec.{' '}
             <Xref to="estimated" sub="local-group">
+              What is not measured
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="local-volume">
+          Beyond the Local Group
+        </Sub>
+        <Items>
+          <Item>
+            The <Strong>Local Volume</Strong>, out to 11 Mpc, from the <Strong>Updated Nearby Galaxy Catalog</Strong>{' '}
+            <Cite k="karachentsev2013" />: 764 galaxies, its 869 less those McConnachie’s catalogue lists, each on
+            its centre, at its distance — by the tip of the red giant branch, Cepheids, surface brightness
+            fluctuations or Tully–Fisher where it is measured — with its B less the Milky Way’s dust in front{' '}
+            <Cite k="schlegel1998" />, its T type and class, its Holmberg diameter, axis ratio and inclination, its
+            radial velocity, its gas, and its group: the neighbour whose tide binds it, where its tidal index says
+            it is bound.
+          </Item>
+          <Item>
+            The <Strong>Virgo Cluster</Strong>, from the <Strong>Extended Virgo Cluster Catalog</Strong>{' '}
+            <Cite k="kim2014" />: 999 of its certain members, each on its centre with its light measured on SDSS’s
+            images — V and B−V from its g and r <Cite k="jester2005" />, less the dust in front — and its
+            half-light radius. 79 of its early types at the distances their surface brightness fluctuations
+            measure, the cluster at 16.5 Mpc <Cite k="mei2007" />.
+          </Item>
+          <Item>
+            Its <Strong>giant ellipticals</Strong> — M87, M49, M86, M84, M60, M85, M89, M59, NGC 4365, NGC 4636,
+            NGC 4261 and NGC 4473 — from Kormendy et al.’s Sérsic fits to each one’s whole profile, out to its
+            faint envelope: its index, its effective radius along its major axis and the total V it holds{' '}
+            <Cite k="kormendy2009" />. The catalogue’s aperture misses that envelope: M87 came out 1.0′ in
+            radius and 0.6 magnitudes fainter; its fit’s is 11.7′, its index 11.8.
+          </Item>
+          <Item>
+            Which way each lies on the sky — the position angle of its major axis, and the Virgo galaxies’ axis
+            ratios and inclinations — from HyperLEDA <Cite k="makarov2014" />, where it holds the galaxy.
+          </Item>
+          <Item>
+            Each stands still at its place, as the Local Group’s do.{' '}
+            <Xref to="estimated" sub="local-volume">
               What is not measured
             </Xref>
             .

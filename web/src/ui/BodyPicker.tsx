@@ -1,5 +1,5 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { renderDemand } from '../core/renderDemand.ts';
@@ -22,8 +22,17 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { isShown, isSmallMoon, SMALL_MOON_LAYER } from '../scene/floatingOrigin.ts';
 import { GALAXY_VIEW } from '../scene/MilkyWay.tsx';
 import { LOCAL_GROUP_VIEW } from '../scene/LocalGroup.tsx';
-import { GALAXY_FRAMING_KM, LOCAL_GROUP_FRAMING_KM, NEIGHBOURHOOD_FRAMING_KM } from '../scene/scale.ts';
-import { galaxyBodyId, GIANTS } from '../core/localGroup.ts';
+import {
+  GALAXY_FRAMING_KM,
+  LOCAL_GROUP_FRAMING_KM,
+  LOCAL_VOLUME_FRAMING_KM,
+  NEIGHBOURHOOD_FRAMING_KM,
+  VIRGO_FRAMING_KM,
+} from '../scene/scale.ts';
+import { LOCAL_VOLUME_VIEW, VIRGO_VIEW } from '../scene/supergalactic.ts';
+import { ensureGalaxyBody, galaxyBodyId, galaxyOf, GIANTS } from '../core/localGroup.ts';
+import { virgoCentre, volumeRegion, type LocalVolumeArchive, type VolumeRegion } from '../core/localVolume.ts';
+import type { LazySource } from '../core/satellites.ts';
 import { useViewStore } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 
@@ -46,9 +55,18 @@ import { Presence, useClosing } from './Presence.tsx';
  * camera 180,000 light years out (GALAXY_FRAMING_KM), where the galaxy model of D2b is
  * seen whole. It was a name and not a place until that model existed.
  *
- * Above them all, **Local Group** (G1): the Sun, the camera 8 million light years out over the
+ * Above them, **Local Group** (G1): the Sun, the camera 8 million light years out over the
  * Milky Way's pole with Andromeda across the frame (LOCAL_GROUP_FRAMING_KM), and beside it a
  * list of its big galaxies. At another galaxy the breadcrumb is Local Group and that galaxy.
+ *
+ * Above it, **Local Volume** (G2): the Sun, the camera 100 million light years out over the
+ * supergalactic pole, the Local Sheet face-on and the Virgo Cluster to the right
+ * (LOCAL_VOLUME_FRAMING_KM); its list, the Local Group, then its groups -- the Sculptor group's,
+ * M81's, Centaurus A's -- each folded over its galaxies, brightest first, and beyond its 11 Mpc
+ * the Virgo Cluster. The Virgo Cluster is not in the Local Volume: at one of its galaxies the
+ * breadcrumb is **Virgo Cluster** and that galaxy, the crumb going to M87, its centre, framed
+ * the same way (VIRGO_FRAMING_KM), and its list the cluster's own groups and the way back. At a
+ * galaxy of the Local Volume, Local Volume and that galaxy.
  *
  * Milky Way has a list of its own beside it: the places in the galaxy -- home first, the
  * Solar System and the Solar Neighbourhood, then the black holes (D5, blackHoles.ts), Sgr
@@ -105,6 +123,9 @@ export interface BodyPickerProps {
    * as a system. Null while the 3D stars are not part of the published data.
    */
   readonly planetSystems: PlanetSystemsNavigator | null;
+  /** The galaxies beyond the Local Group (localVolume.ts), and going to one by its index. */
+  readonly localVolume: LazySource<LocalVolumeArchive>;
+  readonly onVolumeGalaxy: (k: number) => void;
 }
 
 /** Going to a planetary system from the breadcrumb: its star, framed with its planets. */
@@ -156,8 +177,11 @@ export function BodyPicker({
   readout,
   alphaCen,
   planetSystems,
+  localVolume,
+  onVolumeGalaxy,
 }: BodyPickerProps) {
   const [open, setOpen] = useState(false);
+  const volumeArchive = useSyncExternalStore(localVolume.subscribe, () => localVolume.value);
   const root = useRef<HTMLDivElement>(null);
 
   const focusBody = store.body(focus);
@@ -172,8 +196,10 @@ export function BodyPicker({
   // light years off at the least.
   const inGalaxy =
     focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
-  // Another galaxy: out of the Milky Way altogether.
+  // Another galaxy: out of the Milky Way altogether -- and beyond the Local Group, in the
+  // Local Volume or in the Virgo Cluster.
   const inOtherGalaxy = focusBody.kind === 'galaxy';
+  const region = inOtherGalaxy ? volumeRegion(galaxyOf(focus)) : null;
   // What the focus's own crumb drops down. A star other than the Sun is in the
   // neighbourhood, not in the Solar System; nor is anything of Alpha Centauri's or another
   // star's, nor a black hole's, nor a pulsar.
@@ -197,8 +223,30 @@ export function BodyPicker({
     onFocus('sun');
     renderDemand.request();
   };
+  const toLocalVolume = (): void => {
+    void localVolume.request();
+    requestFraming(LOCAL_VOLUME_FRAMING_KM, LOCAL_VOLUME_VIEW);
+    onFocus('sun');
+    renderDemand.request();
+  };
+  // The Virgo Cluster: M87, made a body if it is not one yet (it is, once loaded: App.tsx).
+  const toVirgo = (): void => {
+    void localVolume.request().then(() => {
+      const archive = localVolume.value;
+      const k = archive === null ? null : virgoCentre(archive);
+      if (archive === null || k === null) {
+        return;
+      }
+      const id = ensureGalaxyBody(store, archive.galaxies[k]!);
+      requestFraming(VIRGO_FRAMING_KM, VIRGO_VIEW);
+      onFocus(id);
+      renderDemand.request();
+    });
+  };
   // The Local Group's big galaxies, under its own caret.
   const [galaxiesOpen, setGalaxiesOpen] = useState(false);
+  // The Local Volume's groups, or the Virgo Cluster's, under theirs.
+  const [volumeOpen, setVolumeOpen] = useState(false);
 
   // The star systems one can go to, under Solar Neighbourhood's own caret.
   const [systemsOpen, setSystemsOpen] = useState(false);
@@ -225,16 +273,21 @@ export function BodyPicker({
     renderDemand.request();
   };
   // Opening one list closes the others.
-  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies'): void => {
+  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies' | 'volume'): void => {
     setOpen((value) => which === 'bodies' && !value);
     setSystemsOpen((value) => which === 'systems' && !value);
     setBlackHolesOpen((value) => which === 'places' && !value);
     setGalaxiesOpen((value) => which === 'galaxies' && !value);
+    setVolumeOpen((value) => which === 'volume' && !value);
+    if (which === 'volume') {
+      // Opening the list is a request for what it lists.
+      void localVolume.request();
+    }
   };
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen) {
+    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen && !volumeOpen) {
       return;
     }
     const closeAll = (): void => {
@@ -242,6 +295,7 @@ export function BodyPicker({
       setSystemsOpen(false);
       setBlackHolesOpen(false);
       setGalaxiesOpen(false);
+      setVolumeOpen(false);
     };
     const onPointerDown = (event: PointerEvent): void => {
       if (root.current !== null && !root.current.contains(event.target as Node)) {
@@ -259,7 +313,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen]);
+  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen, volumeOpen]);
 
   // A focus with no list of its own closes the one left open, rather than keep it to reopen later.
   useEffect(() => {
@@ -291,21 +345,40 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={toLocalGroup} outer>
-          Local Group
+        <Crumb onClick={region === 'virgo' ? toVirgo : toLocalVolume} outer>
+          {region === 'virgo' ? 'Virgo Cluster' : 'Local Volume'}
         </Crumb>
         <button
           type="button"
-          aria-label="Galaxies of the Local Group"
+          aria-label={region === 'virgo' ? 'Groups of the Virgo Cluster' : 'Groups of the Local Volume'}
           aria-haspopup="listbox"
-          aria-expanded={galaxiesOpen}
-          title="Go to a galaxy of the Local Group"
-          onClick={() => only('galaxies')}
+          aria-expanded={volumeOpen}
+          title={region === 'virgo' ? 'Go to a galaxy of the Virgo Cluster' : 'Go to a group of the Local Volume'}
+          onClick={() => only('volume')}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
-          <Caret open={galaxiesOpen} />
+          <Caret open={volumeOpen} />
         </button>
         <Separator />
+        {region === null && (
+          <>
+            <Crumb onClick={toLocalGroup} outer>
+              Local Group
+            </Crumb>
+            <button
+              type="button"
+              aria-label="Galaxies of the Local Group"
+              aria-haspopup="listbox"
+              aria-expanded={galaxiesOpen}
+              title="Go to a galaxy of the Local Group"
+              onClick={() => only('galaxies')}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+            >
+              <Caret open={galaxiesOpen} />
+            </button>
+            <Separator />
+          </>
+        )}
         {!inOtherGalaxy && (
           <>
             <Crumb onClick={toGalaxy} outer>
@@ -428,6 +501,31 @@ export function BodyPicker({
                   setSystemsOpen(false);
                 }
           }
+        />
+      </Presence>
+
+      <Presence show={volumeOpen}>
+        <VolumeList
+          archive={volumeArchive}
+          region={region ?? 'local-volume'}
+          active={inOtherGalaxy ? focus : null}
+          onLocalGroup={() => {
+            toLocalGroup();
+            setVolumeOpen(false);
+          }}
+          onLocalVolume={() => {
+            toLocalVolume();
+            setVolumeOpen(false);
+          }}
+          onVirgo={() => {
+            toVirgo();
+            setVolumeOpen(false);
+          }}
+          onChoose={(k) => {
+            onVolumeGalaxy(k);
+            renderDemand.request();
+            setVolumeOpen(false);
+          }}
         />
       </Presence>
 
@@ -1240,8 +1338,11 @@ function GalaxyList({
   const closing = useClosing();
   useStoreVersion(store);
   const giants = new Set(GIANTS.map(galaxyBodyId));
+  // The Local Group's own: those beyond are listed by the Local Volume's crumb.
   const dwarfs = visibleKinds.has('galaxy')
-    ? store.bodies.filter((body) => body.kind === 'galaxy' && !giants.has(body.id))
+    ? store.bodies.filter(
+        (body) => body.kind === 'galaxy' && !giants.has(body.id) && galaxyOf(body.id)?.volumeIndex === undefined,
+      )
     : [];
   return (
     <div
@@ -1265,6 +1366,117 @@ function GalaxyList({
           {dwarfs.map((body) => (
             <MemberRow key={body.id} name={body.name} active={active === body.id} onChoose={() => onChoose(body.id)} />
           ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A group's galaxies listed at most, brightest first; the rest are found by search. */
+const GROUP_ROWS = 40;
+
+/**
+ * The Local Volume's list: the Local Group, then its groups, each folded over its galaxies,
+ * brightest first, and beyond it the Virgo Cluster. Or, in the Virgo Cluster, its own groups
+ * and the way back. The group of the galaxy in focus starts unfolded.
+ */
+function VolumeList({
+  archive,
+  region,
+  active,
+  onLocalGroup,
+  onLocalVolume,
+  onVirgo,
+  onChoose,
+}: {
+  archive: LocalVolumeArchive | null;
+  region: VolumeRegion;
+  active: BodyId | null;
+  onLocalGroup: () => void;
+  onLocalVolume: () => void;
+  onVirgo: () => void;
+  onChoose: (k: number) => void;
+}) {
+  const closing = useClosing();
+  const groups = archive === null ? [] : archive.groups.filter((group) => group.region === region);
+  const activeIndex = active === null ? undefined : galaxyOf(active)?.volumeIndex;
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => {
+    const group = groups.find((entry) => activeIndex !== undefined && entry.members.includes(activeIndex));
+    return new Set(group === undefined ? [] : [group.label]);
+  });
+  const toggle = (label: string): void => {
+    setUnfolded((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+  return (
+    <div
+      role="listbox"
+      aria-label={region === 'virgo' ? 'Groups of the Virgo Cluster' : 'Groups of the Local Volume'}
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, width: '15rem', maxHeight: '70vh', overflowY: 'auto' }}
+    >
+      {region === 'virgo' ? (
+        <MemberRow name="Local Volume" active={false} onChoose={onLocalVolume} />
+      ) : (
+        <MemberRow name="Local Group" active={false} onChoose={onLocalGroup} />
+      )}
+      {archive === null && <div style={{ ...SECTION_HEADING, borderTop: 'none' }}>Loading…</div>}
+      {groups.length > 0 && <div style={SECTION_HEADING}>{region === 'virgo' ? 'Virgo Cluster' : 'Groups'}</div>}
+      {archive !== null &&
+        groups.map((group) => {
+          const open = unfolded.has(group.label);
+          const shown = group.members.slice(0, GROUP_ROWS);
+          return (
+            <div key={group.label}>
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-label={`${open ? 'Hide' : 'Show'} ${group.label}`}
+                onClick={() => toggle(group.label)}
+                style={FOLD_STYLE}
+              >
+                <span style={{ flex: 1 }}>{group.label}</span>
+                <span style={{ color: '#5a5a5a', fontSize: '0.62rem' }}>{group.members.length}</span>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: 'inline-block',
+                    transform: open ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 160ms ease',
+                    fontSize: '0.8rem',
+                    lineHeight: 1,
+                    color: '#6a6a6a',
+                  }}
+                >
+                  &rsaquo;
+                </span>
+              </button>
+              {open &&
+                shown.map((k) => (
+                  <MemberRow
+                    key={k}
+                    name={archive.galaxies[k]!.name}
+                    active={activeIndex === k}
+                    indent
+                    onChoose={() => onChoose(k)}
+                  />
+                ))}
+              {open && group.members.length > shown.length && (
+                <div style={{ padding: '0.25rem 0.45rem 0.3rem 1.55rem', color: '#4e4e4e', fontSize: '0.64rem' }}>
+                  {`${group.members.length - shown.length} more · search`}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      {region === 'local-volume' && (
+        <>
+          <div style={SECTION_HEADING}>Beyond</div>
+          <MemberRow name="Virgo Cluster" active={false} onChoose={onVirgo} />
         </>
       )}
     </div>
@@ -1366,7 +1578,17 @@ const LIST_STYLE: React.CSSProperties = {
  * A star of Alpha Centauri in the list: a row like any body's, but for a star that may not
  * be a body yet -- choosing it makes it one (App.tsx) -- so it carries a name, not a body.
  */
-function MemberRow({ name, active, onChoose }: { name: string; active: boolean; onChoose: () => void }) {
+function MemberRow({
+  name,
+  active,
+  onChoose,
+  indent = false,
+}: {
+  name: string;
+  active: boolean;
+  onChoose: () => void;
+  indent?: boolean;
+}) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <button
@@ -1383,10 +1605,10 @@ function MemberRow({ name, active, onChoose }: { name: string; active: boolean; 
           background: active ? '#1e2a24' : 'transparent',
           border: 'none',
           borderRadius: '0.25rem',
-          padding: '0.3rem 0.45rem',
+          padding: `0.3rem 0.45rem 0.3rem ${indent ? '1.55rem' : '0.45rem'}`,
           color: active ? ACCENT : '#a8a8a8',
           fontFamily: 'inherit',
-          fontSize: '0.78rem',
+          fontSize: indent ? '0.72rem' : '0.78rem',
           letterSpacing: '0.03em',
           cursor: 'pointer',
         }}

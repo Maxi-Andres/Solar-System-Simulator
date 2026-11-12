@@ -12,6 +12,7 @@ import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
+import { galaxyOf } from '../core/localGroup.ts';
 import { homeNames } from './homeName.ts';
 import { angularRadiusPixels, kmToUnits, unitsToKm } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
@@ -426,6 +427,16 @@ export function LabelProjector({
     if (home?.galaxyFolded === true) {
       for (let i = projected.length - 1; i >= 0; i -= 1) {
         if (store.body(projected[i]!.id).kind !== 'galaxy') {
+          projected.splice(i, 1);
+        }
+      }
+    }
+    // Farther, the Local Group itself a small thing: its galaxies' names fold into its own, and
+    // those beyond keep theirs (homeName.ts).
+    if (home?.localGroupFolded === true) {
+      for (let i = projected.length - 1; i >= 0; i -= 1) {
+        const galaxy = galaxyOf(projected[i]!.id);
+        if (galaxy !== null && galaxy.volumeIndex === undefined && projected[i]!.id !== focus) {
           projected.splice(i, 1);
         }
       }

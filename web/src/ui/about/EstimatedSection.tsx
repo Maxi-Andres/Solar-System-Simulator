@@ -29,6 +29,7 @@ export const estimatedSection: AboutSection = {
     { id: 'earth', label: 'Earth' },
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
+    { id: 'local-volume', label: 'Beyond the Local Group' },
   ],
   Body: ({ data }) => {
     const { store, beltInfo, cometInfo, exoplanetCatalog } = data;
@@ -713,6 +714,71 @@ export const estimatedSection: AboutSection = {
             The Small Cloud’s structure, deeper along our line of sight than it is wide, and no disc to draw
             from above; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
             Stream; and each galaxy’s motion. A galaxy whose size or V is not measured is its mark only.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="local-volume">
+          Beyond the Local Group
+        </Sub>
+        <Items>
+          <Item title="Where in the Virgo Cluster">
+            920 of its 999 members drawn have no distance of their own. Each is put at its part of the cluster’s —
+            about M87 16.7 Mpc and about M49 16.4 <Cite k="mei2007" />, about M60 and the low-velocity cloud
+            16.5, the W′ cloud 22.9, the mean of the five measured there, the W and M clouds twice M87’s, 33.4{' '}
+            <Cite k="gavazzi1999" />, its parts where Boselli et al. draw them on the sky{' '}
+            <Cite k={['boselli2014', 'binggeli1987', 'binggeli1993']} /> — in front of it or behind by a draw
+            from the cluster’s measured depth, 0.6 Mpc, the same each time; for the W and M clouds that depth is
+            assumed. The 545 in its outskirts are at 16.5 Mpc, deeper the farther out they are seen — as deep as
+            they are wide, half the square of their distance from M87 on the sky — never past the cluster’s 7.2
+            Mpc reach <Cite k="karachentsev2014" />. Their panels give that depth as the error.
+            <Why>one distance for all would draw the cluster as a flat sheet seen edge-on from the side.</Why>
+          </Item>
+          <Item title="Distances from a group or a velocity">
+            259 of the Local Volume’s galaxies have no distance of their own: each is at its group’s, or where its
+            velocity puts it at 73 km/s per Mpc; its panel says which.
+          </Item>
+          <Item title="Their colours, and V">
+            The Local Volume’s catalogue gives B and no colour. Each of its 764 is drawn in its type’s: the giants’
+            from the integrated colours of each Hubble type <Cite k="fukugita1995" />, between types as its T
+            falls; the dwarfs’ the median of the Local Group’s own — spheroidals and dwarf ellipticals 0.72,
+            irregulars 0.47, transition types 0.59 <Cite k="mateo1998" /> — and V from B by it. On the 29 galaxies
+            both catalogues measure, V so made is within 0.08 magnitudes of the measured, the colours 0.11 bluer.
+            <Why>a galaxy’s colour follows its type more closely than anything else the catalogue gives.</Why>
+          </Item>
+          <Item title="Their sizes, from the Holmberg diameter">
+            The Local Volume’s catalogue measures how far each reaches, to 26.5 B mag/arcsec², not where half its
+            light lies. Its half-light radius is drawn 0.529 of that radius: the median of the 29 galaxies both
+            catalogues measure, which scatter about it by a factor of 1.5. A disc’s scale length is its half-light
+            radius over 1.678 <Cite k="grahamDriver2005" />.
+          </Item>
+          <Item title="The Virgo Cluster’s half-light radii, made elliptical">
+            Its catalogue measures each in circles. On the major axis it is that over what a disc of its axis ratio
+            shows in circles — 0.744 at an axis ratio of 0.5, 0.57 edge-on; with no axis ratio, it stays round.
+          </Item>
+          <Item title="Their bulges">
+            How much of a disc galaxy’s light is its bulge is measured for few: it is drawn by its type, as
+            Simien and de Vaucouleurs’s decompositions show it — 57% of an S0’s, 24% of an Sb’s, 10% of an Sc’s
+            — on de Vaucouleurs’s law, its effective radius 0.22 of its disc’s scale length, the mean measured{' '}
+            <Cite k={['simienDeVaucouleurs1986', 'macArthur2003']} />. In the galaxy’s own colour.
+          </Item>
+          <Item title="Their depth and thickness">
+            As the Local Group’s: an ellipsoid as deep as the geometric mean of its two axes on the sky, a disc
+            7.3 times thinner than its scale length <Cite k="kregel2002" />.
+          </Item>
+          <Item title="Which way, where not measured">
+            No position angle is measured for 270 of the Local Volume’s galaxies and 225 of the Virgo Cluster’s,
+            nor an axis ratio for 54 of these: which way each is elongated is not known. It is drawn round on the
+            sky, a disc facing us, and its panel says so. A disc’s inclination not given is its axis ratio’s, for
+            a disc as thick as these <Cite k="hubble1926" />. Which side of a disc is nearer is measured for none
+            of them; from Earth it looks the same either way.
+          </Item>
+          <Item title="Their groups">
+            A galaxy is in the group of the neighbour whose tide binds it, followed from neighbour to neighbour
+            while each is bound, and the group named for its most luminous galaxy in the near infrared{' '}
+            <Cite k="karachentsev2013" />. Groups of one or two are listed with the field.
+          </Item>
+          <Item title="What is not drawn">
+            Each galaxy’s motion, its spiral arms and its dust; a galaxy with no size or no V is its mark only.
           </Item>
         </Items>
       </>

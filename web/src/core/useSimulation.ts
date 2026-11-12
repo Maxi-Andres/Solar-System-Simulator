@@ -17,6 +17,7 @@ import { loadExoplanetArchive, type ExoplanetArchive } from './exoplanetArchive.
 import { loadPulsarArchive, type PulsarArchive } from './pulsars.ts';
 import { loadGlobularClusterArchive, type GlobularClusterArchive } from './globularClusters.ts';
 import { loadLocalGroupArchive, type LocalGroupArchive } from './localGroup.ts';
+import { loadLocalVolumeArchive, type LocalVolumeArchive } from './localVolume.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -78,6 +79,11 @@ export interface Simulation {
   readonly globularClusters: LazySource<GlobularClusterArchive>;
   /** The Local Group's galaxies (localGroup.ts): fetched as the camera leaves the disc, or when search opens. */
   readonly localGroup: LazySource<LocalGroupArchive>;
+  /**
+   * The galaxies beyond, the Local Volume's and the Virgo Cluster's (localVolume.ts): fetched
+   * as the camera passes three million light years, or when search or their list opens.
+   */
+  readonly localVolume: LazySource<LocalVolumeArchive>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -150,6 +156,12 @@ export function useSimulation(refreshHz = 10): Simulation {
   localGroupRef.current ??= new LazySource(
     () => loadLocalGroupArchive(httpBeltFetchers, import.meta.env.BASE_URL),
     'the Local Group',
+  );
+
+  const localVolumeRef = useRef<LazySource<LocalVolumeArchive>>(null);
+  localVolumeRef.current ??= new LazySource(
+    () => loadLocalVolumeArchive(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the Local Volume',
   );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
@@ -259,6 +271,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     pulsars: pulsarsRef.current,
     globularClusters: globularClustersRef.current,
     localGroup: localGroupRef.current,
+    localVolume: localVolumeRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

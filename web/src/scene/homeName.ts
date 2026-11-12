@@ -16,6 +16,13 @@ import { angularRadiusPixels, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
  *   (`galaxyFolded`), as a planet's into the Solar System's; its arms' go sooner, under
  *   ARM_NAMES_FROM_PX, where they would lie on top of each other (Maxi, 2026-11-05: at a
  *   hundred and fifty pixels "deberia poner milky way").
+ * - Once the Local Group -- its galaxies bound within LOCAL_GROUP_EXTENT_KM of its centre of
+ *   mass -- is as small on screen as the Milky Way was when it folded, MILKY_WAY_FOLD_PX in
+ *   radius, the Local Group (`centre`): from the Local Volume's view one place among its groups,
+ *   and the names of its own galaxies, Andromeda's and the dwarfs', fold into it
+ *   (`localGroupFolded`) as the Milky Way's did. The Local Volume and the Virgo Cluster beyond
+ *   are never a point from anywhere the camera goes (scale.ts): they are places to be in, on
+ *   the breadcrumb, not names on a point.
  *
  * By the camera's distance from the Sun, for both: from where the galaxy folds, 5 million
  * light years, its centre and the Sun are the same point.
@@ -31,21 +38,31 @@ export const NEIGHBOURHOOD_EXTENT_KM = 100 * PARSEC_KM;
 export const MILKY_WAY_EXTENT_KM = 50_000 * LIGHT_YEAR_KM;
 /** Its disc's radius on screen, pixels, below which it is named as one thing, and its arms' names go. */
 export const MILKY_WAY_FOLD_PX = 160;
+/**
+ * The Local Group's extent: a megaparsec, within which its galaxies are bound about its centre
+ * of mass (McConnachie 2012, AJ 144, 4, section 5).
+ */
+export const LOCAL_GROUP_EXTENT_KM = 1e6 * PARSEC_KM;
 export const ARM_NAMES_FROM_PX = 320;
 
 export interface HomeNames {
   /** The Sun's label: its own (or the Solar System's fold), another name, or none. */
   readonly sun: 'own' | 'none' | 'Solar Neighbourhood';
   /** The Galactic Centre's label. */
-  readonly centre: 'Galactic Centre' | 'Milky Way';
+  readonly centre: 'Galactic Centre' | 'Milky Way' | 'Local Group';
   /** The arms' names shown; the names of what is in the galaxy folded into its own. */
   readonly arms: boolean;
   readonly galaxyFolded: boolean;
+  /** The Local Group's galaxies' names folded into its own. */
+  readonly localGroupFolded?: boolean;
 }
 
 export function homeNames(cameraFromSunKm: number, viewportHeightPx: number, fovDeg: number): HomeNames {
   const px = (extentKm: number) => angularRadiusPixels(extentKm, cameraFromSunKm, viewportHeightPx, fovDeg);
   const galaxyPx = px(MILKY_WAY_EXTENT_KM);
+  if (px(LOCAL_GROUP_EXTENT_KM) < MILKY_WAY_FOLD_PX) {
+    return { sun: 'none', centre: 'Local Group', arms: false, galaxyFolded: true, localGroupFolded: true };
+  }
   if (galaxyPx < MILKY_WAY_FOLD_PX) {
     return { sun: 'none', centre: 'Milky Way', arms: false, galaxyFolded: true };
   }

@@ -54,6 +54,10 @@ import type { StateVector, Vec3 } from './vec3.ts';
  *
  * A galaxy whose size is not in the catalogue is drawn as its mark alone, and its panel says
  * so; one with no V, the same.
+ *
+ * The galaxies beyond, out to the Virgo Cluster, are made the same kind of galaxy from their
+ * own catalogues (localVolume.ts), with one more profile: an elliptical's, a Prugniel-Simien
+ * ellipsoid (`sersic`), and discs with a bulge drawn in the disc's own box.
  */
 
 // ---------------------------------------------------------------------------------------
@@ -92,6 +96,19 @@ export type GalaxyModel =
       readonly minorPc: number;
       readonly depthPc: number;
       readonly positionAngleDeg: number;
+    }
+  | {
+      /**
+       * An elliptical beyond the Local Group (localVolume.ts): a Prugniel-Simien ellipsoid,
+       * whose projection is the Sersic profile of index n, its effective radii these.
+       */
+      readonly kind: 'sersic';
+      /** Effective radii, pc: major and minor on the sky, and along the line of sight. */
+      readonly majorPc: number;
+      readonly minorPc: number;
+      readonly depthPc: number;
+      readonly positionAngleDeg: number;
+      readonly sersicN: number;
     };
 
 export interface LocalGroupGalaxy {
@@ -120,6 +137,8 @@ export interface LocalGroupGalaxy {
   readonly shapeSource: string;
   /** Is it one of the four big ones, a body from the start. */
   readonly giant: boolean;
+  /** Its entry in local-volume.json, for one beyond the Local Group (localVolume.ts). */
+  readonly volumeIndex?: number;
 }
 
 /**
@@ -495,6 +514,13 @@ export function centralDensities(galaxy: LocalGroupGalaxy): { readonly main: num
     case 'exponential-ellipsoid':
       // Of e^-m: 8 pi a b c.
       return { main: luminosity / (8 * Math.PI * model.majorPc * model.minorPc * model.depthPc), bulge: 0 };
+    case 'sersic': {
+      // Of the Prugniel-Simien profile in effective radii: its unit luminosity times a b c --
+      // that within the reach it is drawn to (SERSIC_REACH), so all its light is drawn.
+      const { unitLuminosity } = prugnielSimien(model.sersicN);
+      const drawn = unitLuminosity * sersicLightWithin(SERSIC_REACH, model.sersicN);
+      return { main: luminosity / (drawn * model.majorPc * model.minorPc * model.depthPc), bulge: 0 };
+    }
     case 'disc': {
       const share = model.bulge?.share ?? 0;
       // Of e^(-R/h - |z|/h_z): 4 pi h^2 h_z.
@@ -724,9 +750,73 @@ export function galaxyExtentPc(galaxy: LocalGroupGalaxy, whiteColumn = Infinity)
       const along = rho0 * model.scaleLengthPc;
       const r = Math.max(7, exponentialReach(along)) * model.scaleLengthPc;
       const z = Math.max(7, Math.log(Math.max(1, (2 * along) / BOX_FLOOR))) * model.scaleHeightPc;
-      return [r, r, z];
+      if (galaxy.giant || model.bulge === null || densities === null) {
+        return [r, r, z];
+      }
+      // A bulge drawn in the disc's own box (scene/galaxyColumns.ts), which must hold it: far
+      // above a thin disc's plane its light still shows.
+      const bulgeRho = Number.isFinite(whiteColumn) ? densities.bulge / whiteColumn : 0;
+      const reach = sersicReach(bulgeRho * model.bulge.effectiveRadiusPc, model.bulge.sersicN) * model.bulge.effectiveRadiusPc;
+      return [Math.max(r, reach), Math.max(r, reach), Math.max(z, reach)];
+    }
+    case 'sersic': {
+      // Its column k effective radii off its centre, along its longest axis, rho0 c Sigma(k).
+      const k = sersicReach(rho0 * Math.max(model.majorPc, model.minorPc, model.depthPc), model.sersicN);
+      return [k * model.majorPc, k * model.minorPc, k * model.depthPc];
     }
   }
+}
+
+/**
+ * How far a Prugniel-Simien profile is drawn, effective radii: the table of its columns
+ * reaches this far (scene/galaxyColumns.ts). Beyond it lies a fifth of a per cent of a de
+ * Vaucouleurs profile's light.
+ */
+export const SERSIC_REACH = 30;
+
+/**
+ * The projected column of a Prugniel-Simien profile of unit central density and unit
+ * effective radius, `m` effective radii off its centre: very nearly the Sersic profile,
+ * Sigma_e e^(-b (m^(1/n) - 1)), its Sigma_e such that it holds the profile's whole light,
+ * 2 pi n Sigma_e e^b b^(-2n) Gamma(2n) = the unit luminosity (prugnielSimien).
+ */
+export function sersicUnitColumn(m: number, n: number): number {
+  const { b, unitLuminosity } = prugnielSimien(n);
+  const sigmaE = unitLuminosity / (2 * Math.PI * n * Math.exp(b) * b ** (-2 * n) * gamma(2 * n));
+  return sigmaE * Math.exp(-b * (m ** (1 / n) - 1));
+}
+
+/**
+ * The share of a Sersic profile's light within `k` effective radii on the sky: the regularized
+ * incomplete gamma function P(2n, b k^(1/n)), by its series. A de Vaucouleurs profile holds
+ * 99.8 % of its light within SERSIC_REACH; M87's, of index 11.8, 93 %.
+ */
+export function sersicLightWithin(k: number, n: number): number {
+  const { b } = prugnielSimien(n);
+  const a = 2 * n;
+  const x = b * k ** (1 / n);
+  let term = 1 / a;
+  let sum = term;
+  for (let i = 1; i < 500 && term > sum * 1e-15; i += 1) {
+    term *= x / (a + i);
+    sum += term;
+  }
+  return Math.min(1, Math.exp(-x + a * Math.log(x) - Math.log(gamma(a))) * sum);
+}
+
+/**
+ * The effective radii out to which a Prugniel-Simien profile is drawn, its brightest column
+ * there `peak` (rho0 times its longest scale, over the white column) times its unit column:
+ * where that falls below BOX_FLOOR, never under 8, never past SERSIC_REACH.
+ */
+export function sersicReach(peak: number, n: number): number {
+  if (!(peak > 0)) {
+    return 8;
+  }
+  const { b } = prugnielSimien(n);
+  const atCentre = sersicUnitColumn(0, n) * peak;
+  const k = atCentre <= BOX_FLOOR ? 0 : (Math.log(atCentre / BOX_FLOOR) / b) ** n;
+  return Math.min(SERSIC_REACH, Math.max(8, k));
 }
 
 /** The k at which peak sqrt(2 pi k) e^-k falls to BOX_FLOOR: by iteration, from 8. */
@@ -757,6 +847,8 @@ export function galaxyHalfLightPc(galaxy: LocalGroupGalaxy): number | null {
       return 2.027 * model.majorPc;
     case 'disc':
       return 1.678 * model.scaleLengthPc;
+    case 'sersic':
+      return Math.sqrt(model.majorPc * model.minorPc);
   }
 }
 
@@ -776,6 +868,12 @@ export const GLOW_SHOWN_MU = 26;
  */
 export const FRAMING_STARS = 5;
 export const FRAMING_STARS_V = 6;
+
+/**
+ * An elliptical is framed on its light out to where it is this bright, mag/arcsec^2: three
+ * magnitudes below the column drawn white, where it still shows clearly (galaxyFramingKm).
+ */
+export const FRAMING_MU = 24;
 
 /** Nearer than this, in half-light radii (galaxyHalfLightPc), a dwarf is about the camera, not in front of it. */
 export const FRAMING_NEAREST_RADII = 3;
@@ -837,7 +935,8 @@ export function plummerCentreMu(galaxy: LocalGroupGalaxy): number | null {
  *   at the three radii short of it, their stars still faint: Antlia II 6.9 kpc out, Crater II
  *   3.1, Sextans 1.7, Andromeda's faint dwarfs 0.5 to 4 kpc.
  *
- * Discs, the Small Cloud and the dwarfs whose light shows are framed whole, as before.
+ * Discs, the Small Cloud, the ellipticals and the dwarfs whose light shows are framed whole,
+ * as before -- and every dwarf beyond the Local Group, whose stars are not drawn.
  */
 export function galaxyFramingKm(galaxy: LocalGroupGalaxy): number {
   const model = galaxy.model;
@@ -850,7 +949,23 @@ export function galaxyFramingKm(galaxy: LocalGroupGalaxy): number {
   if (model.kind === 'exponential-ellipsoid') {
     return 7 * 4 * model.majorPc * PARSEC_KM;
   }
+  if (model.kind === 'sersic') {
+    // An elliptical's light out to three effective radii, four-fifths of it for n = 4 -- or,
+    // nearer, out to where it fades below FRAMING_MU along its major axis: a steep profile,
+    // M87's of index 11.8, is at its effective radius already 25.7 mag/arcsec^2, its light
+    // further out a halo too faint to frame. M87 is framed on its inner 19 kpc, not its 59.
+    const densities = centralDensities(galaxy);
+    const { b } = prugnielSimien(model.sersicN);
+    const peak = densities === null ? 0 : (densities.main * model.depthPc * sersicUnitColumn(1, model.sersicN)) / columnAt(FRAMING_MU);
+    const root = peak > 0 ? 1 + Math.log(peak) / b : 0;
+    const fades = root > 0 ? root ** model.sersicN : 0;
+    return 7 * Math.min(3, Math.max(0.1, fades)) * model.majorPc * PARSEC_KM;
+  }
   const whole = 7 * 3 * model.majorPc;
+  // Beyond the Local Group no dwarf's stars are drawn (DwarfStars.tsx): framed whole.
+  if (galaxy.volumeIndex !== undefined) {
+    return whole * PARSEC_KM;
+  }
   const mu = plummerCentreMu(galaxy);
   const k = galaxy.catalogueIndex;
   const brightest = brightestStarsV(galaxy, k === null ? null : (readCatalog?.feH[k] ?? null));
@@ -996,14 +1111,22 @@ export function ensureGalaxyBody(store: EphemerisStore, galaxy: LocalGroupGalaxy
 
 /** The four big ones are bodies from the start (App.tsx): named on the sky, found by search. */
 export function ensureLocalGroupGiants(store: EphemerisStore): void {
-  const missing = GIANTS.filter((giant) => !store.isPropagatedBody(galaxyBodyId(giant)));
+  ensureGalaxyBodies(store, GIANTS);
+}
+
+/** Makes these galaxies bodies, those not yet, at once: one rebuild of the store for all. */
+export function ensureGalaxyBodies(store: EphemerisStore, galaxies: readonly LocalGroupGalaxy[]): void {
+  for (const galaxy of galaxies) {
+    made.set(galaxyBodyId(galaxy), galaxy);
+  }
+  const missing = galaxies.filter((galaxy) => !store.isPropagatedBody(galaxyBodyId(galaxy)));
   if (missing.length === 0) {
     return;
   }
   store.addPropagatedBodies(
-    missing.map((giant) => {
-      const state = galaxyState(giant);
-      return { body: galaxyDefinition(giant), elements: null, state: () => state, options: { exact: true } };
+    missing.map((galaxy) => {
+      const state = galaxyState(galaxy);
+      return { body: galaxyDefinition(galaxy), elements: null, state: () => state, options: { exact: true } };
     }),
   );
 }

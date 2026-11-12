@@ -42,6 +42,7 @@ import {
   galaxyFramingKm,
   galaxyOf,
 } from './core/localGroup.ts';
+import { ensureNamedVolumeGalaxies } from './core/localVolume.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -126,6 +127,7 @@ export function App() {
     pulsars,
     globularClusters,
     localGroup,
+    localVolume,
     clock,
     error,
     readout,
@@ -349,6 +351,39 @@ export function App() {
     },
     [store, localGroup, setFocus],
   );
+
+  // A galaxy beyond the Local Group (G2), its mark clicked or found by search: the same.
+  const goToVolumeGalaxy = useCallback(
+    (k: number): void => {
+      if (store === null) {
+        return;
+      }
+      localVolume
+        .request()
+        .then(() => {
+          const galaxy = localVolume.value?.galaxies[k];
+          if (galaxy === undefined) {
+            return;
+          }
+          setFocus(ensureGalaxyBody(store, galaxy));
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that galaxy', error);
+        });
+    },
+    [store, localVolume, setFocus],
+  );
+
+  // The brightest beyond the Local Group are bodies once they arrive: named on the sky and
+  // listed, as the four big ones of the Local Group are (localVolume.ts NAMED_V).
+  const volumeArchive = useSyncExternalStore(localVolume.subscribe, () => localVolume.value);
+  useEffect(() => {
+    if (store !== null && volumeArchive !== null) {
+      ensureNamedVolumeGalaxies(store, volumeArchive);
+      renderDemand.request();
+    }
+  }, [store, volumeArchive]);
 
   // The black holes, and the stars about them, are bodies from the start: nothing to fetch,
   // every number is in blackHoles.ts.
@@ -577,6 +612,8 @@ export function App() {
         localGroup={localGroup}
         showLocalGroup={layers.localGroup}
         onPickGalaxy={goToGalaxy}
+        localVolume={localVolume}
+        onPickVolumeGalaxy={goToVolumeGalaxy}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -605,6 +642,8 @@ export function App() {
             readout={readout}
             alphaCen={alphaCen}
             planetSystems={planetSystems}
+            localVolume={localVolume}
+            onVolumeGalaxy={goToVolumeGalaxy}
           />
 
           {/* Bottom-left: time. */}
@@ -661,6 +700,8 @@ export function App() {
               onCluster={goToCluster}
               localGroup={localGroup}
               onGalaxy={goToGalaxy}
+              localVolume={localVolume}
+              onVolumeGalaxy={goToVolumeGalaxy}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>

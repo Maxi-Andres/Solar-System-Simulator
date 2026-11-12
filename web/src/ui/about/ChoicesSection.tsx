@@ -24,6 +24,7 @@ export const choicesSection: AboutSection = {
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy’s light' },
     { id: 'local-group', label: 'The Local Group' },
+    { id: 'local-volume', label: 'Beyond the Local Group' },
   ],
   Body: ({ data }) => {
     const { stars } = data;
@@ -425,6 +426,61 @@ export const choicesSection: AboutSection = {
             They are drawn once the camera is out among the galaxy’s own model, and their marks once it leaves
             the disc.
             <Why>from inside, they are the sky’s, and the sky is the stars’.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="local-volume">
+          Beyond the Local Group
+        </Sub>
+        <Items>
+          <Item title="Three profiles">
+            A dwarf — a spheroidal, a dwarf elliptical, an irregular, a blue compact dwarf, a Magellanic spiral, an
+            elliptical fainter than M<sub>V</sub> −17 — is drawn as the Local Group’s dwarfs are; a giant elliptical
+            by de Vaucouleurs’s law, or its own fit; an S0 to an Sdm as an exponential disc with its bulge.
+            <Why>
+              the classes their catalogues give, and the profile each class is known to follow{' '}
+              <Cite k="devaucouleurs1948" />.
+            </Why>
+          </Item>
+          <Item title="A giant elliptical’s envelope, as its fit carries it">
+            Each is drawn out to 30 effective radii of its fit, past the last light measured, all its fit’s light
+            inside: M86’s fit, of index 10.3, has an effective radius of 190 kpc along its major axis, half its
+            light a faint halo across the cluster’s core. Gone to, each is framed on its light out to 24
+            mag/arcsec², not on its effective radius: M87 on its inner 19 kpc.
+            <Why>its fit is what is measured of its light; where the envelope truly ends is not.</Why>
+          </Item>
+          <Item title="Only the Virgo Cluster’s certain members">
+            Its catalogue’s 561 possible members, outside the infall model that defines membership, are not drawn:
+            most of them lie in the clouds twice as far. 29 it shares with the Local Volume’s catalogue are drawn
+            from that, which measures their distances.
+          </Item>
+          <Item title="Once each">
+            The 102 galaxies of the Local Volume’s catalogue that McConnachie’s lists are drawn from his; Andromeda,
+            the Milky Way and Segue 3, a star cluster, are left out of it. A distance error of a magnitude or more
+            is taken as not given: M51’s reads 24.23.
+          </Item>
+          <Item title="As far as 200 million light years">
+            The camera pulls back that far: from there the Virgo Cluster, 54 million light years off, and the Local
+            Group are in one frame from either end.
+          </Item>
+          <Item title="From over the supergalactic pole">
+            The Local Volume is seen from over the pole of the plane its galaxies lie in, the Virgo Cluster to the
+            right; the Virgo Cluster the same way, from 60 million light years over M87.
+            <Why>
+              in that plane lie the Local Sheet, the groups about us and the cluster itself{' '}
+              <Cite k={['devaucouleurs1953', 'lahav2000']} />: face-on it is a map, and the cluster’s depth runs
+              across the frame.
+            </Why>
+          </Item>
+          <Item title="The brightest named, the rest marked">
+            Galaxies of V 9.5 or brighter are named on the sky from the start, as Andromeda is; the others carry a
+            mark, and where two marks would overlap the less luminous gives way.
+            <Why>from the Virgo Cluster’s view a thousand marks would be one smudge.</Why>
+          </Item>
+          <Item title="The Local Group, named as one">
+            From past about 11 Mpc the Milky Way’s name is the Local Group’s, and its galaxies’ names fold into it.
+            The Local Volume and the Virgo Cluster are never a point from anywhere the camera goes: they are on the
+            breadcrumb.
           </Item>
         </Items>
       </>

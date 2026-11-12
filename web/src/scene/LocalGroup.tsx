@@ -25,6 +25,7 @@ import {
   type LocalGroupArchive,
   type LocalGroupGalaxy,
 } from '../core/localGroup.ts';
+import { BULGE_SERSIC_N, type LocalVolumeArchive } from '../core/localVolume.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { PARSEC_KM } from '../core/stars3d.ts';
@@ -38,6 +39,13 @@ import { setMarkerPointer } from './markerPointer.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
+import {
+  DISC_VOLUME_FRAGMENT,
+  DISC_VOLUME_VERTEX,
+  SERSIC_VOLUME_FRAGMENT,
+  SERSIC_VOLUME_VERTEX,
+  sersicAtlas,
+} from './galaxyColumns.ts';
 import { dwarfStarsDrawn } from './DwarfStars.tsx';
 import { skyVolumesDrawn } from '../core/skyMap.ts';
 import { BALMER_HUE, galaxyVisibility } from './MilkyWay.tsx';
@@ -121,6 +129,20 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * and its point keep only the light of those too faint to: the share DwarfStars works out
  * (dwarfStarsDrawn), so no light is counted twice.
  *
+ * ## Beyond the Local Group
+ *
+ * The Local Volume's and the Virgo Cluster's galaxies (core/localVolume.ts), fetched as the
+ * camera passes VOLUME_FROM_LY, are drawn by the same means, instanced: their dwarfs among the
+ * Plummer ellipsoids, their discs and ellipticals one draw for each kind (galaxyColumns.ts), a
+ * disc's bulge in its own box. A galaxy drawn as a point has no volume drawn at all: its
+ * instance is left out that frame, so two thousand galaxies cost what the few resolved do.
+ *
+ * ## Marks
+ *
+ * One each, an ellipse; where two would overlap the less luminous goes, as a body's marker
+ * behind another's does (markerDeclutter.ts) -- a galaxy made a body first, its own marker
+ * standing for it. From the Virgo Cluster's view a thousand marks would be one smudge.
+ *
  * ## Where
  *
  * Only once out of the Milky Way's neighbourhood, as the Milky Way's own model
@@ -192,6 +214,15 @@ export function pointPeak(luminosity: number, sigmaPc: number): number {
 /** Where the dwarfs' marks come in, light years from the Sun: as the camera leaves the disc. */
 export const MARKS_FROM_LY = 20_000;
 export const MARKS_FULL_LY = 100_000;
+
+/**
+ * Where the galaxies beyond the Local Group are fetched, light years from the Sun: three
+ * million, past Andromeda, on the way out to the Local Group's own view (8 million).
+ */
+export const VOLUME_FROM_LY = 3e6;
+
+/** How near a held mark may let another come before it goes, as a share of the mark's size. */
+const MARK_HELD_FRACTION = 0.7;
 
 /** The marks: an ellipse, the old sign for a nebula, and its size, CSS pixels. */
 const SPRITE_PX = 15;
@@ -628,30 +659,138 @@ export interface LocalGroupProps {
   readonly showMarks: boolean;
   /** A dwarf's mark clicked: its index in the archive. */
   readonly onPick: (k: number) => void;
+  /** The galaxies beyond (localVolume.ts), and a click on one's mark: its index there. */
+  readonly volume: LazySource<LocalVolumeArchive>;
+  readonly onPickVolume: (k: number) => void;
+}
+
+/** A galaxy drawn: the Local Group's `k`, or the Local Volume's. */
+interface Entry {
+  readonly galaxy: LocalGroupGalaxy;
+  readonly k: number;
+  readonly volume: boolean;
 }
 
 const noRaycast = (): void => {};
 const scratchMatrix = new THREE.Matrix4();
 const scratchSize = new THREE.Vector2();
+const scratchQuaternion = new THREE.Quaternion();
+const scratchVector = new THREE.Vector3();
 
-export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick }: LocalGroupProps) {
+/** The marks as the declutter reads and writes them. */
+interface Marks {
+  readonly centres: readonly { readonly x: number; readonly y: number; readonly z: number }[];
+  readonly shown: THREE.BufferAttribute;
+  /** Most luminous first. */
+  readonly order: readonly number[];
+  /** 1 where the galaxy is a body, whose own marker stands for it. */
+  readonly body: Uint8Array;
+  /** 1 where the mark kept its place last frame. */
+  readonly kept: Uint8Array;
+}
+
+/**
+ * Which marks show: the bodies' places taken first, then each galaxy's, most luminous first,
+ * where no mark already placed lies within a mark's size, SPRITE_PX -- one already shown
+ * holding its place unless another comes within MARK_HELD_FRACTION of that, so a pair at the
+ * threshold does not swap each frame. `width` and `height` are the canvas's, CSS pixels.
+ */
+export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc: THREE.Vector3, width: number, height: number): void {
+  frameCamera.updateMatrixWorld();
+  scratchQuaternion.copy(frameCamera.quaternion).invert();
+  const e = (frameCamera as THREE.PerspectiveCamera).projectionMatrix.elements;
+  const cells = new Map<number, number[]>();
+  const cellKey = (cx: number, cy: number) => cx * 100_003 + cy;
+  const clear = (x: number, y: number, gap: number): boolean => {
+    const cx = Math.floor(x / SPRITE_PX);
+    const cy = Math.floor(y / SPRITE_PX);
+    for (let i = -1; i <= 1; i += 1) {
+      for (let j = -1; j <= 1; j += 1) {
+        const placed = cells.get(cellKey(cx + i, cy + j));
+        if (placed === undefined) continue;
+        for (let p = 0; p < placed.length; p += 2) {
+          if (Math.abs(placed[p]! - x) < gap && Math.abs(placed[p + 1]! - y) < gap) return false;
+        }
+      }
+    }
+    return true;
+  };
+  const place = (x: number, y: number): void => {
+    const key = cellKey(Math.floor(x / SPRITE_PX), Math.floor(y / SPRITE_PX));
+    const list = cells.get(key);
+    if (list === undefined) cells.set(key, [x, y]);
+    else list.push(x, y);
+  };
+  const onScreen = (i: number): readonly [number, number] | null => {
+    const centre = marks.centres[i]!;
+    scratchVector.set(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z).applyQuaternion(scratchQuaternion);
+    const depth = -scratchVector.z;
+    if (depth <= 0) return null;
+    const x = ((e[0]! * scratchVector.x) / depth + 1) * 0.5 * width;
+    const y = (1 - (e[5]! * scratchVector.y) / depth) * 0.5 * height;
+    return x < -SPRITE_PX || y < -SPRITE_PX || x > width + SPRITE_PX || y > height + SPRITE_PX ? null : [x, y];
+  };
+  let changed = false;
+  const set = (i: number, keep: boolean): void => {
+    marks.kept[i] = keep ? 1 : 0;
+    const show = keep && marks.body[i] === 0 ? 1 : 0;
+    if (marks.shown.getX(i) !== show) {
+      marks.shown.setX(i, show);
+      changed = true;
+    }
+  };
+  for (const i of marks.order) {
+    if (marks.body[i] === 1) {
+      const at = onScreen(i);
+      if (at !== null) place(at[0], at[1]);
+      set(i, true);
+    }
+  }
+  for (const i of marks.order) {
+    if (marks.body[i] === 1) continue;
+    const at = onScreen(i);
+    if (at === null) {
+      // Off the screen: kept, so it comes back as it was.
+      set(i, true);
+      continue;
+    }
+    const keep = clear(at[0], at[1], marks.kept[i] === 1 ? SPRITE_PX * MARK_HELD_FRACTION : SPRITE_PX);
+    if (keep) place(at[0], at[1]);
+    set(i, keep);
+  }
+  if (changed) {
+    marks.shown.needsUpdate = true;
+  }
+}
+
+export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick, volume, onPickVolume }: LocalGroupProps) {
   const { gl, camera } = useThree();
   const loaded = useSyncExternalStore(source.subscribe, () => source.value);
+  const volumeLoaded = useSyncExternalStore(volume.subscribe, () => volume.value);
   // The four are drawn before the catalogue arrives, from their own numbers.
   const archive = useMemo(() => loaded ?? indexLocalGroup(null), [loaded]);
+  // And the galaxies beyond after them, once they arrive.
+  const entries = useMemo<readonly Entry[]>(
+    () => [
+      ...archive.galaxies.map((galaxy, k) => ({ galaxy, k, volume: false })),
+      ...(volumeLoaded?.galaxies ?? []).map((galaxy, k) => ({ galaxy, k, volume: true })),
+    ],
+    [archive, volumeLoaded],
+  );
   const version = useStoreVersion(store);
   const group = useMemo(() => new THREE.Group(), []);
   const requested = useRef(false);
+  const volumeRequested = useRef(false);
   const frame = useRef({ cameraPc: new THREE.Vector3(), markFade: 0 });
   const pickRef = useRef(onPick);
   pickRef.current = onPick;
+  const pickVolumeRef = useRef(onPickVolume);
+  pickVolumeRef.current = onPickVolume;
 
   // The dwarfs: one instanced box each, with what its shader needs.
   const dwarfUniforms = useMemo(() => ({ uFade: { value: 0 } }), []);
   const dwarfs = useMemo(() => {
-    const list = archive.galaxies
-      .map((galaxy, k) => ({ galaxy, k }))
-      .filter(({ galaxy }) => galaxy.model?.kind === 'plummer' && centralDensities(galaxy) !== null);
+    const list = entries.filter(({ galaxy }) => galaxy.model?.kind === 'plummer' && centralDensities(galaxy) !== null);
     const count = list.length;
     const geometry = new THREE.BoxGeometry(2, 2, 2);
     const attribute = (name: string) => {
@@ -698,13 +837,104 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
         glow: glow(galaxy, centralDensities(galaxy)!.main),
       };
     });
-    fixed.forEach(({ axes, scales }, i) => {
-      m0.setXYZ(i, axes.u.x / scales[0], axes.u.y / scales[0], axes.u.z / scales[0]);
-      m1.setXYZ(i, axes.v.x / scales[1], axes.v.y / scales[1], axes.v.z / scales[1]);
-      m2.setXYZ(i, axes.w.x / scales[2], axes.w.y / scales[2], axes.w.z / scales[2]);
-    });
-    return { mesh, list, fixed, u0, near, glow: glowAttribute };
-  }, [archive, dwarfUniforms]);
+    return { mesh, list, fixed, m0, m1, m2, u0, near, glow: glowAttribute };
+  }, [entries, dwarfUniforms]);
+
+  // The discs and ellipticals beyond the Local Group: one instanced box for each kind, the
+  // Prugniel-Simien tables of every index they need in one atlas, read by both (galaxyColumns.ts).
+  const atlas = useMemo(() => {
+    const indices = [BULGE_SERSIC_N];
+    for (const { galaxy } of entries) {
+      if (galaxy.model?.kind === 'sersic') indices.push(galaxy.model.sersicN);
+    }
+    return sersicAtlas(indices);
+  }, [entries]);
+  useEffect(() => () => atlas.texture.dispose(), [atlas]);
+  const volumeUniforms = useMemo(
+    () => ({
+      uFade: { value: 0 },
+      uSersic: { value: atlas.texture },
+      uSersicLayers: { value: atlas.layers },
+    }),
+    [atlas],
+  );
+  const instancedVolumes = useMemo(() => {
+    const make = (kind: 'disc' | 'sersic') => {
+      const list = entries.filter(({ galaxy }) => {
+        const model = galaxy.model;
+        if (galaxy.giant || model === null || centralDensities(galaxy) === null) {
+          return false;
+        }
+        // A disc's bulge drawn from the atlas's de Vaucouleurs table: every one beyond the Local Group's.
+        return kind === 'disc'
+          ? model.kind === 'disc' && (model.bulge === null || model.bulge.sersicN === BULGE_SERSIC_N)
+          : model.kind === 'sersic';
+      });
+      const count = list.length;
+      const geometry = new THREE.BoxGeometry(2, 2, 2);
+      const attribute = (name: string, width: number) => {
+        const value = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(count, 1) * width), width);
+        value.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute(name, value);
+        return value;
+      };
+      const attributes = {
+        cam: attribute('aCam', 3),
+        extent: attribute('aExtent', 3),
+        glow: attribute('aGlow', 3),
+        shape: attribute('aShape', 4),
+        bulge: attribute('aBulge', 3),
+      };
+      const material = new THREE.ShaderMaterial({
+        uniforms: volumeUniforms,
+        vertexShader: kind === 'disc' ? DISC_VOLUME_VERTEX : SERSIC_VOLUME_VERTEX,
+        fragmentShader: kind === 'disc' ? DISC_VOLUME_FRAGMENT : SERSIC_VOLUME_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        toneMapped: false,
+      });
+      const mesh = new THREE.InstancedMesh(geometry, material, Math.max(count, 1));
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.raycast = noRaycast;
+      drawIntoGlow(mesh);
+      const fixed = list.map(({ galaxy }) => {
+        const model = galaxy.model!;
+        const densities = centralDensities(galaxy)!;
+        let axes = galaxyAxes(galaxy);
+        // Right-handed, so a corner's place in its frame is its position times the extents:
+        // an ellipsoid turned about its own axis is the same ellipsoid.
+        const { u, v, w } = axes;
+        if (u.x * (v.y * w.z - v.z * w.y) + u.y * (v.z * w.x - v.x * w.z) + u.z * (v.x * w.y - v.y * w.x) < 0) {
+          axes = { u, v, w: { x: -w.x, y: -w.y, z: -w.z } };
+        }
+        const shape: readonly [number, number, number] =
+          model.kind === 'disc'
+            ? [model.scaleLengthPc, model.scaleHeightPc, 0]
+            : model.kind === 'sersic'
+              ? [model.majorPc, model.minorPc, model.depthPc]
+              : [1, 1, 1];
+        const bulge = model.kind === 'disc' ? model.bulge : null;
+        const layer = atlas.layerOf(model.kind === 'sersic' ? model.sersicN : BULGE_SERSIC_N);
+        return {
+          centre: galaxyPositionPc(galaxy),
+          axes,
+          extent: galaxyExtentPc(galaxy, columnAt(WHITE_MU))!,
+          shape,
+          bulge:
+            bulge === null
+              ? ([0, 0, layer] as const)
+              : ([bulge.effectiveRadiusPc, densities.bulge / densities.main, layer] as const),
+          halfLightPc: galaxyHalfLightPc(galaxy)!,
+          glow: glow(galaxy, densities.main),
+        };
+      });
+      return { kind, mesh, list, fixed, attributes };
+    };
+    return [make('disc'), make('sersic')];
+  }, [entries, volumeUniforms, atlas]);
 
   // The four, each its own box and marcher.
   const giants = useMemo(
@@ -860,9 +1090,9 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     [],
   );
   const points = useMemo(() => {
-    const list = archive.galaxies.filter(
-      (galaxy) => centralDensities(galaxy) !== null && galaxyLuminosity(galaxy) !== null,
-    );
+    const list = entries
+      .map(({ galaxy }) => galaxy)
+      .filter((galaxy) => centralDensities(galaxy) !== null && galaxyLuminosity(galaxy) !== null);
     const centres = list.map((galaxy) => galaxyPositionPc(galaxy));
     const halfLightPc = list.map((galaxy) => galaxyHalfLightPc(galaxy)!);
     const keys = list.map((galaxy) => galaxy.key);
@@ -898,7 +1128,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     object.raycast = noRaycast;
     drawIntoGlow(object);
     return { object, centres, halfLightPc, keys, share };
-  }, [archive, pointUniforms]);
+  }, [entries, pointUniforms]);
 
   // The dwarfs' marks.
   const markUniforms = useMemo<Record<string, THREE.IUniform>>(
@@ -912,15 +1142,23 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     [],
   );
   const marks = useMemo(() => {
-    const list = archive.galaxies.map((galaxy, k) => ({ galaxy, k })).filter(({ galaxy }) => !galaxy.giant);
+    const list = entries.filter(({ galaxy }) => !galaxy.giant);
     const centres = list.map(({ galaxy }) => galaxyPositionPc(galaxy));
-    // Parsecs about the Sun: float32 holds 3 Mpc to a fifth of a parsec, far finer than a mark.
+    // Parsecs about the Sun: float32 holds 3 Mpc to a fifth of a parsec and the Virgo Cluster
+    // to 2 pc, a fraction of a pixel from wherever its marks show.
     const position = new Float32Array(list.length * 3);
     centres.forEach((centre, i) => position.set([centre.x, centre.y, centre.z], i * 3));
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
     const shown = new THREE.BufferAttribute(new Float32Array(list.length).fill(1), 1);
+    shown.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('shown', shown);
+    // Decluttered most luminous first (see the header); a galaxy made a body steps aside.
+    const order = list
+      .map((_, i) => i)
+      .sort((a, b) => (galaxyLuminosity(list[b]!.galaxy) ?? 0) - (galaxyLuminosity(list[a]!.galaxy) ?? 0));
+    const body = new Uint8Array(list.length);
+    const kept = new Uint8Array(list.length).fill(1);
     const points = new THREE.Points(
       geometry,
       new THREE.ShaderMaterial({
@@ -934,14 +1172,15 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     );
     points.frustumCulled = false;
     points.raycast = noRaycast;
-    return { points, list, centres, shown };
-  }, [archive, markUniforms]);
+    return { points, list, centres, shown, order, body, kept };
+  }, [entries, markUniforms]);
 
   // A galaxy made a body has its body's mark and name: its own mark steps aside.
   useEffect(() => {
     void version;
     marks.list.forEach(({ galaxy }, i) => {
-      marks.shown.setX(i, store.isPropagatedBody(galaxyBodyId(galaxy)) ? 0 : 1);
+      marks.body[i] = store.isPropagatedBody(galaxyBodyId(galaxy)) ? 1 : 0;
+      marks.shown.setX(i, marks.body[i] === 1 || marks.kept[i] === 0 ? 0 : 1);
     });
     marks.shown.needsUpdate = true;
     renderDemand.request();
@@ -950,21 +1189,25 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
   useEffect(() => {
     group.add(dwarfs.mesh);
     for (const giant of giants) group.add(giant.mesh);
+    for (const { mesh } of instancedVolumes) group.add(mesh);
     group.add(points.object);
     group.add(marks.points);
     renderDemand.request();
     return () => {
-      group.remove(dwarfs.mesh, points.object, marks.points);
+      const instanced = instancedVolumes.map(({ mesh }) => mesh);
+      group.remove(dwarfs.mesh, points.object, marks.points, ...instanced);
       for (const giant of giants) group.remove(giant.mesh);
-      for (const object of [dwarfs.mesh, points.object, ...giants.map((giant) => giant.mesh)]) releaseFromGlow(object);
-      dwarfs.mesh.geometry.dispose();
-      (dwarfs.mesh.material as THREE.Material).dispose();
+      for (const object of [dwarfs.mesh, points.object, ...giants.map((giant) => giant.mesh), ...instanced]) releaseFromGlow(object);
+      for (const mesh of [dwarfs.mesh, ...instanced]) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
       points.object.geometry.dispose();
       (points.object.material as THREE.Material).dispose();
       marks.points.geometry.dispose();
       (marks.points.material as THREE.Material).dispose();
     };
-  }, [group, dwarfs, giants, points, marks]);
+  }, [group, dwarfs, giants, instancedVolumes, points, marks]);
 
   useEffect(
     () => () => {
@@ -995,6 +1238,10 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       void source.request();
       setMapsWanted(true);
     }
+    if (!volumeRequested.current && fromSunKm > VOLUME_FROM_LY * LIGHT_YEAR_KM) {
+      volumeRequested.current = true;
+      void volume.request();
+    }
     const fade = galaxyVisibility(fromSunKm);
     const markFade = showMarks
       ? mapStrength(frameCamera.position.length() * KM_PER_UNIT) * outOfDiscStrength(fromSunKm)
@@ -1012,32 +1259,86 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     const volumeShare = (halfLightPc: number, distancePc: number): number =>
       1 - pointShare((halfLightPc / distancePc) * pixelsPerRadian);
 
-    // The dwarfs: each box about the camera, and the camera in each one's units.
+    // The dwarfs: each box about the camera, and the camera in each one's units -- those drawn
+    // as a volume at all this frame, packed to the front (see the header).
     dwarfUniforms.uFade.value = fade;
     dwarfs.mesh.visible = fade > 0;
     if (fade > 0) {
-      dwarfs.fixed.forEach(({ key, centre, axes, scales, extent, halfLightPc, glow: g }, i) => {
+      let n = 0;
+      dwarfs.fixed.forEach(({ key, centre, axes, scales, extent, halfLightPc, glow: g }) => {
         const rx = centre.x - cameraPc.x;
         const ry = centre.y - cameraPc.y;
         const rz = centre.z - cameraPc.z;
         // Less what its stars drawn one by one carry (see the header).
         const share =
           volumeShare(halfLightPc, Math.hypot(rx, ry, rz)) * (key === dwarfStarsDrawn.key ? dwarfStarsDrawn.glowShare : 1);
-        dwarfs.glow.setXYZ(i, g.x * share, g.y * share, g.z * share);
+        if (share <= 0) {
+          return;
+        }
+        dwarfs.m0.setXYZ(n, axes.u.x / scales[0], axes.u.y / scales[0], axes.u.z / scales[0]);
+        dwarfs.m1.setXYZ(n, axes.v.x / scales[1], axes.v.y / scales[1], axes.v.z / scales[1]);
+        dwarfs.m2.setXYZ(n, axes.w.x / scales[2], axes.w.y / scales[2], axes.w.z / scales[2]);
+        dwarfs.glow.setXYZ(n, g.x * share, g.y * share, g.z * share);
         // u0 = the camera minus the centre, along each axis over its scale.
-        dwarfs.near.setX(i, Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scales[0]));
+        dwarfs.near.setX(n, Math.max(NEAR_SHARE * Math.hypot(rx, ry, rz), 0.5 * scales[0]));
         dwarfs.u0.setXYZ(
-          i,
+          n,
           -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z) / scales[0],
           -(rx * axes.v.x + ry * axes.v.y + rz * axes.v.z) / scales[1],
           -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z) / scales[2],
         );
-        dwarfs.mesh.setMatrixAt(i, boxMatrix(axes, extent, { x: rx, y: ry, z: rz }, scratchMatrix));
+        dwarfs.mesh.setMatrixAt(n, boxMatrix(axes, extent, { x: rx, y: ry, z: rz }, scratchMatrix));
+        n += 1;
       });
-      dwarfs.u0.needsUpdate = true;
-      dwarfs.near.needsUpdate = true;
-      dwarfs.glow.needsUpdate = true;
+      dwarfs.mesh.count = n;
+      for (const attribute of [dwarfs.m0, dwarfs.m1, dwarfs.m2, dwarfs.u0, dwarfs.near, dwarfs.glow]) {
+        attribute.needsUpdate = true;
+      }
       dwarfs.mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    // The discs and ellipticals beyond, the same way: the camera in each one's own frame.
+    volumeUniforms.uFade.value = fade;
+    for (const { mesh, fixed, attributes } of instancedVolumes) {
+      mesh.visible = fade > 0;
+      if (fade <= 0) {
+        continue;
+      }
+      let n = 0;
+      for (const { centre, axes, extent, shape, bulge, halfLightPc, glow: g } of fixed) {
+        const rx = centre.x - cameraPc.x;
+        const ry = centre.y - cameraPc.y;
+        const rz = centre.z - cameraPc.z;
+        const distance = Math.hypot(rx, ry, rz);
+        const share = volumeShare(halfLightPc, distance);
+        if (share <= 0) {
+          continue;
+        }
+        attributes.cam.setXYZ(
+          n,
+          -(rx * axes.u.x + ry * axes.u.y + rz * axes.u.z),
+          -(rx * axes.v.x + ry * axes.v.y + rz * axes.v.z),
+          -(rx * axes.w.x + ry * axes.w.y + rz * axes.w.z),
+        );
+        attributes.extent.setXYZ(n, extent[0], extent[1], extent[2]);
+        attributes.glow.setXYZ(n, g.x * share, g.y * share, g.z * share);
+        // Light nearer than this is left out (see the header), never nearer than half its scale.
+        const near = Math.max(NEAR_SHARE * distance, 0.5 * shape[0]);
+        if (shape[2] === 0) {
+          // A disc: its scale length and height, and the near limit.
+          attributes.shape.setXYZW(n, shape[0], shape[1], near, 0);
+        } else {
+          attributes.shape.setXYZW(n, shape[0], shape[1], shape[2], near);
+        }
+        attributes.bulge.setXYZ(n, bulge[0], bulge[1], bulge[2]);
+        mesh.setMatrixAt(n, boxMatrix(axes, extent, { x: rx, y: ry, z: rz }, scratchMatrix));
+        n += 1;
+      }
+      mesh.count = n;
+      for (const attribute of Object.values(attributes)) {
+        attribute.needsUpdate = true;
+      }
+      mesh.instanceMatrix.needsUpdate = true;
     }
 
     // The four: each box about the camera, and the camera in its frame.
@@ -1084,11 +1385,15 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       pointUniforms['uFade']!.value = fade;
     }
 
-    // The marks, about the camera.
+    // The marks, about the camera, decluttered.
     marks.points.visible = markFade > 0;
     (markUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
     markUniforms['uPixelRatio']!.value = renderer.getPixelRatio();
     markUniforms['uFade']!.value = markFade;
+    if (markFade > 0) {
+      const element = renderer.domElement;
+      declutterMarks(marks, frameCamera, cameraPc, element.clientWidth, element.clientHeight);
+    }
   });
 
   // Pointing and clicking a dwarf's mark, as a cluster's.
@@ -1142,7 +1447,8 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       const i = pick(event);
       if (i !== null) {
         tip.style.display = 'none';
-        pickRef.current(marks.list[i]!.k);
+        const entry = marks.list[i]!;
+        (entry.volume ? pickVolumeRef.current : pickRef.current)(entry.k);
       }
     };
     const hover = (): void => {

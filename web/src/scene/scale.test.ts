@@ -466,8 +466,17 @@ describe('how far the camera may pull back', () => {
     // Its far edge about 1.4 Mpc from the Sun, in the inner half of the frame's height.
     const edgeKm = 1.4e6 * PARSEC_KM;
     expect((Math.asin(edgeKm / MAX_VIEW_DISTANCE_KM) * 180) / Math.PI).toBeLessThan(FOV_DEG / 4);
-    // The catalogue's farthest, 3 Mpc, behind the Sun from the farthest zoom.
-    expect(kmToUnits(MAX_VIEW_DISTANCE_KM + 3e6 * PARSEC_KM)).toBeLessThan(CAMERA_FAR_UNITS);
+    // The Virgo Cluster's farthest clouds, 33 Mpc, behind a focus as far again, from the farthest zoom.
+    expect(kmToUnits(MAX_VIEW_DISTANCE_KM + 2 * 35e6 * PARSEC_KM)).toBeLessThan(CAMERA_FAR_UNITS);
+  });
+
+  it('sees the Virgo Cluster whole with the Local Group, from either end, on a 4:3 screen', () => {
+    // M87 16.5 Mpc from the Sun, its members within 2 Mpc of it on the sky.
+    const farEdge = (16.5e6 + 2e6) * PARSEC_KM;
+    const halfWidth43 = Math.atan(Math.tan(((FOV_DEG / 2) * Math.PI) / 180) * (4 / 3));
+    expect(Math.atan(farEdge / MAX_VIEW_DISTANCE_KM)).toBeLessThan(halfWidth43);
+    // From 150 million ly it would not be.
+    expect(Math.atan(farEdge / (150e6 * LIGHT_YEAR_KM))).toBeGreaterThan(halfWidth43);
   });
 
   it('sees the whole 100-parsec sphere, in the inner half of the frame', () => {

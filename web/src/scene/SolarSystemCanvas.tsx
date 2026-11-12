@@ -9,6 +9,7 @@ import type { ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import type { PulsarArchive } from '../core/pulsars.ts';
 import type { GlobularClusterArchive } from '../core/globularClusters.ts';
 import type { LocalGroupArchive } from '../core/localGroup.ts';
+import type { LocalVolumeArchive } from '../core/localVolume.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
@@ -147,6 +148,9 @@ export interface SolarSystemCanvasProps {
   readonly localGroup: LazySource<LocalGroupArchive>;
   readonly showLocalGroup: boolean;
   readonly onPickGalaxy: (k: number) => void;
+  /** The galaxies beyond, out to the Virgo Cluster, and what a click on one's mark does. */
+  readonly localVolume: LazySource<LocalVolumeArchive>;
+  readonly onPickVolumeGalaxy: (k: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -188,6 +192,8 @@ export function SolarSystemCanvas({
   localGroup,
   showLocalGroup,
   onPickGalaxy,
+  localVolume,
+  onPickVolumeGalaxy,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -341,6 +347,8 @@ export function SolarSystemCanvas({
         visible={showLocalGroup}
         showMarks={showIcons}
         onPick={onPickGalaxy}
+        volume={localVolume}
+        onPickVolume={onPickVolumeGalaxy}
       />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />

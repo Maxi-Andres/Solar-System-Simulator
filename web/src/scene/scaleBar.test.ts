@@ -31,11 +31,12 @@ describe('the scale bar', () => {
     expect(barAt(50_000).unit).toBe('km'); // Earth, eight radii out
     expect(barAt(30 * AU_KM).unit).toBe('AU');
     expect(barAt(50 * LIGHT_YEAR_KM).unit).toBe('ly');
-    // The census seen whole, the galaxy (D2b) and the Local Group (G1): light years all the
-    // way out, and millions of them past a million.
+    // The census seen whole, the galaxy (D2b), the Local Group (G1) and the Virgo Cluster (G2):
+    // light years all the way out, and millions of them past a million.
     expect(barAt(3000 * LIGHT_YEAR_KM).label).toBe('100 ly');
     expect(barAt(400_000 * LIGHT_YEAR_KM).label).toBe('20,000 ly');
-    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('2 million ly');
+    expect(barAt(40e6 * LIGHT_YEAR_KM).label).toBe('2 million ly');
+    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('10 million ly');
   });
 
   it('writes large kilometres as millions', () => {

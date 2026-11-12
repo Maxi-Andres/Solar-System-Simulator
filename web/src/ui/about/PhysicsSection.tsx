@@ -53,6 +53,7 @@ export const physicsSection: AboutSection = {
     { id: 'supernova-remnants', label: 'Supernova remnants' },
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
+    { id: 'local-volume', label: 'Beyond the Local Group' },
   ],
   Body: () => {
     const log10 = (...argument: Parameters<typeof row>) => row(sub(up('log'), mn('10')), paren(...argument));
@@ -1310,6 +1311,136 @@ export const physicsSection: AboutSection = {
           thick is not missed between steps a kiloparsec apart. The Large Cloud’s glowing gas adds its Balmer
           lines’ light in the young stars’ sheet, which lights it: H-alpha and H-beta at Case B’s 2.86.
           <Cite k={['cardelli1989', 'drimmelSpergel2001', 'kregel2002', 'osterbrockFerland2006']} />
+        </Equation>
+
+        <Sub section="physics" id="local-volume">
+          Beyond the Local Group
+        </Sub>
+        <Equation
+          title="A disc, in a few steps"
+          code="web/src/scene/galaxyColumns.ts"
+          math={math(
+            row(
+              mi('Σ'),
+              mo('='),
+              sub(mi('ρ'), mn('0')),
+              mo('∑'),
+              sub(mi('Δt'), mi('k')),
+              frac(
+                row(sup(mi('e'), row(mo('−'), sub(mi('φ'), mi('k')))), mo('−'), sup(mi('e'), row(mo('−'), sub(mi('φ'), row(mi('k'), mo('+'), mn('1')))))),
+                row(sub(mi('φ'), row(mi('k'), mo('+'), mn('1'))), mo('−'), sub(mi('φ'), mi('k'))),
+              ),
+              t(',  '),
+              mi('φ'),
+              mo('='),
+              frac(mi('R'), mi('h')),
+              mo('+'),
+              frac(row(mo('|'), mi('z'), mo('|')), sub(mi('h'), mi('z'))),
+              t(',  '),
+              mi('R'),
+              mo('='),
+              mi('b'),
+              fn('cosh'),
+              mi('u'),
+            ),
+          )}
+          symbols={
+            <>
+              ρ<sub>0</sub> the disc’s central density; φ<sub>k</sub> at the ends of step k along the ray, each step’s
+              φ a straight line; b how near the ray’s track passes the disc’s axis, and the steps even in u.
+            </>
+          }
+        >
+          An exponential disc along a ray is e<sup>−φ</sup>; taken as a straight line in each of sixteen steps, its
+          integral is exact. Each step split where the ray crosses the plane, |z| is a straight line in every
+          one, and the steps spaced short where R turns past the axis and long where it does not: exact face-on,
+          within 2% of the integral along any ray, finite edge-on. Two thousand galaxies drawn so, at one draw
+          each kind.
+        </Equation>
+        <Equation
+          title="An elliptical, from a table"
+          code="web/src/scene/galaxyColumns.ts"
+          math={math(
+            row(
+              mi('Σ'),
+              mo('='),
+              frac(sub(mi('ρ'), mn('0')), row(mo('|'), mi('v'), mo('|'))),
+              mi('T'),
+              paren(row(sub(mi('m'), mi('b')), mo(','), sub(mi('s'), mn('0')))),
+              t(',  '),
+              mi('T'),
+              paren(row(mi('m'), mo(','), mi('s'))),
+              mo('='),
+              subsup(mo('∫'), mi('s'), mi('∞')),
+              mi('ρ̃'),
+              paren(sqrt(row(sup(mi('m'), mn('2')), mo('+'), sup(mi('s′'), mn('2'))))),
+              mi('d'),
+              mi('s′'),
+            ),
+          )}
+          symbols={
+            <>
+              In the ellipsoid’s units — each axis over its effective radius — the ray is u<sub>0</sub> + t v; m
+              <sub>b</sub> its nearest approach to the centre and s<sub>0</sub> where the camera stands along it; ρ̃ the
+              Prugniel–Simien profile of its Sérsic index.
+            </>
+          }
+        >
+          In its own units an elliptical is a sphere, so its column along any ray is one function of two numbers,
+          tabled once for each index drawn and read with one lookup a pixel. Summed over the sky from afar it holds
+          the profile’s light to half a per cent, the light past 30 effective radii put back inside them. A disc’s
+          bulge is the same, in the disc’s box.
+          <Cite k={['devaucouleurs1948', 'prugnielSimien1997']} />
+        </Equation>
+        <Equation
+          title="A bulge’s share of the light"
+          code="web/src/core/localVolume.ts"
+          math={math(
+            row(
+              sub(mi('m'), mi('bulge')),
+              mo('−'),
+              sub(mi('m'), mi('T')),
+              mo('='),
+              mn('0.324'),
+              mi('x'),
+              mo('−'),
+              mn('0.054'),
+              sup(mi('x'), mn('2')),
+              mo('+'),
+              mn('0.0047'),
+              sup(mi('x'), mn('3')),
+              t(',  '),
+              mi('x'),
+              mo('='),
+              mi('T'),
+              mo('+'),
+              mn('5'),
+            ),
+          )}
+          symbols={<>T the de Vaucouleurs type; the bulge’s light 10<sup>−0.4 (m<sub>bulge</sub> − m<sub>T</sub>)</sup> of the whole.</>}
+        >
+          Fitted to the bulges and discs of galaxies of every type, taken apart.
+          <Cite k="simienDeVaucouleurs1986" />
+        </Equation>
+        <Equation
+          title="An inclination from an axis ratio"
+          code="web/src/core/localVolume.ts"
+          math={math(
+            row(
+              sup(fn('cos'), mn('2')),
+              mi('i'),
+              mo('='),
+              frac(
+                row(sup(mi('q'), mn('2')), mo('−'), subsup(mi('q'), mn('0'), mn('2'))),
+                row(mn('1'), mo('−'), subsup(mi('q'), mn('0'), mn('2'))),
+              ),
+            ),
+          )}
+          symbols={<>q the axis ratio on the sky; q<sub>0</sub> = 1/7.3, a disc this thick seen edge-on.</>}
+        >
+          A thin disc seen at inclination i is an ellipse of axis ratio cos i; one of thickness q<sub>0</sub>, never
+          thinner than that.
+          <Cite k="hubble1926" />
         </Equation>
       </>
     );

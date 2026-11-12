@@ -80,10 +80,29 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **40 million light years** since
- * the Local Group (G1); 400,000 since the Milky Way model (D2b), 3,000 before it.
+ * The farthest the camera may pull back from its focus, km: **200 million light years** since
+ * the Local Volume and the Virgo Cluster (G2); 40 million since the Local Group (G1); 400,000
+ * since the Milky Way model (D2b), 3,000 before it.
  *
- * Now set by the Local Group, by the same rule as everything before it: the farthest thing
+ * Now set by the Virgo Cluster, by the same rule as everything before it: the farthest thing
+ * worth seeing whole -- and here, seen with home. Its centre, M87, is 16.5 Mpc from the Sun,
+ * 54 million ly (Mei et al. 2007, ApJ 655, 144), and its members lie within some 2 Mpc of it on
+ * the sky, 6.5 million ly. With the camera focused on the Sun, as the breadcrumb's levels are,
+ * or on M87, the other end lies 54 million ly off the middle of the frame; from 200 million ly
+ * the cluster's far edge is atan(60.5 / 200) = 16.8 degrees out -- inside the frame's
+ * half-width, 23.1 degrees at 16:9 and 17.8 at 4:3 -- so the Local Group and the whole
+ * cluster are in one frame from either end, with the Local Volume's 11 Mpc between them. From
+ * 150 million ly the far edge, 21.9 degrees out, would leave a 4:3 screen.
+ *
+ * float32 at the camera is then 1.9e18 scene units out: a step of 1.4e11 units, 14.5 ly, 7e-8
+ * of the distance, as before. The depth buffer's range is logDepth.ts's. The galaxies'
+ * centres reach the GPU in parsecs from the Sun (LocalGroup.tsx), float32 holding the Virgo
+ * Cluster's to 2 pc: a pixel's angle from 4 kpc away, about as near as the smallest of them
+ * is framed.
+ *
+ * What the 40 million was, kept because its argument still holds at its own scale:
+ *
+ * Set by the Local Group, by the same rule as everything before it: the farthest thing
  * worth seeing whole. Its galaxies are bound within about a megaparsec of its centre of mass
  * (McConnachie 2012, AJ 144, 4, section 5), which lies between the Milky Way and Andromeda,
  * nearer Andromeda, the heavier; so its far edge is some 1.4 Mpc, 4.6 million ly, from the
@@ -122,7 +141,7 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 40e6 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 200e6 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Local Group puts the camera, km from the Sun: 8 million ly, looking
@@ -132,6 +151,25 @@ export const MAX_VIEW_DISTANCE_KM = 40e6 * LIGHT_YEAR_KM;
  * the Milky Way's satellites about the middle.
  */
 export const LOCAL_GROUP_FRAMING_KM = 8e6 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Local Volume puts the camera, km from the Sun: 100 million ly, over
+ * the supergalactic pole (supergalactic.ts LOCAL_VOLUME_VIEW). Its galaxies out to 11 Mpc lie
+ * mostly in the supergalactic plane, the Local Sheet, seen face-on from there: the frame's
+ * half-height, 13.5 degrees, is 24 million ly from here, 7.4 Mpc -- the groups about the Sculptor
+ * group, M81, Centaurus A, IC 342 and Canes Venatici -- and its half-width at 16:9 13 Mpc, the
+ * Local Volume's 11 Mpc edge, with the Virgo Cluster just past it on the right.
+ */
+export const LOCAL_VOLUME_FRAMING_KM = 100e6 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Virgo Cluster puts the camera, km from M87, its centre: 60 million
+ * ly, over the supergalactic pole as the Local Volume's (supergalactic.ts VIRGO_VIEW), the Sun
+ * to the left. The frame's half-height is 14.4 million ly from here, 4.4 Mpc, the cluster's
+ * members on the sky about it; its half-width at 16:9, 8 Mpc, holds their depth along our line
+ * of sight, which runs across the frame.
+ */
+export const VIRGO_FRAMING_KM = 60e6 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 180,000 ly. The view

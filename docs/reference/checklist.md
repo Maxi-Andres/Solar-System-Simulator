@@ -9,8 +9,8 @@ simulator should hold that the map does not show ("Beyond the map").
 - `[x]` in the app: drawn at its real place and findable, and where it is.
 - `[~]` partly: what is there and what is not.
 - `[ ]` missing, with the roadmap phase it belongs to: **Solar System**, **stars**,
-  **Milky Way**, **G2** (Local Volume and Virgo, in progress: the UNGC and EVCC catalogues,
-  which bring M51, M63, M64, M81, M82, M101, M104 and the Virgo Cluster), **G3** (Laniakea:
+  **Milky Way**, **G2** (Local Volume and Virgo: the UNGC and EVCC catalogues, which brought
+  M51, M63, M64, M81, M82, M101, M104 and the Virgo Cluster), **G3** (Laniakea:
   clusters, superclusters and voids out to about 1-2 billion light years) or **G4** (the
   observable universe: record-holders, the cosmic web, the CMB).
 
@@ -31,6 +31,8 @@ Where things come from:
   (`globular-clusters.json`, Baumgardt and Harris), supernova remnants, pulsars.
 - **Local Group**: McConnachie's catalogue (`local-group.json`) and the giants in
   `web/src/core/localGroup.ts`.
+- **Local Volume and Virgo**: the UNGC and the EVCC (`local-volume.json`,
+  `tools/src/localVolume/`), drawn by `web/src/core/localVolume.ts`.
 
 ## Near Earth and the atmosphere (to about 1,000 km)
 
@@ -282,20 +284,20 @@ their orbits, not bodies of their size as Eris and Makemake are.
 
 ## Nearby galaxies (to about 200 Mpc)
 
-- [~] Nearby galaxies: the Local Group's 145 (McConnachie's 144 and M31) are drawn; the Local Volume's are G2.
+- [x] Nearby galaxies: the Local Group's 145 (McConnachie's 144 and M31), the Local Volume's 764 (UNGC) and the Virgo Cluster's 999 (EVCC).
 - [ ] Hoag's Object: G3.
 - [ ] NGC 1300: about 19 Mpc, past the UNGC's 11 Mpc and not in Virgo. G3.
-- [ ] Sunflower Galaxy (M63): G2.
-- [ ] Black Eye (M64): G2.
-- [ ] Sombrero (M104): G2.
+- [x] Sunflower Galaxy (M63): Local Volume, `M63`.
+- [x] Black Eye (M64): Local Volume, `M64`.
+- [x] Sombrero (M104): Local Volume, `M104`.
 - [ ] Mayall's Object: G3.
-- [ ] Whirlpool (M51): G2.
-- [ ] Bode's Galaxy (M81): G2.
+- [x] Whirlpool (M51): Local Volume, `M51`.
+- [x] Bode's Galaxy (M81): Local Volume, `M81`.
 - [ ] Cartwheel Galaxy: G3.
-- [ ] Pinwheel Galaxy (M101): G2.
-- [ ] Cigar Galaxy (M82): G2.
+- [x] Pinwheel Galaxy (M101): Local Volume, `M101`.
+- [x] Cigar Galaxy (M82): Local Volume, `M82`.
 - [ ] Tadpole Galaxy: G3.
-- [ ] Virgo Cluster: G2 (EVCC).
+- [x] Virgo Cluster: the EVCC's certain members, on the breadcrumb (`Virgo Cluster`, framed on M87).
 
 ## Clusters, superclusters and voids (to about 1,000 Mpc)
 
@@ -442,14 +444,14 @@ What the map does not show but a realism-first simulator should. These are unche
 - [ ] The LMC's Tarantula Nebula, R136 and SN 1987A
 
 ### Local Volume (G2)
-- [ ] NGC 253, NGC 55, NGC 300, NGC 7793; NGC 3077, the Holmberg galaxies
-- [ ] Cen A's jets and lobes; M83; NGC 4945; Circinus
-- [ ] Maffei 1, Maffei 2, IC 342, Dwingeloo 1
-- [ ] M94 and Cloud-9, a starless dark cloud (2025)
-- [ ] The Local Void; the Leo Triplet; the M96 group; NGC 1052-DF2/DF4 [disputed]
+- [x] NGC 253, NGC 55, NGC 300, NGC 7793; NGC 3077, the Holmberg galaxies (NGC 55 and NGC 300 from McConnachie's catalogue)
+- [~] Cen A's jets and lobes; M83; NGC 4945; Circinus: the galaxies drawn (`NGC 5128`, `Circinus Galaxy`), not the jets and lobes
+- [x] Maffei 1, Maffei 2, IC 342, Dwingeloo 1
+- [~] M94 and Cloud-9, a starless dark cloud (2025): M94 drawn, not Cloud-9
+- [~] The Local Void; the Leo Triplet; the M96 group; NGC 1052-DF2/DF4 [disputed]: the M96 group and M66 drawn; not the void, the triplet as one, nor DF2/DF4
 
 ### Virgo to Laniakea (G2/G3)
-- [ ] M87 and M87*'s shadow and jet; Markarian's Chain; M84, M86, M49, M60
+- [~] M87 and M87*'s shadow and jet; Markarian's Chain; M84, M86, M49, M60: the galaxies drawn, the giant ellipticals by their own Sérsic fits; not M87*'s shadow or jet, nor the chain named
 - [ ] The Local Supercluster; the Great Attractor; the Norma cluster; the Vela supercluster
 - [ ] Clusters: Perseus and NGC 1275; Ophiuchus; Abell 1689; Abell 2029 and IC 1101; Abell 2218
 - [ ] Superclusters and walls: Perseus–Pisces, Pisces–Cetus, Hercules, the CfA2 Great Wall, the South Pole Wall
@@ -483,10 +485,10 @@ As of 12 November 2026, 244 labels:
 
 | Status | Count |
 | --- | --- |
-| `[x]` in the app | 142 |
-| `[~]` partly | 10 |
-| `[ ]` missing | 92 |
+| `[x]` in the app | 151 |
+| `[~]` partly | 9 |
+| `[ ]` missing | 84 |
 
-Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 8, G3 24, G4 20.
+Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 24, G4 20.
 
 The counts are the map's labels only, not "Beyond the map".
