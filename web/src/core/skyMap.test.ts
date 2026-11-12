@@ -394,6 +394,93 @@ describe('its light along a line of sight', () => {
     }
   });
 
+  it('draws all of its light from every side: the march summed over the sky is the volume’s own', async () => {
+    const map = await smc();
+    // A large-scale cloud 1.5 degrees across, and a compact knot on it 0.4 degrees across, read
+    // as points: what is checked is the steps, the box and the cone, not the maps' filtering.
+    const smooth = (xi: number, eta: number) => Math.exp(-(xi * xi + (eta / 1.3) ** 2) / (2 * 1.5 ** 2));
+    const fine = (xi: number, eta: number) => smooth(xi, eta) + 3 * Math.exp(-((xi - 1) ** 2 + (eta - 0.5) ** 2) / (2 * 0.4 ** 2));
+    // Its flux at a place, the sum of j dV / r^2 over the volume: over the sky from the Sun, a
+    // gnomonic grid, and along each line of sight, finely.
+    const own = (camera: Vec3, kind: 'old' | 'young') => {
+      const n = 64;
+      const half = map.halfDeg * DEG;
+      const texel = (2 * half) / n;
+      let sum = 0;
+      for (let j = 0; j < n; j += 1) {
+        for (let i = 0; i < n; i += 1) {
+          const xi = (((i + 0.5) / n) * 2 - 1) * half;
+          const eta = (((j + 0.5) / n) * 2 - 1) * half;
+          if (Math.hypot(xi, eta) >= half) continue;
+          const dOmega = (texel * texel) / (1 + xi * xi + eta * eta) ** 1.5;
+          const [om, os, ym, ys] = depthAt(map.depth, xi / DEG, eta / DEG);
+          const [mean, sigma] = kind === 'old' ? [om * 1000, os * 1000] : [ym * 1000, ys * 1000];
+          const [large, compact] = twoScales(fine(xi / DEG, eta / DEG), smooth(xi / DEG, eta / DEG));
+          const r = Math.hypot(xi, eta, 1);
+          for (const [column, s, shape] of [[large, sigma, map.depth[kind].shape], [compact, COMPACT_SIGMA_PC, 'gaussian']] as const) {
+            if (column <= 0) continue;
+            const steps = 80;
+            const dd = (16 * s) / steps;
+            for (let k = 0; k < steps; k += 1) {
+              const distance = mean - 8 * s + (k + 0.5) * dd;
+              const z = distance / r;
+              const r2 = (xi * z - camera.x) ** 2 + (eta * z - camera.y) ** 2 + (z - camera.z) ** 2;
+              sum += (column * depthDensity(distance, mean, s, shape) * distance * distance * dOmega * dd) / r2;
+            }
+          }
+        }
+      }
+      return sum;
+    };
+    // What the shader draws: its light along each ray, times the ray's solid angle, over a
+    // gnomonic grid 16 kpc either side of the cloud's centre at its distance -- each ray at a
+    // random place in its cell, so that a compact layer seen edge-on, 150 pc deep, is not
+    // aliased by the grid -- and a random jitter along it, as a pixel's.
+    const drawn = (camera: Vec3, kind: 'old' | 'young') => {
+      let seed = 12_345;
+      const random = () => (seed = (seed * 1_664_525 + 1_013_904_223) >>> 0) / 4_294_967_296;
+      const c = { x: -camera.x, y: -camera.y, z: map.referencePc - camera.z };
+      const length = Math.hypot(c.x, c.y, c.z);
+      const forward = { x: c.x / length, y: c.y / length, z: c.z / length };
+      const right = { x: forward.z, y: 0, z: -forward.x };
+      const rl = Math.hypot(right.x, right.z);
+      right.x /= rl;
+      right.z /= rl;
+      const up = {
+        x: forward.y * right.z - forward.z * right.y,
+        y: forward.z * right.x - forward.x * right.z,
+        z: forward.x * right.y - forward.y * right.x,
+      };
+      const n = 110;
+      const h = 16_000 / length;
+      let sum = 0;
+      for (let j = 0; j < n; j += 1) {
+        for (let i = 0; i < n; i += 1) {
+          const u = (((i + random()) / n) * 2 - 1) * h;
+          const v = (((j + random()) / n) * 2 - 1) * h;
+          const ray = { x: forward.x + u * right.x + v * up.x, y: forward.y + u * right.y + v * up.y, z: forward.z + u * right.z + v * up.z };
+          const l = Math.hypot(ray.x, ray.y, ray.z);
+          const d = { x: ray.x / l, y: ray.y / l, z: ray.z / l };
+          const span = marchSpan(map, camera, d);
+          if (span[1] <= span[0]) continue;
+          sum += (marched(map, fine, smooth, kind, camera, d, span, SKY_STEPS, random()) * ((2 * h) / n) ** 2) / l ** 3;
+        }
+      }
+      return sum;
+    };
+    // From Earth's side (0), turned about north, to behind the cloud (180), 20 kpc from its
+    // centre, and from beside it 35 kpc away: within 3 %, what 12 100 rays sample of it -- the
+    // mirror of the shader with its mipmaps, over the real maps, holds it to 2 % from every side,
+    // and the shader itself the mirror to 0.1 %.
+    for (const [distance, angleDeg] of [[20_000, 0], [20_000, 45], [20_000, 90], [20_000, 180], [35_000, 90]] as const) {
+      const a = angleDeg * DEG;
+      const camera = { x: distance * Math.sin(a), y: 0, z: map.referencePc - distance * Math.cos(a) };
+      for (const kind of ['old', 'young'] as const) {
+        expect(Math.abs(drawn(camera, kind) / own(camera, kind) - 1)).toBeLessThan(0.03);
+      }
+    }
+  }, 30_000);
+
   it('draws a compact thing from beside the cloud as deep as COMPACT_SIGMA_PC, not as the population', async () => {
     const real = await smc();
     // The depth even across the sky, so the layer is flat; a thing 0.02 degrees (22 pc) wide at
