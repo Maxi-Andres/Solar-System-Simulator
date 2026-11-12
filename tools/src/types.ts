@@ -1977,3 +1977,62 @@ export interface LocalGroupCatalog {
   readonly pmRaMasYr: readonly (number | null)[];
   readonly pmDecMasYr: readonly (number | null)[];
 }
+
+/**
+ * Beyond the Local Group (G2): the Local Volume out to ~11 Mpc, from Karachentsev, Makarov &
+ * Kaisina's Updated Nearby Galaxy Catalog (2013, AJ 145, 101), and the Virgo Cluster's
+ * members, from the Extended Virgo Cluster Catalog (Kim et al. 2014, ApJS 215, 22) -- each
+ * less the galaxies McConnachie's catalogue already gives (local-group.json). One entry a
+ * galaxy, columns as arrays; a value not measured is null. tools/src/localVolume/ says how
+ * each column is made.
+ */
+export interface LocalVolumeCatalog {
+  readonly sources: { readonly [key: string]: { readonly url: string; readonly queriedAt: string } };
+  readonly frame: string;
+  readonly count: number;
+  /** Which catalogue it comes from. */
+  readonly sample: readonly ('ungc' | 'evcc')[];
+  /** What it is called here ("NGC 253", "M81", "VCC 1226"), and its other names. */
+  readonly name: readonly string[];
+  readonly otherNames: readonly (readonly string[])[];
+  /** Centre, J2000, degrees; and about the Sun, scene frame, parsecs. */
+  readonly raDeg: readonly number[];
+  readonly decDeg: readonly number[];
+  readonly x: readonly number[];
+  readonly y: readonly number[];
+  readonly z: readonly number[];
+  /** Distance, pc, and its uncertainty (one sigma), pc, where given. */
+  readonly distancePc: readonly number[];
+  readonly distanceErrorPc: readonly (number | null)[];
+  /**
+   * How it was measured, the catalogue's code: "TRGB", "Cep", "SBF", "TF", "mem" (its group's),
+   * "h" (from its velocity) -- or "cluster" for a Virgo member with no distance of its own,
+   * placed by the cluster's measured depth (distanceEstimated true).
+   */
+  readonly distanceMethod: readonly string[];
+  readonly distanceEstimated: readonly boolean[];
+  /** Apparent V, total, corrected for the Milky Way's extinction in front; and B-V. */
+  readonly vMag: readonly (number | null)[];
+  readonly colourIndex: readonly (number | null)[];
+  readonly colourEstimated: readonly boolean[];
+  /** Morphology: de Vaucouleurs T type, and the catalogue's class text ("Sph", "dE,N", "Sc"). */
+  readonly tType: readonly (number | null)[];
+  readonly morphology: readonly (string | null)[];
+  /**
+   * Size on the sky: the Holmberg (26.5 mag/arcsec^2 in B) major diameter, arcminutes, where the
+   * catalogue gives it (UNGC); the half-light radius on the major axis, arcminutes, where it does
+   * (EVCC's r band, or derived -- halfLightEstimated).
+   */
+  readonly diameterArcmin: readonly (number | null)[];
+  readonly halfLightArcmin: readonly (number | null)[];
+  readonly halfLightEstimated: readonly boolean[];
+  /** Axis ratio b/a on the sky, inclination (0 face-on), and the major axis's position angle, degrees east of north. */
+  readonly axisRatio: readonly (number | null)[];
+  readonly inclinationDeg: readonly (number | null)[];
+  readonly positionAngleDeg: readonly (number | null)[];
+  /** Heliocentric radial velocity, km/s; log10 HI mass, solar masses. */
+  readonly radialVelocityKmS: readonly (number | null)[];
+  readonly logHiMassSun: readonly (number | null)[];
+  /** The group it belongs to, where known ("M81", "Cen A", "Virgo A", "Virgo W"). */
+  readonly group: readonly (string | null)[];
+}

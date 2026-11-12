@@ -10,6 +10,7 @@ import {
   PULSARS_FILE,
   GLOBULAR_CLUSTERS_FILE,
   LOCAL_GROUP_FILE,
+  LOCAL_VOLUME_FILE,
   SATELLITES_DIR,
   SATELLITES_INFO_FILE,
   STARS3D_DIR,
@@ -38,6 +39,7 @@ import type {
   PulsarCatalog,
   GlobularClusterCatalog,
   LocalGroupCatalog,
+  LocalVolumeCatalog,
   Seam,
   SmallMoonBundle,
   StarCatalog,
@@ -320,4 +322,14 @@ export async function writeGlobularClusters(catalog: GlobularClusterCatalog, out
 export async function writeLocalGroup(catalog: LocalGroupCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   await writeCompactJson(join(outputDir, LOCAL_GROUP_FILE), catalog);
+}
+
+/**
+ * The Local Volume's galaxies and the Virgo Cluster's, as local-volume.json
+ * (LocalVolumeCatalog): about 1,600 entries, a few hundred KB. Takes the directory, because
+ * `pnpm fetch:local-volume` regenerates it alone.
+ */
+export async function writeLocalVolume(catalog: LocalVolumeCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  await writeCompactJson(join(outputDir, LOCAL_VOLUME_FILE), catalog);
 }

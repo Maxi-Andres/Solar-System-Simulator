@@ -705,3 +705,54 @@ export const NEARBY_GALAXIES_VERSION = 'January 2021';
 
 /** The output file. */
 export const LOCAL_GROUP_FILE = 'local-group.json';
+
+/**
+ * Beyond the Local Group (G2): the Local Volume and the Virgo Cluster. Every table is read
+ * from VizieR as the tab-separated text its ASU interface serves, from the mirror at the CfA
+ * first -- on 2026-11-12 the CDS host answered 404 to these queries while the CfA's answered
+ * in a second -- and from Strasbourg when the CfA is down.
+ */
+export const VIZIER_ASU_MIRRORS: readonly string[] = [
+  'https://vizier.cfa.harvard.edu/viz-bin/asu-tsv',
+  'https://vizier.cds.unistra.fr/viz-bin/asu-tsv',
+];
+
+/**
+ * The Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013, AJ 145, 101;
+ * VizieR J/AJ/145/101): 869 galaxies within about 11 Mpc, or with a Local Group velocity
+ * under 600 km/s -- its "catalog" table (one row a galaxy: centre, Holmberg diameter, axis
+ * ratio, B magnitude and the B extinction in front, T type, velocity, adopted distance and
+ * how it was measured, HI mass, main disturber and tidal index) and its "table6" (each
+ * distance's modulus, error and method).
+ */
+export const UNGC_CATALOG_TABLE = 'J/AJ/145/101/catalog';
+export const UNGC_DISTANCE_TABLE = 'J/AJ/145/101/table6';
+
+/**
+ * The Extended Virgo Cluster Catalog (Kim et al. 2014, ApJS 215, 22; VizieR J/ApJS/215/22):
+ * its table2, 1,589 galaxies with cz < 3,000 km/s over 725 square degrees about Virgo, each
+ * with SDSS ugriz photometry and an r-band half-light radius measured by the authors, and a
+ * membership from a spherical infall model.
+ */
+export const EVCC_TABLE = 'J/ApJS/215/22/table2';
+
+/**
+ * The ACS Virgo Cluster Survey's surface brightness fluctuation distances (Mei et al. 2007,
+ * ApJ 655, 144; VizieR J/ApJ/655/144): 84 early-type members, 0.07 mag (0.5 Mpc) each.
+ */
+export const MEI_SBF_TABLE = 'J/ApJ/655/144';
+
+/**
+ * HyperLEDA (Makarov, Prugniel, Terekhova, Courtois & Vauglin 2014, A&A 570, A13), for the
+ * position angles and the axis ratios neither catalogue gives: its SQL interface, fG.cgi.
+ * leda.univ-lyon1.fr redirects to the Observatoire de Haute-Provence's atlas.obs-hp.fr,
+ * which answered over plain HTTP on 2026-11-12 and not over HTTPS; both are tried. Optional:
+ * a run that cannot reach it publishes the galaxies without position angles (null).
+ */
+export const HYPERLEDA_SQL_URLS: readonly string[] = [
+  'http://atlas.obs-hp.fr/hyperleda/fG.cgi',
+  'http://leda.univ-lyon1.fr/fG.cgi',
+];
+
+/** The output file. */
+export const LOCAL_VOLUME_FILE = 'local-volume.json';
