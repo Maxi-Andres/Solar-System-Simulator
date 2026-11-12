@@ -6,6 +6,8 @@ The observable universe on a logarithmic scale, from the ground to the Big Bang:
 simulator should hold at the least. Every object labelled on it is a target, drawn at its real
 place and size.
 
+[checklist.md](checklist.md) lists every label on it and whether the simulator has it yet.
+
 It is an illustration, not a map. The distance up the page is logarithmic and only roughly
 true; the objects are enlarged so their shapes show, and they are placed for the composition,
 not where they lie on the sky. Some labels have aged:
