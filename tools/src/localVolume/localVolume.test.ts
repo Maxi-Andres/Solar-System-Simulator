@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { LocalGroupCatalog } from '../types.ts';
 import { asuNumber, parseAsuTsv } from './asu.ts';
-import { boxClause, matchLeda, parseLedaCsv } from './hyperleda.ts';
+import { boxArcmin, boxClause, ledaNames, matchLeda, matchLedaByName, nameClause, parseLedaCsv } from './hyperleda.ts';
 import {
   buildLocalVolume,
   circularHalfLightFraction,
+  describeLocalVolume,
   evccName,
   holmbergHalfLightRatio,
   johnsonFromSdss,
+  POSITION_ANGLES,
   selectEvcc,
   selectUngc,
   templateColour,
@@ -135,26 +137,103 @@ describe('HyperLEDA', () => {
 
   it('takes the nearest galaxy of the right size, never a small one beside it', () => {
     const objects = parseLedaCsv(csv);
-    const m81 = matchLeda({ raDeg: 148.8882, decDeg: 69.0653, sizeArcmin: 26.9 }, objects);
+    const m81 = matchLeda({ raDeg: 148.8882, decDeg: 69.0653, sizeArcmin: 26.9, names: [] }, objects);
     expect(m81?.pgc).toBe(28630);
     expect(m81?.positionAngleDeg).toBe(157);
     expect(m81?.axisRatio).toBeCloseTo(10 ** -0.283, 6);
     // A dwarf of 0.3' 2.5" from M81's centre: HyperLEDA's M81 is far too big to be it; the
     // small galaxy at the dwarf's place is of its size, so it is taken.
-    const dwarf = matchLeda({ raDeg: 148.88775, decDeg: 69.066, sizeArcmin: 0.3 }, objects);
+    const dwarf = matchLeda({ raDeg: 148.88775, decDeg: 69.066, sizeArcmin: 0.3, names: [] }, objects);
     expect(dwarf?.pgc).toBe(999);
-    expect(matchLeda({ raDeg: 10, decDeg: 10, sizeArcmin: 1 }, objects)).toBeNull();
+    expect(matchLeda({ raDeg: 10, decDeg: 10, sizeArcmin: 1, names: [] }, objects)).toBeNull();
   });
 
   it('asks for a box about each galaxy, split where it crosses 0h', () => {
-    const clause = boxClause([{ raDeg: 0.001, decDeg: 0, sizeArcmin: null }]);
+    const clause = boxClause([{ raDeg: 0.001, decDeg: 0, sizeArcmin: null, names: [] }]);
     expect(clause).toMatch(/al2000 >= 23\.99\d+ or al2000 <= 0\.00\d+/);
+  });
+
+  // HyperLEDA's own records about M51 (NGC 5194 and NGC 5195) and an SDSS knot beside it,
+  // with the UNGC's M51 centre, 2.4' from NGC 5194's, between the two.
+  const m51Field = parseLedaCsv(
+    [
+      'objname;pgc;objtype;al2000;de2000;pa;logr25;logd25;incl',
+      'SDSSJ132940.44+471440.3;1;G ;13.4945667;47.2445278;;;;',
+      'NGC5195;46938;G ;13.4999;47.2661;79;0.101;1.74;',
+      'NGC5194;47404;G ;13.4979698;47.195151;163;0.07;2.137;32.6',
+    ].join('\n'),
+  );
+  const m51 = { raDeg: 202.46958, decDeg: 47.23444, sizeArcmin: 15.85, names: ['M51', 'NGC 5194', 'Whirlpool Galaxy'] };
+
+  it("widens a large galaxy's box, and there takes the one closest to it in size", () => {
+    expect(boxArcmin({ raDeg: 0, decDeg: 0, sizeArcmin: 2, names: [] })).toBe(1);
+    expect(boxArcmin(m51)).toBeCloseTo(3.17, 2);
+    expect(boxArcmin({ raDeg: 0, decDeg: 0, sizeArcmin: 30.2, names: [] })).toBe(5);
+    expect(boxClause([m51])).toMatch(/de2000 between 47\.1816 and 47\.2873/);
+    // NGC 5195 is as near as NGC 5194, but a third of M51's size.
+    expect(matchLeda(m51, m51Field)?.pgc).toBe(47404);
+    // An arcminute's box would have found nothing: the knot has no D25, and is not at the centre.
+    expect(matchLeda({ ...m51, sizeArcmin: 4 }, m51Field)).toBeNull();
+  });
+
+  it("takes the galaxy at the very centre whatever its size, and a '?' only of the right size", () => {
+    const field = parseLedaCsv(
+      [
+        'objname;pgc;objtype;al2000;de2000;pa;logr25;logd25;incl',
+        // M89: HyperLEDA's D25 8.1', the EVCC's three R50 1.5'.
+        'NGC4552;41968;G ;12.594416;12.556258;;0.007;1.91;',
+        // NGC 2784, filed as "?".
+        'NGC2784;25950;? ;9.2054014;-24.1725975;72.77;0.417;1.689;90',
+        // A "?" beside a dwarf, ten times its size.
+        'X1;7;? ;9.0;-10.001;30;0.2;1.0;',
+      ].join('\n'),
+    );
+    expect(matchLeda({ raDeg: 188.9164, decDeg: 12.5563, sizeArcmin: 1.49, names: [] }, field)?.pgc).toBe(41968);
+    // 0.3' off and still five times too big: not taken.
+    expect(matchLeda({ raDeg: 188.9164, decDeg: 12.5613, sizeArcmin: 1.49, names: [] }, field)).toBeNull();
+    const n2784 = matchLeda({ raDeg: 138.08083, decDeg: -24.17167, sizeArcmin: 5.5, names: [] }, field);
+    expect(n2784?.pgc).toBe(25950);
+    expect(n2784?.positionAngleDeg).toBeCloseTo(72.77, 2);
+    expect(matchLeda({ raDeg: 135, decDeg: -10, sizeArcmin: 0.1, names: [] }, field)).toBeNull();
+  });
+
+  it("writes a galaxy's names as HyperLEDA does, and asks for them", () => {
+    expect(ledaNames(['M87', 'NGC 4486', 'Virgo A', 'VCC 1316'])).toEqual(['NGC4486']);
+    expect(ledaNames(['NGC 4486A', 'IC 342', 'UGC 8638', 'ESO 270-17', 'PGC 47658', 'UGCA 361', 'KK 208'])).toEqual([
+      'NGC4486A',
+      'IC0342',
+      'UGC08638',
+      'ESO270-017',
+      'PGC047658',
+    ]);
+    expect(ledaNames(['Dwingeloo 1'])).toEqual(['PGC100170']);
+    expect(nameClause(['NGC0628', 'ESO270-017'])).toBe("objname in ('NGC0628','ESO270-017')");
+    expect(() => nameClause(["NGC0628') or (1=1"])).toThrow(/Not a HyperLEDA name/);
+  });
+
+  it('takes a galaxy found by name, whatever its size, if it is near the centre', () => {
+    const field = parseLedaCsv(
+      [
+        'objname;pgc;objtype;al2000;de2000;pa;logr25;logd25;incl',
+        'PGC100170;100170;G ;2.9477205;58.9115793;106.69;0.41;0.685;71.11',
+        'NGC0628;5974;G ;1.6115;15.7836;;0.025;1.995;',
+      ].join('\n'),
+    );
+    const dw1 = { raDeg: 44.23375, decDeg: 58.91167, sizeArcmin: 2.0, names: ['Dwingeloo 1'] };
+    // 0.56' off and a quarter of the size: the sky does not take it; the name does.
+    expect(matchLeda(dw1, field)).toBeNull();
+    expect(matchLedaByName(dw1, field)?.positionAngleDeg).toBeCloseTo(106.69, 2);
+    // Not its name, or too far from its centre: nothing.
+    expect(matchLedaByName({ ...dw1, names: ['M74', 'NGC 628'] }, field)?.pgc).toBeUndefined();
+    expect(matchLedaByName({ ...dw1, decDeg: 59.0 }, field)).toBeNull();
   });
 });
 
 describe('names', () => {
   it("spaces the UNGC's, Messier's first", () => {
-    expect(ungcName('NGC0253')).toEqual({ name: 'NGC 253', otherNames: ['Sculptor Galaxy'] });
+    expect(ungcName('NGC0253')).toEqual({ name: 'NGC 253', otherNames: ['Sculptor Galaxy', 'Silver Coin Galaxy', 'Silver Dollar Galaxy'] });
+    expect(ungcName('NGC5128').otherNames).toEqual(['Centaurus A', 'Cen A']);
+    expect(ungcName('IC0342')).toEqual({ name: 'IC 342', otherNames: ['Hidden Galaxy'] });
     expect(ungcName('MESSIER081')).toEqual({ name: 'M81', otherNames: ['NGC 3031', "Bode's Galaxy"] });
     expect(ungcName('NGC5236').name).toBe('M83');
     expect(ungcName('UGCA086').name).toBe('UGCA 86');
@@ -168,7 +247,7 @@ describe('names', () => {
   });
 
   it("names an EVCC galaxy by NGC (or Messier), VCC, else EVCC", () => {
-    expect(evccName(786, 1316, '4486')).toEqual({ name: 'M87', otherNames: ['NGC 4486', 'Virgo A', 'VCC 1316', 'EVCC 786'] });
+    expect(evccName(786, 1316, '4486')).toEqual({ name: 'M87', otherNames: ['NGC 4486', 'Virgo A', 'Vir A', 'VCC 1316', 'EVCC 786'] });
     expect(evccName(3, null, '3810')).toEqual({ name: 'NGC 3810', otherNames: ['EVCC 3'] });
     expect(evccName(1000, 1500, '')).toEqual({ name: 'VCC 1500', otherNames: ['EVCC 1000'] });
     expect(evccName(2001, null, '')).toEqual({ name: 'EVCC 2001', otherNames: [] });
@@ -324,5 +403,28 @@ describe('the Local Volume', () => {
     expect(catalog.halfLightArcmin[m87 + 1]).toBeCloseTo(9 / 60, 3);
     expect(catalog.axisRatio[m87 + 1]).toBeNull();
     expect(catalog.group[0]).toBe('M81');
+  });
+
+  it("gives a bright galaxy HyperLEDA gives no position angle the literature's, and HyperLEDA's first", () => {
+    const ungcGalaxies = withHolmbergHalfLight(ungc.galaxies, 0.5);
+    const faceOn = { pgc: 41361, name: 'NGC4486', separationArcmin: 0, positionAngleDeg: null, axisRatio: 0.94, inclinationDeg: 20 };
+    const build = (ledaEvcc: Parameters<typeof buildLocalVolume>[0]['ledaEvcc']) =>
+      buildLocalVolume({ ungc: ungcGalaxies, evcc: evcc.galaxies, ledaUngc: null, ledaEvcc, sources: {} });
+    const catalog = build([faceOn, null]);
+    const m87 = catalog.name.indexOf('M87');
+    // M87: the 2MASS Large Galaxy Atlas's -22.5 degrees, made 0-180; HyperLEDA's axis ratio kept.
+    expect(catalog.positionAngleDeg[m87]).toBe(POSITION_ANGLES['M87']!.deg);
+    expect(catalog.positionAngleDeg[m87]).toBe(157.5);
+    expect(catalog.axisRatio[m87]).toBe(0.94);
+    // With HyperLEDA unreached, still the literature's; with HyperLEDA's own, HyperLEDA's.
+    expect(build(null).positionAngleDeg[m87]).toBe(157.5);
+    expect(build([{ ...faceOn, positionAngleDeg: 12 }, null]).positionAngleDeg[m87]).toBe(12);
+    // A galaxy not in the table stays unoriented.
+    expect(catalog.positionAngleDeg[m87 + 1]).toBeNull();
+    for (const { deg } of Object.values(POSITION_ANGLES)) {
+      expect(deg).toBeGreaterThanOrEqual(0);
+      expect(deg).toBeLessThan(180);
+    }
+    expect(describeLocalVolume(catalog).some((line) => /not in the catalogue, so not used: .*Maffei 2/.test(line))).toBe(true);
   });
 });

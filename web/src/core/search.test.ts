@@ -1,7 +1,7 @@
 import type { BodyDefinition } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
-import { describeBody, layersFor, normalizeName, searchBodies } from './search.ts';
+import { describeBody, layersFor, mergeBodiesAndCatalogues, normalizeName, searchBodies } from './search.ts';
 import { tagSatelliteBody, untagSatelliteBody } from './satelliteGroups.ts';
 
 /** Just enough of a body for the search; the rest is never read. */
@@ -157,5 +157,32 @@ describe('searchBodies, Earth satellites', () => {
       untagSatelliteBody('iss');
       untagSatelliteBody('hubble');
     }
+  });
+});
+
+describe('bodies and catalogues together', () => {
+  it('says which bodies are named the query whole', () => {
+    expect(searchBodies(BODIES, '16 psyche').find((result) => result.body.id === '16-psyche')?.exact).toBe(true);
+    expect(searchBodies(BODIES, 'psyche').find((result) => result.body.id === '16-psyche')?.exact).toBe(false);
+    expect(searchBodies(BODIES, 'S 2004 S12')[0]?.exact).toBe(true);
+  });
+
+  it('puts a catalogue entry named exactly the query before a body merely like it', () => {
+    const merged = mergeBodiesAndCatalogues(
+      [
+        { item: 'Psyche (spacecraft)', exact: true },
+        { item: '16 Psyche', exact: false },
+      ],
+      [
+        { item: 'a star whose designation contains it', exact: false },
+        { item: 'a galaxy one of whose names it is', exact: true },
+      ],
+    );
+    expect(merged).toEqual([
+      'Psyche (spacecraft)',
+      'a galaxy one of whose names it is',
+      '16 Psyche',
+      'a star whose designation contains it',
+    ]);
   });
 });

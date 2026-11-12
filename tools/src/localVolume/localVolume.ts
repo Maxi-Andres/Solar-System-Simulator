@@ -36,7 +36,9 @@ import { type LedaMatch, type LedaProbe, separationArcmin } from './hyperleda.ts
  * - **HyperLEDA** (Makarov et al. 2014, A&A 570, A13) for the position angle of each, and the
  *   EVCC's axis ratios and inclinations (hyperleda.ts). Where it has no match, or cannot be
  *   reached, the position angle is null (and for the EVCC the axis ratio and inclination too);
- *   the renderer decides how to draw a galaxy whose orientation is not known.
+ *   the renderer decides how to draw a galaxy whose orientation is not known. For the
+ *   brightest it gives no position angle, RC3's or the 2MASS Large Galaxy Atlas's
+ *   (POSITION_ANGLES).
  *
  * ## Who is left out
  *
@@ -81,7 +83,8 @@ import { type LedaMatch, type LedaProbe, separationArcmin } from './hyperleda.ts
  *   of the Holmberg radius, measured on the galaxies both catalogues hold
  *   (holmbergHalfLightRatio), halfLightEstimated.
  * - **Axis ratio**: the UNGC's b/a; the EVCC's from HyperLEDA's log r25. **Inclination**: the
- *   UNGC's; the EVCC's HyperLEDA's. **Position angle**: HyperLEDA's for both.
+ *   UNGC's; the EVCC's HyperLEDA's. **Position angle**: HyperLEDA's for both; where it gives
+ *   none, for the brightest, RC3's or the 2MASS Large Galaxy Atlas's (POSITION_ANGLES).
  * - **Group**: UNGC, by its tidal links (ungcGroups): named for the most luminous galaxy it is
  *   bound to, through its main disturber and theirs; null in the field. EVCC: the Virgo
  *   substructure it lies in (virgoPlacement), or "Virgo" for the cluster's outskirts.
@@ -103,22 +106,35 @@ const NGC_BY_MESSIER: Readonly<Record<number, number>> = Object.fromEntries(
   Object.entries(MESSIER_BY_NGC).map(([ngc, m]) => [m, Number(ngc)]),
 );
 
-/** The names the brightest are known by, by NGC number. */
-const POPULAR: Readonly<Record<number, readonly string[]>> = {
-  253: ['Sculptor Galaxy'],
-  3031: ["Bode's Galaxy"],
-  3034: ['Cigar Galaxy'],
-  4486: ['Virgo A'],
-  4565: ['Needle Galaxy'],
-  4594: ['Sombrero Galaxy'],
-  4631: ['Whale Galaxy'],
-  4826: ['Black Eye Galaxy'],
-  5055: ['Sunflower Galaxy'],
-  5128: ['Centaurus A'],
-  5194: ['Whirlpool Galaxy'],
-  5236: ['Southern Pinwheel Galaxy'],
-  5457: ['Pinwheel Galaxy'],
-  6946: ['Fireworks Galaxy'],
+/**
+ * The names the brightest are known by, by their NGC or IC name -- the common names the
+ * literature and the observing guides use (each a Messier object's too) -- and the radio
+ * sources' short names, Cen A and Vir A, by which they are as often looked for.
+ */
+const POPULAR: Readonly<Record<string, readonly string[]>> = {
+  'NGC 253': ['Sculptor Galaxy', 'Silver Coin Galaxy', 'Silver Dollar Galaxy'],
+  'NGC 2683': ['UFO Galaxy'],
+  'NGC 3031': ["Bode's Galaxy"],
+  'NGC 3034': ['Cigar Galaxy'],
+  'NGC 3115': ['Spindle Galaxy'],
+  'NGC 4486': ['Virgo A', 'Vir A'],
+  'NGC 4490': ['Cocoon Galaxy'],
+  'NGC 4565': ['Needle Galaxy'],
+  'NGC 4567': ['Siamese Twins'],
+  'NGC 4568': ['Siamese Twins'],
+  'NGC 4594': ['Sombrero Galaxy'],
+  'NGC 4631': ['Whale Galaxy'],
+  'NGC 4656': ['Hockey Stick Galaxy'],
+  'NGC 4736': ["Cat's Eye Galaxy", "Croc's Eye Galaxy"],
+  'NGC 4826': ['Black Eye Galaxy', 'Sleeping Beauty Galaxy', 'Evil Eye Galaxy'],
+  'NGC 5055': ['Sunflower Galaxy'],
+  'NGC 5128': ['Centaurus A', 'Cen A'],
+  'NGC 5194': ['Whirlpool Galaxy'],
+  'NGC 5236': ['Southern Pinwheel Galaxy'],
+  'NGC 5457': ['Pinwheel Galaxy'],
+  'NGC 6946': ['Fireworks Galaxy'],
+  'IC 342': ['Hidden Galaxy'],
+  'IC 2574': ["Coddington's Nebula"],
 };
 
 /** UNGC names that are not a designation and a number. */
@@ -142,7 +158,7 @@ export function ungcName(catalogueName: string): { name: string; otherNames: str
   if (messier !== null) {
     const m = Number(messier[1]);
     const ngc = NGC_BY_MESSIER[m];
-    return { name: `M${m}`, otherNames: ngc === undefined ? [] : [`NGC ${ngc}`, ...(POPULAR[ngc] ?? [])] };
+    return { name: `M${m}`, otherNames: ngc === undefined ? [] : [`NGC ${ngc}`, ...(POPULAR[`NGC ${ngc}`] ?? [])] };
   }
   const spelled = SPELLED[raw];
   if (spelled !== undefined) {
@@ -153,14 +169,15 @@ export function ungcName(catalogueName: string): { name: string; otherNames: str
     const n = Number(ngc[1]);
     const m = MESSIER_BY_NGC[n];
     return m === undefined
-      ? { name: `NGC ${n}`, otherNames: [...(POPULAR[n] ?? [])] }
-      : { name: `M${m}`, otherNames: [`NGC ${n}`, ...(POPULAR[n] ?? [])] };
+      ? { name: `NGC ${n}`, otherNames: [...(POPULAR[`NGC ${n}`] ?? [])] }
+      : { name: `M${m}`, otherNames: [`NGC ${n}`, ...(POPULAR[`NGC ${n}`] ?? [])] };
   }
   // A designation then a number: padding zeros off the first number, the rest as written.
   const designation = /^(UGCA|UGC|IC|DDO|KDG|KKH|KKR|KKs|KK|PGC|AGC|ESO|VCC|MCG|GR|LeG|BK|FS|MRK)\s*(\d+)(.*)$/.exec(raw);
   if (designation !== null) {
     const prefix = designation[1] === 'MRK' ? 'Mrk' : designation[1]!;
-    return { name: `${prefix} ${Number(designation[2])}${designation[3]}`, otherNames: [] };
+    const name = `${prefix} ${Number(designation[2])}${designation[3]}`;
+    return { name, otherNames: [...(POPULAR[name] ?? [])] };
   }
   // "[CKT2009]d0926+70": the bracketed reference is the catalogue's, not the name.
   return { name: raw.replace(/^\[[^\]]+\]\s*/, ''), otherNames: [] };
@@ -181,7 +198,7 @@ export function evccName(evcc: number, vcc: number | null, ngcText: string): { n
       name = `M${m}`;
       others.push(ngcName);
     }
-    others.push(...(ngc[2] === '' ? (POPULAR[n] ?? []) : []));
+    others.push(...(ngc[2] === '' ? (POPULAR[`NGC ${n}`] ?? []) : []));
   }
   if (vcc !== null) {
     if (name === null) {
@@ -826,11 +843,48 @@ export function withHolmbergHalfLight(galaxies: readonly Galaxy[], ratio: number
 }
 
 export function ledaProbe(galaxy: Galaxy): LedaProbe {
-  return { raDeg: galaxy.raDeg, decDeg: galaxy.decDeg, sizeArcmin: galaxy.ledaSizeArcmin };
+  return { raDeg: galaxy.raDeg, decDeg: galaxy.decDeg, sizeArcmin: galaxy.ledaSizeArcmin, names: [galaxy.name, ...galaxy.otherNames] };
 }
 
 // ---------------------------------------------------------------------------------------
 // The catalogue
+
+/**
+ * Position angles, degrees east of north, for the brightest galaxies HyperLEDA gives none
+ * (hyperleda.ts): every one brighter than V 10.5 left without, nearly all of them nearly face
+ * on, where the major axis is ill-defined and measurements disagree (M74's: RC3 25, the LGA 70)
+ * -- so the shape it gives a nearly round galaxy is slight either way, but the direction is a
+ * measured one. Taken, in this order, from:
+ *
+ * - **RC3**, the Third Reference Catalogue of Bright Galaxies (de Vaucouleurs et al. 1991;
+ *   VizieR VII/155, column PA): the D25 isophote's, in B, as HyperLEDA's are.
+ * - **The 2MASS Large Galaxy Atlas** (Jarrett et al. 2003, AJ 125, 525; IRSA's lga_v2, column
+ *   sup_pa): the major axis of the co-added J+H+Ks image, which sees through the dust that
+ *   hides Maffei 2 in B. Its angles run -90 to 90; made 0-180 here.
+ *
+ * Each found by the galaxy's position (within 2' in RC3, 3' in the LGA), on 2026-11-12. NGC 404
+ * and IC 5332 are left without: the LGA finds them round (b/a 1.00), with no major axis to
+ * measure, and RC3 gives none; HIZSS008, Cas 1 and NGC 4624 are in neither. A name here the
+ * catalogue no longer holds is reported by describeLocalVolume.
+ */
+export const POSITION_ANGLES: Readonly<Record<string, { readonly deg: number; readonly source: 'RC3' | '2MASS LGA' }>> = {
+  'IC 342': { deg: 10, source: '2MASS LGA' },
+  'Maffei 2': { deg: 30, source: '2MASS LGA' },
+  M83: { deg: 47.5, source: '2MASS LGA' },
+  'Maffei 1': { deg: 100, source: 'RC3' },
+  'NGC 6946': { deg: 70, source: '2MASS LGA' },
+  M101: { deg: 28.5, source: '2MASS LGA' },
+  M87: { deg: 157.5, source: '2MASS LGA' },
+  M74: { deg: 25, source: 'RC3' },
+  M85: { deg: 10, source: '2MASS LGA' },
+  M100: { deg: 30, source: 'RC3' },
+  'NGC 5068': { deg: 110, source: 'RC3' },
+  'NGC 4214': { deg: 120, source: '2MASS LGA' },
+  'NGC 3344': { deg: 172.5, source: '2MASS LGA' },
+  'NGC 3184': { deg: 135, source: 'RC3' },
+  M99: { deg: 28.5, source: '2MASS LGA' },
+  M89: { deg: 150, source: '2MASS LGA' },
+};
 
 const round = (value: number, digits: number): number => Number(value.toFixed(digits));
 const roundOrNull = (value: number | null, digits: number): number | null => (value === null ? null : round(value, digits));
@@ -849,15 +903,16 @@ export function buildLocalVolume(parts: LocalVolumeParts): LocalVolumeCatalog {
     ...parts.ungc.map((galaxy, i) => ({ galaxy, leda: parts.ledaUngc?.[i] ?? null })),
     ...parts.evcc.map((galaxy, i) => ({ galaxy, leda: parts.ledaEvcc?.[i] ?? null })),
   ].map(({ galaxy, leda }) => {
+    const positionAngleDeg = leda?.positionAngleDeg ?? POSITION_ANGLES[galaxy.name]?.deg ?? null;
     if (galaxy.sample === 'ungc') {
-      return { ...galaxy, positionAngleDeg: leda?.positionAngleDeg ?? null };
+      return { ...galaxy, positionAngleDeg };
     }
     const axisRatio = leda?.axisRatio ?? null;
     return {
       ...galaxy,
       axisRatio,
       inclinationDeg: leda?.inclinationDeg ?? null,
-      positionAngleDeg: leda?.positionAngleDeg ?? null,
+      positionAngleDeg,
       halfLightArcmin:
         galaxy.halfLightArcmin === null || axisRatio === null ? galaxy.halfLightArcmin : galaxy.halfLightArcmin / circularHalfLightFraction(axisRatio),
     };
@@ -935,6 +990,13 @@ export function describeLocalVolume(catalog: LocalVolumeCatalog): string[] {
     .map(({ v, i }) => `${catalog.name[i]} ${v.toFixed(2)}`)
     .join(', ');
   lines.push(`[local-volume] brightest in V: ${brightest}.`);
+  const named = new Set(catalog.name);
+  const unused = Object.keys(POSITION_ANGLES).filter((name) => !named.has(name));
+  lines.push(
+    `[local-volume] position angles from RC3 or the 2MASS LGA where HyperLEDA gives none: ` +
+      `${Object.keys(POSITION_ANGLES).length - unused.length}` +
+      (unused.length === 0 ? '.' : `; not in the catalogue, so not used: ${unused.join(', ')}.`),
+  );
   const virgo = indices('evcc');
   const groups = new Map<string, number[]>();
   for (const i of virgo) {

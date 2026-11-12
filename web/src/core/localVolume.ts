@@ -1,7 +1,7 @@
 import type { LocalVolumeCatalog } from '@sss/tools/types';
 
 import type { BeltFetchers } from './belt.ts';
-import type { Searchable } from './beltNames.ts';
+import { aliasField, type Searchable } from './beltNames.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import {
   colourIndex,
@@ -535,7 +535,7 @@ export function indexLocalVolume(catalog: LocalVolumeCatalog): LocalVolumeArchiv
     catalog,
     search: {
       display: galaxies.map((galaxy) => normalizeName(galaxy.name)),
-      designation: galaxies.map((galaxy) => normalizeName(galaxy.otherNames.join(' '))),
+      designation: galaxies.map((galaxy) => aliasField(galaxy.otherNames)),
     },
     named,
     groups,

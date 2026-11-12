@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { decodeBeltRecords, httpBeltFetchers, RECORD, RECORD_BYTES, RECORD_FLOATS, type BeltFetchers, type LoadedTier } from './belt.ts';
 import { addBeltBody, beltBodyFacts, beltBodyId, nominalRadiusKm, parseBeltBodyId, recordElements } from './beltBodies.ts';
-import { indexNames, loadBeltRecord, parseBeltNames, searchable, searchNames } from './beltNames.ts';
+import { aliasField, indexNames, loadBeltRecord, parseBeltNames, searchable, searchNames } from './beltNames.ts';
 import { describeWithData as withData } from './describeWithData.ts';
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { propagate } from './kepler.ts';
@@ -87,6 +87,24 @@ describe('the name index', () => {
     // Whole, start, a word, anywhere.
     expect(score('pan')).toEqual(['2:0', '3:1', '4:2', '5:3']);
     expect(score('xyz')).toEqual([]);
+  });
+
+  it('matches one of several other names typed whole as the whole designation', () => {
+    // Rigil Kentaurus's designations, run together as the star names are, against Centaurus
+    // A's other names kept apart.
+    const index = {
+      display: ['rigil kentaurus', 'ngc 5128'],
+      designation: ['alf cen a hip 71683 hd 128620', aliasField(['Centaurus A', 'Cen A'])],
+    };
+    expect(aliasField(['NGC 5236', 'Southern Pinwheel Galaxy', ''])).toBe('ngc 5236 | southern pinwheel galaxy');
+    expect(searchNames(index, 'Cen A')).toEqual([
+      { k: 1, score: 0.5 },
+      { k: 0, score: 2.5 },
+    ]);
+    expect(searchNames(index, 'Centaurus A')[0]).toEqual({ k: 1, score: 0.5 });
+    // Not a run of words across two names: "a cen" is neither.
+    expect(searchNames(index, 'centaurus')[0]).toEqual({ k: 1, score: 1.5 });
+    expect(searchNames(index, 'a cen')).toEqual([]);
   });
 
   it('matches the designation a name does not show, a step below the name', () => {

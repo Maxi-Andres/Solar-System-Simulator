@@ -157,6 +157,8 @@ export interface SearchResult {
   readonly body: BodyDefinition;
   /** Lower is better; see searchBodies. */
   readonly score: number;
+  /** Its name is the query, whole: "16 psyche", "s2004s12". */
+  readonly exact: boolean;
 }
 
 /**
@@ -223,7 +225,7 @@ export function searchBodies(
       score += 4 * (1 + Math.min(...elsewhere));
     }
     if (matched) {
-      results.push({ body, score });
+      results.push({ body, score, exact });
     }
   }
 
@@ -235,6 +237,29 @@ export function searchBodies(
       a.body.name.localeCompare(b.body.name),
   );
   return results.slice(0, limit);
+}
+
+/** searchNames's score of a name, or one of a galaxy's other names, typed whole (beltNames.ts). */
+export const EXACT_NAME_SCORE = 0.5;
+
+/**
+ * The bodies' results and the catalogues' -- stars, exoplanet hosts, pulsars, clusters,
+ * galaxies -- in one list. The bodies go first: they are few and what people look for most,
+ * and the catalogues are long and mostly faint. But a catalogue entry named exactly what was
+ * typed, by its name or one of its other names, goes before every body whose name merely
+ * starts with it or contains it: "Cen A" is Centaurus A, though a body's name had "Cen" in it.
+ * Each list keeps its own order.
+ */
+export function mergeBodiesAndCatalogues<T>(
+  bodies: readonly { readonly item: T; readonly exact: boolean }[],
+  catalogues: readonly { readonly item: T; readonly exact: boolean }[],
+): T[] {
+  return [
+    ...bodies.filter((entry) => entry.exact),
+    ...catalogues.filter((entry) => entry.exact),
+    ...bodies.filter((entry) => !entry.exact),
+    ...catalogues.filter((entry) => !entry.exact),
+  ].map((entry) => entry.item);
 }
 
 /** Parent name for `describeBody`, looked up in the same list. */

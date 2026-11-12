@@ -37,7 +37,15 @@ import {
   type Satellites,
   type SatelliteSource,
 } from '../core/satellites.ts';
-import { describeBody, layersFor, normalizeName, parentNameOf, searchBodies } from '../core/search.ts';
+import {
+  describeBody,
+  EXACT_NAME_SCORE,
+  layersFor,
+  mergeBodiesAndCatalogues,
+  normalizeName,
+  parentNameOf,
+  searchBodies,
+} from '../core/search.ts';
 import { addStarBody, starBodyId } from '../core/starBodies.ts';
 import { GALAXY_COLOR, galaxyBodyId, type LocalGroupArchive } from '../core/localGroup.ts';
 import { type LocalVolumeArchive } from '../core/localVolume.ts';
@@ -269,10 +277,11 @@ export function SearchPanel({
 
   const results = useMemo((): Result[] => {
     void version;
-    const bodies: Result[] = searchBodies(store.bodies, searched, RESULT_LIMIT).map(({ body }) => ({
-      kind: 'body',
-      id: body.id,
-    }));
+    const bodyResults = searchBodies(store.bodies, searched, RESULT_LIMIT).map(({ body, exact }) => {
+      const item: Result = { kind: 'body', id: body.id };
+      return { item, exact };
+    });
+    const bodies = bodyResults.map(({ item }) => item);
     // A comet or a name already a body is listed as the body, once.
     const fromComets: Result[] =
       cometIndex === null
@@ -353,8 +362,11 @@ export function SearchPanel({
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
     return [
-      ...bodies,
-      ...fromCatalogues,
+      // A catalogue entry named exactly what was typed goes before a body merely like it.
+      ...mergeBodiesAndCatalogues(
+        bodyResults,
+        fromCatalogues.map((item) => ({ item, exact: scored.get(item)! <= EXACT_NAME_SCORE })),
+      ),
       ...fromComets,
       ...fromSatellites,
       ...fromNames,

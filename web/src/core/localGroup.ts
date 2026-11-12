@@ -2,7 +2,7 @@ import type { BodyDefinition, BodyId, LocalGroupCatalog } from '@sss/tools/types
 
 import { astrometricState } from './alphaCentauri.ts';
 import type { BeltFetchers } from './belt.ts';
-import type { Searchable } from './beltNames.ts';
+import { aliasField, type Searchable } from './beltNames.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
 import { CLUSTER_LF_STEP } from './globularClusterPopulation.ts';
@@ -1035,7 +1035,7 @@ export function indexLocalGroup(catalog: LocalGroupCatalog | null): LocalGroupAr
     catalog,
     search: {
       display: galaxies.map((galaxy) => normalizeName(galaxy.name)),
-      designation: galaxies.map((galaxy) => normalizeName(galaxy.otherNames.join(' '))),
+      designation: galaxies.map((galaxy) => aliasField(galaxy.otherNames)),
     },
   };
 }

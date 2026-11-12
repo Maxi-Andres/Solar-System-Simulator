@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { LocalVolumeCatalog } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
+import { searchNames } from './beltNames.ts';
 import {
   centralDensities,
   columnAt,
@@ -285,5 +286,32 @@ describe('the archive', () => {
       const off = Math.hypot(at.x - catalog.x[k]!, at.y - catalog.y[k]!, at.z - catalog.z[k]!);
       expect(off / d, catalog.name[k]).toBeLessThan(1e-6);
     }
+  });
+
+  it('finds the famous ones in the published data by the names they are known by', async () => {
+    const raw = await readFile(join(import.meta.dirname, '../../public/data/local-volume.json'), 'utf8').catch(() => null);
+    if (raw === null) {
+      return;
+    }
+    const published = indexLocalVolume(parseLocalVolumeCatalog(JSON.parse(raw)));
+    const first = (query: string) => {
+      const best = searchNames(published.search, query, 5)[0];
+      return best === undefined ? null : { name: published.catalog.name[best.k], score: best.score };
+    };
+    // Each an exact other name: 0.5, which goes before a star whose designation merely holds it.
+    expect(first('Cen A')).toEqual({ name: 'NGC 5128', score: 0.5 });
+    expect(first('Centaurus A')).toEqual({ name: 'NGC 5128', score: 0.5 });
+    expect(first('Sculptor Galaxy')?.name).toBe('NGC 253');
+    expect(first('Silver Dollar Galaxy')?.name).toBe('NGC 253');
+    expect(first("Bode's Galaxy")?.name).toBe('M81');
+    expect(first('Cigar Galaxy')?.name).toBe('M82');
+    expect(first('Whirlpool')?.name).toBe('M51');
+    expect(first('Pinwheel Galaxy')).toEqual({ name: 'M101', score: 0.5 });
+    expect(first('Southern Pinwheel')?.name).toBe('M83');
+    expect(first('Sombrero')?.name).toBe('M104');
+    expect(first('Sunflower')?.name).toBe('M63');
+    expect(first('Black Eye')?.name).toBe('M64');
+    expect(first('Hidden Galaxy')?.name).toBe('IC 342');
+    expect(first('Virgo A')?.name).toBe('M87');
   });
 });

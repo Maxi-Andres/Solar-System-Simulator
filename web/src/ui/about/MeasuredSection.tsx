@@ -668,7 +668,9 @@ export const measuredSection: AboutSection = {
           </Item>
           <Item>
             Which way each lies on the sky — the position angle of its major axis, and the Virgo galaxies’ axis
-            ratios and inclinations — from HyperLEDA <Cite k="makarov2014" />, where it holds the galaxy.
+            ratios and inclinations — from HyperLEDA <Cite k="makarov2014" />, where it holds the galaxy; for
+            the brightest it gives no angle, mostly seen nearly face on, RC3’s <Cite k="rc3" /> or the 2MASS
+            Large Galaxy Atlas’s <Cite k="jarrett2003" />.
           </Item>
           <Item>
             Each stands still at its place, as the Local Group’s do.{' '}

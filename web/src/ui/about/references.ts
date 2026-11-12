@@ -1026,8 +1026,8 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         key: 'rc3',
         who: 'de Vaucouleurs et al. 1991',
         title: 'Third Reference Catalogue of Bright Galaxies',
-        where: 'Springer, New York',
-        use: 'Andromeda’s total V magnitude',
+        where: 'Springer, New York; VizieR VII/155',
+        use: 'Andromeda’s total V magnitude; the position angles of five bright galaxies HyperLEDA does not orient',
       },
       {
         key: 'schlegel1998',
@@ -1303,6 +1303,13 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         title: 'HyperLEDA. III. The catalogue of extragalactic distances',
         where: 'A&A 570, A13; the HyperLEDA database',
         use: 'the position angles, and the Virgo galaxies’ axis ratios and inclinations',
+      },
+      {
+        key: 'jarrett2003',
+        who: 'Jarrett, Chester, Cutri, Schneider & Huchra 2003',
+        title: 'The 2MASS Large Galaxy Atlas',
+        where: 'AJ 125, 525; IRSA, table lga_v2',
+        use: 'the position angles of the brightest galaxies HyperLEDA and RC3 do not orient, in the near infrared',
       },
       {
         key: 'kormendy2009',

@@ -70,8 +70,23 @@ export function parseBeltNames(raw: unknown, info: BeltInfo): BeltNames {
 /** Names made comparable once rather than on every keystroke: what searchNames reads. */
 export interface Searchable {
   readonly display: readonly string[];
-  /** A second name each, or '' for none. */
+  /** A second name each, or '' for none; or several, as aliasField joins them. */
   readonly designation: readonly string[];
+}
+
+/** What aliasField puts between names: normalizeName leaves no "|" in a name. */
+const ALIAS_SEPARATOR = ' | ';
+
+/**
+ * Several other names as one designation, each made comparable and kept apart, so that one
+ * typed whole is matched whole: "Cen A" is Centaurus A's own other name, not a run of words
+ * across two of them.
+ */
+export function aliasField(names: readonly string[]): string {
+  return names
+    .map(normalizeName)
+    .filter((name) => name !== '')
+    .join(ALIAS_SEPARATOR);
 }
 
 /** The belt's names, searchable. */
@@ -105,7 +120,8 @@ export interface NameMatch {
  *
  * The same idea as searchBodies, cut down for 140,000 entries a keystroke: the whole name,
  * then a name starting with the query, then one with a word starting with it, then one
- * containing it, and the designation counting one step less than the name. Equal scores
+ * containing it, and the designation counting one step less than the name -- one of its
+ * several names typed whole counting as its whole (aliasField). Equal scores
  * keep the index's own order, which is tier and record order -- brightness -- so "eros"
  * puts 433 Eros above every fainter asteroid whose name merely contains it.
  */
@@ -137,6 +153,10 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
     }
     if (!field.includes(q)) {
       return null;
+    }
+    // One of several names, whole (aliasField).
+    if (field.includes(ALIAS_SEPARATOR) && ` | ${field} | `.includes(` | ${q} | `)) {
+      return 0;
     }
     if (field.startsWith(q)) {
       return 1;
