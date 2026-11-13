@@ -756,3 +756,71 @@ export const HYPERLEDA_SQL_URLS: readonly string[] = [
 
 /** The output file. */
 export const LOCAL_VOLUME_FILE = 'local-volume.json';
+
+/**
+ * Laniakea and its surroundings (G3): the galaxies out to z ~ 0.1, the clusters and
+ * superclusters, and the basins of attraction of the Cosmicflows-4 velocity field. The
+ * VizieR tables are read like the Local Volume's (VIZIER_ASU_MIRRORS); see laniakea/.
+ *
+ * Cosmicflows-4 (Tully et al. 2023, ApJ 944, 94; VizieR J/ApJ/944/94): 55,877 galaxy
+ * distances by eight methods -- table2, a galaxy a row with its group -- and the 38,053
+ * groups they fall in, each with its averaged distance modulus (table "groups").
+ */
+export const CF4_GALAXY_TABLE = 'J/ApJ/944/94/table2';
+export const CF4_GROUP_TABLE = 'J/ApJ/944/94/groups';
+
+/**
+ * The 2MASS Redshift Survey (Huchra et al. 2012, ApJS 199, 26; VizieR J/ApJS/199/26):
+ * table3, its 44,599 galaxies to K_s 11.75 over 91% of the sky, each with the 2MASS
+ * extended-source photometry, axis ratio and isophotal radius, and a redshift.
+ */
+export const TWO_MRS_TABLE = 'J/ApJS/199/26/table3';
+
+/**
+ * The 2MASS galaxy groups (Tully 2015, AJ 149, 171; VizieR J/AJ/149/171): table5, the
+ * 2MRS galaxies with their PGC numbers and the "nest" (group) each is in, with the nest's
+ * velocity dispersion, second-turnaround radius and masses. Table3, one row a nest.
+ */
+export const TULLY_2015_GALAXY_TABLE = 'J/AJ/149/171/table5';
+export const TULLY_2015_NEST_TABLE = 'J/AJ/149/171/table3';
+
+/**
+ * The supercluster-void network (Einasto et al. 1997, A&AS 123, 119; VizieR
+ * J/A+AS/123/119): table A2, the superclusters of Abell clusters, their centres and
+ * distances, and the names the literature gives them.
+ */
+export const EINASTO_1997_TABLE = 'J/A+AS/123/119/tablea2';
+
+/**
+ * The Cosmicflows-4 reconstruction (Courtois et al. 2023, A&A 670, L15): the overdensity
+ * field from the Hamiltonian Monte Carlo fit to the CF4 galaxies, 128^3 voxels over 1000
+ * Mpc/h in supergalactic coordinates, published by H. Courtois on Zenodo (doi
+ * 10.5281/zenodo.20653238, CC BY 4.0), and the 64^3 version on the CosmicFlows project page
+ * as the fallback.
+ */
+export const CF4_DENSITY_URLS: readonly { readonly url: string; readonly voxels: number }[] = [
+  { url: 'https://zenodo.org/records/20653238/files/CF4_new_128-z008_delta.fits?download=1', voxels: 128 },
+  { url: 'https://projets.ip2i.in2p3.fr/cosmicflows/CF4_new_64-z008_delta.fits', voxels: 64 },
+];
+
+/**
+ * The watersheds of that field (Dupuy & Courtois 2023, A&A 678, A176): its basins of
+ * attraction and of repulsion, for the CF4 galaxies and for the CF4 groups, as four 128^3
+ * FITS grids of basin numbers in one zip (67 MB, stored uncompressed) on the CosmicFlows
+ * project page.
+ */
+export const CF4_WATERSHEDS_URL = 'https://projets.ip2i.in2p3.fr/cosmicflows/CF4_new_128-z008_watersheds-fits.zip';
+
+/**
+ * HyperLEDA, for every galaxy by its PGC number: the name, morphology, B and V magnitudes,
+ * Galactic extinction, D25 size, axis ratio, position angle and inclination. Asked by POST,
+ * PGC_BATCH numbers a query: a GET of 2,000 numbers is longer than the server takes.
+ */
+export const HYPERLEDA_PGC_BATCH = 2000;
+
+/** Who asks, for the hosts that want to know (Zenodo refuses an anonymous fetch with 403). */
+export const DATA_USER_AGENT = 'Solar-System-Simulator data build (+https://github.com/Maxi-Andres/Solar-System-Simulator)';
+
+/** The output directory, and the description written last within it. */
+export const LANIAKEA_DIR = 'laniakea';
+export const LANIAKEA_INFO_FILE = 'laniakea.json';

@@ -9,6 +9,8 @@ import {
   POSITION_DECIMALS,
   PULSARS_FILE,
   GLOBULAR_CLUSTERS_FILE,
+  LANIAKEA_DIR,
+  LANIAKEA_INFO_FILE,
   LOCAL_GROUP_FILE,
   LOCAL_VOLUME_FILE,
   SATELLITES_DIR,
@@ -20,6 +22,7 @@ import {
   VELOCITY_DECIMALS,
 } from './config.ts';
 import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
+import type { LaniakeaOutput } from './laniakea/laniakea.ts';
 import type { CometBuild } from './belt/comets.ts';
 import type { SatelliteBuild } from './satellites/buildSatellites.ts';
 import {
@@ -332,4 +335,22 @@ export async function writeLocalGroup(catalog: LocalGroupCatalog, outputDir = OU
 export async function writeLocalVolume(catalog: LocalVolumeCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   await writeCompactJson(join(outputDir, LOCAL_VOLUME_FILE), catalog);
+}
+
+/**
+ * Laniakea and its surroundings (G3), as laniakea/: the galaxies' records and details, the
+ * search index, the groups, the CF4 reconstruction's density and basins, and laniakea.json
+ * describing them (LaniakeaInfo). Like the belt it takes the directory, because `pnpm
+ * fetch:laniakea` regenerates it alone, and it replaces laniakea/ and nothing else.
+ * laniakea.json goes last, after every file it names, so an interrupted write leaves none --
+ * which the app reads as no G3 data.
+ */
+export async function writeLaniakea(output: LaniakeaOutput, outputDir = OUTPUT_DIR): Promise<void> {
+  const directory = join(outputDir, LANIAKEA_DIR);
+  await rm(directory, { recursive: true, force: true });
+  await mkdir(directory, { recursive: true });
+  for (const [file, bytes] of Object.entries(output.files)) {
+    await writeFile(join(directory, file), bytes);
+  }
+  await writeJson(join(directory, LANIAKEA_INFO_FILE), output.info);
 }

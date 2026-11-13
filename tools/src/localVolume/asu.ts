@@ -63,34 +63,50 @@ export function asuNumber(row: AsuRow, column: string): number | null {
   return value;
 }
 
-/** The URL that asks a mirror for a whole table, every column. */
-export function asuUrl(mirror: string, table: string): string {
-  return `${mirror}?-source=${table}&-out.max=unlimited&-out.all`;
+/** The URL that asks a mirror for a whole table, every column, and any `extra` parameters ("&-out.add=_RAJ,_DEJ"). */
+export function asuUrl(mirror: string, table: string, extra = ''): string {
+  return `${mirror}?-source=${encodeURIComponent(table).replace(/%2F/g, '/')}&-out.max=unlimited&-out.all${extra}`;
 }
+
+/** Times round the mirrors before giving up, and the wait between rounds. */
+const MIRROR_ROUNDS = 3;
+const ROUND_WAIT_MS = 30_000;
 
 /**
  * A whole table, from the first mirror that answers with one; each mirror retried with the
  * project's backoff (download()) before the next is tried. `minimumRows` guards against a
- * mirror that answers with part of a table.
+ * mirror that answers with part of a table. `log` prefixes the warnings: the pipeline that
+ * asks.
+ *
+ * An answer of HTTP 200 that is VizieR's in-band error ("The database is not currently
+ * reachable", which the CfA's mirror gives for a minute or two at a time) is not retried by
+ * download(), so when every mirror has failed the round is tried again, MIRROR_ROUNDS times.
  */
 export async function readVizierTable(
   table: string,
   label: string,
   required: readonly string[],
   minimumRows: number,
+  log = '[local-volume]',
+  extra = '',
 ): Promise<{ rows: AsuRow[]; url: string }> {
   const failures: string[] = [];
-  for (const mirror of VIZIER_ASU_MIRRORS) {
-    const url = asuUrl(mirror, table);
-    try {
-      const rows = parseAsuTsv(new TextDecoder('latin1').decode(await download(url, label)), required);
-      if (rows.length < minimumRows) {
-        throw new Error(`only ${rows.length} rows, where the table has at least ${minimumRows}`);
+  for (let round = 1; round <= MIRROR_ROUNDS; round += 1) {
+    for (const mirror of VIZIER_ASU_MIRRORS) {
+      const url = asuUrl(mirror, table, extra);
+      try {
+        const rows = parseAsuTsv(new TextDecoder('latin1').decode(await download(url, label)), required);
+        if (rows.length < minimumRows) {
+          throw new Error(`only ${rows.length} rows, where the table has at least ${minimumRows}`);
+        }
+        return { rows, url };
+      } catch (error) {
+        failures.push(`${mirror} (round ${round}): ${String(error).slice(0, 300)}`);
+        console.warn(`${log} ${label}: ${mirror} failed (${String(error).slice(0, 200)}); trying the next mirror.`);
       }
-      return { rows, url };
-    } catch (error) {
-      failures.push(`${mirror}: ${String(error).slice(0, 300)}`);
-      console.warn(`[local-volume] ${label}: ${mirror} failed (${String(error).slice(0, 200)}); trying the next mirror.`);
+    }
+    if (round < MIRROR_ROUNDS) {
+      await new Promise((done) => setTimeout(done, ROUND_WAIT_MS));
     }
   }
   throw new Error(`Could not read ${label} (${table}) from any VizieR mirror:\n  ${failures.join('\n  ')}`);

@@ -40,7 +40,7 @@ const CARD = 80;
 export type FitsValue = string | number | null;
 
 /** The header from `at`: its keywords' values, and where its data starts. */
-function readHeader(bytes: Uint8Array, at: number): { cards: Map<string, string>; dataAt: number } {
+export function readHeader(bytes: Uint8Array, at: number): { cards: Map<string, string>; dataAt: number } {
   const cards = new Map<string, string>();
   const text = new TextDecoder('latin1');
   for (let block = at; block + BLOCK <= bytes.length; block += BLOCK) {

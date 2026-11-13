@@ -111,7 +111,7 @@ const NGC_BY_MESSIER: Readonly<Record<number, number>> = Object.fromEntries(
  * literature and the observing guides use (each a Messier object's too) -- and the radio
  * sources' short names, Cen A and Vir A, by which they are as often looked for.
  */
-const POPULAR: Readonly<Record<string, readonly string[]>> = {
+export const POPULAR: Readonly<Record<string, readonly string[]>> = {
   'NGC 253': ['Sculptor Galaxy', 'Silver Coin Galaxy', 'Silver Dollar Galaxy'],
   'NGC 2683': ['UFO Galaxy'],
   'NGC 3031': ["Bode's Galaxy"],

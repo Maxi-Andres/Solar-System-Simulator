@@ -20,6 +20,7 @@
     "fetch:pulsars": "pnpm --filter @sss/tools fetch:pulsars",
     "fetch:clusters": "pnpm --filter @sss/tools fetch:clusters",
     "fetch:local-group": "pnpm --filter @sss/tools fetch:local-group",
+    "fetch:laniakea": "pnpm --filter @sss/tools fetch:laniakea",
     "write:catalog": "pnpm --filter @sss/tools write:catalog",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

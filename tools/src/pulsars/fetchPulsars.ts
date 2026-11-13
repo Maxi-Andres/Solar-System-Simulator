@@ -21,12 +21,15 @@ import { parseAtnfDatabase, parseAtnfReferences, unpackAtnf } from './atnf.ts';
 import { buildPulsars, describePulsars } from './buildPulsars.ts';
 import { parseMcgillCsv } from './mcgill.ts';
 
-/** One file over HTTPS, its bytes; retried with the project's backoff, then thrown. */
-export async function download(url: string, label: string): Promise<Uint8Array> {
+/**
+ * One file over HTTPS, its bytes; retried with the project's backoff, then thrown. `headers`
+ * for a host that wants them (Zenodo answers 403 to a request that does not say who asks).
+ */
+export async function download(url: string, label: string, headers?: Record<string, string>): Promise<Uint8Array> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(headers === undefined ? {} : { headers }) });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

@@ -2036,3 +2036,245 @@ export interface LocalVolumeCatalog {
   /** The group it belongs to, where known ("M81", "Cen A", "Virgo A", "Virgo W"). */
   readonly group: readonly (string | null)[];
 }
+
+// ---------------------------------------------------------------------------------------
+// Laniakea and its surroundings (G3): laniakea/
+
+/**
+ * Floats per galaxy in `laniakea/galaxies.bin`: little-endian float32, record k at byte
+ * k x 4 x LANIAKEA_RECORD_FLOATS. NaN is "not known" wherever it appears.
+ *
+ *   0  x     position, parsecs  } scene frame: heliocentric, ICRS rotated about its x axis
+ *   1  y     position, parsecs  } by the IAU 1976 obliquity (as local-group.json's and
+ *   2  z     position, parsecs  } local-volume.json's); at the galaxy's comoving distance
+ *   3  absV  absolute V magnitude: the apparent V, corrected for the Milky Way's extinction
+ *            in front, less 5 log10(d_L / 10 pc), d_L = (1 + z) x the distance it is placed
+ *            at. Seen from the Sun at the placed (comoving) distance it is brighter than the
+ *            sky shows by 5 log10(1 + z) -- the cosmological dimming, 0.06 mag at z 0.03,
+ *            0.2 at z 0.1 -- which details' vMag gives back. No K-correction
+ *   4  bv    B-V, corrected for the extinction in front (flag COLOUR_ESTIMATED: from type)
+ *   5  rePc  half-light radius along the major axis, parsecs: always estimated, see
+ *            LaniakeaInfo.calibration (flag SIZE_FROM_K for the 2MASS route)
+ *   6  q     axis ratio b/a on the sky
+ *   7  pa    position angle of the major axis, degrees east of north, 0-180
+ *   8  incl  inclination, degrees (0 face-on), HyperLEDA's
+ *   9  t     de Vaucouleurs T type (-5 E ... 10 Im)
+ *  10  flags LANIAKEA_FLAGS bits, an integer held exactly in float32
+ *  11  group the index of the group it was placed with in groups.json, or -1
+ *
+ * Records are ordered by absV, most luminous first, those without a V last.
+ */
+export const LANIAKEA_RECORD_FLOATS = 12;
+
+/** The bits of a `laniakea/galaxies.bin` record's `flags`. */
+export const LANIAKEA_FLAGS = {
+  /** In Cosmicflows-4 (Tully et al. 2023): its distance was measured. */
+  CF4: 1,
+  /** In the 2MASS Redshift Survey (Huchra et al. 2012). */
+  TWO_MRS: 2,
+  /** Placed at its own Cosmicflows-4 distance (a group of one). */
+  DISTANCE_OWN: 4,
+  /** Placed at its Cosmicflows-4 group's distance, the weighted mean of its members'. */
+  DISTANCE_GROUP: 8,
+  /**
+   * Not in Cosmicflows-4 itself, but in a 2MASS group (Tully 2015) whose other members are:
+   * placed at that Cosmicflows-4 group's measured distance.
+   */
+  DISTANCE_LINKED: 16,
+  /** Placed by redshift, the Hubble law at H0 74.6: an estimate. */
+  DISTANCE_REDSHIFT: 32,
+  /** That redshift is its 2MASS group's mean, not its own: the finger of god taken out. */
+  GROUP_REDSHIFT: 64,
+  /**
+   * Its place along the line of sight within its group drawn from the group's measured
+   * extent on the sky (an estimate); without it the group would be a sheet facing the Sun.
+   */
+  DEPTH_DRAWN: 128,
+  /** V measured (HyperLEDA's total V); else from B less a colour, or from K. */
+  V_MEASURED: 256,
+  /** V from 2MASS K_s and a V-K colour by type (calibration.vMinusK): the dust route. */
+  V_FROM_K: 512,
+  /** B-V from the galaxy's type (Fukugita et al. 1995, as local-volume.json's). */
+  COLOUR_ESTIMATED: 1024,
+  /** Size from the 2MASS K_s isophote, scaled to D25 (calibration.d25PerK20), not from D25. */
+  SIZE_FROM_K: 2048,
+  /**
+   * In the zone of avoidance as 2MRS defines it (|b| < 5 deg; < 8 deg within 30 deg of the
+   * Galactic centre), which 2MRS does not survey: there by another catalogue's distance.
+   */
+  ZONE_OF_AVOIDANCE: 4096,
+} as const;
+
+/** The bits of a galaxy's distance methods in details.bin: each one Cosmicflows-4 measured it by. */
+export const LANIAKEA_METHODS = { SNIa: 1, TF: 2, FP: 4, SBF: 8, SNII: 16, TRGB: 32, Cepheid: 64, Maser: 128 } as const;
+
+/** The three basin grids in basins.bin, in the file's order. */
+export type LaniakeaBasinGrid = 'galaxiesAttraction' | 'galaxiesRepulsion' | 'groupsAttraction';
+
+/** A grid of voxels in a `laniakea/` file, and where it is. */
+export interface LaniakeaGrid {
+  readonly file: string;
+  readonly bytes: number;
+  /** Voxels along x, y, z of the file; x (SGX) fastest, then y (SGY), then z (SGZ). */
+  readonly size: readonly [number, number, number];
+  /** The file's first voxel in the full cube of `cubeVoxels`^3, which is centred on the Milky Way's voxel. */
+  readonly offset: readonly [number, number, number];
+  readonly cubeVoxels: number;
+  /** A voxel's edge, parsecs (1000 Mpc/h over cubeVoxels, h = 0.746). */
+  readonly voxelPc: number;
+  /**
+   * A voxel's centre in the scene frame, parsecs, from its indices in the file: p =
+   * M (i, j, k, 1), M this 4x4 matrix column-major (three.js Matrix4.elements).
+   */
+  readonly voxelToScene: readonly number[];
+}
+
+/** A named structure. Positions in the scene frame, parsecs; sizes in parsecs. */
+export interface LaniakeaLandmark {
+  readonly name: string;
+  readonly otherNames: readonly string[];
+  readonly kind: 'cluster' | 'supercluster' | 'basin' | 'attractor' | 'repeller' | 'void' | 'wall';
+  /** Centre on the sky, J2000, degrees. */
+  readonly raDeg: number;
+  readonly decDeg: number;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** Comoving distance, pc. */
+  readonly distancePc: number;
+  /** How the distance was had: "CF4 group", "2MASS group redshift", "Einasto et al. 1997", ... */
+  readonly distanceMethod: string;
+  readonly distanceEstimated: boolean;
+  /** A radius, parsecs, where one is given; sizeNote says which. */
+  readonly radiusPc: number | null;
+  /** Rough extents along SGX, SGY, SGZ, parsecs, where given (Tully et al. 2019's voids). */
+  readonly extentPc: readonly [number, number, number] | null;
+  readonly sizeNote: string | null;
+  /** Mass, solar masses, where measured; massNote says how. */
+  readonly massSun: number | null;
+  readonly massNote: string | null;
+  /** Member galaxies (a cluster) or Abell clusters (a supercluster), where counted. */
+  readonly members: number | null;
+  /** Its group in groups.json, or -1. */
+  readonly group: number;
+  /** Its basins in basins.bin: the grid and the number. */
+  readonly basin: readonly { readonly grid: LaniakeaBasinGrid; readonly label: number }[] | null;
+  /** For a wall: points along it, scene frame, parsecs. */
+  readonly path: readonly (readonly [number, number, number])[] | null;
+  readonly source: string;
+  readonly note: string | null;
+}
+
+/** `laniakea/groups.json`: the groups galaxies were placed with, as columns. */
+export interface LaniakeaGroups {
+  readonly count: number;
+  /** "cf4": a Cosmicflows-4 group, id its 1PGC; "2mass": a Tully (2015) nest, id its number. */
+  readonly source: readonly ('cf4' | '2mass')[];
+  readonly id: readonly number[];
+  /** Its name: a landmark's ("Coma Cluster"), else its most luminous member's here. */
+  readonly name: readonly string[];
+  readonly raDeg: readonly number[];
+  readonly decDeg: readonly number[];
+  readonly x: readonly number[];
+  readonly y: readonly number[];
+  readonly z: readonly number[];
+  /** Comoving distance it is placed at, pc; its luminosity distance and that's error, pc (null: by redshift). */
+  readonly distancePc: readonly number[];
+  readonly luminosityDistancePc: readonly number[];
+  readonly distanceErrorPc: readonly (number | null)[];
+  readonly distanceEstimated: readonly boolean[];
+  /** Galaxies here placed with it; and in its catalogue (CF4's Ngal, Tully's Nmb). */
+  readonly members: readonly number[];
+  readonly catalogueMembers: readonly number[];
+  /** The line-of-sight sigma its members' depths were drawn with, pc; null when none was. */
+  readonly depthSigmaPc: readonly (number | null)[];
+}
+
+/** `laniakea/names.json`: the search index. */
+export interface LaniakeaNames {
+  readonly count: number;
+  /** Record k's name ("NGC 4889", "M77", "PGC 4", "2MASX J00000001+3311085"). */
+  readonly name: readonly string[];
+  /** Sparse: [record, its other names]. */
+  readonly otherNames: readonly (readonly [number, readonly string[]])[];
+}
+
+/**
+ * `laniakea/laniakea.json`: what the other files in `laniakea/` hold, and how they were
+ * made. Written last, so a run cut short leaves none (the app reads that as no G3 data).
+ */
+export interface LaniakeaInfo {
+  readonly generatedAt: string;
+  readonly sources: Readonly<Record<string, { readonly citation: string; readonly url: string; readonly queriedAt: string; readonly rows: number | null }>>;
+  readonly frame: string;
+  readonly obliquityArcsec: number;
+  readonly cosmology: {
+    readonly h0KmSMpc: number;
+    readonly omegaM: number;
+    readonly cmbDipole: { readonly speedKmS: number; readonly lDeg: number; readonly bDeg: number };
+    readonly note: string;
+  };
+  readonly galaxies: {
+    readonly file: string;
+    readonly bytes: number;
+    readonly count: number;
+    readonly recordFloats: typeof LANIAKEA_RECORD_FLOATS;
+    /**
+     * The details, fetched for an info panel: columns of `count` entries each, in this
+     * order, little-endian: Uint32 PGC number (0 none); Float32 z, CMB frame; Float32
+     * luminosity distance, pc; Float32 its error, pc (NaN: by redshift); Float32 its own
+     * Cosmicflows-4 distance, pc (NaN: none); Float32 apparent V, extinction-corrected, as
+     * the sky shows it; Float32 K_s total, extinction-corrected (2MRS; NaN: none); Uint8
+     * LANIAKEA_METHODS bits.
+     */
+    readonly details: { readonly file: string; readonly bytes: number };
+    readonly names: { readonly file: string; readonly bytes: number; readonly count: number };
+    readonly counts: Readonly<Record<string, number>>;
+    /** Nearest, median and farthest placed, comoving, pc. */
+    readonly distanceRangePc: { readonly min: number; readonly median: number; readonly max: number };
+  };
+  readonly groups: { readonly file: string; readonly bytes: number; readonly count: number };
+  /** How each estimated quantity was filled, with the numbers this run measured. */
+  readonly calibration: {
+    /** Median V - K_s by T-type bin, over galaxies with both a B and a K. */
+    readonly vMinusK: readonly { readonly bin: string; readonly tMin: number; readonly tMax: number; readonly value: number; readonly calibrators: number; readonly scatter: number }[];
+    /** Half-light radius over the D25 radius, measured on local-volume.json's Virgo galaxies. */
+    readonly halfLightPerR25: readonly { readonly bin: string; readonly tMin: number; readonly tMax: number; readonly value: number; readonly calibrators: number; readonly scatterDex: number }[];
+    /** The D25 radius over the 2MASS K_s 20 mag/arcsec^2 isophote's radius. */
+    readonly d25PerK20: { readonly value: number; readonly calibrators: number; readonly scatterDex: number };
+    readonly note: string;
+  };
+  /** The sky 2MRS does not survey. Nothing is put there that was not observed. */
+  readonly zoneOfAvoidance: {
+    readonly description: string;
+    readonly absBDeg: number;
+    readonly absBNearCentreDeg: number;
+    readonly nearCentreLDeg: number;
+    readonly galaxiesInside: number;
+  };
+  /** What each catalogue covers: where the map thins because the surveys stop. */
+  readonly coverage: readonly string[];
+  readonly density: LaniakeaGrid & {
+    /** delta = value / scale: the reconstruction's overdensity, a linear field (below -1 where the fit puts it). */
+    readonly scale: number;
+    readonly source: string;
+  };
+  readonly basins: LaniakeaGrid & {
+    /** The grids in the file, one after another, each size[0] x size[1] x size[2] bytes. */
+    readonly grids: readonly LaniakeaBasinGrid[];
+    /** The basin each grid puts the Milky Way's voxel in (0: none). */
+    readonly home: Readonly<Record<LaniakeaBasinGrid, number>>;
+    readonly basins: readonly {
+      readonly name: string;
+      readonly kind: 'attraction' | 'repulsion';
+      readonly grid: LaniakeaBasinGrid;
+      readonly label: number;
+      readonly voxels: number;
+      /** Volume, Mpc^3 (h = 0.746), from its voxels; and the paper's, (Mpc/h)^3. */
+      readonly volumeMpc3: number;
+      readonly paperVolumeMpcH3: number;
+    }[];
+    readonly source: string;
+  };
+  readonly landmarks: readonly LaniakeaLandmark[];
+}

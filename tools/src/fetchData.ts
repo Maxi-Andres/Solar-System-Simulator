@@ -38,6 +38,11 @@
  *   VizieR's ASU interface (the CfA's mirror, then CDS) and HyperLEDA -- http://atlas.obs-hp.fr/hyperleda/
  *     The Local Volume (the Updated Nearby Galaxy Catalog) and the Virgo Cluster (the
  *     Extended Virgo Cluster Catalog, Mei et al.'s SBF distances). See localVolume/.
+ *
+ *   Cosmicflows-4, the 2MASS Redshift Survey, Tully's 2MASS groups and Einasto et al.'s
+ *   superclusters (VizieR), HyperLEDA, and the CosmicFlows reconstruction and its watersheds
+ *   (Zenodo; https://projets.ip2i.in2p3.fr/cosmicflows/)
+ *     Laniakea and its surroundings out to z ~ 0.1. See laniakea/.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -93,6 +98,8 @@ import { loadLocalGroup } from './localGroup/fetchLocalGroup.ts';
 import { describeLocalGroup } from './localGroup/nearbyGalaxies.ts';
 import { loadLocalVolume } from './localVolume/fetchLocalVolume.ts';
 import { describeLocalVolume } from './localVolume/localVolume.ts';
+import { loadLaniakea } from './laniakea/fetchLaniakea.ts';
+import { describeLaniakea } from './laniakea/laniakea.ts';
 import { describePulsars } from './pulsars/buildPulsars.ts';
 import { loadPulsars } from './pulsars/fetchPulsars.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
@@ -123,6 +130,7 @@ import {
   writeGlobularClusters,
   writeLocalGroup,
   writeLocalVolume,
+  writeLaniakea,
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
@@ -659,8 +667,13 @@ async function main(): Promise<void> {
   // tables too, each from the CfA's mirror or Strasbourg's; it is handed the Local Group as
   // it is read, to leave out the galaxies local-group.json already draws. Its HyperLEDA
   // queries alone are optional: without them the galaxies go out with no position angles.
+  // Laniakea's (G3) five VizieR tables, its HyperLEDA queries and the CF4 grids after them,
+  // handed both, to leave out what local-group.json and local-volume.json draw; it fails the
+  // run like the rest -- HyperLEDA is not optional there, a third of its galaxies having no
+  // other photometry.
   const localGroupRead = loadLocalGroup();
-  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters, localGroup, localVolume] = await Promise.all([
+  const localVolumeRead = loadLocalVolume(localGroupRead);
+  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters, localGroup, localVolume, laniakea] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -689,7 +702,8 @@ async function main(): Promise<void> {
     loadPulsars(),
     loadGlobularClusters(),
     localGroupRead,
-    loadLocalVolume(localGroupRead),
+    localVolumeRead,
+    loadLaniakea(localGroupRead, localVolumeRead),
   ]);
 
   // The named small bodies next, before the craft: several craft fly to them, and a
@@ -804,6 +818,9 @@ async function main(): Promise<void> {
   for (const line of describeLocalVolume(localVolume)) {
     console.log(line.replace('[local-volume]', '[fetch-data] local volume'));
   }
+  for (const line of describeLaniakea(laniakea.output, laniakea.build)) {
+    console.log(line.replace('[laniakea]', '[fetch-data] laniakea'));
+  }
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
@@ -895,6 +912,7 @@ async function main(): Promise<void> {
   await writeGlobularClusters(globularClusters);
   await writeLocalGroup(localGroup);
   await writeLocalVolume(localVolume);
+  await writeLaniakea(laniakea.output);
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {
