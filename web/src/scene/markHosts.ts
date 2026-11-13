@@ -2,12 +2,21 @@ import type { BodyDefinition, BodyId, LocalVolumeCatalog } from '@sss/tools/type
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { SGR_A_ID } from '../core/blackHoles.ts';
+import {
+  basinAt,
+  groupOf,
+  laniakeaCatalogue,
+  positionPc as laniakeaPositionPc,
+  structureBodyId,
+  structureOf,
+  type LaniakeaCatalogue,
+} from '../core/laniakea.ts';
 import { galaxyOf, galaxyPositionPc, GIANTS, type LocalGroupGalaxy } from '../core/localGroup.ts';
 import { localVolumeCatalog, regionOf, virgoCentre } from '../core/localVolume.ts';
 import { galacticCentrePc } from '../core/milkyWay.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
-import { LOCAL_GROUP_EXTENT_KM, MILKY_WAY_EXTENT_KM } from './homeName.ts';
+import { LOCAL_GROUP_EXTENT_KM, LOCAL_VOLUME_EXTENT_KM, MILKY_WAY_EXTENT_KM } from './homeName.ts';
 import { FoldHosts, UNFOLDED, type FoldOf } from './markFolding.ts';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 
@@ -27,14 +36,26 @@ import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
  *   of Andromeda and nearer it than the Milky Way, a satellite of Andromeda's; within it of the
  *   Milky Way, the Milky Way's; any other, the Local Group's.
  * - **Beyond the Local Group**, each Local Volume group's brightest galaxy (local-volume.json's
- *   `group`), by luminosity: its members fold into it, and it into nothing. A galaxy of no
- *   group, or alone in its group, folds into nothing.
+ *   `group`), by luminosity: its members fold into it, and it into the Local Volume. A galaxy
+ *   of no group, or alone in its group, into the Local Volume.
  * - **The Virgo Cluster**: M87 at its centre (localVolume.ts virgoCentre), for its main body,
  *   Virgo A, and its outskirts; each other substructure's brightest for that substructure's, and
  *   they into M87.
  *
- * Laniakea's galaxies (G3) are the same thing again -- their groups' and clusters' brightest as
- * hosts, an index into these a galaxy -- and go in the same way.
+ * - **The Local Volume**, its 11 Mpc about home: the Local Group and each of its groups fold
+ *   into it as its reach shrinks on the screen, as homeName.ts folds their names
+ *   (LOCAL_VOLUME_EXTENT_KM). Its mark is the Milky Way's.
+ * - **Laniakea's galaxies** (G3, laniakea.ts): each group's brightest the host of its group,
+ *   its reach the group's radius (laniakea.ts indexGroups) -- and present only while that is
+ *   large on the screen (markFolding.ts), so ten thousand groups are not ten thousand marks
+ *   from afar, only their light. A named cluster's group folds into the cluster's own mark, a
+ *   body of its own, its reach its radius.
+ * - **The named structures** (laniakea.ts landmarks, made bodies): a cluster into the
+ *   supercluster or the attractor within CLUSTER_IN_SUPERCLUSTER_PC of it, nearest first; a
+ *   supercluster, and a cluster in none, into the basin the galaxies' watersheds put it in
+ *   (Dupuy & Courtois 2023); a basin, a void, a wall, a repeller into nothing. And all of them
+ *   only once out of the Local Group (STRUCTURES_FROM_LY): from the Solar System they are not
+ *   a second sky of names.
  */
 
 /** The reach of a giant's satellites, pc: the virial radius both the Milky Way and Andromeda are given. */
@@ -53,7 +74,11 @@ export const GALACTIC_CENTRE_SCENE_PC: readonly [number, number, number] = (() =
 /** The Local Group's reach, pc, the extent homeName.ts folds its names by: the Milky Way's mark is the Local Group's. */
 export const LOCAL_GROUP_REACH_PC = LOCAL_GROUP_EXTENT_KM / PARSEC_KM;
 
-export const LOCAL_GROUP_HOST = MARK_HOSTS.add('local-group', GALACTIC_CENTRE_SCENE_PC, null, LOCAL_GROUP_REACH_PC);
+/** The Local Volume's reach, pc (homeName.ts LOCAL_VOLUME_EXTENT_KM): its groups', and the Local Group's, mark is the Milky Way's. */
+export const LOCAL_VOLUME_REACH_PC = LOCAL_VOLUME_EXTENT_KM / PARSEC_KM;
+
+export const LOCAL_VOLUME_HOST = MARK_HOSTS.add('local-volume', GALACTIC_CENTRE_SCENE_PC, null, LOCAL_VOLUME_REACH_PC);
+export const LOCAL_GROUP_HOST = MARK_HOSTS.add('local-group', GALACTIC_CENTRE_SCENE_PC, 'local-volume', LOCAL_GROUP_REACH_PC);
 export const MILKY_WAY_SATELLITES_HOST = MARK_HOSTS.add(
   'milky-way-satellites',
   GALACTIC_CENTRE_SCENE_PC,
@@ -144,7 +169,7 @@ export function volumeFolds(c: LocalVolumeCatalog): VolumeFolds {
     // A group of one is no group: it folds into nothing.
     if (list.length < 2 && !key.startsWith('virgo:')) continue;
     const mark = brightest(list);
-    marks[mark] = MARK_HOSTS.add(key, at(mark), key.startsWith('virgo:') && m87 !== null ? 'virgo' : null);
+    marks[mark] = MARK_HOSTS.add(key, at(mark), key.startsWith('virgo:') && m87 !== null ? 'virgo' : key.startsWith('virgo:') ? null : 'local-volume');
   }
   const folds: FoldOf[] = [];
   for (let k = 0; k < c.count; k += 1) {
@@ -154,7 +179,9 @@ export function volumeFolds(c: LocalVolumeCatalog): VolumeFolds {
     }
     const g = (c.group[k] ?? '').trim();
     const key = regionOf(c, k) === 'virgo' ? virgoKey(g) : g === '' ? null : `lv:${g}`;
-    const host = key === null ? -1 : MARK_HOSTS.indexOf(key);
+    // A galaxy of no group, or alone in its own, is the Local Volume's own.
+    const own = key === null ? -1 : MARK_HOSTS.indexOf(key);
+    const host = own < 0 && regionOf(c, k) === 'local-volume' ? LOCAL_VOLUME_HOST : own;
     folds.push(host < 0 ? UNFOLDED : { host, separationPc: MARK_HOSTS.distancePc(host, at(k)) });
   }
   volume = { catalog: c, folds, marks };
@@ -166,6 +193,10 @@ export function volumeFolds(c: LocalVolumeCatalog): VolumeFolds {
 
 /** A galaxy's host and its distance from it. */
 export function galaxyFold(galaxy: LocalGroupGalaxy): FoldOf {
+  if (galaxy.laniakeaIndex !== undefined) {
+    const lc = laniakeaCatalogue();
+    return lc === null ? UNFOLDED : laniakeaFolds(lc).folds(galaxy.laniakeaIndex);
+  }
   if (galaxy.volumeIndex === undefined) {
     return localGroupFold(galaxy);
   }
@@ -178,9 +209,16 @@ function hostMarkedBy(id: BodyId): number {
   if (id === SGR_A_ID) {
     return MILKY_WAY_HOST;
   }
+  if (structureOf(id) !== null) {
+    return MARK_HOSTS.indexOf(`structure:${id}`);
+  }
   const galaxy = galaxyOf(id);
   if (galaxy === null) {
     return -1;
+  }
+  if (galaxy.laniakeaIndex !== undefined) {
+    const lc = laniakeaCatalogue();
+    return lc === null ? -1 : (laniakeaFolds(lc).marks[galaxy.laniakeaIndex] ?? -1);
   }
   if (galaxy.key === andromeda.key && galaxy.volumeIndex === undefined) {
     return ANDROMEDA_HOST;
@@ -194,6 +232,10 @@ function hostMarkedBy(id: BodyId): number {
  * none; anything else is in the Milky Way, `fromSunPc` from the Sun.
  */
 export function bodyFold(body: BodyDefinition, fromSunPc: readonly [number, number, number]): FoldOf {
+  if (body.kind === 'structure') {
+    const host = MARK_HOSTS.indexOf(`structure:${body.id}`);
+    return host < 0 ? UNFOLDED : MARK_HOSTS.foldOf(host);
+  }
   if (body.kind === 'galaxy') {
     const galaxy = galaxyOf(body.id);
     return galaxy === null ? UNFOLDED : galaxyFold(galaxy);
@@ -227,6 +269,11 @@ export function bodyFoldStrength(
   if (lineage.has(body.id) || sunKm === undefined) {
     return 1;
   }
+  if (body.kind === 'structure') {
+    // Its own host's strength: what it folds into above it, and the structures' fade.
+    const host = MARK_HOSTS.indexOf(`structure:${body.id}`);
+    return Math.min(structuresStrength(), host < 0 || host >= MARK_HOSTS.strength.length ? 1 : MARK_HOSTS.strength[host]!);
+  }
   const fold = bodyFold(body, [
     (fromKm.x - sunKm.x) / PARSEC_KM,
     (fromKm.y - sunKm.y) / PARSEC_KM,
@@ -239,7 +286,8 @@ export function bodyFoldStrength(
 export function pinnedHosts(focus: BodyId): number[] {
   const own = hostMarkedBy(focus);
   const galaxy = galaxyOf(focus);
-  const above = galaxy !== null ? galaxyFold(galaxy).host : focus === SGR_A_ID ? -1 : MILKY_WAY_HOST;
+  const above =
+    galaxy !== null ? galaxyFold(galaxy).host : focus === SGR_A_ID || structureOf(focus) !== null ? -1 : MILKY_WAY_HOST;
   return [...(own >= 0 ? MARK_HOSTS.chain(own) : []), ...(above >= 0 ? MARK_HOSTS.chain(above) : [])];
 }
 
@@ -254,6 +302,8 @@ export function updateMarkHosts(cameraPc: readonly [number, number, number], pix
   // The galaxies' hosts are known once their catalogue is.
   const c = localVolumeCatalog();
   if (c !== null) volumeFolds(c);
+  const lc = laniakeaCatalogue();
+  if (lc !== null) laniakeaFolds(lc);
   if (
     last.x === cameraPc[0] &&
     last.y === cameraPc[1] &&
@@ -265,6 +315,7 @@ export function updateMarkHosts(cameraPc: readonly [number, number, number], pix
     return;
   }
   MARK_HOSTS.update(cameraPc, pixelsPerRadian, pinnedHosts(focus));
+  structures.strength = structuresFade(Math.hypot(cameraPc[0], cameraPc[1], cameraPc[2]));
   Object.assign(last, { x: cameraPc[0], y: cameraPc[1], z: cameraPc[2], scale: pixelsPerRadian, focus, count: MARK_HOSTS.count });
 }
 
@@ -326,4 +377,130 @@ export function galaxyMembers(galaxies: readonly LocalGroupGalaxy[]): MemberFold
     separationPc[i] = fold.separationPc;
   });
   return { host, separationPc, value: new Float32Array(galaxies.length).fill(1) };
+}
+
+// ---------------------------------------------------------------------------------------
+// Laniakea (G3): its groups, and the named structures
+
+/** A cluster folds into a supercluster, or the Great Attractor, within this of it, pc: the nearest. */
+export const CLUSTER_IN_SUPERCLUSTER_PC = 35e6;
+
+/**
+ * The named structures come in as the camera leaves the Local Group, light years from the Sun:
+ * gone within STRUCTURES_FROM_LY, whole from STRUCTURES_FULL_LY -- past the Local Group's own
+ * view (8 million), before the Local Volume's (100 million).
+ */
+export const STRUCTURES_FROM_LY = 10e6;
+export const STRUCTURES_FULL_LY = 30e6;
+
+/** A light year in parsecs. */
+const LIGHT_YEAR_PC = 0.30660139378555057;
+
+/** How much of the structures' marks and names is drawn, 0 to 1, from the camera's distance from the Sun, pc. */
+export function structuresFade(cameraFromSunPc: number): number {
+  const ly = cameraFromSunPc / LIGHT_YEAR_PC;
+  const t = (Math.log(ly) - Math.log(STRUCTURES_FROM_LY)) / (Math.log(STRUCTURES_FULL_LY) - Math.log(STRUCTURES_FROM_LY));
+  const c = Math.min(1, Math.max(0, t));
+  return c * c * (3 - 2 * c);
+}
+
+const structures = { strength: 0 };
+
+/** This frame's fade of the structures (structuresFade, from the camera given to updateMarkHosts). */
+export function structuresStrength(): number {
+  return structures.strength;
+}
+
+interface LaniakeaFolds {
+  readonly catalogue: LaniakeaCatalogue;
+  /** The host each galaxy is the mark of, -1 none. */
+  readonly marks: Int32Array;
+  /** Each galaxy's host and its distance from it; -1 for one of no group, a place of its own. */
+  readonly host: Int32Array;
+  readonly separationPc: Float32Array;
+  readonly folds: (k: number) => FoldOf;
+}
+
+let laniakea: LaniakeaFolds | null = null;
+
+/** A structure's host, by its body's id: "structure:structure-coma-cluster". */
+export function structureHostKey(name: string): string {
+  return `structure:${structureBodyId({ name })}`;
+}
+
+/** The structures' hosts and every galaxy's fold, once for a catalogue (see the header). */
+export function laniakeaFolds(c: LaniakeaCatalogue): LaniakeaFolds {
+  if (laniakea !== null && laniakea.catalogue === c) {
+    return laniakea;
+  }
+  const landmarks = c.info.landmarks;
+  const at = (l: (typeof landmarks)[number]): [number, number, number] => [l.x, l.y, l.z];
+  const basinOf = (p: readonly [number, number, number]): string | null => {
+    if (c.basins === null) return null;
+    const label = basinAt(c.basins, 'galaxiesAttraction', p);
+    if (label === 0) return null;
+    const basin = landmarks.find(
+      (l) => l.kind === 'basin' && l.basin?.some((b) => b.grid === 'galaxiesAttraction' && b.label === label),
+    );
+    return basin === undefined ? null : structureHostKey(basin.name);
+  };
+  // Basins first, then what folds into them, then what folds into those.
+  for (const l of landmarks) {
+    if (l.kind === 'basin' || l.kind === 'void' || l.kind === 'wall' || l.kind === 'repeller') {
+      MARK_HOSTS.add(structureHostKey(l.name), at(l), null, l.kind === 'basin' ? (l.radiusPc ?? Infinity) : Infinity);
+    }
+  }
+  for (const l of landmarks) {
+    if (l.kind === 'supercluster' || l.kind === 'attractor') {
+      MARK_HOSTS.add(structureHostKey(l.name), at(l), basinOf(at(l)));
+    }
+  }
+  const above = landmarks.filter((l) => l.kind === 'supercluster' || l.kind === 'attractor');
+  for (const l of landmarks) {
+    if (l.kind !== 'cluster') continue;
+    let parent: string | null = null;
+    let best = CLUSTER_IN_SUPERCLUSTER_PC;
+    for (const s of above) {
+      const d = Math.hypot(s.x - l.x, s.y - l.y, s.z - l.z);
+      if (d < best) {
+        best = d;
+        parent = structureHostKey(s.name);
+      }
+    }
+    MARK_HOSTS.add(structureHostKey(l.name), at(l), parent ?? basinOf(at(l)), l.radiusPc ?? Infinity);
+  }
+  // The groups: a named cluster's is the cluster's own host; any other of two or more its
+  // brightest's, present only while its radius is large on the screen.
+  const groups = c.groupBrightest.length;
+  const groupHost = new Int32Array(groups).fill(-1);
+  const marks = new Int32Array(c.count).fill(-1);
+  for (let g = 0; g < groups; g += 1) {
+    const b = c.groupBrightest[g]!;
+    if (b < 0) continue;
+    const landmark = c.groupLandmark.get(g);
+    if (landmark !== undefined) {
+      groupHost[g] = MARK_HOSTS.indexOf(structureHostKey(landmarks[landmark]!.name));
+      continue;
+    }
+    if (c.groupMembers[g]! < 2) continue;
+    const radius = c.groupRadiusPc[g]!;
+    groupHost[g] = MARK_HOSTS.add(`lk:g${g}`, laniakeaPositionPc(c, b), null, radius, radius);
+    marks[b] = groupHost[g]!;
+  }
+  const host = new Int32Array(c.count).fill(-1);
+  const separationPc = new Float32Array(c.count).fill(Infinity);
+  for (let k = 0; k < c.count; k += 1) {
+    const g = groupOf(c, k);
+    const h = g < 0 ? -1 : groupHost[g]!;
+    if (h < 0 || marks[k] === h) continue;
+    host[k] = h;
+    separationPc[k] = MARK_HOSTS.distancePc(h, laniakeaPositionPc(c, k));
+  }
+  const folds = (k: number): FoldOf => {
+    const own = marks[k]!;
+    if (own >= 0) return MARK_HOSTS.foldOf(own);
+    return host[k]! < 0 ? UNFOLDED : { host: host[k]!, separationPc: separationPc[k]! };
+  };
+  laniakea = { catalogue: c, marks, host, separationPc, folds };
+  return laniakea;
 }

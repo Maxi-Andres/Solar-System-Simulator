@@ -159,3 +159,26 @@ describe('a host with a reach', () => {
     expect(h.member(g, 1.5e6)).toBe(1);
   });
 });
+
+describe('a host present only while its system is large on the screen', () => {
+  it('is no mark from afar, and comes in, its members with it, as its radius grows past SYSTEM_GONE_PX', () => {
+    const h = new FoldHosts();
+    // A group of 1 Mpc's radius: present while that is large, its own mark and its members'.
+    const g = h.add('group', [0, 0, 0], null, 1e6, 1e6);
+    const far = (1e6 * 1000) / SYSTEM_GONE_PX + 1;
+    h.update([0, 0, far], 1000, []);
+    expect(h.strength[g]).toBe(0);
+    expect(h.member(g, 5e5)).toBe(0);
+    const near = (1e6 * 1000) / SYSTEM_FULL_PX - 1;
+    h.update([0, 0, near], 1000, []);
+    expect(h.strength[g]).toBe(1);
+    expect(h.member(g, 5e5)).toBe(1);
+  });
+
+  it('is there from anywhere when pinned: the focus’s group', () => {
+    const h = new FoldHosts();
+    const g = h.add('group', [0, 0, 0], null, 1e6, 1e6);
+    h.update([0, 0, 1e12], 1000, [g]);
+    expect(h.strength[g]).toBe(1);
+  });
+});

@@ -15,7 +15,8 @@ export type BodyId = string;
  * pulsars.json (web/src/core/pulsars.ts). And 'globular-cluster': a cluster gone to, from
  * globular-clusters.json (web/src/core/globularClusters.ts) -- a place of no surface. And
  * 'galaxy': another galaxy of the Local Group, from web/src/core/localGroup.ts and
- * local-group.json -- a place of no surface too.
+ * local-group.json -- a place of no surface too. And 'structure': a cluster, supercluster,
+ * basin, void or wall of laniakea/laniakea.json's landmarks (web/src/core/laniakea.ts).
  */
 export type BodyKind =
   | 'star'
@@ -30,7 +31,8 @@ export type BodyKind =
   | 'neutron-star'
   | 'globular-cluster'
   | 'supernova-remnant'
-  | 'galaxy';
+  | 'galaxy'
+  | 'structure';
 
 /**
  * Which surface-map set a body is being drawn with.

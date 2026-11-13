@@ -1213,7 +1213,8 @@ export function SolarSystem({
         !lensState.drawnByLens.has(handle.definition.id) &&
         handle.definition.kind !== 'globular-cluster' &&
         handle.definition.kind !== 'supernova-remnant' &&
-        handle.definition.kind !== 'galaxy';
+        handle.definition.kind !== 'galaxy' &&
+        handle.definition.kind !== 'structure';
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;

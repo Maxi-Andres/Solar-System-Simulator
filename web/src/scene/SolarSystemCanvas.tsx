@@ -10,6 +10,7 @@ import type { PulsarArchive } from '../core/pulsars.ts';
 import type { GlobularClusterArchive } from '../core/globularClusters.ts';
 import type { LocalGroupArchive } from '../core/localGroup.ts';
 import type { LocalVolumeArchive } from '../core/localVolume.ts';
+import type { LaniakeaCatalogue, LaniakeaNameIndex } from '../core/laniakea.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
@@ -31,6 +32,7 @@ import { GlowComposite } from './GlowComposite.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
+import { Laniakea } from './Laniakea.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
 import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
@@ -151,6 +153,13 @@ export interface SolarSystemCanvasProps {
   /** The galaxies beyond, out to the Virgo Cluster, and what a click on one's mark does. */
   readonly localVolume: LazySource<LocalVolumeArchive>;
   readonly onPickVolumeGalaxy: (k: number) => void;
+  /** Laniakea and beyond, its layers, and what a click on a galaxy's mark does. */
+  readonly laniakea: LazySource<LaniakeaCatalogue>;
+  readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
+  readonly showLaniakea: boolean;
+  readonly showLaniakeaBasin: boolean;
+  readonly showShapleyBasin: boolean;
+  readonly onPickLaniakeaGalaxy: (k: number) => void;
 }
 
 export function SolarSystemCanvas({
@@ -194,6 +203,12 @@ export function SolarSystemCanvas({
   onPickGalaxy,
   localVolume,
   onPickVolumeGalaxy,
+  laniakea,
+  laniakeaNames,
+  showLaniakea,
+  showLaniakeaBasin,
+  showShapleyBasin,
+  onPickLaniakeaGalaxy,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -233,6 +248,9 @@ export function SolarSystemCanvas({
     showSupernovaRemnants,
     showLocalGroup,
     showNuclearCluster,
+    showLaniakea,
+    showLaniakeaBasin,
+    showShapleyBasin,
   ]);
 
   return (
@@ -349,6 +367,18 @@ export function SolarSystemCanvas({
         onPick={onPickGalaxy}
         volume={localVolume}
         onPickVolume={onPickVolumeGalaxy}
+      />
+      <Laniakea
+        source={laniakea}
+        names={laniakeaNames}
+        store={store}
+        clock={clock}
+        focus={focus}
+        visible={showLaniakea}
+        showMarks={showIcons}
+        showBasin={showLaniakeaBasin}
+        showShapley={showShapleyBasin}
+        onPick={onPickLaniakeaGalaxy}
       />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />

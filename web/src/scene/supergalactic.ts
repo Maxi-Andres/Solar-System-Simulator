@@ -52,3 +52,28 @@ export const LOCAL_VOLUME_VIEW: FramingView = supergalacticView();
 
 /** Where the breadcrumb's Virgo Cluster looks from (scale.ts VIRGO_FRAMING_KM), on M87: the same way, the Sun to the left. */
 export const VIRGO_VIEW: FramingView = LOCAL_VOLUME_VIEW;
+
+/** A view from over the supergalactic pole, turned by `degrees` about it (counter-clockwise on the screen). */
+export function turnedView(view: FramingView, degrees: number): FramingView {
+  const d = { x: view.direction[0], y: view.direction[1], z: view.direction[2] };
+  const up = { x: view.up[0], y: view.up[1], z: view.up[2] };
+  // right = up x direction.
+  const right = cross(up, d);
+  const a = (degrees * Math.PI) / 180;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { direction: view.direction, up: [c * up.x - s * right.x, c * up.y - s * right.y, c * up.z - s * right.z] };
+}
+
+/**
+ * Laniakea's turn of the supergalactic view (scale.ts LANIAKEA_FRAMING_KM): 15 degrees, which
+ * lays its basin's longest extent, from the Great Attractor out past Pavo-Indus, along the
+ * frame's width -- worked out over every 5 degrees for the fewest of its voxels off the frame.
+ */
+export const LANIAKEA_TURN_DEG = 15;
+
+/** Where the breadcrumb's Laniakea looks from, on its attractor. */
+export const LANIAKEA_VIEW: FramingView = turnedView(LOCAL_VOLUME_VIEW, LANIAKEA_TURN_DEG);
+
+/** Where the breadcrumb's Nearby Universe looks from, on the Sun: the same way. */
+export const NEARBY_UNIVERSE_VIEW: FramingView = LANIAKEA_VIEW;

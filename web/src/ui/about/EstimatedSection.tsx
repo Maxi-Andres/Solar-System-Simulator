@@ -30,6 +30,7 @@ export const estimatedSection: AboutSection = {
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
+    { id: 'laniakea', label: 'Laniakea and beyond' },
   ],
   Body: ({ data }) => {
     const { store, beltInfo, cometInfo, exoplanetCatalog } = data;
@@ -789,6 +790,61 @@ export const estimatedSection: AboutSection = {
           </Item>
           <Item title="What is not drawn">
             Each galaxy’s motion, its spiral arms and its dust; a galaxy with no size or no V is its mark only.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="laniakea">
+          Laniakea and beyond
+        </Sub>
+        <Items>
+          <Item title="Distances from redshift">
+            23,350 galaxies have no measured distance: each is where its redshift puts it, in the CMB’s frame, by
+            the Hubble law in a flat universe of matter and a cosmological constant — H<sub>0</sub> 74.6 km/s per
+            Mpc, Cosmicflows-4’s, and Ω<sub>m</sub> 0.3 <Cite k={['tully2023', 'courtois2023']} />. Its own motion
+            through the flow, a few hundred km/s, is a few Mpc of error at any distance. Its panel says “its
+            redshift, estimated”.
+          </Item>
+          <Item title="A group’s redshift for its members">
+            8,623 of those are at their 2MASS group’s mean redshift, not their own <Cite k="tully2015" />: a
+            cluster’s galaxies move about it at a thousand km/s, and by their own redshifts would stand in a line
+            pointing at us 30 Mpc long — the finger of God.
+          </Item>
+          <Item title="Depth within a group">
+            41,058 galaxies placed at their group’s distance are put in front of it or behind by a draw from the
+            group’s measured width on the sky, the same each time. Their panels say so.
+            <Why>one distance for all would draw every group as a sheet facing the Sun.</Why>
+          </Item>
+          <Item title="Distances linked from a group">
+            8,351 galaxies not in Cosmicflows-4 are in a 2MASS group whose other members are: they are at that
+            group’s measured distance.
+          </Item>
+          <Item title="Their colours">
+            82,739 have no B−V measured: each is drawn in its type’s <Cite k="fukugita1995" />, as the Local
+            Volume’s are.
+          </Item>
+          <Item title="V from K">
+            8,005, behind dust or never measured in B, have their V from 2MASS K<sub>s</sub> and the median V−K
+            of their type, measured on this catalogue’s own galaxies that have both: E 3.10, S0 3.18, Sa 3.19, Sb
+            3.14, Sc 3.00, Sm to Im 2.66, each scattered by 0.3 to 0.8 magnitudes.
+          </Item>
+          <Item title="Their sizes">
+            Every half-light radius is estimated: 0.366 of the D25 radius for early types, 0.493 for late, the
+            medians of the Virgo galaxies both catalogues measure; for the 5,014 with no D25, its 2MASS isophote’s
+            radius times 1.38, the median ratio over 38,000 that have both. 3,577 have neither, and are points
+            only.
+          </Item>
+          <Item title="Where the structures are">
+            A cluster at its group’s distance; a supercluster at the mean of its Abell clusters’ redshifts; a
+            basin at its attractor; a void at its deepest point, its extents rough and not centred on it{' '}
+            <Cite k="tully2019" />; a wall along its line in the survey’s slice. Their panels say which are
+            estimates.
+          </Item>
+          <Item title="What is not drawn">
+            Each galaxy’s motion, its arms and dust; a galaxy with no V its faint dot only. Behind the Milky Way’s
+            plane, where 2MRS does not look — 5° either side, 8° within 30° of the Galactic Centre — only the 51
+            other catalogues place: the empty band there is not empty space. And 2MRS is flux-limited, and past 200
+            Mpc only the SDSS north and 6dF south go on: the map thins with distance because the surveys do, not
+            the universe.
           </Item>
         </Items>
       </>

@@ -48,6 +48,15 @@ import { SATELLITE_HIDDEN_PX, SATELLITE_SHOWN_PX } from './scale.ts';
  * and its members fold as that reach shrinks on the screen from SYSTEM_FULL_PX to
  * SYSTEM_GONE_PX: whole down to the size at which homeName folds the names, gone at half of it.
  * A host with no reach given is folded by separation alone.
+ *
+ * ## A host that is a place only when near
+ *
+ * Laniakea's ten thousand groups (G3) are each a host, its brightest galaxy's mark, and at the
+ * top of nothing: folded by separation alone, every one of them was a mark from anywhere, a
+ * wall of rings over the map. So a host may also be **present** only while its system is
+ * large on the screen: its own mark, and with it its members', drawn as its presence radius
+ * grows from SYSTEM_GONE_PX to SYSTEM_FULL_PX -- a group far off is its light alone, and comes
+ * in as a place, its mark and its galaxies' at once, as the camera comes near.
  */
 
 /** The member's mark is gone with its apparent separation from its host this small, CSS pixels. */
@@ -109,6 +118,8 @@ export class FoldHosts {
   private readonly separation: number[] = [];
   /** The reach of its system, parsecs (see the header); Infinity for none. */
   private readonly reach: number[] = [];
+  /** The radius its own mark needs on the screen to be there, parsecs (see the header); 0 for always. */
+  private readonly presence: number[] = [];
   /** This frame's: pixels per parsec at the host's distance, how much of its mark is drawn, and how much it lets its members' be. */
   scale = new Float64Array(0);
   strength = new Float64Array(0);
@@ -123,8 +134,17 @@ export class FoldHosts {
     return this.index.get(key) ?? -1;
   }
 
-  /** Adds a host, if it is not there yet, and returns its index. Its own host must be there first. */
-  add(key: string, positionPc: readonly [number, number, number], parentKey: string | null, reachPc = Infinity): number {
+  /**
+   * Adds a host, if it is not there yet, and returns its index. Its own host must be there
+   * first. `presencePc`: present only while that radius is large on the screen (see the header).
+   */
+  add(
+    key: string,
+    positionPc: readonly [number, number, number],
+    parentKey: string | null,
+    reachPc = Infinity,
+    presencePc = 0,
+  ): number {
     const known = this.index.get(key);
     if (known !== undefined) {
       return known;
@@ -142,6 +162,7 @@ export class FoldHosts {
     this.parent.push(parent);
     this.separation.push(parent < 0 ? Infinity : this.distancePc(parent, positionPc));
     this.reach.push(reachPc);
+    this.presence.push(presencePc);
     return i;
   }
 
@@ -188,8 +209,10 @@ export class FoldHosts {
       const p = this.parent[h]!;
       // A host where its own host is -- the Milky Way inside the Local Group whose mark is its
       // own -- is that mark: as much there as it is.
-      this.strength[h] =
+      const own =
         this.pinned[h] === 1 || p < 0 ? 1 : this.separation[h] === 0 ? this.strength[p]! : this.member(p, this.separation[h]!);
+      const presence = this.presence[h]!;
+      this.strength[h] = presence > 0 && this.pinned[h] === 0 ? Math.min(own, systemStrength(presence * this.scale[h]!)) : own;
     }
   }
 

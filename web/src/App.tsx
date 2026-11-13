@@ -43,6 +43,13 @@ import {
   galaxyOf,
 } from './core/localGroup.ts';
 import { ensureNamedVolumeGalaxies } from './core/localVolume.ts';
+import {
+  ensureStructureBodies,
+  laniakeaGalaxy,
+  structureEarthView,
+  structureFramingKm,
+  structureOf,
+} from './core/laniakea.ts';
 import { renderDemand } from './core/renderDemand.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -67,6 +74,10 @@ import { Toolbar } from './ui/Toolbar.tsx';
 // radii out -- all of it in view: whichever way it is focused. A galaxy of the Local Group the
 // same way, as its photographs show it, all of it in view (localGroup.ts).
 setFocusFraming((id) => {
+  const structure = structureOf(id);
+  if (structure !== null) {
+    return { km: structureFramingKm(structure), view: structureEarthView(structure) };
+  }
   const remnant = remnantOf(id);
   if (remnant !== null) {
     return { km: 6 * remnantRadiusKm(remnant), view: remnantEarthView(remnant) };
@@ -110,6 +121,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   supernovaRemnants: ['supernova-remnant'],
   // The four big galaxies are bodies from the start, a dwarf once gone to (localGroup.ts).
   localGroup: ['galaxy'],
+  // The named clusters, superclusters, basins, voids and walls, bodies once loaded (laniakea.ts).
+  laniakea: ['structure'],
 };
 
 export function App() {
@@ -128,6 +141,8 @@ export function App() {
     globularClusters,
     localGroup,
     localVolume,
+    laniakea,
+    laniakeaNames,
     clock,
     error,
     readout,
@@ -375,6 +390,40 @@ export function App() {
     [store, localVolume, setFocus],
   );
 
+  // A galaxy of Laniakea's catalogue (G3), its mark clicked or found by search: made a body
+  // with its names, which come with the first one gone to.
+  const goToLaniakeaGalaxy = useCallback(
+    (k: number): void => {
+      if (store === null) {
+        return;
+      }
+      Promise.all([laniakea.request(), laniakeaNames.request()])
+        .then(() => {
+          const catalogue = laniakea.value;
+          if (catalogue === null || k < 0 || k >= catalogue.count) {
+            return;
+          }
+          const names = laniakeaNames.value;
+          const galaxy = laniakeaGalaxy(catalogue, k, names?.names.name[k] ?? `Galaxy ${k}`, names?.others.get(k) ?? []);
+          setFocus(ensureGalaxyBody(store, galaxy));
+          renderDemand.request();
+        })
+        .catch((error: unknown) => {
+          console.error('Could not go to that galaxy', error);
+        });
+    },
+    [store, laniakea, laniakeaNames, setFocus],
+  );
+
+  // The named structures are bodies once the catalogue arrives: named and marked on the sky.
+  const laniakeaCatalogue = useSyncExternalStore(laniakea.subscribe, () => laniakea.value);
+  useEffect(() => {
+    if (store !== null && laniakeaCatalogue !== null) {
+      ensureStructureBodies(store, laniakeaCatalogue.info.landmarks);
+      renderDemand.request();
+    }
+  }, [store, laniakeaCatalogue]);
+
   // The brightest beyond the Local Group are bodies once they arrive: named on the sky and
   // listed, as the four big ones of the Local Group are (localVolume.ts NAMED_V).
   const volumeArchive = useSyncExternalStore(localVolume.subscribe, () => localVolume.value);
@@ -614,6 +663,12 @@ export function App() {
         onPickGalaxy={goToGalaxy}
         localVolume={localVolume}
         onPickVolumeGalaxy={goToVolumeGalaxy}
+        laniakea={laniakea}
+        laniakeaNames={laniakeaNames}
+        showLaniakea={layers.laniakea}
+        showLaniakeaBasin={layers.laniakeaBasin}
+        showShapleyBasin={layers.shapleyBasin}
+        onPickLaniakeaGalaxy={goToLaniakeaGalaxy}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -644,6 +699,8 @@ export function App() {
             planetSystems={planetSystems}
             localVolume={localVolume}
             onVolumeGalaxy={goToVolumeGalaxy}
+            laniakea={laniakea}
+            onLaniakeaGalaxy={goToLaniakeaGalaxy}
           />
 
           {/* Bottom-left: time. */}
@@ -702,6 +759,9 @@ export function App() {
               onGalaxy={goToGalaxy}
               localVolume={localVolume}
               onVolumeGalaxy={goToVolumeGalaxy}
+              laniakea={laniakea}
+              laniakeaNames={laniakeaNames}
+              onLaniakeaGalaxy={goToLaniakeaGalaxy}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>

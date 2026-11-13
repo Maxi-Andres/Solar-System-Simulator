@@ -37,6 +37,7 @@ export const measuredSection: AboutSection = {
     { id: 'galaxy', label: 'The Milky Way' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
+    { id: 'laniakea', label: 'Laniakea and beyond' },
   ],
   Body: ({ data }) => {
     const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog, pulsarCatalog } = data;
@@ -675,6 +676,53 @@ export const measuredSection: AboutSection = {
           <Item>
             Each stands still at its place, as the Local Group’s do.{' '}
             <Xref to="estimated" sub="local-volume">
+              What is not measured
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="laniakea">
+          Laniakea and beyond
+        </Sub>
+        <Items>
+          <Item>
+            <Strong>86,899 galaxies</Strong> out to 703 Mpc, 2.3 billion light years: the{' '}
+            <Strong>Cosmicflows-4</Strong> catalogue’s 55,000 measured distances <Cite k="tully2023" /> and the{' '}
+            <Strong>2MASS Redshift Survey</Strong>’s 43,000 redshifts <Cite k="huchra2012" />, merged, less the 813
+            the Local Group’s and the Local Volume’s catalogues already draw. 32,399 are at their own measured
+            distance — by the fundamental plane <Cite k={['howlett2022', 'springob2014']} />, Tully–Fisher{' '}
+            <Cite k="kourkchi2020" />, type Ia supernovae, surface brightness fluctuations, the tip of the red giant
+            branch, Cepheids — and 22,799 at their group’s, the mean of its members’ measured distances.
+          </Item>
+          <Item>
+            Each one’s light from <Strong>HyperLEDA</Strong> <Cite k="makarov2014" />: its V, less the Milky Way’s
+            dust in front <Cite k="schlafly2011" />, where it measures one (4,160); its B, its D25 diameter, axis
+            ratio, position angle, inclination and T type. Its K<sub>s</sub> and its isophotal radius from 2MRS.
+          </Item>
+          <Item>
+            The <Strong>groups</Strong> they were placed with: Cosmicflows-4’s and the 2MASS groups{' '}
+            <Cite k="tully2015" />, 9,799 in all, a named cluster’s radius and mass from the latter.
+          </Item>
+          <Item>
+            <Strong>Laniakea’s basin</Strong>, and its neighbours’: the watersheds of the Cosmicflows-4 velocity
+            field <Cite k={['courtois2023', 'dupuyCourtois2023']} />, each 10.5 Mpc voxel given to the attractor its
+            flow ends at — twice, once from the galaxies’ reconstruction and once from the groups’. The first puts
+            the Milky Way in a basin of its own, Laniakea, 4.7 million Mpc³; the second in Shapley’s{' '}
+            <Cite k="valade2024" />.
+          </Item>
+          <Item>
+            The <Strong>named structures</Strong>: the clusters by their groups; the superclusters of Einasto et
+            al.’s catalogue of Abell clusters <Cite k="einasto1997" />; the Great Attractor where its galaxies were
+            seen to stream <Cite k="lyndenBell1988" />, the Norma Cluster near its heart behind the Milky Way’s plane{' '}
+            <Cite k="kraanKorteweg1996" />; the voids of Cosmicflows-3’s density <Cite k="tully2019" />; the CfA2 and
+            Sloan Great Walls <Cite k={['gellerHuchra1989', 'gott2005']} />. Laniakea itself as first drawn:
+            10<sup>17</sup> M☉, 160 Mpc across <Cite k="tully2014" />.
+          </Item>
+          <Item>
+            The redshifts in the frame of the cosmic microwave background, by its dipole{' '}
+            <Cite k="planck2020" />.{' '}
+            <Xref to="estimated" sub="laniakea">
               What is not measured
             </Xref>
             .

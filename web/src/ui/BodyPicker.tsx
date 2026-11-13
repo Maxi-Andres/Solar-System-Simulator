@@ -24,12 +24,24 @@ import { GALAXY_VIEW } from '../scene/MilkyWay.tsx';
 import { LOCAL_GROUP_VIEW } from '../scene/LocalGroup.tsx';
 import {
   GALAXY_FRAMING_KM,
+  LANIAKEA_FRAMING_KM,
   LOCAL_GROUP_FRAMING_KM,
   LOCAL_VOLUME_FRAMING_KM,
+  NEARBY_UNIVERSE_FRAMING_KM,
   NEIGHBOURHOOD_FRAMING_KM,
   VIRGO_FRAMING_KM,
 } from '../scene/scale.ts';
-import { LOCAL_VOLUME_VIEW, VIRGO_VIEW } from '../scene/supergalactic.ts';
+import { LANIAKEA_VIEW, LOCAL_VOLUME_VIEW, NEARBY_UNIVERSE_VIEW, VIRGO_VIEW } from '../scene/supergalactic.ts';
+import {
+  ensureStructureBodies,
+  inLaniakea,
+  laniakeaLandmark,
+  laniakeaPlaceOf,
+  structureBodyId,
+  structureOf,
+  type LaniakeaCatalogue,
+} from '../core/laniakea.ts';
+import type { LaniakeaLandmark } from '@sss/tools/types';
 import { ensureGalaxyBody, galaxyBodyId, galaxyOf, GIANTS } from '../core/localGroup.ts';
 import { virgoCentre, volumeRegion, type LocalVolumeArchive, type VolumeRegion } from '../core/localVolume.ts';
 import type { LazySource } from '../core/satellites.ts';
@@ -67,6 +79,14 @@ import { Presence, useClosing } from './Presence.tsx';
  * breadcrumb is **Virgo Cluster** and that galaxy, the crumb going to M87, its centre, framed
  * the same way (VIRGO_FRAMING_KM), and its list the cluster's own groups and the way back. At a
  * galaxy of the Local Volume, Local Volume and that galaxy.
+ *
+ * Above it all, **Laniakea** (G3): its attractor, the camera 1.8 billion light years out over the
+ * supergalactic pole, its basin's outline about the frame (LANIAKEA_FRAMING_KM); its list, the
+ * Nearby Universe -- the Sun from 1.5 billion light years, out to the Shapley Supercluster
+ * (NEARBY_UNIVERSE_FRAMING_KM) -- Laniakea and the Local Volume, then the named structures by
+ * kind, nearest first. At a galaxy or a structure of its catalogue the breadcrumb is Laniakea
+ * and that place -- or, outside Laniakea's basin as the galaxies' watersheds draw it, Nearby
+ * Universe and that place: the Coma Cluster is not in Laniakea.
  *
  * Milky Way has a list of its own beside it: the places in the galaxy -- home first, the
  * Solar System and the Solar Neighbourhood, then the black holes (D5, blackHoles.ts), Sgr
@@ -126,6 +146,9 @@ export interface BodyPickerProps {
   /** The galaxies beyond the Local Group (localVolume.ts), and going to one by its index. */
   readonly localVolume: LazySource<LocalVolumeArchive>;
   readonly onVolumeGalaxy: (k: number) => void;
+  /** Laniakea's catalogue (laniakea.ts), and going to one of its galaxies by its record. */
+  readonly laniakea: LazySource<LaniakeaCatalogue>;
+  readonly onLaniakeaGalaxy: (k: number) => void;
 }
 
 /** Going to a planetary system from the breadcrumb: its star, framed with its planets. */
@@ -149,6 +172,7 @@ export type CrumbMenu = 'solar-system' | 'alpha-centauri' | 'planetary-system' |
 export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   if (
     body.kind === 'galaxy' ||
+    body.kind === 'structure' ||
     body.kind === 'neutron-star' ||
     body.kind === 'globular-cluster' ||
     body.kind === 'supernova-remnant'
@@ -179,9 +203,11 @@ export function BodyPicker({
   planetSystems,
   localVolume,
   onVolumeGalaxy,
+  laniakea,
 }: BodyPickerProps) {
   const [open, setOpen] = useState(false);
   const volumeArchive = useSyncExternalStore(localVolume.subscribe, () => localVolume.value);
+  const laniakeaArchive = useSyncExternalStore(laniakea.subscribe, () => laniakea.value);
   const root = useRef<HTMLDivElement>(null);
 
   const focusBody = store.body(focus);
@@ -198,8 +224,18 @@ export function BodyPicker({
     focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
   // Another galaxy: out of the Milky Way altogether -- and beyond the Local Group, in the
   // Local Volume or in the Virgo Cluster.
-  const inOtherGalaxy = focusBody.kind === 'galaxy';
+  const inOtherGalaxy = focusBody.kind === 'galaxy' || focusBody.kind === 'structure';
   const region = inOtherGalaxy ? volumeRegion(galaxyOf(focus)) : null;
+  // A galaxy or a structure of Laniakea's catalogue: in Laniakea, or beyond it (see the header).
+  const deep = focusBody.kind === 'structure' || galaxyOf(focus)?.laniakeaIndex !== undefined;
+  const deepPlace = !deep || laniakeaArchive === null ? null : laniakeaPlaceOf(laniakeaArchive, focus, galaxyOf(focus)?.laniakeaIndex);
+  const laniakeaItself = laniakeaArchive === null ? null : laniakeaLandmark(laniakeaArchive);
+  const beyondLaniakea =
+    deep &&
+    (laniakeaArchive === null ||
+      deepPlace === null ||
+      structureOf(focus) === laniakeaItself ||
+      !inLaniakea(laniakeaArchive, deepPlace));
   // What the focus's own crumb drops down. A star other than the Sun is in the
   // neighbourhood, not in the Solar System; nor is anything of Alpha Centauri's or another
   // star's, nor a black hole's, nor a pulsar.
@@ -243,6 +279,31 @@ export function BodyPicker({
       renderDemand.request();
     });
   };
+  // Laniakea: its attractor, the structures made bodies first if the catalogue has only now come.
+  const toStructure = (choose: (c: LaniakeaCatalogue) => LaniakeaLandmark | null, km?: number, view?: typeof LANIAKEA_VIEW): void => {
+    void laniakea.request().then(() => {
+      const c = laniakea.value;
+      const landmark = c === null ? null : choose(c);
+      if (c === null || landmark === null) {
+        return;
+      }
+      ensureStructureBodies(store, c.info.landmarks);
+      if (km !== undefined) {
+        requestFraming(km, view);
+      }
+      onFocus(structureBodyId(landmark));
+      renderDemand.request();
+    });
+  };
+  const toLaniakea = (): void => toStructure(laniakeaLandmark, LANIAKEA_FRAMING_KM, LANIAKEA_VIEW);
+  const toNearbyUniverse = (): void => {
+    void laniakea.request();
+    requestFraming(NEARBY_UNIVERSE_FRAMING_KM, NEARBY_UNIVERSE_VIEW);
+    onFocus('sun');
+    renderDemand.request();
+  };
+  // Laniakea's structures, under its caret.
+  const [laniakeaOpen, setLaniakeaOpen] = useState(false);
   // The Local Group's big galaxies, under its own caret.
   const [galaxiesOpen, setGalaxiesOpen] = useState(false);
   // The Local Volume's groups, or the Virgo Cluster's, under theirs.
@@ -273,8 +334,12 @@ export function BodyPicker({
     renderDemand.request();
   };
   // Opening one list closes the others.
-  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies' | 'volume'): void => {
+  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies' | 'volume' | 'laniakea'): void => {
     setOpen((value) => which === 'bodies' && !value);
+    setLaniakeaOpen((value) => which === 'laniakea' && !value);
+    if (which === 'laniakea') {
+      void laniakea.request();
+    }
     setSystemsOpen((value) => which === 'systems' && !value);
     setBlackHolesOpen((value) => which === 'places' && !value);
     setGalaxiesOpen((value) => which === 'galaxies' && !value);
@@ -287,11 +352,12 @@ export function BodyPicker({
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen && !volumeOpen) {
+    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen && !volumeOpen && !laniakeaOpen) {
       return;
     }
     const closeAll = (): void => {
       setOpen(false);
+      setLaniakeaOpen(false);
       setSystemsOpen(false);
       setBlackHolesOpen(false);
       setGalaxiesOpen(false);
@@ -313,7 +379,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen, volumeOpen]);
+  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen, volumeOpen, laniakeaOpen]);
 
   // A focus with no list of its own closes the one left open, rather than keep it to reopen later.
   useEffect(() => {
@@ -345,22 +411,41 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={region === 'virgo' ? toVirgo : toLocalVolume} outer>
-          {region === 'virgo' ? 'Virgo Cluster' : 'Local Volume'}
+        <Crumb onClick={beyondLaniakea ? toNearbyUniverse : toLaniakea} outer>
+          {beyondLaniakea ? 'Nearby Universe' : 'Laniakea'}
         </Crumb>
         <button
           type="button"
-          aria-label={region === 'virgo' ? 'Groups of the Virgo Cluster' : 'Groups of the Local Volume'}
+          aria-label="Structures of Laniakea and beyond"
           aria-haspopup="listbox"
-          aria-expanded={volumeOpen}
-          title={region === 'virgo' ? 'Go to a galaxy of the Virgo Cluster' : 'Go to a group of the Local Volume'}
-          onClick={() => only('volume')}
+          aria-expanded={laniakeaOpen}
+          title="Go to a cluster, supercluster or void"
+          onClick={() => only('laniakea')}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
-          <Caret open={volumeOpen} />
+          <Caret open={laniakeaOpen} />
         </button>
         <Separator />
-        {region === null && (
+        {!deep && (
+          <>
+            <Crumb onClick={region === 'virgo' ? toVirgo : toLocalVolume} outer>
+              {region === 'virgo' ? 'Virgo Cluster' : 'Local Volume'}
+            </Crumb>
+            <button
+              type="button"
+              aria-label={region === 'virgo' ? 'Groups of the Virgo Cluster' : 'Groups of the Local Volume'}
+              aria-haspopup="listbox"
+              aria-expanded={volumeOpen}
+              title={region === 'virgo' ? 'Go to a galaxy of the Virgo Cluster' : 'Go to a group of the Local Volume'}
+              onClick={() => only('volume')}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+            >
+              <Caret open={volumeOpen} />
+            </button>
+            <Separator />
+          </>
+        )}
+        {region === null && !deep && (
           <>
             <Crumb onClick={toLocalGroup} outer>
               Local Group
@@ -501,6 +586,29 @@ export function BodyPicker({
                   setSystemsOpen(false);
                 }
           }
+        />
+      </Presence>
+
+      <Presence show={laniakeaOpen}>
+        <LaniakeaList
+          archive={laniakeaArchive}
+          active={deep ? focus : null}
+          onNearbyUniverse={() => {
+            toNearbyUniverse();
+            setLaniakeaOpen(false);
+          }}
+          onLaniakea={() => {
+            toLaniakea();
+            setLaniakeaOpen(false);
+          }}
+          onLocalVolume={() => {
+            toLocalVolume();
+            setLaniakeaOpen(false);
+          }}
+          onChoose={(landmark) => {
+            toStructure(() => landmark);
+            setLaniakeaOpen(false);
+          }}
         />
       </Presence>
 
@@ -1479,6 +1587,67 @@ function VolumeList({
           <MemberRow name="Virgo Cluster" active={false} onChoose={onVirgo} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Laniakea's list's sections: the named structures by kind, in this order, nearest first in each. */
+const STRUCTURE_SECTIONS: readonly { readonly label: string; readonly kinds: readonly LaniakeaLandmark['kind'][] }[] = [
+  { label: 'Clusters', kinds: ['cluster'] },
+  { label: 'Superclusters', kinds: ['supercluster', 'attractor'] },
+  { label: 'Basins', kinds: ['basin', 'repeller'] },
+  { label: 'Voids and walls', kinds: ['void', 'wall'] },
+];
+
+/**
+ * Laniakea's list: the views -- the Nearby Universe, Laniakea, the Local Volume -- then the
+ * named structures, by kind, nearest first. Laniakea's own entry is the second view.
+ */
+function LaniakeaList({
+  archive,
+  active,
+  onNearbyUniverse,
+  onLaniakea,
+  onLocalVolume,
+  onChoose,
+}: {
+  archive: LaniakeaCatalogue | null;
+  active: BodyId | null;
+  onNearbyUniverse: () => void;
+  onLaniakea: () => void;
+  onLocalVolume: () => void;
+  onChoose: (landmark: LaniakeaLandmark) => void;
+}) {
+  const closing = useClosing();
+  const own = archive === null ? null : laniakeaLandmark(archive);
+  const landmarks = archive === null ? [] : [...archive.info.landmarks].filter((l) => l !== own).sort((a, b) => a.distancePc - b.distancePc);
+  return (
+    <div
+      role="listbox"
+      aria-label="Structures of Laniakea and beyond"
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, width: '15rem', maxHeight: '70vh', overflowY: 'auto' }}
+    >
+      <MemberRow name="Nearby Universe" active={false} onChoose={onNearbyUniverse} />
+      <MemberRow name="Laniakea" active={own !== null && active === structureBodyId(own)} onChoose={onLaniakea} />
+      <MemberRow name="Local Volume" active={false} onChoose={onLocalVolume} />
+      {archive === null && <div style={SECTION_HEADING}>Loading…</div>}
+      {STRUCTURE_SECTIONS.map(({ label, kinds }) => {
+        const rows = landmarks.filter((l) => kinds.includes(l.kind));
+        return rows.length === 0 ? null : (
+          <div key={label}>
+            <div style={SECTION_HEADING}>{label}</div>
+            {rows.map((landmark) => (
+              <MemberRow
+                key={landmark.name}
+                name={landmark.name}
+                active={active === structureBodyId(landmark)}
+                onChoose={() => onChoose(landmark)}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -25,6 +25,7 @@ export const choicesSection: AboutSection = {
     { id: 'galaxy', label: 'The galaxy’s light' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
+    { id: 'laniakea', label: 'Laniakea and beyond' },
   ],
   Body: ({ data }) => {
     const { stars } = data;
@@ -471,9 +472,9 @@ export const choicesSection: AboutSection = {
             the Milky Way and Segue 3, a star cluster, are left out of it. A distance error of a magnitude or more
             is taken as not given: M51’s reads 24.23.
           </Item>
-          <Item title="As far as 200 million light years">
-            The camera pulls back that far: from there the Virgo Cluster, 54 million light years off, and the Local
-            Group are in one frame from either end.
+          <Item title="The Virgo Cluster and home in one frame">
+            From 200 million light years the Virgo Cluster, 54 million light years off, and the Local Group are in
+            one frame from either end.
           </Item>
           <Item title="From over the supergalactic pole">
             The Local Volume is seen from over the pole of the plane its galaxies lie in, the Virgo Cluster to the
@@ -492,8 +493,59 @@ export const choicesSection: AboutSection = {
           </Item>
           <Item title="The Local Group, named as one">
             From past about 11 Mpc the Milky Way’s name is the Local Group’s, and its galaxies’ names fold into it.
-            The Local Volume and the Virgo Cluster are never a point from anywhere the camera goes: they are on the
-            breadcrumb.
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="laniakea">
+          Laniakea and beyond
+        </Sub>
+        <Items>
+          <Item title="Where they are now, not where they were seen">
+            Every galaxy is at its comoving distance: the scene is one instant, and the light of the farthest left
+            it 2.2 billion years ago. Its absolute V is from its luminosity distance, so seen from the Sun it is
+            brighter here than the sky shows it by 5 log<sub>10</sub>(1 + z) magnitudes — 0.06 at the Coma
+            Cluster, 0.2 at 400 Mpc. Its panel gives the V the sky shows.
+          </Item>
+          <Item title="A group’s distance over a galaxy’s own">
+            A galaxy in a Cosmicflows-4 group is at the group’s distance, the mean of its members’, not its own
+            Tully–Fisher or fundamental-plane distance, each 20% uncertain.
+            <Why>a cluster’s galaxies, each at its own, would scatter along the line of sight over 40 Mpc.</Why>
+          </Item>
+          <Item title="Each a point, the near ones volumes">
+            Every galaxy is a point holding all its light, as a far galaxy of the Local Volume is, and at least a
+            faint dot in its colour; the few the camera is near are volumes, by the same three profiles.
+            <Why>at these distances almost all are under a pixel; their map is what the catalogue is.</Why>
+          </Item>
+          <Item title="Marks only near">
+            A group is marked only while it is large on the screen, its galaxies with it; a named cluster’s
+            galaxies fold into the cluster. The clusters, superclusters, basins, voids and walls are named from out
+            of the Local Group on.
+            <Why>86,899 marks would be a wall of rings.</Why>
+          </Item>
+          <Item title="Both answers to where we live">
+            The Laniakea Basin layer draws Laniakea’s boundary as the galaxies’ reconstruction finds it; the
+            Shapley Basin layer the groups’ answer, in which there is no Laniakea and the Milky Way’s flow ends at
+            Shapley. Valade et al. find the data slightly prefer the second <Cite k="valade2024" />. The
+            breadcrumb’s “Laniakea” is the first; every panel gives both.
+            <Why>the two reconstructions are of the same data, and neither is settled.</Why>
+          </Item>
+          <Item title="Drawn faint">
+            A basin and a void are outlines, their faces nearly clear; from inside a basin its outline is a quarter
+            as strong. A wall is a line along it: the CfA2 Great Wall is a sheet 50° tall, drawn through the Coma
+            Cluster’s declination.
+          </Item>
+          <Item title="As far as 3 billion light years">
+            The camera pulls back that far: focused on the Sun, from over the supergalactic pole, the superclusters
+            out to the Sculptor Supercluster, 400 Mpc off, and the Sloan Great Wall are in one frame. Laniakea’s view
+            stands 1.8 billion light years over its attractor, the Nearby Universe’s 1.5 billion over the Sun.
+          </Item>
+          <Item title="The Local Volume, named as one">
+            From past about 124 Mpc the Milky Way’s name is the Local Volume’s, and the names of its galaxies and
+            the Virgo Cluster’s fold into it and into the Virgo Cluster’s own.
+          </Item>
+          <Item title="Left out">
+            The 813 galaxies the Local Group’s and the Local Volume’s catalogues draw, drawn from those; 239
+            HyperLEDA records that are not galaxies.
           </Item>
         </Items>
       </>

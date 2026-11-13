@@ -217,7 +217,7 @@ export function labelRank(kind: string, parent: BodyId | null): number {
  * that would hide a remnant's name, its only way to be clicked, whenever the Sun's planets
  * are small on screen.
  */
-const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant', 'galaxy']);
+const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant', 'galaxy', 'structure']);
 
 export function LabelProjector({
   store,
@@ -475,7 +475,8 @@ export function LabelProjector({
     // into the Solar System's; the other galaxies keep theirs.
     if (home?.galaxyFolded === true) {
       for (let i = projected.length - 1; i >= 0; i -= 1) {
-        if (store.body(projected[i]!.id).kind !== 'galaxy') {
+        const kind = store.body(projected[i]!.id).kind;
+        if (kind !== 'galaxy' && kind !== 'structure') {
           projected.splice(i, 1);
         }
       }
@@ -485,7 +486,17 @@ export function LabelProjector({
     if (home?.localGroupFolded === true) {
       for (let i = projected.length - 1; i >= 0; i -= 1) {
         const galaxy = galaxyOf(projected[i]!.id);
-        if (galaxy !== null && galaxy.volumeIndex === undefined && projected[i]!.id !== focus) {
+        if (galaxy !== null && galaxy.volumeIndex === undefined && galaxy.laniakeaIndex === undefined && projected[i]!.id !== focus) {
+          projected.splice(i, 1);
+        }
+      }
+    }
+    // Farther still, the Local Volume a small thing (G3): its galaxies' names, and the Virgo
+    // Cluster's, fold into its own and into the Virgo Cluster's (homeName.ts).
+    if (home?.localVolumeFolded === true) {
+      for (let i = projected.length - 1; i >= 0; i -= 1) {
+        const galaxy = galaxyOf(projected[i]!.id);
+        if (galaxy !== null && galaxy.volumeIndex !== undefined && projected[i]!.id !== focus) {
           projected.splice(i, 1);
         }
       }

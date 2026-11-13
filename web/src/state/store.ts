@@ -74,6 +74,9 @@ export type LayerId =
   | 'supernovaRemnants'
   | 'milkyWay'
   | 'localGroup'
+  | 'laniakea'
+  | 'laniakeaBasin'
+  | 'shapleyBasin'
   | 'nuclearCluster'
   | 'spacecraft'
   | 'satellites'
@@ -133,6 +136,15 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The Local Group's galaxies (core/localGroup.ts): each a volume of its measured light,
   // size and shape, past the Milky Way; the dwarfs marked as the camera leaves the disc.
   { id: 'localGroup', label: 'Local Group', pending: null },
+  // Laniakea and beyond (core/laniakea.ts): 86,899 galaxies out to 700 Mpc, each its light,
+  // and the named clusters, superclusters, voids and walls.
+  { id: 'laniakea', label: 'Laniakea', pending: null },
+  // Laniakea's boundary as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois
+  // 2023): a faint outline.
+  { id: 'laniakeaBasin', label: 'Laniakea Basin', pending: null },
+  // The groups' reconstruction's answer: the Milky Way's flow ends at Shapley, and Laniakea is
+  // part of Shapley's basin. Off, as the other answer is on; the About says why both.
+  { id: 'shapleyBasin', label: 'Shapley Basin', pending: null },
   // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
   // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
   // none a particular one. A layer of its own, as the galaxy's model is, so the measured
@@ -180,6 +192,9 @@ const DEFAULT_LAYERS: LayerState = {
   supernovaRemnants: true,
   milkyWay: true,
   localGroup: true,
+  laniakea: true,
+  laniakeaBasin: true,
+  shapleyBasin: false,
   nuclearCluster: true,
   spacecraft: true,
   satellites: false,

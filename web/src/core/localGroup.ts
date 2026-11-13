@@ -139,6 +139,8 @@ export interface LocalGroupGalaxy {
   readonly giant: boolean;
   /** Its entry in local-volume.json, for one beyond the Local Group (localVolume.ts). */
   readonly volumeIndex?: number;
+  /** Its record in laniakea/galaxies.bin, for one beyond the Local Volume and Virgo (laniakea.ts). */
+  readonly laniakeaIndex?: number;
 }
 
 /**
@@ -965,7 +967,7 @@ export function galaxyFramingKm(galaxy: LocalGroupGalaxy): number {
   }
   const whole = 7 * 3 * model.majorPc;
   // Beyond the Local Group no dwarf's stars are drawn (DwarfStars.tsx): framed whole.
-  if (galaxy.volumeIndex !== undefined) {
+  if (galaxy.volumeIndex !== undefined || galaxy.laniakeaIndex !== undefined) {
     return whole * PARSEC_KM;
   }
   const mu = plummerCentreMu(galaxy);

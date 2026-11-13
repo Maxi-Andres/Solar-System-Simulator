@@ -2,6 +2,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { isSmallMoon } from '../scene/floatingOrigin.ts';
 import { satelliteBodyTag } from './satelliteGroups.ts';
+import { structureKindLabel, structureOf } from './structures.ts';
 import type { LayerId } from '../state/store.ts';
 
 /**
@@ -71,6 +72,10 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       return 'Supernova remnant';
     case 'galaxy':
       return 'Galaxy';
+    case 'structure': {
+      const structure = structureOf(body.id);
+      return structure === null ? 'Structure' : structureKindLabel(structure.kind);
+    }
   }
 }
 
@@ -112,6 +117,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['supernovaRemnants'];
     case 'galaxy':
       return ['localGroup'];
+    case 'structure':
+      return ['laniakea'];
   }
 }
 
@@ -127,6 +134,7 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   'globular-cluster': 0,
   'supernova-remnant': 0,
   galaxy: 0,
+  structure: 0,
   'dwarf-planet': 1,
   moon: 2,
   asteroid: 3,

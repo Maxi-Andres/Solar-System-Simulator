@@ -49,7 +49,16 @@ import {
 import { addStarBody, starBodyId } from '../core/starBodies.ts';
 import { GALAXY_COLOR, galaxyBodyId, type LocalGroupArchive } from '../core/localGroup.ts';
 import { type LocalVolumeArchive } from '../core/localVolume.ts';
+import {
+  STRUCTURE_COLOR,
+  structureBodyId,
+  structureKindLabel,
+  structureSearch,
+  type LaniakeaCatalogue,
+  type LaniakeaNameIndex,
+} from '../core/laniakea.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
+import { renderDemand } from '../core/renderDemand.ts';
 import { systemDisplayName, type StarNameIndex, type Stars3dSource } from '../core/stars3d.ts';
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
@@ -109,6 +118,10 @@ import { Panel } from './Panel.tsx';
  *
  * And the galaxies beyond (G2), the Local Volume's and the Virgo Cluster's, by name and other
  * names ("NGC 5128", "Centaurus A", "VCC 1316"), from local-volume.json.
+ *
+ * And Laniakea's (G3): its 86,899 galaxies by name and other names ("NGC 4889", "PGC 44715"),
+ * from laniakea/names.json, fetched when search opens; its named structures by theirs too
+ * ("Abell 1656" the Coma Cluster), which are bodies once the catalogue is in.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -159,7 +172,11 @@ type Result =
   /** Galaxy `k` of the Local Group's archive. */
   | { readonly kind: 'galaxy'; readonly k: number }
   /** Galaxy `k` of the Local Volume's archive. */
-  | { readonly kind: 'volume'; readonly k: number };
+  | { readonly kind: 'volume'; readonly k: number }
+  /** Record `k` of Laniakea's catalogue. */
+  | { readonly kind: 'laniakea'; readonly k: number }
+  /** Landmark `k` of laniakea.json, by one of its other names. */
+  | { readonly kind: 'structure'; readonly k: number };
 
 export function SearchPanel({
   store,
@@ -182,6 +199,9 @@ export function SearchPanel({
   onGalaxy,
   localVolume,
   onVolumeGalaxy,
+  laniakea,
+  laniakeaNames,
+  onLaniakeaGalaxy,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -208,6 +228,10 @@ export function SearchPanel({
   readonly localVolume: LazySource<LocalVolumeArchive>;
   /** Goes to a galaxy beyond the Local Group (App.tsx). */
   readonly onVolumeGalaxy: (k: number) => void;
+  readonly laniakea: LazySource<LaniakeaCatalogue>;
+  readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
+  /** Goes to a galaxy of Laniakea's catalogue (App.tsx). */
+  readonly onLaniakeaGalaxy: (k: number) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
@@ -237,6 +261,12 @@ export function SearchPanel({
   const clusterArchive = useSyncExternalStore(globularClusters.subscribe, () => globularClusters.value);
   const galaxyArchive = useSyncExternalStore(localGroup.subscribe, () => localGroup.value);
   const volumeArchive = useSyncExternalStore(localVolume.subscribe, () => localVolume.value);
+  const laniakeaCatalogue = useSyncExternalStore(laniakea.subscribe, () => laniakea.value);
+  const laniakeaIndex = useSyncExternalStore(laniakeaNames.subscribe, () => laniakeaNames.value);
+  const structureIndex = useMemo(
+    () => (laniakeaCatalogue === null ? null : structureSearch(laniakeaCatalogue.info.landmarks)),
+    [laniakeaCatalogue],
+  );
   // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
   const hostOfStar = useMemo(() => {
     const map = new Map<string, number>();
@@ -273,7 +303,9 @@ export function SearchPanel({
     void globularClusters.request();
     void localGroup.request();
     void localVolume.request();
-  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters, localGroup, localVolume]);
+    void laniakea.request();
+    void laniakeaNames.request();
+  }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters, localGroup, localVolume, laniakea, laniakeaNames]);
 
   const results = useMemo((): Result[] => {
     void version;
@@ -357,8 +389,31 @@ export function SearchPanel({
         : searchNames(volumeArchive.search, searched, GALAXY_LIMIT)
             .filter(({ k }) => !bodiesListed.has(galaxyBodyId(volumeArchive.galaxies[k]!)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'volume', k }, score));
+    const fromLaniakea: Result[] =
+      laniakeaIndex === null
+        ? []
+        : searchNames(laniakeaIndex.search, searched, GALAXY_LIMIT)
+            .filter(({ k }) => !bodiesListed.has(`galaxy-lk-${k}`))
+            .map(({ k, score }) => scoredResult(scored, { kind: 'laniakea', k }, score));
+    // A structure is a body once the catalogue is in, found by its name as one; by its other
+    // names ("Abell 1656") here.
+    const fromStructures: Result[] =
+      structureIndex === null || laniakeaCatalogue === null
+        ? []
+        : searchNames(structureIndex, searched, GALAXY_LIMIT)
+            .filter(({ k }) => !bodiesListed.has(structureBodyId(laniakeaCatalogue.info.landmarks[k]!)))
+            .map(({ k, score }) => scoredResult(scored, { kind: 'structure', k }, score));
     // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters, galaxies.
-    const fromCatalogues = [...fromStars, ...fromArchive, ...fromPulsars, ...fromClusters, ...fromGalaxies, ...fromVolume].sort(
+    const fromCatalogues = [
+      ...fromStars,
+      ...fromArchive,
+      ...fromPulsars,
+      ...fromClusters,
+      ...fromGalaxies,
+      ...fromVolume,
+      ...fromStructures,
+      ...fromLaniakea,
+    ].sort(
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
     return [
@@ -386,6 +441,9 @@ export function SearchPanel({
     clusterArchive,
     galaxyArchive,
     volumeArchive,
+    laniakeaIndex,
+    laniakeaCatalogue,
+    structureIndex,
   ]);
 
   // A new query starts at the top.
@@ -469,6 +527,22 @@ export function SearchPanel({
     if (result.kind === 'volume') {
       setLayer('localGroup', true);
       onVolumeGalaxy(result.k);
+      closePanel();
+      return;
+    }
+    if (result.kind === 'laniakea') {
+      setLayer('laniakea', true);
+      onLaniakeaGalaxy(result.k);
+      closePanel();
+      return;
+    }
+    if (result.kind === 'structure') {
+      const landmark = laniakeaCatalogue?.info.landmarks[result.k];
+      if (landmark !== undefined) {
+        setLayer('laniakea', true);
+        setFocus(structureBodyId(landmark));
+        renderDemand.request();
+      }
       closePanel();
       return;
     }
@@ -599,6 +673,8 @@ export function SearchPanel({
             clusterArchive,
             galaxyArchive,
             volumeArchive,
+            laniakeaCatalogue,
+            laniakeaIndex,
           );
           return (
             <li
@@ -663,7 +739,33 @@ function describeResult(
   clusterArchive: GlobularClusterArchive | null,
   galaxyArchive: LocalGroupArchive | null,
   volumeArchive: LocalVolumeArchive | null,
+  laniakeaCatalogue: LaniakeaCatalogue | null,
+  laniakeaIndex: LaniakeaNameIndex | null,
 ): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+  if (result.kind === 'laniakea') {
+    const k = result.k;
+    const r = laniakeaCatalogue?.records;
+    const distance = r === undefined ? null : Math.hypot(r[k * 12]!, r[k * 12 + 1]!, r[k * 12 + 2]!);
+    return {
+      glyph: '⬭',
+      color: GALAXY_COLOR,
+      name: laniakeaIndex!.names.name[k]!,
+      detail: ['Galaxy', laniakeaIndex!.others.get(k)?.[0], distance === null ? undefined : formatGalaxyDistance(distance)]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
+  if (result.kind === 'structure') {
+    const landmark = laniakeaCatalogue!.info.landmarks[result.k]!;
+    return {
+      glyph: '◯',
+      color: STRUCTURE_COLOR,
+      name: landmark.name,
+      detail: [structureKindLabel(landmark.kind), landmark.otherNames[0], formatGalaxyDistance(landmark.distancePc)]
+        .filter((part) => part !== undefined)
+        .join(' · '),
+    };
+  }
   if (result.kind === 'galaxy' || result.kind === 'volume') {
     const galaxy = (result.kind === 'galaxy' ? galaxyArchive! : volumeArchive!).galaxies[result.k]!;
     return {

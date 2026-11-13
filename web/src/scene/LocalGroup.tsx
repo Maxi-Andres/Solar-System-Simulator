@@ -231,7 +231,7 @@ const MARK_HELD_FRACTION = 0.7;
 
 /** The marks: an ellipse, the old sign for a nebula, and its size, CSS pixels. */
 const SPRITE_PX = 15;
-const CLICK_SLOP_PX = 5;
+export const CLICK_SLOP_PX = 5;
 
 export function outOfDiscStrength(cameraFromSunKm: number): number {
   const ly = cameraFromSunKm / LIGHT_YEAR_KM;
@@ -294,7 +294,7 @@ const COMMON_VERTEX = /* glsl */ `
 varying vec3 vRel;
 `;
 
-const DWARF_VERTEX = /* glsl */ `
+export const DWARF_VERTEX = /* glsl */ `
 ${COMMON_VERTEX}
 attribute vec3 aM0;
 attribute vec3 aM1;
@@ -323,7 +323,7 @@ void main() {
 }
 `;
 
-const DWARF_FRAGMENT = /* glsl */ `
+export const DWARF_FRAGMENT = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 ${GLOW_OUTPUT_GLSL}
 uniform float uFade;
@@ -589,7 +589,7 @@ void main() {
 }
 `;
 
-const MARK_VERTEX = /* glsl */ `
+export const MARK_VERTEX = /* glsl */ `
 uniform vec3 uCameraPc;
 uniform float uUnitsPerPc;
 uniform float uPixelRatio;
@@ -603,7 +603,7 @@ void main() {
 }
 `;
 
-const MARK_FRAGMENT = /* glsl */ `
+export const MARK_FRAGMENT = /* glsl */ `
 uniform vec3 uColor;
 uniform float uFade;
 varying float vShown;
@@ -638,7 +638,7 @@ function bulgeTable(ps: { readonly p: number; readonly b: number }, n: number): 
 }
 
 /** The colour of a galaxy's light, linear, times rho0 over the white column. */
-function glow(galaxy: LocalGroupGalaxy, rho0: number, colourIndex = galaxy.colourIndex): THREE.Vector3 {
+export function glow(galaxy: LocalGroupGalaxy, rho0: number, colourIndex = galaxy.colourIndex): THREE.Vector3 {
   const [r, g, b] = starColor(colourIndex);
   const scale = rho0 / columnAt(WHITE_MU);
   return new THREE.Vector3(r * scale, g * scale, b * scale);
@@ -684,7 +684,7 @@ const scratchQuaternion = new THREE.Quaternion();
 const scratchVector = new THREE.Vector3();
 
 /** The marks as the declutter reads and writes them. */
-interface Marks {
+export interface Marks {
   readonly centres: readonly { readonly x: number; readonly y: number; readonly z: number }[];
   readonly shown: THREE.BufferAttribute;
   /** Most luminous first. */
@@ -1528,7 +1528,7 @@ export function formatGalaxyDistance(pc: number): string {
   return pc >= 1e6 ? `${(pc / 1e6).toFixed(2)} Mpc` : `${Math.round(pc / 1000)} kpc`;
 }
 
-const TIP_STYLE: Partial<CSSStyleDeclaration> = {
+export const TIP_STYLE: Partial<CSSStyleDeclaration> = {
   position: 'absolute',
   top: '0',
   left: '0',

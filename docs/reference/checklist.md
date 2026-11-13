@@ -33,6 +33,10 @@ Where things come from:
   `web/src/core/localGroup.ts`.
 - **Local Volume and Virgo**: the UNGC and the EVCC (`local-volume.json`,
   `tools/src/localVolume/`), drawn by `web/src/core/localVolume.ts`.
+- **Laniakea and beyond** (G3): Cosmicflows-4 and the 2MASS Redshift Survey's 86,899 galaxies,
+  the CF4 watersheds and the named clusters, superclusters, basins, voids and walls
+  (`laniakea/`, `tools/src/laniakea/`), drawn by `web/src/core/laniakea.ts` and
+  `web/src/scene/Laniakea.tsx`; the structures are bodies, found by search.
 
 ## Near Earth and the atmosphere (to about 1,000 km)
 
@@ -285,42 +289,42 @@ their orbits, not bodies of their size as Eris and Makemake are.
 ## Nearby galaxies (to about 200 Mpc)
 
 - [x] Nearby galaxies: the Local Group's 145 (McConnachie's 144 and M31), the Local Volume's 764 (UNGC) and the Virgo Cluster's 999 (EVCC).
-- [ ] Hoag's Object: G3.
-- [ ] NGC 1300: about 19 Mpc, past the UNGC's 11 Mpc and not in Virgo. G3.
+- [ ] Hoag's Object: not in Cosmicflows-4 or 2MRS under any name. G3.
+- [x] NGC 1300: Laniakea's catalogue, `NGC 1300`.
 - [x] Sunflower Galaxy (M63): Local Volume, `M63`.
 - [x] Black Eye (M64): Local Volume, `M64`.
 - [x] Sombrero (M104): Local Volume, `M104`.
-- [ ] Mayall's Object: G3.
+- [ ] Mayall's Object: not in Cosmicflows-4 or 2MRS under any name. G3.
 - [x] Whirlpool (M51): Local Volume, `M51`.
 - [x] Bode's Galaxy (M81): Local Volume, `M81`.
-- [ ] Cartwheel Galaxy: G3.
+- [ ] Cartwheel Galaxy: not in Cosmicflows-4 or 2MRS (`ESO 350-40`, PGC 2248). G3.
 - [x] Pinwheel Galaxy (M101): Local Volume, `M101`.
 - [x] Cigar Galaxy (M82): Local Volume, `M82`.
-- [ ] Tadpole Galaxy: G3.
+- [x] Tadpole Galaxy: Laniakea's catalogue, `UGC 10214`.
 - [x] Virgo Cluster: the EVCC's certain members, on the breadcrumb (`Virgo Cluster`, framed on M87).
 
 ## Clusters, superclusters and voids (to about 1,000 Mpc)
 
-- [ ] Superclusters of galaxies: G3.
-- [ ] Fornax Cluster: G3.
-- [ ] Shapley Supercluster: G3.
-- [ ] KBC Void: G3.
-- [ ] Hydra Cluster: G3.
-- [ ] Pavo-Indus Supercluster: G3.
-- [ ] Northern Local Supervoid: G3.
-- [ ] Centaurus Cluster: G3.
-- [ ] Horologium Supercluster: G3.
-- [ ] Coma Wall: G3.
-- [ ] Sculptor Wall: G3.
-- [ ] Southern Local Supervoid: G3.
-- [ ] Giant Void: G3.
-- [ ] Leo Supercluster: G3.
-- [ ] Walls and filaments: G3.
-- [ ] Caelum Supercluster: G3.
-- [ ] Sloan Great Wall: G3.
-- [ ] Corona Borealis Supercluster: G3.
+- [x] Superclusters of galaxies: Einasto et al.'s eleven named here, and the CF4 watershed basins (Laniakea, Shapley, Perseus-Pisces, Hercules, Lepus, Apus).
+- [x] Fornax Cluster: a structure, its galaxies drawn.
+- [x] Shapley Supercluster: a structure, with Abell 3558 and Abell 3571; its basin the Shapley Basin layer.
+- [ ] KBC Void: disputed, and in none of G3's catalogues. G3.
+- [x] Hydra Cluster: a structure (`Abell 1060`).
+- [~] Pavo-Indus Supercluster: the Pavo II Cluster in it drawn and named; the supercluster not named.
+- [x] Northern Local Supervoid: the `Hercules Void` (Tully et al. 2019), an outline.
+- [x] Centaurus Cluster: a structure (`Abell 3526`).
+- [x] Horologium Supercluster: `Horologium-Reticulum Supercluster`.
+- [x] Coma Wall: the `CfA2 Great Wall`, drawn as a line through the Coma Cluster's declination.
+- [ ] Sculptor Wall: not in G3's landmarks; the Sculptor Supercluster is. G3.
+- [x] Southern Local Supervoid: the `Sculptor Void` (Tully et al. 2019), an outline.
+- [ ] Giant Void: not in G3's landmarks. G3.
+- [x] Leo Supercluster: a structure.
+- [~] Walls and filaments: the CfA2 and Sloan Great Walls as lines, the filaments as the galaxies themselves; no filament catalogue.
+- [ ] Caelum Supercluster: not in G3's landmarks. G3.
+- [x] Sloan Great Wall: a structure, drawn as a line (Gott et al. 2005).
+- [x] Corona Borealis Supercluster: a structure.
 - [ ] ASASSN-15lh, "brightest supernova": maybe not a supernova (see README). G4.
-- [ ] Boötes Void: G3.
+- [~] Boötes Void: the CF4 repeller near it (`Near the Bootes Void repeller`); the void not outlined.
 - [ ] Pandora's Cluster (Abell 2744): z = 0.31, past G3's reach. G4.
 - [ ] Bullet Cluster: z = 0.30. G4.
 - [ ] Saraswati Supercluster: z = 0.28. G4.
@@ -448,15 +452,15 @@ What the map does not show but a realism-first simulator should. These are unche
 - [~] Cen A's jets and lobes; M83; NGC 4945; Circinus: the galaxies drawn (`NGC 5128`, `Circinus Galaxy`), not the jets and lobes
 - [x] Maffei 1, Maffei 2, IC 342, Dwingeloo 1
 - [~] M94 and Cloud-9, a starless dark cloud (2025): M94 drawn, not Cloud-9
-- [~] The Local Void; the Leo Triplet; the M96 group; NGC 1052-DF2/DF4 [disputed]: the M96 group and M66 drawn; not the void, the triplet as one, nor DF2/DF4
+- [~] The Local Void; the Leo Triplet; the M96 group; NGC 1052-DF2/DF4 [disputed]: the M96 group and M66 drawn, the Local Void outlined (G3); not the triplet as one, nor DF2/DF4
 
 ### Virgo to Laniakea (G2/G3)
 - [~] M87 and M87*'s shadow and jet; Markarian's Chain; M84, M86, M49, M60: the galaxies drawn, the giant ellipticals by their own Sérsic fits; not M87*'s shadow or jet, nor the chain named
-- [ ] The Local Supercluster; the Great Attractor; the Norma cluster; the Vela supercluster
-- [ ] Clusters: Perseus and NGC 1275; Ophiuchus; Abell 1689; Abell 2029 and IC 1101; Abell 2218
-- [ ] Superclusters and walls: Perseus–Pisces, Pisces–Cetus, Hercules, the CfA2 Great Wall, the South Pole Wall
-- [ ] The Dipole Repeller; Ho'oleilana; Quipu (2025)
-- [ ] Galaxies: the Antennae, Stephan's Quintet, Arp 220, Malin 1, NGC 4993 (GW170817)
+- [~] The Local Supercluster; the Great Attractor; the Norma cluster; the Vela supercluster: the Great Attractor and the Norma Cluster; not the Local Supercluster named, nor Vela
+- [~] Clusters: Perseus and NGC 1275; Ophiuchus; Abell 1689; Abell 2029 and IC 1101; Abell 2218: Perseus, NGC 1275 and Ophiuchus; not the rest
+- [~] Superclusters and walls: Perseus–Pisces, Pisces–Cetus, Hercules, the CfA2 Great Wall, the South Pole Wall: all but the South Pole Wall
+- [~] The Dipole Repeller; Ho'oleilana; Quipu (2025): the Dipole Repeller (with the Cold Spot Repeller, one CF4 basin); not Ho'oleilana or Quipu
+- [~] Galaxies: the Antennae, Stephan's Quintet, Arp 220, Malin 1, NGC 4993 (GW170817): NGC 4038, NGC 7317 and NGC 7319, NGC 4993; not NGC 4039, the rest of the quintet, Arp 220 or Malin 1
 - [ ] Supernovae: SN 2023ixf, SN 2011fe, SN 2014J
 
 ### The far universe (G4)
@@ -481,14 +485,14 @@ What the map does not show but a realism-first simulator should. These are unche
 
 ## Summary
 
-As of 12 November 2026, 244 labels:
+As of 13 November 2026, 244 labels:
 
 | Status | Count |
 | --- | --- |
-| `[x]` in the app | 151 |
-| `[~]` partly | 9 |
-| `[ ]` missing | 84 |
+| `[x]` in the app | 165 |
+| `[~]` partly | 12 |
+| `[ ]` missing | 67 |
 
-Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 24, G4 20.
+Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 7, G4 20.
 
 The counts are the map's labels only, not "Beyond the map".

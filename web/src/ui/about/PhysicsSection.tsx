@@ -54,6 +54,7 @@ export const physicsSection: AboutSection = {
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
+    { id: 'laniakea', label: 'Laniakea and beyond' },
   ],
   Body: () => {
     const log10 = (...argument: Parameters<typeof row>) => row(sub(up('log'), mn('10')), paren(...argument));
@@ -1441,6 +1442,47 @@ export const physicsSection: AboutSection = {
           A thin disc seen at inclination i is an ellipse of axis ratio cos i; one of thickness q<sub>0</sub>, never
           thinner than that.
           <Cite k="hubble1926" />
+        </Equation>
+
+        <Sub section="physics" id="laniakea">
+          Laniakea and beyond
+        </Sub>
+        <Equation
+          title="Where a redshift puts a galaxy"
+          code="tools/src/laniakea/frames.ts"
+          math={math(
+            row(
+              sub(mi('d'), mi('C')),
+              mo('='),
+              frac(mi('c'), sub(mi('H'), mn('0'))),
+              subsup(mo('∫'), mn('0'), mi('z')),
+              frac(
+                row(mi('d'), mi('z')),
+                sqrt(row(sub(mi('Ω'), mi('m')), sup(paren(mn('1'), mo('+'), mi('z')), mn('3')), mo('+'), mn('1'), mo('−'), sub(mi('Ω'), mi('m')))),
+              ),
+              gap(),
+              sub(mi('d'), mi('L')),
+              mo('='),
+              paren(mn('1'), mo('+'), mi('z')),
+              sub(mi('d'), mi('C')),
+            ),
+          )}
+          symbols={<>d<sub>C</sub> the comoving distance it is drawn at; d<sub>L</sub> the luminosity distance a measured modulus gives; H<sub>0</sub> 74.6 km/s/Mpc, Ω<sub>m</sub> 0.3.</>}
+        >
+          A flat universe of matter and a cosmological constant. Every galaxy is drawn at its comoving distance, and
+          its absolute V from its luminosity distance.
+          <Cite k={['tully2023', 'courtois2023', 'planck2020']} />
+        </Equation>
+        <Equation
+          title="A basin’s edge"
+          code="web/src/scene/isosurface.ts"
+          math={math(row(mi('f'), mo('='), mi('k'), mo('⊗'), mi('k'), mo('⊗'), mi('k'), mo('∗'), sub(mn('1'), mi('B')), gap(), mi('f'), mo('='), frac(mn('1'), mn('2'))))}
+          symbols={<>1<sub>B</sub> one in the basin’s voxels, nought outside; k the kernel [1 2 1]/4 along one axis.</>}
+        >
+          The watershed grid gives each 10.5 Mpc voxel to a basin. Its indicator blurred once, the surface is
+          drawn where it is a half — through the middle of a flat face, its corners rounded, nothing moved more
+          than half a voxel — by surface nets: a vertex in each cell it crosses, a quad for each edge.
+          <Cite k={['dupuyCourtois2023', 'gibson1998']} />
         </Equation>
       </>
     );

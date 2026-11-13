@@ -80,11 +80,28 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **200 million light years** since
- * the Local Volume and the Virgo Cluster (G2); 40 million since the Local Group (G1); 400,000
- * since the Milky Way model (D2b), 3,000 before it.
+ * The farthest the camera may pull back from its focus, km: **3 billion light years** since
+ * Laniakea (G3); 200 million since the Local Volume and the Virgo Cluster (G2); 40 million since
+ * the Local Group (G1); 400,000 since the Milky Way model (D2b), 3,000 before it.
  *
- * Now set by the Virgo Cluster, by the same rule as everything before it: the farthest thing
+ * Now set by the superclusters, by the same rule as everything before it: the farthest thing
+ * worth seeing whole. The catalogue reaches 703 Mpc, 2.3 billion ly (laniakea.json), but past
+ * the 2MASS Redshift Survey's depth -- its median 120 Mpc, few galaxies past 300 -- it is the
+ * SDSS's and 6dF's patches alone, not a map. What is mapped whole is the superclusters about
+ * us: Shapley 190 Mpc off, Horologium-Reticulum 256, the Sloan Great Wall 288, Corona Borealis
+ * 279, the Sculptor Supercluster 402. Focused on the Sun and looking down from the supergalactic
+ * pole (supergalactic.ts NEARBY_UNIVERSE_VIEW's way), all ten of Einasto's named here and the
+ * walls lie within nine tenths of the frame from 2.9 billion ly, at 16:9; 3 billion is that,
+ * rounded. From 2 billion the Sculptor Supercluster and the Sloan Great Wall leave the frame.
+ *
+ * float32 at the camera is then 2.8e19 scene units out: a step of 2.2e12 units, 232 ly, 8e-8 of
+ * the distance, as before. The depth buffer's range is logDepth.ts's. The galaxies' centres
+ * reach the GPU in parsecs from the Sun (Laniakea.tsx), float32 holding the farthest, 703 Mpc,
+ * to 64 pc: a pixel's angle from 100 kpc away, nearer than a galaxy is drawn as a point.
+ *
+ * What the 200 million was, kept because its argument still holds at its own scale:
+ *
+ * Set by the Virgo Cluster, by the same rule as everything before it: the farthest thing
  * worth seeing whole -- and here, seen with home. Its centre, M87, is 16.5 Mpc from the Sun,
  * 54 million ly (Mei et al. 2007, ApJ 655, 144), and its members lie within some 2 Mpc of it on
  * the sky, 6.5 million ly. With the camera focused on the Sun, as the breadcrumb's levels are,
@@ -141,7 +158,7 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 200e6 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 3e9 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Local Group puts the camera, km from the Sun: 8 million ly, looking
@@ -170,6 +187,25 @@ export const LOCAL_VOLUME_FRAMING_KM = 100e6 * LIGHT_YEAR_KM;
  * of sight, which runs across the frame.
  */
 export const VIRGO_FRAMING_KM = 60e6 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Laniakea puts the camera, km from its attractor (laniakea.json's
+ * "Laniakea Supercluster", where Dupuy & Courtois 2023 put it): 1.8 billion ly, over the
+ * supergalactic pole and turned 15 degrees (supergalactic.ts LANIAKEA_VIEW). Its basin in the
+ * Cosmicflows-4 galaxies' reconstruction is no sphere -- 4.7 million Mpc^3, a sphere of 104 Mpc's
+ * radius, but 300 Mpc from end to end, the Sun near one side -- and from here 94 % of its voxels
+ * lie in the frame at 16:9, its far lobes running off the edges: 95 % takes 1.85 billion, all of
+ * it 2.2. From the Sun the same takes 2.6 billion, the basin in a corner.
+ */
+export const LANIAKEA_FRAMING_KM = 1.8e9 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Nearby Universe puts the camera, km from the Sun: 1.5 billion ly, over
+ * the supergalactic pole turned as Laniakea's (supergalactic.ts NEARBY_UNIVERSE_VIEW): Laniakea,
+ * the Perseus Cluster, the Coma Cluster, the Hercules Cluster and the Shapley Supercluster with
+ * Abell 3558 at its heart, 190 Mpc off, all inside nine tenths of the frame from 1.4 billion.
+ */
+export const NEARBY_UNIVERSE_FRAMING_KM = 1.5e9 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Milky Way puts the camera, km from the Sun: 180,000 ly. The view

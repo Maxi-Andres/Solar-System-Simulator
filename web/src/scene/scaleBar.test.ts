@@ -36,7 +36,9 @@ describe('the scale bar', () => {
     expect(barAt(3000 * LIGHT_YEAR_KM).label).toBe('100 ly');
     expect(barAt(400_000 * LIGHT_YEAR_KM).label).toBe('20,000 ly');
     expect(barAt(40e6 * LIGHT_YEAR_KM).label).toBe('2 million ly');
-    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('10 million ly');
+    expect(barAt(200e6 * LIGHT_YEAR_KM).label).toBe('10 million ly');
+    // And Laniakea's (G3), three billion light years out.
+    expect(barAt(MAX_VIEW_DISTANCE_KM).label).toBe('100 million ly');
   });
 
   it('writes large kilometres as millions', () => {

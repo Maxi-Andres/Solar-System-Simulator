@@ -18,6 +18,7 @@ import { loadPulsarArchive, type PulsarArchive } from './pulsars.ts';
 import { loadGlobularClusterArchive, type GlobularClusterArchive } from './globularClusters.ts';
 import { loadLocalGroupArchive, type LocalGroupArchive } from './localGroup.ts';
 import { loadLocalVolumeArchive, type LocalVolumeArchive } from './localVolume.ts';
+import { loadLaniakeaCatalogue, loadLaniakeaNames, type LaniakeaCatalogue, type LaniakeaNameIndex } from './laniakea.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -84,6 +85,13 @@ export interface Simulation {
    * as the camera passes three million light years, or when search or their list opens.
    */
   readonly localVolume: LazySource<LocalVolumeArchive>;
+  /**
+   * Laniakea and beyond (laniakea.ts): the galaxies and the basins, fetched as the camera passes
+   * thirty million light years, or when search or the breadcrumb asks; their names, when a
+   * galaxy's are first wanted.
+   */
+  readonly laniakea: LazySource<LaniakeaCatalogue>;
+  readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -162,6 +170,17 @@ export function useSimulation(refreshHz = 10): Simulation {
   localVolumeRef.current ??= new LazySource(
     () => loadLocalVolumeArchive(httpBeltFetchers, import.meta.env.BASE_URL),
     'the Local Volume',
+  );
+
+  const laniakeaRef = useRef<LazySource<LaniakeaCatalogue>>(null);
+  laniakeaRef.current ??= new LazySource(
+    () => loadLaniakeaCatalogue(httpBeltFetchers, import.meta.env.BASE_URL),
+    'Laniakea',
+  );
+  const laniakeaNamesRef = useRef<LazySource<LaniakeaNameIndex>>(null);
+  laniakeaNamesRef.current ??= new LazySource(
+    () => loadLaniakeaNames(httpBeltFetchers, import.meta.env.BASE_URL),
+    'the names of Laniakea’s galaxies',
   );
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
@@ -272,6 +291,8 @@ export function useSimulation(refreshHz = 10): Simulation {
     globularClusters: globularClustersRef.current,
     localGroup: localGroupRef.current,
     localVolume: localVolumeRef.current,
+    laniakea: laniakeaRef.current,
+    laniakeaNames: laniakeaNamesRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

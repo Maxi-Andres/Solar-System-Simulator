@@ -11,15 +11,22 @@ import {
   focusLineage,
   GALACTIC_CENTRE_SCENE_PC,
   galaxyFold,
+  laniakeaFolds,
   LOCAL_GROUP_HOST,
+  LOCAL_VOLUME_HOST,
   MARK_HOSTS,
   milkyWayMembers,
   MILKY_WAY_HOST,
   MILKY_WAY_SATELLITES_HOST,
   pinnedHosts,
   SATELLITE_REACH_PC,
+  structureHostKey,
+  structuresFade,
+  STRUCTURES_FROM_LY,
+  STRUCTURES_FULL_LY,
   updateMarkHosts,
 } from './markHosts.ts';
+import { indexLaniakea } from '../core/laniakea.ts';
 import { UNFOLDED } from './markFolding.ts';
 
 /**
@@ -83,7 +90,7 @@ describe('the Milky Way’s', () => {
   it('never folds what is above the focus', () => {
     expect(pinnedHosts(galaxyBodyId(giant('m33')))).toEqual(expect.arrayContaining([ANDROMEDA, LOCAL_GROUP_HOST]));
     expect(pinnedHosts(galaxyBodyId(giant('m31')))).toEqual(expect.arrayContaining([ANDROMEDA, LOCAL_GROUP_HOST]));
-    expect(pinnedHosts('sun')).toEqual([MILKY_WAY_HOST, MILKY_WAY_SATELLITES_HOST, LOCAL_GROUP_HOST]);
+    expect(pinnedHosts('sun')).toEqual([MILKY_WAY_HOST, MILKY_WAY_SATELLITES_HOST, LOCAL_GROUP_HOST, LOCAL_VOLUME_HOST]);
   });
 
   it('never folds the focus, nor what it goes round', () => {
@@ -165,16 +172,16 @@ describe('beyond the Local Group', () => {
   } as LocalVolumeCatalog);
   const g = archive.galaxies;
 
-  it('folds a group into its brightest, and the brightest into nothing', () => {
+  it('folds a group into its brightest, and the brightest into the Local Volume', () => {
     const m81 = MARK_HOSTS.indexOf('lv:M81');
-    expect(galaxyFold(g[0]!)).toEqual(UNFOLDED);
+    expect(galaxyFold(g[0]!).host).toBe(LOCAL_VOLUME_HOST);
     expect(galaxyFold(g[1]!)).toEqual({ host: m81, separationPc: 40_000 });
     expect(galaxyFold(g[2]!)).toEqual({ host: m81, separationPc: 60_000 });
   });
 
-  it('folds a galaxy of no group, or alone in its own, into nothing', () => {
-    expect(galaxyFold(g[3]!)).toEqual(UNFOLDED);
-    expect(galaxyFold(g[4]!)).toEqual(UNFOLDED);
+  it('folds a galaxy of no group, or alone in its own, into the Local Volume', () => {
+    expect(galaxyFold(g[3]!).host).toBe(LOCAL_VOLUME_HOST);
+    expect(galaxyFold(g[4]!).host).toBe(LOCAL_VOLUME_HOST);
   });
 
   it('folds Virgo A and the outskirts into M87, another substructure into its brightest, and that into M87', () => {
@@ -198,5 +205,64 @@ describe('beyond the Local Group', () => {
     // M82 focused: M81's host pinned -- M81 itself folds into nothing anyway.
     ensureGalaxyBodies({ isPropagatedBody: () => true } as unknown as EphemerisStore, [g[1]!]);
     expect(pinnedHosts(galaxyBodyId(g[1]!))).toContain(m81);
+  });
+});
+
+describe('Laniakea’s (G3)', () => {
+  // Coma's group (0) of three, a group of two (1), and a galaxy of none; a supercluster beside Coma.
+  const records = new Float32Array(5 * 12).fill(Number.NaN);
+  const put = (k: number, p: [number, number, number], group: number) => {
+    records.set(p, k * 12);
+    records[k * 12 + 10] = 0;
+    records[k * 12 + 11] = group;
+  };
+  put(0, [90e6, 0, 0], 0);
+  put(1, [91e6, 0, 0], 0);
+  put(2, [50e6, 30e6, 0], 1);
+  put(3, [50e6, 30.4e6, 0], 1);
+  put(4, [20e6, -10e6, 0], -1);
+  const landmark = (name: string, kind: string, p: [number, number, number], group = -1, radiusPc: number | null = null) =>
+    ({ name, kind, x: p[0], y: p[1], z: p[2], group, radiusPc, extentPc: null, basin: null, otherNames: [] }) as never;
+  const catalogue = indexLaniakea(
+    {
+      galaxies: { count: 5 },
+      groups: { count: 2 },
+      landmarks: [landmark('Coma Cluster', 'cluster', [90e6, 0, 0], 0, 2.9e6), landmark('Coma Supercluster', 'supercluster', [85e6, 5e6, 0])],
+      basins: { basins: [] },
+    } as never,
+    records,
+    null,
+  );
+  const folds = laniakeaFolds(catalogue);
+  const coma = MARK_HOSTS.indexOf(structureHostKey('Coma Cluster'));
+  const supercluster = MARK_HOSTS.indexOf(structureHostKey('Coma Supercluster'));
+
+  it('folds a named cluster’s galaxies into the cluster’s own mark, and the cluster into its supercluster', () => {
+    expect(folds.folds(0)).toEqual({ host: coma, separationPc: 0 });
+    expect(folds.folds(1).host).toBe(coma);
+    expect(folds.folds(1).separationPc).toBeCloseTo(1e6, -1);
+    expect(MARK_HOSTS.foldOf(coma).host).toBe(supercluster);
+  });
+
+  it('makes any other group’s brightest its host, and a galaxy of no group a place of its own', () => {
+    const host = folds.marks[2]!;
+    expect(host).toBeGreaterThanOrEqual(0);
+    expect(folds.folds(3).host).toBe(host);
+    expect(folds.folds(3).separationPc).toBeCloseTo(4e5, -1);
+    expect(folds.host[4]).toBe(-1);
+  });
+
+  it('shows a group only near it: from the Sun its 400 kpc are a few pixels, and it is no mark', () => {
+    const host = folds.marks[2]!;
+    updateMarkHosts([0, 0, 0], 1000, 'earth');
+    expect(MARK_HOSTS.strength[host]).toBe(0);
+    updateMarkHosts([50e6, 30.2e6, 2e6], 1000, 'earth');
+    expect(MARK_HOSTS.strength[host]).toBe(1);
+  });
+
+  it('brings the named structures in only out of the Local Group', () => {
+    expect(structuresFade(1e6)).toBe(0);
+    expect(structuresFade((STRUCTURES_FROM_LY * 0.99) / 3.2616)).toBe(0);
+    expect(structuresFade((STRUCTURES_FULL_LY * 1.01) / 3.2616)).toBe(1);
   });
 });

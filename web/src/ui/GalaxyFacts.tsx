@@ -1,4 +1,5 @@
-import type { BodyId } from '@sss/tools/types';
+import { LANIAKEA_FLAGS, type BodyId } from '@sss/tools/types';
+import { useEffect, useState } from 'react';
 
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import {
@@ -13,6 +14,19 @@ import {
   UNDRAWN_REASONS,
 } from '../core/localGroup.ts';
 import { groupLabel, localVolumeCatalog, regionOf } from '../core/localVolume.ts';
+import { httpBeltFetchers } from '../core/belt.ts';
+import {
+  basinNamesAt,
+  FIELD,
+  flagsOf,
+  groupOf,
+  laniakeaCatalogue,
+  laniakeaDetails,
+  laniakeaGroups,
+  loadLaniakeaExtras,
+  methodNames,
+  positionPc,
+} from '../core/laniakea.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { LIGHT_YEAR_KM, PARSEC_KM } from '../scene/scale.ts';
 import { Panel } from './Panel.tsx';
@@ -35,6 +49,8 @@ function formatLuminosity(l: number): string {
 
 function formatLightYears(pc: number): string {
   const ly = (pc * PARSEC_KM) / LIGHT_YEAR_KM;
+  if (ly >= 1e9) return `${(ly / 1e9).toFixed(2)} billion ly`;
+  if (ly >= 1e8) return `${Math.round(ly / 1e6)} million ly`;
   return ly >= 1e6 ? `${(ly / 1e6).toFixed(2)} million ly` : `${Math.round(ly / 1000).toLocaleString('en-US')},000 ly`;
 }
 
@@ -84,6 +100,9 @@ export function GalaxyPanel({
   const galaxy = galaxyOf(focus);
   if (galaxy === null) {
     return null;
+  }
+  if (galaxy.laniakeaIndex !== undefined) {
+    return <LaniakeaPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={onClose} galaxy={galaxy} />;
   }
   if (galaxy.volumeIndex !== undefined) {
     return <VolumePanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={onClose} galaxy={galaxy} />;
@@ -281,4 +300,105 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function Divider() {
   return <div style={{ gridColumn: '1 / -1', height: 1, background: '#202020', margin: '0.4rem 0' }} />;
+}
+
+/** The details and groups, fetched once, the first time a galaxy of Laniakea's panel opens. */
+let extras: Promise<unknown> | null = null;
+
+/** A galaxy of Laniakea's catalogue (G3): its record, its details once fetched, what was estimated said so. */
+function LaniakeaPanel({
+  store,
+  focus,
+  jd,
+  distanceMode,
+  onClose,
+  galaxy,
+}: {
+  store: EphemerisStore;
+  focus: BodyId;
+  jd: number;
+  distanceMode: DistanceMode;
+  onClose: () => void;
+  galaxy: LocalGroupGalaxy;
+}) {
+  const [, setLoaded] = useState(0);
+  useEffect(() => {
+    extras ??= loadLaniakeaExtras(httpBeltFetchers, import.meta.env.BASE_URL);
+    let cancelled = false;
+    void extras.then(() => {
+      if (!cancelled) setLoaded((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const c = laniakeaCatalogue();
+  const k = galaxy.laniakeaIndex!;
+  if (c === null) {
+    return null;
+  }
+  const details = laniakeaDetails();
+  const groups = laniakeaGroups();
+  const body = store.body(focus);
+  const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
+  const r = c.records;
+  const at = (f: number): number | null => (Number.isNaN(r[k * 12 + f]!) ? null : r[k * 12 + f]!);
+  const flags = flagsOf(c, k);
+  const g = groupOf(c, k);
+  const F = LANIAKEA_FLAGS;
+  const luminosity = galaxyLuminosity(galaxy);
+  const absV = at(FIELD.absV);
+  const t = at(FIELD.t);
+  const re = at(FIELD.rePc);
+  const q = at(FIELD.q);
+  const pa = at(FIELD.pa);
+  const inclination = at(FIELD.incl);
+  const pgc = details?.pgc[k] ?? 0;
+  const z = details === null ? null : details.redshift[k]!;
+  const error = details === null ? null : details.distanceErrorPc[k]!;
+  const vMag = details === null ? null : details.vMag[k]!;
+  const kMag = details === null ? null : details.kMag[k]!;
+  const methods = details === null ? [] : methodNames(details.methods[k]!);
+  const basins = basinNamesAt(c, positionPc(c, k));
+  const model = galaxy.model;
+  const finite = (v: number | null): v is number => v !== null && Number.isFinite(v);
+  const vFrom = flags & F.V_MEASURED ? 'dereddened' : flags & F.V_FROM_K ? 'from K_s, estimated' : 'from B, estimated';
+  return (
+    <Panel title={body.name} onClose={onClose} width="17.5rem">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ color: body.color, fontSize: '0.9rem' }}>⬭</span>
+        <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>galaxy</span>
+      </div>
+      <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
+      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
+        {galaxy.otherNames.length > 0 && <Row label="Also">{galaxy.otherNames.slice(0, 4).join(' · ')}</Row>}
+        {pgc > 0 && <Row label="PGC">{pgc}</Row>}
+        <Row label="In">{g < 0 ? 'No group' : (groups?.name[g] ?? '…')}</Row>
+        <Row label="Basin, galaxies">{basins.galaxies ?? 'None'}</Row>
+        <Row label="Basin, groups">{basins.groups ?? 'None'}</Row>
+        <Row label="Distance">{fromSun === null ? '--' : formatGalaxyDistance(fromSun / PARSEC_KM)}</Row>
+        <Row label="">{fromSun === null ? '' : formatLightYears(fromSun / PARSEC_KM)}</Row>
+        {finite(error) && <Row label="">{`± ${formatGalaxyDistance(error)}, of d_L`}</Row>}
+        <Row label="Distance from">{methods.length > 0 ? `${galaxy.distanceSource} · ${methods.join(', ')}` : galaxy.distanceSource}</Row>
+        {flags & F.DEPTH_DRAWN ? <Row label="">Depth in its group drawn</Row> : null}
+        {finite(z) && <Row label="Redshift">{`z ${z.toFixed(4)}, CMB frame`}</Row>}
+        <Row label="V">{finite(vMag) ? `${vMag.toFixed(2)}, ${vFrom}` : vMag === null ? '…' : 'Not measured'}</Row>
+        {finite(kMag) && <Row label="K_s">{kMag.toFixed(2)}</Row>}
+        {absV !== null && <Row label="M_V">{absV.toFixed(2)}</Row>}
+        {luminosity !== null && <Row label="Luminosity">{formatLuminosity(luminosity)}</Row>}
+        {t !== null && <Row label="Type">{`T ${t.toFixed(1)}`}</Row>}
+        {re !== null && <Row label="Half-light radius">{`${(re / 1000).toFixed(1)} kpc, estimated`}</Row>}
+        {q !== null && <Row label="Axis ratio">{q.toFixed(2)}</Row>}
+        {inclination !== null && <Row label="Inclination">{`${Math.round(inclination)}°`}</Row>}
+        <Row label="Position angle">{pa === null ? 'Not measured' : `${Math.round(pa)}°`}</Row>
+        {flags & F.ZONE_OF_AVOIDANCE ? <Row label="">Behind the Milky Way’s plane</Row> : null}
+        <Row label="Source">{galaxy.shapeSource}</Row>
+        <Divider />
+        <Row label="Drawn as">{shapeText(galaxy)}</Row>
+        {model !== null && pa === null && <Row label="">Orientation not measured: drawn round</Row>}
+        {model === null && <Row label="">No size known: its light a point</Row>}
+        <Row label="Colour">{`B−V ${galaxy.colourIndex.toFixed(2)}${flags & F.COLOUR_ESTIMATED || at(FIELD.bv) === null ? ', estimated' : ''}`}</Row>
+      </dl>
+    </Panel>
+  );
 }

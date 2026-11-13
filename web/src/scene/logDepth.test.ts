@@ -20,7 +20,7 @@ describe('the logarithmic depth buffer', () => {
 
   it('keeps the same relative step at every distance past the near plane', () => {
     for (const w of [1e-3, 1, 1e3, 1e8]) {
-      expect(depthResolution(w) / w).toBeCloseTo(3.4346e-6, 8);
+      expect(depthResolution(w) / w).toBeCloseTo(3.5719e-6, 8);
     }
   });
 
@@ -68,11 +68,35 @@ describe('the logarithmic depth buffer', () => {
     const AU = 149_597.870_7;
     const EARTH_RADIUS = 6.378_137;
     const d3 = (w: number): number => depthResolution(w, true, 1e18);
-    expect(CAMERA_FAR_UNITS).toBe(1e19);
-    expect(depthResolution(METRE) / d3(METRE)).toBeCloseTo(83.05 / 79.73, 3);
-    expect(depthResolution(METRE) / METRE).toBeCloseTo(6.87e-6, 7);
-    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(22, 0);
-    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(510, -1);
+    const d4 = (w: number): number => depthResolution(w, true, 1e19);
+    expect(d4(METRE) / d3(METRE)).toBeCloseTo(83.05 / 79.73, 3);
+    expect(d4(METRE) / METRE).toBeCloseTo(6.87e-6, 7);
+    expect(d4(EARTH_RADIUS) / METRE).toBeCloseTo(22, 0);
+    expect(d4(AU) / METRE / 1000).toBeCloseTo(510, -1);
+  });
+
+  it('paid 4 % more for Laniakea, as logDepth.ts states', () => {
+    // Step G3: the far plane from 1e19 units to 1e20 (10.6 billion ly).
+    const AU = 149_597.870_7;
+    const EARTH_RADIUS = 6.378_137;
+    const d4 = (w: number): number => depthResolution(w, true, 1e19);
+    expect(CAMERA_FAR_UNITS).toBe(1e20);
+    expect(depthResolution(METRE) / d4(METRE)).toBeCloseTo(86.37 / 83.05, 3);
+    expect(depthResolution(METRE) / METRE).toBeCloseTo(7.15e-6, 7);
+    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(23, 0);
+    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(530, -1);
+  });
+
+  it('holds the farthest place the camera can see from the farthest it can stand', () => {
+    // Focused on the catalogue's farthest galaxy, 703 Mpc out, the camera 3 billion ly off
+    // it, and the catalogue's far side 703 Mpc beyond the Sun the other way.
+    const LY_KM = 299_792.458 * 365.25 * 86_400;
+    const MPC_KM = 3.085_677_581_491_367e19;
+    const farthestKm = 3e9 * LY_KM + 2 * 703 * MPC_KM;
+    expect(kmToUnits(farthestKm)).toBeLessThan(CAMERA_FAR_UNITS);
+    // And in float32, the logarithm the fragment writes still steps finer than the buffer.
+    const w = kmToUnits(farthestKm) / CAMERA_NEAR_UNITS;
+    expect(Number.isFinite(Math.fround(w))).toBe(true);
   });
 
   it('never far-clips: the projection’s depth term is exactly one at this range', () => {

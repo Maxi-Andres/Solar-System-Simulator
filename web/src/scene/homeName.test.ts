@@ -11,8 +11,10 @@ import {
   NEIGHBOURHOOD_FRAMING_KM,
   PARSEC_KM,
   VIRGO_FRAMING_KM,
+  LANIAKEA_FRAMING_KM,
+  NEARBY_UNIVERSE_FRAMING_KM,
 } from './scale.ts';
-import { LOCAL_VOLUME_VIEW, M87_DEC_DEG, M87_RA_DEG, SUPERGALACTIC_POLE } from './supergalactic.ts';
+import { LANIAKEA_TURN_DEG, LANIAKEA_VIEW, LOCAL_VOLUME_VIEW, M87_DEC_DEG, M87_RA_DEG, SUPERGALACTIC_POLE } from './supergalactic.ts';
 import { equatorialDirection } from './galactic.ts';
 import { equatorialToEcliptic } from './orientation.ts';
 
@@ -57,7 +59,21 @@ describe('the name of home from afar', () => {
     // Its megaparsec 160 pixels in radius on an 864 px screen: 11 Mpc out.
     expect(at(8e6 * PARSEC_KM).centre).toBe('Milky Way');
     expect(at(13e6 * PARSEC_KM).centre).toBe('Local Group');
-    expect(at(MAX_VIEW_DISTANCE_KM).centre).toBe('Local Group');
+    expect(at(100e6 * PARSEC_KM).centre).toBe('Local Group');
+  });
+
+  it('calls it the Local Volume from Laniakea’s view, the Local Volume’s names folded into it', () => {
+    // Its 11 Mpc 160 pixels in radius on an 864 px screen: 124 Mpc out.
+    expect(at(120e6 * PARSEC_KM).centre).toBe('Local Group');
+    expect(at(130e6 * PARSEC_KM)).toEqual({
+      sun: 'none',
+      centre: 'Local Volume',
+      arms: false,
+      galaxyFolded: true,
+      localGroupFolded: true,
+      localVolumeFolded: true,
+    });
+    expect(at(MAX_VIEW_DISTANCE_KM).centre).toBe('Local Volume');
   });
 
   it('goes up a level and never back down as the camera goes out', () => {
@@ -95,5 +111,20 @@ describe('the views beyond the Local Group', () => {
     expect(LOCAL_VOLUME_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
     expect(VIRGO_FRAMING_KM).toBeLessThan(LOCAL_VOLUME_FRAMING_KM);
     expect(LOCAL_GROUP_FRAMING_KM).toBeLessThan(VIRGO_FRAMING_KM);
+  });
+
+  it('look at Laniakea and the nearby universe from the same pole, turned, inside the farthest zoom', () => {
+    const { direction, up } = LANIAKEA_VIEW;
+    expect(dot(direction, SUPERGALACTIC_POLE)).toBeCloseTo(1, 12);
+    expect(dot(up, SUPERGALACTIC_POLE)).toBeCloseTo(0, 12);
+    expect(Math.hypot(...up)).toBeCloseTo(1, 12);
+    const before = { x: LOCAL_VOLUME_VIEW.up[0], y: LOCAL_VOLUME_VIEW.up[1], z: LOCAL_VOLUME_VIEW.up[2] };
+    expect((Math.acos(dot(up, before)) * 180) / Math.PI).toBeCloseTo(LANIAKEA_TURN_DEG, 9);
+    expect(LOCAL_VOLUME_FRAMING_KM).toBeLessThan(NEARBY_UNIVERSE_FRAMING_KM);
+    expect(LANIAKEA_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
+    expect(NEARBY_UNIVERSE_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
+    // Three billion light years: past the catalogue's 703 Mpc, 2.3 billion.
+    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(3e9);
+    expect(MAX_VIEW_DISTANCE_KM).toBeGreaterThan(703e6 * PARSEC_KM);
   });
 });
