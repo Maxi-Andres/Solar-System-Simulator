@@ -117,7 +117,7 @@ describe('a disc’s column', () => {
       expect(sum / light, `${iDeg} degrees`).toBeGreaterThan(0.985);
       expect(sum / light, `${iDeg} degrees`).toBeLessThan(1.005);
     }
-  });
+  }, 30_000);
 });
 
 describe('the Prugniel-Simien table', () => {

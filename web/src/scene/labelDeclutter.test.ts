@@ -86,6 +86,35 @@ describe('declutterLabels, while things move', () => {
   });
 });
 
+describe('declutterLabels, across catalogues', () => {
+  it('keeps the brighter galaxy’s name where two would overlap', () => {
+    const faint = { ...label('galaxy-ngc-247', 300, 200, 0), importance: 3e9, depth: 1 };
+    const bright = { ...label('galaxy-ngc-253', 304, 203, 0), importance: 4e10, depth: 2 };
+    expect(ids(declutterLabels([faint, bright], 'sun'))).toEqual(['galaxy-ngc-253']);
+    // Held or not: the brighter keeps it, so the two never swap.
+    expect(ids(declutterLabels([faint, bright], 'sun', new Set(['galaxy-ngc-247'])))).toEqual(['galaxy-ngc-253']);
+  });
+
+  it('lets the Milky Way’s name, written left of its point, push the Large Magellanic Cloud’s aside', () => {
+    // The screenshot: "MILKY WAY" right up against "LARGE MAGELLANIC CLOUD", their points 20 px apart.
+    const milkyWay = { ...label('board:milky-way-0', 760, 432, 0, 80), offset: -88, importance: Infinity };
+    const lmc = { ...label('galaxy-lmc', 742, 438, 0, 190), importance: 3e9 };
+    expect(ids(declutterLabels([lmc, milkyWay], 'sun'))).toEqual(['board:milky-way-0']);
+    // Unless the Cloud is the focus.
+    expect(ids(declutterLabels([lmc, milkyWay], 'galaxy-lmc'))).toEqual(['galaxy-lmc']);
+  });
+
+  it('places a name above its point where it is written there, and a name at no mark only by its box', () => {
+    // "Galactic Centre" above the centre, Sgr A* to the right of it, a few pixels off: both fit.
+    const centre = { ...label('board:milky-way-0', 400, 300, 1, 110), offset: -55, dy: -23, height: 14, marked: false };
+    for (const dy of [-3, 0, 3]) {
+      expect(declutterLabels([centre, label('sgr-a-star', 402, 300 + dy, 0, 60)], 'sun')).toHaveLength(2);
+    }
+    // Written on the point, it does collide, and the body's name, a thing to click, keeps it.
+    expect(ids(declutterLabels([{ ...centre, dy: 0 }, label('sgr-a-star', 400, 300, 0, 60)], 'sun'))).toEqual(['sgr-a-star']);
+  });
+});
+
 describe('frame order', () => {
   it('projects the names through this frame’s camera, not last frame’s', async () => {
     const projector = await readFile(join(import.meta.dirname, 'LabelProjector.tsx'), 'utf8');

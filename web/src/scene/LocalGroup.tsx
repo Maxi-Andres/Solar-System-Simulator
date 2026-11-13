@@ -36,6 +36,8 @@ import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { setMarkerPointer } from './markerPointer.ts';
+import { foldMembers } from './markFolding.ts';
+import { galaxyMembers, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, updateMarkHosts, type MemberFolds } from './markHosts.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
@@ -141,7 +143,10 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  *
  * One each, an ellipse; where two would overlap the less luminous goes, as a body's marker
  * behind another's does (markerDeclutter.ts) -- a galaxy made a body first, its own marker
- * standing for it. From the Virgo Cluster's view a thousand marks would be one smudge.
+ * standing for it. From the Virgo Cluster's view a thousand marks would be one smudge. And
+ * each folds into its host's mark as the two come together on the screen (markFolding.ts): a
+ * satellite into its giant's, a group's galaxies into its brightest's, the Virgo Cluster's into
+ * M87's, so a group far off is one mark and opens into its galaxies as the camera nears.
  *
  * ## Where
  *
@@ -688,6 +693,8 @@ interface Marks {
   readonly body: Uint8Array;
   /** 1 where the mark kept its place last frame. */
   readonly kept: Uint8Array;
+  /** Each one's host, and this frame's fold into it (markFolding.ts). */
+  readonly folds: MemberFolds;
 }
 
 /**
@@ -695,6 +702,9 @@ interface Marks {
  * where no mark already placed lies within a mark's size, SPRITE_PX -- one already shown
  * holding its place unless another comes within MARK_HELD_FRACTION of that, so a pair at the
  * threshold does not swap each frame. `width` and `height` are the canvas's, CSS pixels.
+ *
+ * A mark folded into its host's (markFolding.ts) takes no place; one folding is drawn as much
+ * as it is there, its fold this frame.
  */
 export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc: THREE.Vector3, width: number, height: number): void {
   frameCamera.updateMatrixWorld();
@@ -734,8 +744,9 @@ export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc
   let changed = false;
   const set = (i: number, keep: boolean): void => {
     marks.kept[i] = keep ? 1 : 0;
-    const show = keep && marks.body[i] === 0 ? 1 : 0;
-    if (marks.shown.getX(i) !== show) {
+    const show = keep && marks.body[i] === 0 ? marks.folds.value[i]! : 0;
+    const was = marks.shown.getX(i);
+    if (was !== show && (Math.abs(was - show) > 1 / 512 || show === 0 || show === 1)) {
       marks.shown.setX(i, show);
       changed = true;
     }
@@ -749,6 +760,15 @@ export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc
   }
   for (const i of marks.order) {
     if (marks.body[i] === 1) continue;
+    if (marks.folds.value[i] === 0) {
+      // Folded away: kept, so it comes back as it was.
+      marks.kept[i] = 1;
+      if (marks.shown.getX(i) !== 0) {
+        marks.shown.setX(i, 0);
+        changed = true;
+      }
+      continue;
+    }
     const at = onScreen(i);
     if (at === null) {
       // Off the screen: kept, so it comes back as it was.
@@ -1160,6 +1180,9 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       .sort((a, b) => (galaxyLuminosity(list[b]!.galaxy) ?? 0) - (galaxyLuminosity(list[a]!.galaxy) ?? 0));
     const body = new Uint8Array(list.length);
     const kept = new Uint8Array(list.length).fill(1);
+    // Each folded into its host's mark: a satellite into its giant's, a galaxy of a group into
+    // its brightest's (markHosts.ts).
+    const folds = galaxyMembers(list.map(({ galaxy }) => galaxy));
     const points = new THREE.Points(
       geometry,
       new THREE.ShaderMaterial({
@@ -1173,7 +1196,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     );
     points.frustumCulled = false;
     points.raycast = noRaycast;
-    return { points, list, centres, shown, order, body, kept };
+    return { points, list, centres, shown, order, body, kept, folds };
   }, [entries, markUniforms]);
 
   // A galaxy made a body has its body's mark and name: its own mark steps aside.
@@ -1393,6 +1416,9 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     markUniforms['uFade']!.value = markFade;
     if (markFade > 0) {
       const element = renderer.domElement;
+      const fov = (frameCamera as THREE.PerspectiveCamera).fov;
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], viewPixelsPerRadian(element.clientHeight, fov), focus);
+      foldMembers(MARK_HOSTS, marks.folds.host, marks.folds.separationPc, marks.folds.value, -1);
       declutterMarks(marks, frameCamera, cameraPc, element.clientWidth, element.clientHeight);
     }
   });
@@ -1413,7 +1439,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       const e = camera.projectionMatrix.elements;
       const rect = element.getBoundingClientRect();
       marks.centres.forEach((centre, i) => {
-        if (marks.shown.getX(i) === 0) {
+        if (marks.shown.getX(i) < 0.5) {
           screen[i * 2] = Number.NaN;
           screen[i * 2 + 1] = Number.NaN;
           return;

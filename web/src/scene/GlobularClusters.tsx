@@ -16,6 +16,7 @@ import {
   clusterExtinctionV,
   clusterPopulation,
   clusterSampleRequest,
+  globularClusterIndexOf,
   type ClusterSample,
   type GlobularClusterArchive,
 } from '../core/globularClusters.ts';
@@ -38,6 +39,8 @@ import { KM_PER_UNIT } from './scale.ts';
 import { magnitudeToPeakCoefficients } from './starRendering.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
 import { setMarkerPointer } from './markerPointer.ts';
+import { foldMembers } from './markFolding.ts';
+import { MARK_HOSTS, milkyWayMembers, pixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -87,6 +90,12 @@ import { mapStrength } from './Starfield.tsx';
  *   From the Solar System the sky is the star catalogues', Hipparcos and Tycho-2, which hold
  *   single stars and not a cluster's light taken whole -- as they hold no galaxy's.
  * - The Icons layer does not touch it: it is the cluster's light, not a mark.
+ *
+ * ## Folded into the Milky Way
+ *
+ * Each mark folds into the Milky Way's as the galaxy shrinks on the screen (markFolding.ts):
+ * the clusters near its centre first, the farthest last, the one gone to never. Its light does
+ * not: that is there from anywhere, as the galaxy's is.
  */
 
 /** The brightest a cluster's stars are, M_V: the 12 Gyr populations' AGB tip. */
@@ -114,23 +123,27 @@ uniform float uUnitsPerPc;
 uniform float uPixelRatio;
 
 attribute vec3 velocity;
+attribute float aFold;
+varying float vFold;
 
 void main() {
   vec3 rel = ((position - uCameraHigh) - uCameraLow) + velocity * uMotion;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
   gl_PointSize = ${SPRITE_PX.toFixed(1)} * uPixelRatio;
+  vFold = aFold;
 }
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
 uniform vec3 uColor;
 uniform float uFade;
+varying float vFold;
 
 void main() {
   float r = length(gl_PointCoord - 0.5) * ${SPRITE_PX.toFixed(1)};
   float ring = 1.0 - smoothstep(0.35, 0.95, abs(r - ${RING_RADIUS_PX.toFixed(2)}));
   float dot = 1.0 - smoothstep(${(DOT_RADIUS_PX - 0.5).toFixed(2)}, ${(DOT_RADIUS_PX + 0.5).toFixed(2)}, r);
-  float alpha = max(0.6 * ring, 0.8 * dot) * uFade;
+  float alpha = max(0.6 * ring, 0.8 * dot) * uFade * vFold;
   if (alpha < 0.004) {
     discard;
   }
@@ -254,6 +267,11 @@ export function GlobularClusters({
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geometry.setAttribute('velocity', new THREE.BufferAttribute(velocity, 3));
+    // Each folded into the Milky Way's mark as the galaxy shrinks on the screen (markFolding.ts).
+    const folds = milkyWayMembers(position, c.count);
+    const fold = new THREE.BufferAttribute(folds.value, 1);
+    fold.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aFold', fold);
     const points = new THREE.Points(
       geometry,
       new THREE.ShaderMaterial({
@@ -267,7 +285,7 @@ export function GlobularClusters({
     );
     points.frustumCulled = false;
     points.raycast = noRaycast;
-    return { points, position, velocity, count: c.count };
+    return { points, position, velocity, count: c.count, folds, fold };
   }, [archive, markerUniforms]);
   useEffect(() => {
     const group = markersRef.current;
@@ -426,6 +444,14 @@ export function GlobularClusters({
     markerUniforms['uMotion']!.value = motion;
     markerUniforms['uPixelRatio']!.value = pixelRatio;
     markerUniforms['uFade']!.value = fade;
+    if (fade > 0) {
+      const fov = (frameCamera as THREE.PerspectiveCamera).fov;
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      const pinned = globularClusterIndexOf(focus) ?? -1;
+      if (foldMembers(MARK_HOSTS, markers.folds.host, markers.folds.separationPc, markers.folds.value, pinned)) {
+        markers.fold.needsUpdate = true;
+      }
+    }
 
     // Which cluster's stars, if any, could show.
     let best = -1;
@@ -585,7 +611,8 @@ export function GlobularClusters({
         const at = (axis: number, originPc: number): number =>
           markers.position[i * 3 + axis]! + markers.velocity[i * 3 + axis]! * motion - originPc;
         scratch.set(at(0, cameraPc.x), at(1, cameraPc.y), at(2, cameraPc.z)).applyQuaternion(inverse);
-        const depth = -scratch.z;
+        // A mark folded away is not there to be clicked.
+        const depth = markers.folds.value[i]! < 0.5 ? -1 : -scratch.z;
         screen[i * 2] = depth > 0 ? ((e[0]! * scratch.x) / depth + 1) * 0.5 * rect.width : Number.NaN;
         screen[i * 2 + 1] = depth > 0 ? (1 - (e[5]! * scratch.y) / depth) * 0.5 * rect.height : Number.NaN;
       }

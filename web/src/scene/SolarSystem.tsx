@@ -58,6 +58,7 @@ import { loadBodyTexture, releaseBodyTexture } from './textureCache.ts';
 import { loadShapeModel, releaseShapeModel, type LoadedShape } from './shapeModels.ts';
 import { detailExpired, detailWanted } from './detailRelease.ts';
 import { declutterMarkers, type MarkerCandidate } from './markerDeclutter.ts';
+import { bodyFoldStrength, focusLineage, updateMarkHostsFromScene } from './markHosts.ts';
 import { shadowSphereRadius } from '../core/schwarzschildLens.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
@@ -862,6 +863,9 @@ export function SolarSystem({
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
     const sun = snapshot.bodies.get('sun');
+    // Every mark's host, from where the camera is this frame (markHosts.ts).
+    updateMarkHostsFromScene(camera.position, sun?.positionKm, size.height, fov, focus);
+    const lineage = focusLineage(store, focus);
     // Spacecraft paths live in the barycentric frame, whose origin is wherever the focus
     // is not: minus the focus's own barycentric position.
     const focusInRoot = store.stateInRoot(focus, jd);
@@ -1044,7 +1048,10 @@ export function SolarSystem({
           : shapeModel !== null
             ? handle.bodyShape !== null
             : sized;
-      const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite;
+      // Folded into its host's mark as the two come together on the screen (markFolding.ts):
+      // a cluster into the Milky Way's, a satellite galaxy into its giant's.
+      const folded = bodyFoldStrength(handle.definition, rebased.positionKm, sun?.positionKm, lineage);
+      const ringOpacity = (shaped ? markerOpacity(pixelRadius) : 1) * satellite * folded;
       const sphereOpacity = craft === null && sized ? meshOpacity(pixelRadius) : 0;
       if (handle.bodyShape !== null && shapeModel !== null) {
         // A craft's rule, for the same reason: thousands of facets wait until they cover

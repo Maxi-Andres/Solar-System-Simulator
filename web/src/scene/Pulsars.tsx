@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { formatPeriod, NEUTRON_STAR_COLOR, type PulsarArchive } from '../core/pulsars.ts';
+import { formatPeriod, NEUTRON_STAR_COLOR, pulsarIndexOf, type PulsarArchive } from '../core/pulsars.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { julianYearsSinceJ2000, KM_S_TO_PC_PER_YEAR, PARSEC_KM, STARS3D_FROM_KM } from '../core/stars3d.ts';
@@ -13,6 +13,8 @@ import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { KM_PER_UNIT } from './scale.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
 import { setMarkerPointer } from './markerPointer.ts';
+import { foldMembers } from './markFolding.ts';
+import { MARK_HOSTS, milkyWayMembers, pixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -26,7 +28,8 @@ import { mapStrength } from './Starfield.tsx';
  * pulsars are spread through the disc, most of them thousands of parsecs out, and from
  * across the galaxy where they are is what there is to see of them. A neutron star is
  * twelve kilometres of nearly dark: no dot here is its light, and the marker is the same
- * size at any distance. The Pulsars layer switches them off.
+ * size at any distance. The Pulsars layer switches them off. Each folds into the Milky Way's
+ * mark as the galaxy shrinks on the screen (markFolding.ts), the one gone to never.
  *
  * Pointing at one names it and its period; clicking one goes there, the pulsar made a body
  * of its real size (pulsars.ts).
@@ -69,8 +72,10 @@ uniform float uPixelRatio;
 
 attribute vec3 velocity;
 attribute float magnetar;
+attribute float aFold;
 
 varying float vMagnetar;
+varying float vFold;
 
 void main() {
   // As the 3D stars' (stars3dShader.ts): the camera's high part, its low part, the motion.
@@ -78,6 +83,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
   gl_PointSize = ${SPRITE_PX.toFixed(1)} * uPixelRatio;
   vMagnetar = magnetar;
+  vFold = aFold;
 }
 `;
 
@@ -86,6 +92,7 @@ uniform vec3 uColor;
 uniform float uFade;
 
 varying float vMagnetar;
+varying float vFold;
 
 void main() {
   // CSS pixels from the sprite's centre.
@@ -93,7 +100,7 @@ void main() {
   float dot = 1.0 - smoothstep(${(DOT_RADIUS_PX - 0.5).toFixed(2)}, ${(DOT_RADIUS_PX + 0.5).toFixed(2)}, r);
   float ring = vMagnetar * (1.0 - smoothstep(0.3, 0.9, abs(r - ${RING_RADIUS_PX.toFixed(2)})));
   // Thousands of them lie along the disc: each faint enough that the arms show through.
-  float alpha = max(0.6 * dot, 0.5 * ring) * uFade;
+  float alpha = max(0.6 * dot, 0.5 * ring) * uFade * vFold;
   if (alpha < 0.004) {
     discard;
   }
@@ -145,6 +152,11 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     geometry.setAttribute('position', new THREE.BufferAttribute(markers.position, 3));
     geometry.setAttribute('velocity', new THREE.BufferAttribute(markers.velocity, 3));
     geometry.setAttribute('magnetar', new THREE.BufferAttribute(markers.magnetar, 1));
+    // Each folded into the Milky Way's mark as the galaxy shrinks on the screen (markFolding.ts).
+    const folds = milkyWayMembers(markers.position, markers.count);
+    const fold = new THREE.BufferAttribute(folds.value, 1);
+    fold.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aFold', fold);
     const material = new THREE.ShaderMaterial({
       uniforms,
       vertexShader: VERTEX_SHADER,
@@ -156,19 +168,19 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     const object = new THREE.Points(geometry, material);
     object.frustumCulled = false;
     object.raycast = noRaycast;
-    return object;
+    return { object, folds, fold };
   }, [markers, uniforms]);
   useEffect(() => {
     const group = groupRef.current;
     if (group === null || points === null) {
       return;
     }
-    group.add(points);
+    group.add(points.object);
     renderDemand.request();
     return () => {
-      group.remove(points);
-      points.geometry.dispose();
-      (points.material as THREE.Material).dispose();
+      group.remove(points.object);
+      points.object.geometry.dispose();
+      (points.object.material as THREE.Material).dispose();
     };
   }, [points]);
 
@@ -207,6 +219,14 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     uniforms['uMotion']!.value = julianYearsSinceJ2000(jd) * KM_S_TO_PC_PER_YEAR;
     uniforms['uPixelRatio']!.value = renderer.getPixelRatio();
     uniforms['uFade']!.value = fade;
+    // Folded into the Milky Way's mark, the one gone to never (markFolding.ts).
+    if (points !== null) {
+      const fov = (frameCamera as THREE.PerspectiveCamera).fov;
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      if (foldMembers(MARK_HOSTS, points.folds.host, points.folds.separationPc, points.folds.value, pulsarIndexOf(focus) ?? -1)) {
+        points.fold.needsUpdate = true;
+      }
+    }
   });
 
   // Pointing and clicking, as the hosts' rings: every marker projected in float64, on the
@@ -215,6 +235,7 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     if (markers === null || archive === null) {
       return;
     }
+    const folds = points?.folds ?? null;
     const element = gl.domElement;
     const tip = document.createElement('div');
     Object.assign(tip.style, TIP_STYLE);
@@ -233,7 +254,8 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
         const at = (axis: number, originPc: number): number =>
           markers.position[i * 3 + axis]! + markers.velocity[i * 3 + axis]! * motion - originPc;
         scratch.set(at(0, cameraPc.x), at(1, cameraPc.y), at(2, cameraPc.z)).applyQuaternion(inverse);
-        const depth = -scratch.z;
+        // A mark folded away is not there to be clicked.
+        const depth = folds !== null && folds.value[i]! < 0.5 ? -1 : -scratch.z;
         screen[i * 2] = depth > 0 ? ((e[0]! * scratch.x) / depth + 1) * 0.5 * rect.width : Number.NaN;
         screen[i * 2 + 1] = depth > 0 ? (1 - (e[5]! * scratch.y) / depth) * 0.5 * rect.height : Number.NaN;
       }
@@ -305,7 +327,7 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
       setPointing(false);
       tip.remove();
     };
-  }, [markers, archive, gl, camera]);
+  }, [markers, archive, points, gl, camera]);
 
   return <group ref={groupRef} />;
 }

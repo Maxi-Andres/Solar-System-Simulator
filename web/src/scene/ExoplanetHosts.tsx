@@ -13,6 +13,8 @@ import { KM_PER_UNIT } from './scale.ts';
 import { splitHigh, splitLow, UNITS_PER_PC } from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { setMarkerPointer } from './markerPointer.ts';
+import { foldMembers } from './markFolding.ts';
+import { MARK_HOSTS, milkyWayMembers, pixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import { mapStrength } from './Starfield.tsx';
 
 /**
@@ -31,7 +33,8 @@ import { mapStrength } from './Starfield.tsx';
  * across it four thousand rings are one teal smear along the Kepler field and toward the
  * bulge, where the microlensing planets are, and a smear names nothing -- even at a
  * quarter strength it read as a structure of the galaxy, which it is not. The Exoplanet
- * Hosts layer switches it off.
+ * Hosts layer switches it off. Each ring folds into the Milky Way's mark as the galaxy
+ * shrinks on the screen (markFolding.ts).
  *
  * Pointing at a ring names its star and its count; clicking one goes there -- the star made
  * a body, its planets on their orbits (archiveSystems.ts). Picked on the CPU from the same
@@ -115,8 +118,10 @@ uniform float uPixelRatio;
 
 attribute vec3 velocity;
 attribute float planets;
+attribute float aFold;
 
 varying float vPlanets;
+varying float vFold;
 
 void main() {
   // As the 3D stars' (stars3dShader.ts): the camera's high part, its low part, the motion.
@@ -124,6 +129,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
   gl_PointSize = ${SPRITE_PX.toFixed(1)} * uPixelRatio;
   vPlanets = planets;
+  vFold = aFold;
 }
 `;
 
@@ -132,6 +138,7 @@ uniform vec3 uColor;
 uniform float uFade;
 
 varying float vPlanets;
+varying float vFold;
 
 const float TAU = 6.28318530718;
 
@@ -149,7 +156,7 @@ void main() {
   float angle = k * step;
   vec2 centre = ${RING_RADIUS_PX.toFixed(2)} * vec2(sin(angle), cos(angle));
   float dot = 1.0 - smoothstep(${(DOT_RADIUS_PX - 0.6).toFixed(2)}, ${(DOT_RADIUS_PX + 0.4).toFixed(2)}, length(p - centre));
-  float alpha = max(0.38 * ring, 0.95 * dot) * uFade;
+  float alpha = max(0.38 * ring, 0.95 * dot) * uFade * vFold;
   if (alpha < 0.004) {
     discard;
   }
@@ -181,6 +188,8 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
   pickRef.current = onPick;
 
   const markers = useMemo(() => (archive === null ? null : hostMarkers(archive.catalog)), [archive]);
+  // Each folded into the Milky Way's mark as the galaxy shrinks on the screen (markFolding.ts).
+  const folds = useMemo(() => (markers === null ? null : milkyWayMembers(markers.position, markers.count)), [markers]);
 
   const uniforms = useMemo<Record<string, THREE.IUniform>>(
     () => ({
@@ -202,6 +211,9 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     geometry.setAttribute('position', new THREE.BufferAttribute(markers.position, 3));
     geometry.setAttribute('velocity', new THREE.BufferAttribute(markers.velocity, 3));
     geometry.setAttribute('planets', new THREE.BufferAttribute(markers.planets, 1));
+    const fold = new THREE.BufferAttribute(folds?.value ?? new Float32Array(markers.count).fill(1), 1);
+    fold.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aFold', fold);
     const material = new THREE.ShaderMaterial({
       uniforms,
       vertexShader: VERTEX_SHADER,
@@ -214,7 +226,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     object.frustumCulled = false;
     object.raycast = noRaycast;
     return object;
-  }, [markers, uniforms]);
+  }, [markers, folds, uniforms]);
   useEffect(() => {
     const group = groupRef.current;
     if (group === null || points === null) {
@@ -267,6 +279,13 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     uniforms['uMotion']!.value = julianYearsSinceJ2000(jd) * KM_S_TO_PC_PER_YEAR;
     uniforms['uPixelRatio']!.value = renderer.getPixelRatio();
     uniforms['uFade']!.value = fade;
+    if (points !== null && folds !== null) {
+      const fov = (frameCamera as THREE.PerspectiveCamera).fov;
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      if (foldMembers(MARK_HOSTS, folds.host, folds.separationPc, folds.value, -1)) {
+        points.geometry.getAttribute('aFold').needsUpdate = true;
+      }
+    }
   });
 
   // Pointing and clicking: every marker projected through the camera, in float64, when
@@ -296,8 +315,8 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
         const at = (axis: number, originPc: number): number =>
           markers.position[i * 3 + axis]! + markers.velocity[i * 3 + axis]! * motion - originPc;
         scratch.set(at(0, cameraPc.x), at(1, cameraPc.y), at(2, cameraPc.z)).applyQuaternion(inverse);
-        // In front is -z in the camera's axes.
-        const depth = -scratch.z;
+        // In front is -z in the camera's axes; a mark folded away is not there to be clicked.
+        const depth = folds !== null && folds.value[i]! < 0.5 ? -1 : -scratch.z;
         screen[i * 2] = depth > 0 ? ((e[0]! * scratch.x) / depth + 1) * 0.5 * rect.width : Number.NaN;
         screen[i * 2 + 1] = depth > 0 ? (1 - (e[5]! * scratch.y) / depth) * 0.5 * rect.height : Number.NaN;
       }
@@ -369,7 +388,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
       setMarkerPointer(element, 'exoplanet-hosts', false);
       tip.remove();
     };
-  }, [markers, archive, gl, camera]);
+  }, [markers, folds, archive, gl, camera]);
 
   return <group ref={groupRef} />;
 }

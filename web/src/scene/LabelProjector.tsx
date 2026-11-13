@@ -12,8 +12,11 @@ import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
-import { galaxyOf } from '../core/localGroup.ts';
+import { galaxyLuminosity, galaxyOf } from '../core/localGroup.ts';
 import { homeNames } from './homeName.ts';
+import { labelBoard } from './labelBoard.ts';
+import { foldedShown } from './markFolding.ts';
+import { bodyFoldStrength, focusLineage, updateMarkHostsFromScene } from './markHosts.ts';
 import { angularRadiusPixels, kmToUnits, unitsToKm } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
 
@@ -28,6 +31,9 @@ const scratch = new THREE.Vector3();
  * UI. This component only moves them: it writes transforms directly in the frame
  * loop, so labels track the scene at 60 fps without React re-rendering anything.
  */
+
+/** The ids the names of the label board (labelBoard.ts) go by here, apart from any body's. */
+const BOARD_PREFIX = 'board:';
 
 /** Gap between a body's edge and its label, in pixels. */
 const LABEL_GAP_PX = 14;
@@ -87,15 +93,28 @@ export interface LabelCandidate {
   readonly width: number;
   readonly depth: number;
   readonly rank: number;
+  /** Within a rank, the more important first: a galaxy's luminosity. 0 where none is given. */
+  readonly importance?: number;
+  /** The text's box: its height, and its centre's offset below the point, pixels. */
+  readonly height?: number;
+  readonly dy?: number;
+  /** Whether a mark is at the point: false for a name on a model, which has none. */
+  readonly marked?: boolean;
 }
 
 /**
  * Which labels to show: the ones that fit, by precedence.
  *
  * The focused body first, always -- it is the one you asked about, and everything that
- * would cover its name yields to it. Then by rank (see `labelRank`). Within a rank, a
- * label already on screen (`held`) keeps its place against one that is not, and only
- * then does depth decide.
+ * would cover its name yields to it. Then by rank (see `labelRank`); within a rank by
+ * importance -- a galaxy's luminosity; the Milky Way's name, once it is named as one thing,
+ * above all, since every name near it is of something in it. The names on its model, its
+ * centre's and its arms', come after the bodies'. Then a label already on screen (`held`) keeps its place
+ * against one that is not, and only then does depth decide.
+ *
+ * **One pass for every name.** The bodies' names and the names on the Milky Way's model
+ * (its centre's, its arms'; see `labelBoard`) are decluttered together, so a name of one
+ * never lies over a name of the other: "Milky Way" and "Large Magellanic Cloud" did.
  *
  * **Why held labels win.** Depth alone flips: two craft a few pixels apart swap places in
  * depth as the camera turns, and with them which name is shown -- every frame, so the
@@ -122,6 +141,9 @@ export function declutterLabels(
     if (a.rank !== b.rank) {
       return a.rank - b.rank;
     }
+    if ((a.importance ?? 0) !== (b.importance ?? 0)) {
+      return (a.importance ?? 0) > (b.importance ?? 0) ? -1 : 1;
+    }
     if (held.has(a.id) !== held.has(b.id)) {
       return held.has(a.id) ? -1 : 1;
     }
@@ -129,24 +151,28 @@ export function declutterLabels(
   });
 
   const placed: LabelCandidate[] = [];
+  const half = (label: LabelCandidate) => (label.height ?? LABEL_HEIGHT_PX) / 2;
+  const middle = (label: LabelCandidate) => label.y + (label.dy ?? 0);
   for (const candidate of ordered) {
     const holding = held.has(candidate.id);
     const padding = holding ? 0 : LABEL_PADDING_PX;
     const markerGap = holding ? DECLUTTER_PX * HELD_MARKER_FRACTION : DECLUTTER_PX;
     const left = candidate.x + candidate.offset - padding;
     const right = candidate.x + candidate.offset + candidate.width + padding;
-    const top = candidate.y - LABEL_HEIGHT_PX / 2 - padding;
-    const bottom = candidate.y + LABEL_HEIGHT_PX / 2 + padding;
+    const top = middle(candidate) - half(candidate) - padding;
+    const bottom = middle(candidate) + half(candidate) + padding;
     const collides = placed.some((other) => {
       const markersTouch =
+        candidate.marked !== false &&
+        other.marked !== false &&
         Math.abs(other.x - candidate.x) < markerGap &&
         Math.abs(other.y - candidate.y) < markerGap;
       const otherLeft = other.x + other.offset;
       const boxesTouch =
         left < otherLeft + other.width &&
         otherLeft < right &&
-        top < other.y + LABEL_HEIGHT_PX / 2 &&
-        other.y - LABEL_HEIGHT_PX / 2 < bottom;
+        top < middle(other) + half(other) &&
+        middle(other) - half(other) < bottom;
       return markersTouch || boxesTouch;
     });
     if (!collides) {
@@ -171,6 +197,12 @@ const SYSTEM_OUTSIDE_EXTENTS = 3;
 const SOLAR_SYSTEM_EXTENT_KM = 50 * 149_597_870.7;
 /** Alpha Centauri's: Proxima's distance from the pair, 13,000 AU. */
 const ALPHA_CEN_EXTENT_KM = 13_000 * 149_597_870.7;
+
+/** A body's importance among its rank: a galaxy's luminosity, solar V; any other's none. */
+function labelImportance(id: BodyId): number {
+  const galaxy = galaxyOf(id);
+  return galaxy === null ? 0 : (galaxyLuminosity(galaxy) ?? 0);
+}
 
 export function labelRank(kind: string, parent: BodyId | null): number {
   if (kind === 'spacecraft' || kind === 'satellite') {
@@ -259,9 +291,16 @@ export function LabelProjector({
     const shared = sharedFrame.snapshot;
     sharedFrame.snapshot = null;
 
+    // The names others placed this frame, for the one declutter pass below (labelBoard.ts).
+    const posted = labelBoard.posted;
+    labelBoard.posted = [];
+
     if (!visible) {
       for (const element of map.values()) {
         hide(element);
+      }
+      for (const label of posted) {
+        hide(label.element);
       }
       held.clear();
       return;
@@ -294,6 +333,9 @@ export function LabelProjector({
 
     const projected: LabelCandidate[] = [];
     const unmarked = new Set<BodyId>();
+    const sunKm = snapshot.bodies.get('sun')?.positionKm;
+    updateMarkHostsFromScene(camera.position, sunKm, size.height, fov, focus);
+    const lineage = focusLineage(store, focus);
 
     for (const body of store.bodies) {
       // A kind that is switched off has nothing on screen to be labelled.
@@ -334,6 +376,12 @@ export function LabelProjector({
         continue;
       }
 
+      // And its mark's fold into its host's (markFolding.ts): the name goes with the mark,
+      // with hysteresis, so one at the edge does not come and go.
+      if (!foldedShown(bodyFoldStrength(body, rebased.positionKm, sunKm, lineage), held.has(body.id))) {
+        continue;
+      }
+
       scratch.set(
         kmToUnits(rebased.positionKm.x),
         kmToUnits(rebased.positionKm.y),
@@ -364,6 +412,7 @@ export function LabelProjector({
         offset: Math.min(pixelRadius, size.height * 0.4) + LABEL_GAP_PX,
         width: widths.get(body.id) ?? body.name.length * LABEL_CHAR_PX,
         rank: labelRank(body.kind, body.parent),
+        importance: labelImportance(body.id),
       });
     }
 
@@ -499,8 +548,19 @@ export function LabelProjector({
     // The focused body outranks them all. See `declutterLabels`.
     shown.clear();
 
+    // With the names the Milky Way's model placed, which it shows unless they lose here.
+    const boardElements = new Map<string, HTMLElement>();
+    for (const label of posted) {
+      const id = `${BOARD_PREFIX}${label.key}`;
+      boardElements.set(id, label.element);
+      projected.push({ ...label, id, depth: 0 });
+    }
+
     for (const candidate of declutterLabels(projected, focus, held)) {
       shown.add(candidate.id);
+      if (boardElements.has(candidate.id)) {
+        continue;
+      }
 
       const element = map.get(candidate.id);
       if (element == null) {
@@ -515,6 +575,11 @@ export function LabelProjector({
     }
 
     for (const [id, element] of map) {
+      if (!shown.has(id)) {
+        hide(element);
+      }
+    }
+    for (const [id, element] of boardElements) {
       if (!shown.has(id)) {
         hide(element);
       }

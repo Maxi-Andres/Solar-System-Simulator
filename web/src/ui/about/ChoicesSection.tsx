@@ -60,6 +60,15 @@ export const choicesSection: AboutSection = {
             </Xref>
             .
           </Item>
+          <Item title="Marks fold into what they are part of">
+            A mark fades into the mark of what it is part of as the two close to within a mark’s size, 24 to 12
+            pixels apart as seen from the camera: a moon into its planet; a cluster, pulsar, remnant or black hole
+            into the Milky Way; a satellite galaxy into its giant; the Local Group’s others into the Milky Way’s
+            mark, which is the Local Group’s; a group’s galaxies into its brightest; the Virgo Cluster’s into M87.
+            Its name goes with it. The body looked at, and what it is part of, never fold. Of two names that would
+            still overlap, the body looked at keeps its place, then a body, then the more luminous.
+            <Why>from afar a system is one place and its members’ marks one smudge on it; nearer, it opens into them.</Why>
+          </Item>
         </Items>
 
         <Sub section="choices" id="sun">
@@ -268,7 +277,8 @@ export const choicesSection: AboutSection = {
             <Why>the dots say where the neutron stars are, which is what there is to see of them.</Why>
           </Item>
           <Item title="Kept with the galaxy in view">
-            Unlike the exoplanet hosts’ rings, the dots stay when the whole galaxy is in view.
+            Unlike the exoplanet hosts’ rings, the dots stay when the whole galaxy is in view, folding into its
+            mark only as it shrinks to a few pixels.
             <Why>pulsars are spread through the disc, thousands of light years out; across the galaxy is where their pattern is.</Why>
           </Item>
           <Item title="Spin and beams not drawn">
@@ -476,7 +486,8 @@ export const choicesSection: AboutSection = {
           </Item>
           <Item title="The brightest named, the rest marked">
             Galaxies of V 9.5 or brighter are named on the sky from the start, as Andromeda is; the others carry a
-            mark, and where two marks would overlap the less luminous gives way.
+            mark, and where two marks would overlap the less luminous gives way. A group’s marks fold into its
+            brightest’s as it grows small on the screen.
             <Why>from the Virgo Cluster’s view a thousand marks would be one smudge.</Why>
           </Item>
           <Item title="The Local Group, named as one">

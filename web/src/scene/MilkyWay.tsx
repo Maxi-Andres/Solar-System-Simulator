@@ -15,6 +15,7 @@ import type { FramingView } from '../state/store.ts';
 import { cieX, cieY, cieZ, starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { homeNames } from './homeName.ts';
+import { boxOf, labelBoard } from './labelBoard.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
@@ -166,8 +167,15 @@ const FOLDED_NAME_STYLE: Partial<CSSStyleDeclaration> = {
   textTransform: 'uppercase',
 };
 
-/** How far above its point the Galactic Centre's name stands, pixels. */
+/** How far left of its point the folded name stands, pixels. */
 const CENTRE_LABEL_GAP_PX = 8;
+/**
+ * How far above its point the Galactic Centre's name stands, pixels: clear of Sgr A*'s name
+ * beside it -- by the clear space the labels' declutter keeps about a name (LabelProjector
+ * LABEL_PADDING_PX) and as much again for Sgr A* lying a few pixels off the model's centre --
+ * so the two are both shown (labelBoard.ts).
+ */
+const CENTRE_LABEL_ABOVE_PX = 16;
 
 /** Points nearer the camera than this share of its distance from the Sun fade out. */
 const NEAR_FADE_SHARE = 0.35;
@@ -690,8 +698,25 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
           ? `translate(${x}px, ${y}px) translate(-50%, -50%)`
           : folded
             ? `translate(${x - CENTRE_LABEL_GAP_PX}px, ${y}px) translate(-100%, -50%)`
-            : `translate(${x}px, ${y - CENTRE_LABEL_GAP_PX}px) translate(-50%, -100%)`;
+            : `translate(${x}px, ${y - CENTRE_LABEL_ABOVE_PX}px) translate(-50%, -100%)`;
       element.style.opacity = String(visibility);
+      // Handed to the labels' one declutter pass (labelBoard.ts), which hides it if it loses.
+      // Folded, the name of the mark everything near it folds into, before every other name;
+      // unfolded, the centre's and the arms' are the model's, after the bodies', at no mark.
+      const box = boxOf(element);
+      labelBoard.posted.push({
+        key: `milky-way-${index}`,
+        element,
+        x,
+        y,
+        offset: index > 0 ? -box.width / 2 : folded ? -CENTRE_LABEL_GAP_PX - box.width : -box.width / 2,
+        dy: index > 0 || folded ? 0 : -CENTRE_LABEL_ABOVE_PX - box.height / 2,
+        width: box.width,
+        height: box.height,
+        rank: index === 0 && folded ? 0 : 1,
+        importance: index === 0 && folded ? Infinity : 0,
+        marked: index === 0 && folded,
+      });
     });
   });
 

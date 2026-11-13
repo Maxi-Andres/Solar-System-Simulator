@@ -571,7 +571,7 @@ export function ensureNamedVolumeGalaxies(store: EphemerisStore, archive: LocalV
  * The Virgo Cluster's centre, for its breadcrumb: M87, at the centre of its main body,
  * cluster A (Mei et al. 2007, ApJ 655, 144) -- or, missing from the data, its brightest member.
  */
-export function virgoCentre(archive: LocalVolumeArchive): number | null {
+export function virgoCentre(archive: Pick<LocalVolumeArchive, 'catalog'>): number | null {
   const names = (k: number) => [archive.catalog.name[k]!, ...archive.catalog.otherNames[k]!].map(normalizeName);
   let brightest: number | null = null;
   for (let k = 0; k < archive.catalog.count; k += 1) {
