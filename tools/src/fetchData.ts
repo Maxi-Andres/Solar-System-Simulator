@@ -989,11 +989,28 @@ async function main(): Promise<void> {
         `(${failedCraft.join(', ')}). The rest is written and usable locally; this run ` +
         'exits with an error so a deploy does not publish it.',
     );
+    annotate(`INCOMPLETE: ${failedCraft.length} spacecraft left out (${failedCraft.join(', ')}).`);
     process.exitCode = 1;
+  }
+}
+
+/**
+ * On GitHub Actions, the reason a run failed as an error annotation: annotations are public on
+ * the run's page and through the API without signing in, where a job's log is not.
+ */
+function annotate(message: string): void {
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    const escaped = message.slice(0, 4000).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+    console.log(`::error title=fetch:data::${escaped}`);
   }
 }
 
 // Run when invoked, not when imported -- a script trying one body imports fetchAdaptiveBody.
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    annotate(error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error));
+    throw error;
+  }
 }
