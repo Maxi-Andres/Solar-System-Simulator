@@ -105,6 +105,7 @@ import { loadPulsars } from './pulsars/fetchPulsars.ts';
 import { loadSatellites } from './satellites/fetchSatellites.ts';
 import { fetchTraverse, fixedTrack, parseTraverse, traverseTrack } from './surface.ts';
 import { describeSky, loadSky, loadStars3d } from './stars/fetchStars.ts';
+import { useTapCache } from './stars/tap.ts';
 import type {
   BodyDefinition,
   BodyId,
@@ -611,6 +612,13 @@ async function writePaths(
 }
 
 async function main(): Promise<void> {
+  // The star catalogues' answers kept between runs where STAR_CATALOGUE_CACHE names a
+  // directory (the deploy does): Hipparcos, Tycho-2 and Gaia DR3 do not change from one
+  // run to the next, and their hosts are the least reachable from GitHub's runners -- CDS's
+  // TAP refuses them, the Gaia archive answers 429 to runs close together. Unset, every
+  // run asks them afresh, as before.
+  const starCache = process.env.STAR_CATALOGUE_CACHE;
+  useTapCache(starCache === undefined || starCache === '' ? null : starCache);
   const epoch = todayUtcMidnight();
   const full = windowFor('full', epoch);
   const short = windowFor('short', epoch);

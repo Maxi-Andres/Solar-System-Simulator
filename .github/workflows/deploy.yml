@@ -75,12 +75,36 @@ jobs:
           restore-keys: |
             deploy-data-
 
+      # The star catalogues (Hipparcos, Tycho-2, Gaia DR3) are the same every run, and their
+      # hosts the least reachable from here: CDS's TAP refuses GitHub's runners and the Gaia
+      # archive answers 429 to runs close together. Their answers are kept between runs,
+      # keyed by the queries themselves; nothing that changes with the date is.
+      - name: Restore the star catalogues' answers
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/star-catalogues
+          key: star-catalogues-none
+          restore-keys: |
+            star-catalogues-
+
       # A full run: always fetched fresh, never from cache -- the whole point of it is to
       # publish a window centred on today. Also the daily run's fallback when no saved
       # data came back (the cache is evicted after a week unused).
       - name: Fetch ephemerides from JPL Horizons
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        env:
+          STAR_CATALOGUE_CACHE: ${{ github.workspace }}/tools/.cache/star-catalogues
         run: pnpm fetch:data
+
+      # Kept even when the fetch failed further on: the stars it did read need not be asked
+      # for again.
+      - name: Save the star catalogues' answers
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '')
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/star-catalogues
+          key: star-catalogues-${{ github.run_id }}
 
       - name: Save the data for the daily satellite runs
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
