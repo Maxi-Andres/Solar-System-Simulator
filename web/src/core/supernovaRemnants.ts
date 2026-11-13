@@ -168,7 +168,7 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
       file: 'crab.png',
       halfArcmin: 4,
       reachArcmin: 4.83,
-      continuum: { file: 'crab-continuum.png', colour: [0.0771, 0.8135, 1] },
+      continuum: { file: 'crab-continuum.png', colour: [0.0749, 0.8143, 1] },
       colour: 'photograph',
       points: null,
       light: 'visible, three filters (VLT FORS2)',

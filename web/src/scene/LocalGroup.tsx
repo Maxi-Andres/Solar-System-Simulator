@@ -111,7 +111,7 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * (galaxyHalfLightPc) shrinks from RESOLVED_PX to UNRESOLVED_PX pixels its light goes over
  * from its volume to a point: a Gaussian of that radius, never narrower than MIN_SIGMA_PX,
  * holding all of its luminosity (pointPeak), through the same exposure, drawn out to where it
- * fades below a display step however bright (gaussianSprite.ts). From the Local
+ * rounds to black however bright (gaussianSprite.ts). From the Local
  * Group's view Andromeda, Triangulum, the Clouds and a dozen more are dots, some forty in all
  * show, and the faintest dwarfs still do not.
  *
@@ -527,13 +527,14 @@ void main() {
 `;
 
 /**
- * The least a galaxy's point is drawn at, in white columns: about 40 of 255 at its centre. A
- * choice, not the light (Maxi, 2026-11-11: "me gusta, dejalo así"): on one exposure most dwarfs
- * are far too faint to show at all, and a galaxy at least a faint dot, in its own colour, is
- * where it is. Only its point -- an unresolved galaxy; once it is a few pixels across, its
- * volume is its own light alone.
+ * The least a galaxy's point is drawn at, in white columns: 40 of 255 at its centre, after the
+ * shoulder and the display's encode (glowBuffer.ts glowDisplay) -- 0.021. A choice, not the
+ * light (Maxi, 2026-11-11: "me gusta, dejalo así"): on one exposure most dwarfs are far too
+ * faint to show at all, and a galaxy at least a faint dot, in its own colour, is where it is.
+ * Only its point -- an unresolved galaxy; once it is a few pixels across, its volume is its own
+ * light alone. It was 0.17 when the composite did not encode, the same 40 of 255 then.
  */
-export const FAINT_GALAXY_FLOOR = 0.17;
+export const FAINT_GALAXY_FLOOR = -Math.log(1 - srgbToLinear(40 / 255));
 
 const POINT_VERTEX = /* glsl */ `
 #include <common>
@@ -562,7 +563,7 @@ void main() {
   // Every galaxy at least a faint dot, its own colour at FAINT_GALAXY_FLOOR whatever its
   // light: a choice, not what a photograph shows.
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toFixed(3)} * aShare * uFade);
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aShare * uFade);
   vSigmaPx = sigmaPx;
   // Out to where its light falls below the floor (gaussianSprite.ts): a bright one's wing
   // is not cut square.

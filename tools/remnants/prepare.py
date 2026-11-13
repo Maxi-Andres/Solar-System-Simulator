@@ -12,11 +12,14 @@ For each remnant, a 1024 x 1024 map, north up, east left, centred on Green's cen
    of a FITS file -- by the gnomonic projection both use; a wide picture smoothed first to the
    map's pixel.
 2. **Sky taken off**: a low percentile of the frame, or of the pixels round each one
-   (`localSky`) where the plates of a mosaic differ.
+   (`localSky`) where the plates of a mosaic differ, or a quadratic surface through the sky
+   round the remnant (`skyOutside`) where the picture's sky is a gradient; only over the
+   picture's own data where it is set in a black frame (`footprint`).
 3. **Stars taken out**: the faintest by a directional median -- a star is bright every way, a
    filament along itself; the rest where Gaia DR3 and Hipparcos put them, each one's size from
    its magnitude, fitted on the stars clear of the gas; filled from the light round them.
-4. **Noise floor**, **faded out** past the remnant, **normalised**; a grey map where the
+4. **Noise floor**, **faded out** past the remnant -- and inside the picture's own edge where
+   it stops short (`edgeFadeArcmin`) -- **normalised**; a grey map where the
    picture is not in visible colours (the app colours it with the remnant's lines).
 
 Cassiopeia A's 3D points (cas-a-points.bin) are DeLaney et al. 2010's surfaces, placed on the
@@ -208,9 +211,45 @@ def make(key, spec):
             # Two plates, red and blue: the green between them.
             out = np.stack([red, 0.5 * (red + blue), blue], -1)
 
+    # The picture's own data, not its file's frame: a press image set square on a black field
+    # (Kepler's, Hubble's field turned within it) counted that black as sky -- its low percentile
+    # nothing, its noise nothing -- and the field's own sky and faint stars were kept, a square of
+    # them. Where it holds light -- three display steps -- its holes closed, its rim's ringing left
+    # out.
+    if spec.get('footprint'):
+        lum0 = out @ LUMA
+        data = ndimage.binary_fill_holes(ndimage.binary_closing(lum0 > 3 / 255 / 12.92, iterations=4))
+        inside = inside & ndimage.binary_erosion(data, iterations=4)
+        print('  the picture covers %.0f%% of the map' % (inside.mean() * 100))
+
     # Sky background: a low percentile of the frame's own pixels, each channel -- or, where the
-    # picture is a mosaic of plates whose skies differ, of the pixels round each one.
-    if spec.get('localSky'):
+    # picture is a mosaic of plates whose skies differ, of the pixels round each one -- or, where
+    # its sky is a gradient and the remnant fills most of it (the Crab's: red to one side, green
+    # in a corner), a quadratic surface through the low percentiles of the sky round the remnant,
+    # outside the ellipse `skyOutside` [semi-axes, arcmin, and the long one's position angle].
+    if 'skyOutside' in spec:
+        a_, b_, pa_ = spec['skyOutside']
+        p_ = math.radians(pa_)
+        u = (east * math.sin(p_) + north * math.cos(p_)) * 60
+        v = (east * math.cos(p_) - north * math.sin(p_)) * 60
+        sky = inside & ((u / a_) ** 2 + (v / b_) ** 2 > 1)
+        B = 32
+        rows, cols, levels = [], [], []
+        for y0 in range(0, N, B):
+            for x0 in range(0, N, B):
+                block = sky[y0:y0 + B, x0:x0 + B]
+                if block.mean() > 0.5:
+                    rows.append(y0 + B / 2)
+                    cols.append(x0 + B / 2)
+                    levels.append(np.percentile(out[y0:y0 + B, x0:x0 + B][block], 20, axis=0))
+        terms = lambda x, y: [np.ones_like(x), x, y, x * x, x * y, y * y]
+        design = np.stack(terms(np.array(cols) / N - 0.5, np.array(rows) / N - 0.5), -1)
+        coef, *_ = np.linalg.lstsq(design, np.array(levels), rcond=None)
+        plane = np.stack(terms(i / N - 0.5, j / N - 0.5), -1) @ coef
+        print('  sky: a quadratic surface through %d patches of it round the remnant, from %s to %s' % (
+            len(rows), np.round(plane[inside].min(0) * 255, 2), np.round(plane[inside].max(0) * 255, 2)))
+        out = np.clip(out - plane, 0, None)
+    elif spec.get('localSky'):
         box = spec['localSky']
         for ch in range(3):
             small = ndimage.zoom(out[..., ch], 0.25, order=1)
@@ -364,6 +403,13 @@ def make(key, spec):
     dist = np.hypot(east, north) * 60
     edge = np.clip((spec['maskArcmin'] * 1.15 - dist) / (spec['maskArcmin'] * 0.15), 0, 1)
     out *= (edge * edge * (3 - 2 * edge))[..., None]
+    # And where the picture or the map ends short of that, faded to nothing over `edgeFadeArcmin`
+    # inside the end: its straight side never shows.
+    if 'edgeFadeArcmin' in spec:
+        held = inside.copy()
+        held[0, :] = held[-1, :] = held[:, 0] = held[:, -1] = False
+        ramp = np.clip(ndimage.distance_transform_edt(held) * (2 * spec['halfArcmin'] / N) / spec['edgeFadeArcmin'], 0, 1)
+        out *= (ramp * ramp * (3 - 2 * ramp))[..., None]
     out[~inside] = 0
 
     # Its bright end at `level`, then a power for a picture that was not linear.

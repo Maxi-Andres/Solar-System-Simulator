@@ -612,18 +612,18 @@ export const measuredSection: AboutSection = {
             from pictures of it with its tilt undone — a thin disc’s picture is itself seen face-on, squeezed
             along its minor axis. Its old stars from WISE’s 3.4 µm, which dust hardly dims; its star formation
             from GALEX’s far-UV and WISE’s 22 µm for what the dust took <Cite k={['leroy2019', 'leroy2008']} />,
-            0.34 solar masses a year in all, within the 0.25–0.7 measured for it; its dust from Herschel{' '}
+            0.33 solar masses a year in all, within the 0.25–0.7 measured for it; its dust from Herschel{' '}
             <Cite k="marsh2018" />. Its bulge fitted and taken off the pictures first: a Sérsic profile of index
             2.0, effective radius 0.9 kpc and flattened to 0.70, near Courteau et al.’s, drawn as a body of its
             own. <Strong>Triangulum from above</Strong> the same way, its dust from Herschel through z0MGS{' '}
-            <Cite k="chastenet2025" />: 0.24 solar masses of stars a year, within the 0.2–0.45 measured for it.
+            <Cite k="chastenet2025" />: 0.23 solar masses of stars a year, within the 0.2–0.45 measured for it.
             The <Strong>Large Cloud from above</Strong> from its own surveys, nine degrees across the sky: its
             old stars from Spitzer’s 3.6 µm, its star formation from SHASSA’s Hα and Spitzer’s 24 µm{' '}
             <Cite k={['meixner2006', 'gaustad2001', 'kennicutt2009']} /> — 0.17 solar masses a year, within the
             0.1–0.2 measured — and its dust from Herschel, Planck, IRAS and COBE <Cite k="clark2023" />; its
             bar and 30 Doradus at the bar’s east end, as in its photographs. The{' '}
             <Strong>Small Cloud</Strong> as seen from Earth, from the same surveys and its dust from Clark et
-            al. — 0.033 solar masses a year — and how deep it lies along each line of sight, on a 32 × 32 grid:
+            al. — 0.033 solar masses a year — and how deep it lies along each line of sight, on a 51 × 51 grid:
             the mean distance and intrinsic depth of its old stars from OGLE’s RR Lyrae, of its young stars from
             its Cepheids under 150 million years, anchored to 62.44 kpc <Cite k="graczyk2020" />. The young lie
             nearer in the north-east, by 2.3 kpc a degree. Its <Strong>glowing gas</Strong>,

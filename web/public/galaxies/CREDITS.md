@@ -32,6 +32,11 @@ Made by `tools/galaxies/prepare.py`, which downloads its sources itself
 - **Star formation** ends at 22 kpc: past the outer ring, what the far-UV shows is foreground
   stars. Inside, a compact source in the far-UV with nothing at 22 µm (a star in front) or the
   reverse (a galaxy behind) is taken out: a star-forming region shows in both.
+- **Faded out where it is down in its noise**: the map's own level in its corners taken off
+  (Triangulum's −0.001 MJy/sr, its background taken off a little deep), then a weight from its
+  light smoothed over 8 texels against the scatter of each texel about its neighbours -- nothing
+  below 1.5 times that noise, all of it from 5 -- and the star formation faded with it: past the
+  disc the noise, drawn out along the minor axis, showed as streaks and specks round it.
 - **Softened** to the resolution the minor axis leaves -- a texel and a half across, one along --
   and faded out below twice the noise measured where there is no disc.
 - **R, old stars**: WISE 3.4 µm.
@@ -78,12 +83,19 @@ the old stars and 0.626 for the dust; no bulge to take off; star formation endin
 ## lmc.png, lmc.json: the Large Magellanic Cloud
 
 Made the same way, by the same script, from its own surveys -- nine degrees across the sky, it
-is in neither z0MGS nor its dust maps: 1024 × 1024 points 9 kpc either side of the centre;
+is in neither z0MGS nor its dust maps: 1024 × 1024 points 13 kpc either side of the centre --
+its exponential under the glow's floor by the round window's edge --;
 tipped 34°, its line of nodes at 139°, its north-east side nearer; star formation ending at
 5.5 kpc. Each map only where it was observed: past its edge nothing, not light made up.
 
-- **R, old stars**: Spitzer IRAC 3.6 µm, SAGE's 2″ mosaic averaged to 10″; its compact sources --
-  its own resolved giants, foreground stars, background galaxies -- taken out on the map.
+- **R, old stars**: Spitzer IRAC 3.6 µm, SAGE's 2″ mosaic averaged to 10″, its own background
+  taken off -- 0.0100 MJy/sr, the floor its medians in rings settle on, fitted with the disc's
+  measured scale length, 1.4 kpc (van der Marel 2001): 2.6 % of the profile at its centre, 23 %
+  of the light the map held; its compact sources -- its own resolved giants, foreground stars,
+  background galaxies -- taken out on the map. Past the mosaic's edge, its exponential of that
+  scale length, joined to it smoothly where the map is down in its noise. Its dust faded out
+  towards the edge of Clark's map, as the SMC's: there the fit's streaks, A_V twice the disc's,
+  were a dark band along Spitzer's square.
 - **G, star formation**, M☉/yr/kpc²: SHASSA's continuum-subtracted H-alpha (field 013), less the
   Milky Way's own H-alpha in front of it (its median 5.5–6.3° from the centre), plus Spitzer MIPS
   24 µm for what the dust hides, averaged to 12.5″: Kennicutt et al. 2009's
@@ -135,16 +147,23 @@ no disc: it is deeper along our line of sight than it is wide on the sky, so a f
 would be a map of nothing. Its maps are of the sky as seen from Earth, not deprojected, and
 `smc.json` says how deep its light lies at each place.
 
-- **The sky**: 1024 × 1024 points on the tangent (gnomonic) plane about RA 12.75°, Dec −73.12°,
-  5° either side; the column number grows to the east, the row number to the north -- so the
+- **The sky**: 1640 × 1640 points on the tangent (gnomonic) plane about RA 12.75°, Dec −73.12°,
+  8° either side, so that its old stars' exponential is under the glow's floor by the round
+  window's edge; the column number grows to the east, the row number to the north -- so the
   picture's left is west, unlike a photograph of the sky. Each value per pc² of sky at 62.44 kpc
   (Graczyk et al. 2020). Each map only where it was observed, as the LMC's.
 - **R, old stars**: Spitzer IRAC 3.6 µm, SAGE-SMC's 2″ mosaic averaged to 10″; its compact
   sources taken out on the map. The Milky Way's globular clusters 47 Tucanae and NGC 362, in
   front of it, masked to their tidal radii, 42′ and 10′ (Harris 1996, 2010 edition) -- 47 Tuc's
-  light is still a fifth above the SMC's at 40′. There and past the mosaic's edge, the SMC's own
-  exponential on the sky (a scale length of 2.35 kpc), fitted to the mosaic and joined to it
-  smoothly.
+  light is still a fifth above the SMC's at 40′. The mosaic's own background taken off: its
+  medians in rings fall to some 3.7 kpc from the centre and then stay at 0.0035 MJy/sr out to
+  5.4, where the SMC's giants fall another e^−1.5 (Nidever et al. 2011, ApJ 733, L10: an
+  exponential of 1.0°, 1.09 kpc, from 3° to 7.5°) -- so a floor of 0.0013 MJy/sr, fitted with
+  that scale length over the rings 1.2–8.7 kpc out, 1.1 % of the profile at its centre, which
+  carried past the mosaic's edge had drawn a grey disc 5° across. Past the mosaic's edge, and
+  where the mosaic is down in its noise, the SMC's own exponential on the sky of that scale
+  length, joined to the mosaic smoothly. (Fitted to the mosaic, as it was, its slope came out 2.35 kpc: the floor and
+  the Bridge to the east held it up.)
 - **G, star formation**, M☉/yr/kpc² of sky: SHASSA's continuum-subtracted H-alpha (field 510),
   less the Milky Way's H-alpha in front of it, 7.0 dR -- its median 4.5–6° from the centre, the
   third of that ring towards the LMC (position angles 50–170°, the Bridge's gas) left out -- plus
@@ -168,10 +187,10 @@ would be a map of nothing. Its maps are of the sky as seen from Earth, not depro
 
 ### Its depth: smc.json's `depth`
 
-On a 32 × 32 grid over the same square, for its old stars and its young: the mean distance from
-the Sun, kpc, and the intrinsic spread about it along the line of sight, kpc -- the app spreads
-each point of the sky maps along the line of sight by the Gaussian of its place (the dust by the
-young stars').
+On a 51 × 51 grid over the same square -- cells 0.31° across, for its old stars and its young:
+the mean distance from the Sun, kpc, and the intrinsic spread about it along the line of sight,
+kpc -- the app spreads each point of the sky maps along the line of sight by the Gaussian of its
+place (the dust by the young stars').
 
 - **Old** from OGLE-IV's RR Lyrae (3458 in the SMC), **young** from its classical Cepheids
   younger than 150 Myr (1556), each star's distance from its period-luminosity relation, with
@@ -188,9 +207,9 @@ young stars').
   eclipsing binaries' 62.44 kpc (Graczyk et al. 2020) -- the RR Lyrae's by 1.017, the Cepheids'
   by 0.954 -- a zero point in distance modulus being a factor in distance. The young Cepheids keep
   their offset from the older ones on the same scale.
-- At the centre the old stars lie at 62.1 kpc, spread by 3.7 kpc (3.1–4.3 over the grid); the
-  young at 61.3 kpc, spread by 2.8 kpc (1.6–3.3), and the young lie nearer to the north-east,
-  farther by 2.3 kpc per degree towards position angle 237° (the Wing and N66 nearer, the
+- At the centre the old stars lie at 62.1 kpc, spread by 3.0 kpc (2.0–3.8 over the grid); the
+  young at 61.8 kpc, spread by 2.8 kpc (1.3–3.3), and the young lie nearer to the north-east,
+  farther by 2.3 kpc per degree towards position angle 241° (the Wing and N66 nearer, the
   south-west bar farther).
 
 ### Sources

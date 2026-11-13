@@ -283,7 +283,11 @@ export function starsMeteredExposure(nthMagnitude: number, limit: number): numbe
   return limit - nthMagnitude;
 }
 
-/** The shoulder's level a meter puts a scene's mean at: 1 - e^-x = 0.18, middle grey. */
+/**
+ * The shoulder's level a meter puts a scene's mean at: 1 - e^-x = 0.18 of white's light, middle
+ * grey -- linear light, as a camera's 18 % card is, which the glow's encode for the display
+ * (glowBuffer.ts glowDisplay) shows as 118 of 255, the middle of the display's steps.
+ */
 export const MIDDLE_GREY_X = -Math.log(1 - 0.18);
 
 /**

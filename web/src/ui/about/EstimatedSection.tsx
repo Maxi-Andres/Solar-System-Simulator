@@ -666,11 +666,21 @@ export const estimatedSection: AboutSection = {
             found in front of its old stars <Cite k="yanchulovaMericaJones2021" />. Where no star is near, the
             whole cloud’s mean and a typical depth fill in.
           </Item>
-          <Item title="The Large Cloud past Spitzer’s edge">
-            Spitzer mapped its central seven degrees. Its old stars past that edge are its exponential, fitted to
-            the outer half of what was mapped and joined to it smoothly; its star formation there is its Hα
-            alone, which SHASSA saw out to its whole disc.
-            <Why>its disc goes on past what was mapped; drawn as nothing it ended in a square.</Why>
+          <Item title="The Clouds past Spitzer’s edge">
+            Spitzer mapped the Large Cloud’s central seven degrees and the Small Cloud’s body. Each mosaic keeps a
+            background of its own, a floor the light stops falling into — the Small Cloud’s stays level from 3.7
+            to 5.4 kpc out, where its giants fall nearly fivefold — and it is taken off: a fifth of the Large
+            Cloud’s mapped light, a quarter of the Small’s. Past the edge, and where the map is down in its noise,
+            their old stars are their exponential of the measured scale length, 1.4 kpc <Cite k="vdMarel2001" />{' '}
+            and 1.0° <Cite k="nidever2011" />, joined to the map smoothly and drawn out until it is too faint to
+            show; the Large Cloud’s star formation there is its Hα alone, which SHASSA saw out to its whole disc.
+            Andromeda’s and Triangulum’s maps, which fall faster than their exponentials before their noise, fade
+            out with it instead.
+            <Why>
+              their light goes on past what was mapped, and drawn as nothing it ended in a square; the floor,
+              carried on, was a grey disc as wide as the map; and the noise, on the screen’s own curve, showed
+              as streaks.
+            </Why>
           </Item>
           <Item title="Andromeda’s and Triangulum’s light, from their maps">
             The old stars’ map carries the disc’s V light less its young stars’. The young stars give 2 × 10⁹

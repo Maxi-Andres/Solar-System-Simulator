@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
-import { PSF_SIGMA_PX, STAR_WING_FRACTION } from './starRendering.ts';
+import { linearToSrgb } from './shading.ts';
+import { PSF_SIGMA_PX, srgbToLinear, STAR_WING_FRACTION } from './starRendering.ts';
 
 /**
  * One buffer for the diffuse light, and what happens to its light past white.
@@ -18,8 +19,8 @@ import { PSF_SIGMA_PX, STAR_WING_FRACTION } from './starRendering.ts';
  * So now each writes its linear x, no shoulder, into one half-float buffer (glowLight below,
  * on GLOW_LAYER), and the buffer is laid over the frame once (GlowComposite.tsx):
  *
- * 1. **Below white nothing changes.** A pixel's light up to WHITE_X, the white column, is shown
- *    as it was, through the same shoulder: the models are calibrated against photographs, whose
+ * 1. **Below white nothing is spread.** A pixel's light up to WHITE_X, the white column, stays
+ *    in its pixel: the models are calibrated against photographs, whose
  *    own point spread is already in them, so spreading that light again would blur it twice.
  * 2. **Past white it spills, by the star's law.** What a pixel holds past WHITE_X -- the light
  *    the shoulder only crushed into its last few display steps -- goes through the stars' own
@@ -29,7 +30,13 @@ import { PSF_SIGMA_PX, STAR_WING_FRACTION } from './starRendering.ts';
  *    went in. The core's share stays where it was (still past white); the wing's is spread
  *    out to the frame's own size as r^-2. Light is conserved: nothing is thrown away, it is
  *    moved (haloShares, haloPyramid).
- * 3. **One shoulder** for the sum of every glow and its halo, and one dither.
+ * 3. **One shoulder** for the sum of every glow and its halo, its 1 - e^-x linear light; then
+ *    **encoded for the display as the stars are** (glowDisplay: the sRGB curve, as
+ *    starRendering.ts's stars and shading.ts's bodies), and one dither, half a display step,
+ *    among the display values. The shoulder's output went straight to the screen before, as if
+ *    it were already a display value: a column a tenth of white showed as 24 of 255 where its
+ *    light, encoded as a star's, is 87 -- a galaxy's outskirts, the Small Cloud from beside it
+ *    and the faint dwarfs all far darker than the stars about them, which are encoded.
  *
  * The wing is drawn through a pyramid of halvings: level k of it is the light averaged over
  * 2^k pixels, and a sum of such blurs with equal light per octave of radius *is* an r^-2
@@ -43,8 +50,19 @@ import { PSF_SIGMA_PX, STAR_WING_FRACTION } from './starRendering.ts';
 /** The layer the glows are drawn on: only into the glow buffer, never straight onto the frame. */
 export const GLOW_LAYER = 5;
 
-/** The faintest light a glow writes, white columns: an eighth of a display step, as gaussianSprite.ts's SPRITE_FLOOR. */
-export const GLOW_FLOOR = 0.0005;
+/** Half a display step, the least the composite draws: below it a pixel rounds to black. */
+export const HALF_DISPLAY_STEP = 0.5 / 255;
+
+/**
+ * The faintest light a glow writes, white columns: what is shown, after the shoulder and the
+ * encode, as half a display step -- 1.5e-4, the sRGB curve's straight foot, 0.5/255 / 12.92 (the
+ * shoulder at so little light is the light itself, a part in ten thousand under it). Below it
+ * a lone glow rounds to black; it is gaussianSprite.ts's SPRITE_FLOOR too, where a sprite stops.
+ *
+ * It was 0.0005 when the shoulder's output went to the screen unencoded, an eighth of a display
+ * step there; encoded, 0.0005 is 1.6 steps, and the edge where a sprite stopped showed.
+ */
+export const GLOW_FLOOR = srgbToLinear(HALF_DISPLAY_STEP);
 
 /**
  * The most light a pixel holds, white columns: under the half float's largest value, 65,504,
@@ -56,8 +74,8 @@ export const GLOW_MAX = 30_000;
 /**
  * The light a pixel keeps, white columns: one, the white column itself -- WHITE_MU, 21
  * mag/arcsec^2, is by its definition the light drawn white (LocalGroup.tsx). Below it every glow
- * is shown exactly as before; past it the shoulder only squeezed more light into the last few
- * display steps, and the rest now spills (see the header).
+ * is shown through the shoulder, as it is; past it the shoulder only squeezed more light into the
+ * last few display steps, and the rest now spills (see the header).
  *
  * Tried first at ln 510 = 6.23, where the shoulder is within half a display step of white: the
  * nuclear cluster from a few hundred light years, metered to hold its centre at a few times
@@ -120,12 +138,31 @@ export function keptLight(x: readonly [number, number, number]): [number, number
 }
 
 /**
- * The GLSL every glow ends with: its linear light into the buffer, no shoulder, no dither --
- * both are the composite's, once. Below GLOW_FLOOR nothing is written.
+ * What the screen shows for a pixel's `total` light, white columns, one channel: the shoulder's
+ * linear light, 1 - e^-x, encoded for the display by the sRGB curve, 0 to 1 (see the header).
+ */
+export function glowDisplay(total: number): number {
+  return linearToSrgb(1 - Math.exp(-Math.max(0, total)));
+}
+
+/** glowDisplay, per channel, in GLSL: for the composite (GlowComposite.tsx) and whatever else shows the buffer. */
+export const GLOW_DISPLAY_GLSL = /* glsl */ `
+float glowEncode(float v) {
+  return v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1.0 / 2.4) - 0.055;
+}
+vec3 glowDisplay(vec3 total) {
+  vec3 light = vec3(1.0) - exp(-max(total, vec3(0.0)));
+  return vec3(glowEncode(light.r), glowEncode(light.g), glowEncode(light.b));
+}
+`;
+
+/**
+ * The GLSL every glow ends with: its linear light into the buffer, no shoulder, no encode, no
+ * dither -- all three are the composite's, once. Below GLOW_FLOOR nothing is written.
  */
 export const GLOW_OUTPUT_GLSL = /* glsl */ `
 vec4 glowLight(vec3 x) {
-  if (max(x.r, max(x.g, x.b)) < ${GLOW_FLOOR.toFixed(6)}) discard;
+  if (max(x.r, max(x.g, x.b)) < ${GLOW_FLOOR.toPrecision(6)}) discard;
   return vec4(clamp(x, vec3(0.0), vec3(${GLOW_MAX.toFixed(1)})), 1.0);
 }
 `;
@@ -175,7 +212,8 @@ export function anyGlow(): boolean {
  * The halo, worked on the CPU exactly as the GPU passes do (GlowComposite.tsx) -- for one
  * channel, `width` by `height` -- so the tests can hold the shaders' arithmetic to the light
  * it conserves and the profile it draws. Returns the light shown before the shoulder: what a
- * pixel keeps, plus the core's share of its excess, plus the halo.
+ * pixel keeps, plus the core's share of its excess, plus the halo -- glowDisplay of it is what
+ * the screen shows.
  */
 export function haloPyramid(
   input: Float32Array,

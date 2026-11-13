@@ -710,8 +710,10 @@ export function galaxyAxes(galaxy: LocalGroupGalaxy): { readonly u: Vec3; readon
 }
 
 /**
- * The faintest column a galaxy's box may cut, over the white column: a fifth of the light the
- * volumes' shaders stop drawing at (0.0005), so the box's faces never show.
+ * The faintest column a galaxy's box may cut, over the white column: two thirds of the light the
+ * volumes' shaders stop drawing at (scene/glowBuffer.ts GLOW_FLOOR, 1.5e-4, what the display's
+ * encode shows as half a step), so what lies past a face is a third of a display step at most,
+ * rounding to black, and the box's faces never show.
  */
 export const BOX_FLOOR = 1e-4;
 

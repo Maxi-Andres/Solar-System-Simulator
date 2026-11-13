@@ -418,6 +418,92 @@ export function sampleMilkyWay(count: number, seed = 20261028): MilkyWaySample {
 }
 
 /**
+ * The populations whose light is smooth -- the two old discs, the bulge, the bar -- spread
+ * where their sample is sparse (spreadRadii). Not the arms, their knots and HII regions: their
+ * clumping is the light's own.
+ */
+export const SMOOTH_POPULATIONS: readonly number[] = [
+  POPULATION.thinDisc,
+  POPULATION.thickDisc,
+  POPULATION.bulge,
+  POPULATION.bar,
+];
+
+/** How many of its own population's points a smooth population's point reaches to, at the least. */
+export const SPREAD_NEIGHBOURS = 16;
+
+/** The most a point is spread, times its population's own radius. */
+export const MAX_SPREAD = 6;
+
+/**
+ * Each point's radius, pc: its population's own (POPULATIONS radiusPc) -- or, for a smooth
+ * population where its points are sparse, the radius of a sphere that would hold
+ * SPREAD_NEIGHBOURS of them at the density round it, never more than MAX_SPREAD times its own.
+ *
+ * A sample of points is grain wherever they are farther apart than their sprites are wide:
+ * in the outer disc and round the bulge, 260-pc points a kiloparsec apart were a field of
+ * separate dots. Drawn on the screen's own curve, as every glow is, that faint light shows, and
+ * so did the dots. A point as wide as the gap to its neighbours is a smooth glow from any side;
+ * the same light spread wider (MilkyWay.tsx takes its peak down by the square of the widening),
+ * so nothing is added or lost -- only the grain of the sample goes, where it was coarser than
+ * the light. Where the points are dense they keep their own radius, and the arms are untouched.
+ *
+ * The density is counted, not modelled: the population's points in cubes of cells twice its
+ * own radius, about the point's cell -- three cells across, or five, or wider, until the cube
+ * holds SPREAD_NEIGHBOURS of them or reaches MAX_SPREAD radii. Linear in the points: a k-d
+ * tree's nearest neighbours took two seconds in the worker, and the glow waited for them.
+ */
+export function spreadRadii(sample: MilkyWaySample, neighbours = SPREAD_NEIGHBOURS): Float32Array {
+  const radii = new Float32Array(sample.count);
+  for (let i = 0; i < sample.count; i += 1) {
+    radii[i] = POPULATIONS[sample.populations[i]!]!.radiusPc;
+  }
+  const p = sample.positions;
+  for (const population of SMOOTH_POPULATIONS) {
+    const own = POPULATIONS[population]!.radiusPc;
+    const reach = MAX_SPREAD * own;
+    const cell = 2 * own;
+    // Cells keyed by their integer coordinates, offset so each is non-negative under 2^10.
+    const key = (i: number, j: number, k: number): number => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
+    const counts = new Map<number, number>();
+    const at = (i: number): [number, number, number] => [
+      Math.floor(p[i * 3]! / cell),
+      Math.floor(p[i * 3 + 1]! / cell),
+      Math.floor(p[i * 3 + 2]! / cell),
+    ];
+    for (let i = 0; i < sample.count; i += 1) {
+      if (sample.populations[i] !== population) continue;
+      const [a, b, c] = at(i);
+      const k = key(a, b, c);
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const widest = Math.ceil(reach / cell);
+    for (let i = 0; i < sample.count; i += 1) {
+      if (sample.populations[i] !== population) continue;
+      const [a, b, c] = at(i);
+      let held = 0;
+      let half = 1;
+      for (; half <= widest; half += 1) {
+        held = 0;
+        for (let da = -half; da <= half; da += 1) {
+          for (let db = -half; db <= half; db += 1) {
+            for (let dc = -half; dc <= half; dc += 1) {
+              held += counts.get(key(a + da, b + db, c + dc)) ?? 0;
+            }
+          }
+        }
+        if (held >= neighbours) break;
+      }
+      // The sphere holding `neighbours` at the cube's density, (3 k V / 4 pi held)^(1/3).
+      const side = (2 * Math.min(half, widest) + 1) * cell;
+      const density = Math.max(held, 1) / side ** 3;
+      radii[i] = Math.min(reach, Math.max(own, Math.cbrt((3 * neighbours) / (4 * Math.PI * density))));
+    }
+  }
+  return radii;
+}
+
+/**
  * The dust, as points that darken rather than shine (MilkyWay.tsx): `count` of them,
  * deterministic for a seed, about the Sun in the galactic frame, pc.
  *

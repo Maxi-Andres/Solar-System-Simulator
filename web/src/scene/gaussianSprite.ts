@@ -9,14 +9,14 @@ import { GLOW_FLOOR, GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
  *
  *     x(r) = peak e^(-r^2 / 2 sigma^2)
  *
- * written linear into the glow buffer, which shows it through the soft shoulder 1 - e^-x and
- * spills what is past white into a halo (glowBuffer.ts); it is drawn out to where it has
- * fallen to SPRITE_FLOOR:
+ * written linear into the glow buffer, which shows it through the soft shoulder 1 - e^-x,
+ * encoded for the display, and spills what is past white into a halo (glowBuffer.ts); it is
+ * drawn out to where it has fallen to SPRITE_FLOOR:
  *
  *     r = sigma sqrt(2 ln(peak / SPRITE_FLOOR))
  *
- * -- four sigma for a peak at white, five for one a hundred times past it, six and a half for
- * a million times. A sprite of a fixed six sigma was cut square where its light was far past
+ * -- 4.2 sigma for a peak at white, 5.2 for one a hundred times past it, 6.7 for a million
+ * times. A sprite of a fixed six sigma was cut square where its light was far past
  * white: Pal 2 from a few hundred parsecs, a bright square.
  *
  * ## A quad, not a point sprite
@@ -30,9 +30,9 @@ import { GLOW_FLOOR, GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
  */
 
 /**
- * The faintest light a sprite draws, white columns: an eighth of a display step -- the glow
- * buffer's own floor (GLOW_FLOOR), so it rounds to black, and the edge where a sprite stops
- * never shows.
+ * The faintest light a sprite draws, white columns: the glow buffer's own floor (GLOW_FLOOR),
+ * what is shown, encoded, as half a display step -- so where a sprite stops it rounds to black,
+ * and its edge never shows.
  */
 export const SPRITE_FLOOR = GLOW_FLOOR;
 
@@ -52,7 +52,7 @@ varying vec2 vOffsetPx;
 
 float spriteRadiusPx(vec3 peak, float sigmaPx) {
   float p = max(peak.r, max(peak.g, peak.b));
-  return p > ${SPRITE_FLOOR.toFixed(6)} ? sigmaPx * sqrt(2.0 * log(p / ${SPRITE_FLOOR.toFixed(6)})) + 1.0 : 0.0;
+  return p > ${SPRITE_FLOOR.toPrecision(6)} ? sigmaPx * sqrt(2.0 * log(p / ${SPRITE_FLOOR.toPrecision(6)})) + 1.0 : 0.0;
 }
 
 vec4 spriteCorner(vec4 centre, float radiusPx) {
@@ -67,7 +67,7 @@ vec4 spriteCorner(vec4 centre, float radiusPx) {
 
 /**
  * The fragment side: the Gaussian at this fragment, linear, into the glow buffer (glowLight
- * cuts it at the floor). The shoulder and the halo are the buffer's, once, over every glow.
+ * cuts it at the floor). The shoulder, the encode and the halo are the buffer's, once, over every glow.
  */
 export const SPRITE_FRAGMENT_GLSL = /* glsl */ `
 varying vec2 vOffsetPx;

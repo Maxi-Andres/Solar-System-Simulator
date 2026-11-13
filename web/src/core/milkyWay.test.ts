@@ -14,11 +14,14 @@ import {
   galacticCentrePc,
   galactocentricToSun,
   LONG_BAR,
+  MAX_SPREAD,
   POPULATION,
   POPULATIONS,
   R0_PC,
   sampleMilkyWay,
+  SMOOTH_POPULATIONS,
   SPIRAL_ARMS,
+  spreadRadii,
   SUN_ABOVE_PLANE_PC,
 } from './milkyWay.ts';
 
@@ -230,5 +233,44 @@ describe('the dust, Drimmel & Spergel 2001', () => {
     expect(thin / count).toBeGreaterThan(0.95);
     // Within a kiloparsec of the centre the hole has taken almost everything.
     expect(inHole).toBeLessThan(nearHalf / 20);
+  });
+});
+
+describe('the points spread where their population is sparse', () => {
+  const sample = sampleMilkyWay(200_000);
+  const radii = spreadRadii(sample);
+  const [cx, cy, cz] = galacticCentrePc();
+  const fromCentre = (i: number) =>
+    Math.hypot(sample.positions[i * 3]! - cx, sample.positions[i * 3 + 1]! - cy, sample.positions[i * 3 + 2]! - cz);
+  const median = (values: number[]) => values.sort((a, b) => a - b)[values.length >> 1]!;
+
+  it('never narrower than its population, never past MAX_SPREAD of it, and only the smooth ones', () => {
+    let wrong = 0;
+    for (let i = 0; i < sample.count; i += 1) {
+      const p = sample.populations[i]!;
+      const own = POPULATIONS[p]!.radiusPc;
+      const r = radii[i]!;
+      if (r < own || r > MAX_SPREAD * own + 1e-3 || (!SMOOTH_POPULATIONS.includes(p) && r !== own)) wrong += 1;
+    }
+    expect(wrong).toBe(0);
+  });
+
+  it('keeps the thin disc’s own radius where it is dense, and spreads it in the outer disc', () => {
+    const inner: number[] = [];
+    const outer: number[] = [];
+    for (let i = 0; i < sample.count; i += 1) {
+      if (sample.populations[i] !== POPULATION.thinDisc) continue;
+      const r = fromCentre(i);
+      if (r < 3000) inner.push(radii[i]!);
+      if (r > 12_000 && r < 14_000) outer.push(radii[i]!);
+    }
+    const own = POPULATIONS[POPULATION.thinDisc]!.radiusPc;
+    expect(median(inner)).toBe(own);
+    // Its points sparse out there: spread some three times as wide.
+    expect(median(outer)).toBeGreaterThan(2.5 * own);
+  });
+
+  it('is the same on every load', () => {
+    expect(spreadRadii(sample)).toEqual(radii);
   });
 });

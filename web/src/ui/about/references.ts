@@ -1132,6 +1132,14 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         use: 'the Small Cloud’s centre, size and scale length',
       },
       {
+        key: 'nidever2011',
+        who: 'Nidever et al. 2011',
+        title: 'Discovery of a Large Stellar Periphery Around the Small Magellanic Cloud',
+        where: 'ApJ 733, L10',
+        link: arxiv('1104.2594'),
+        use: 'the Small Cloud’s old stars’ scale length on the sky, past its mapped body',
+      },
+      {
         key: 'harrisZaritsky2006',
         who: 'Harris & Zaritsky 2006',
         title: 'Spectroscopic Survey of Red Giants in the Small Magellanic Cloud. I. Kinematics',

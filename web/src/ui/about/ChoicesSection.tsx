@@ -377,7 +377,7 @@ export const choicesSection: AboutSection = {
           <Item title="A galaxy drawn to where its light fades">
             A bright galaxy’s volume reaches until its light is a ten-thousandth of white, not a fixed eight
             scale radii; each point of light, a galaxy’s, a cluster’s or a model star’s, is drawn round, out to
-            where it is below an eighth of a display step.
+            where, encoded for the screen, it is under half a display step and rounds to black.
             <Why>cut sooner, M32 showed as a faint square and the clusters’ points as squares.</Why>
           </Item>
           <Item title="Marks only, where no size is measured">
@@ -387,7 +387,9 @@ export const choicesSection: AboutSection = {
           </Item>
           <Item title="Light past white, a halo">
             Every glow — the galaxies’, the clusters’, the Milky Way’s, the remnants’ gas — is added up linear
-            and shown through one soft shoulder. Up to white, a column of 21 mag/arcsec², it is shown as it is.
+            and goes through one soft shoulder, 1 − e<sup>−x</sup>, whose output is still linear light: it is
+            then encoded for the screen as the stars’ light is, so a faint glow beside a faint star is as bright
+            as it. Up to white, a column of 21 mag/arcsec², it is shown as it is.
             Past white its light is not thrown away: it spreads by the stars’ own point spread — the 0.54-pixel
             core and the tail carrying a tenth of the light, falling as r<sup>−2</sup> — out to the frame’s
             size, the light it holds kept. So a cluster’s or a galaxy’s core far past white is a bright star’s

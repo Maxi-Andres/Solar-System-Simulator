@@ -30,6 +30,12 @@
     "maskArcmin": 4.2,
     "size": 1024,
     "gaiaLimit": 19,
+    "skyOutside": [
+      3.5,
+      2.5,
+      298.4
+    ],
+    "edgeFadeArcmin": 0.3,
     "out": "crab.png",
     "continuum": "crab-continuum.png"
   },
@@ -141,6 +147,9 @@
     "maskArcmin": 2.1,
     "size": 1024,
     "out": "kepler.png",
+    "footprint": true,
+    "edgeFadeArcmin": 0.2,
+    "lineLength": 11,
     "maxStar": 40,
     "floor": 4,
     "gaiaLimit": 21,

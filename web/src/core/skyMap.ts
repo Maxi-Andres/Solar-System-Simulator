@@ -375,7 +375,7 @@ export function gaussianCentroid(x0: number, x1: number): number | null {
  * at the least, the steps under a sigma -- a Laplace population's, whose core is a cusp the
  * trapezoid would cut, and the compact layers' exactly (laplaceAcross, gaussianAcross), x = (D
  * - mu) / sigma straight along the step: from Earth's side an even map's column is the map to
- * 0.01 % (skyMap.test.ts), and the compact layers, 150 pc deep against steps of 500, are never
+ * 0.03 % (skyMap.test.ts), and the compact layers, 150 pc deep against steps of 500, are never
  * missed between them; from beside the cloud each step reads the map averaged over what it
  * crosses. 48 cost half again as much, for nothing that shows.
  */

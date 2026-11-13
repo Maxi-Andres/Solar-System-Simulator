@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SPRITE_FLOOR, spriteRadiusSigmas } from './gaussianSprite.ts';
+import { glowDisplay } from './glowBuffer.ts';
 import { SPRITE_KERNEL } from './MilkyWay.tsx';
 
 /**
@@ -9,19 +10,21 @@ import { SPRITE_KERNEL } from './MilkyWay.tsx';
  */
 
 describe('a Gaussian sprite', () => {
-  it('reaches four sigma for a peak at white, five a hundred times past it, six and a half a million', () => {
-    expect(spriteRadiusSigmas(1)).toBeCloseTo(Math.sqrt(2 * Math.log(2000)), 10);
-    expect(spriteRadiusSigmas(1)).toBeCloseTo(3.9, 1);
-    expect(spriteRadiusSigmas(100)).toBeCloseTo(4.94, 2);
-    expect(spriteRadiusSigmas(1e6)).toBeCloseTo(6.54, 2);
+  it('reaches 4.2 sigma for a peak at white, 5.2 a hundred times past it, 6.7 a million', () => {
+    expect(spriteRadiusSigmas(1)).toBeCloseTo(Math.sqrt(2 * Math.log(1 / SPRITE_FLOOR)), 10);
+    expect(spriteRadiusSigmas(1)).toBeCloseTo(4.19, 2);
+    expect(spriteRadiusSigmas(100)).toBeCloseTo(5.18, 2);
+    expect(spriteRadiusSigmas(1e6)).toBeCloseTo(6.72, 2);
   });
 
-  it('is cut where its light, through the shoulder, is the floor: the edge is below a display step', () => {
+  it('is cut where its light, through the shoulder and the encode, rounds to black', () => {
     for (const peak of [0.01, 1, 30, 1e4, 1e8]) {
       const r = spriteRadiusSigmas(peak);
       const x = peak * Math.exp(-0.5 * r * r);
       expect(x).toBeCloseTo(SPRITE_FLOOR, 12);
-      expect(1 - Math.exp(-x)).toBeLessThan(0.5 / 255);
+      expect(glowDisplay(x)).toBeLessThan(0.5 / 255);
+      // And no lower than it need be: a tenth past the floor is half a step.
+      expect(glowDisplay(1.1 * x)).toBeGreaterThan(0.5 / 255);
     }
   });
 

@@ -25,7 +25,14 @@ downloads itself (`python tools/remnants/prepare.py`; numpy, scipy and Pillow).
   directional median for the faintest. The app draws stars from its own catalogues.
 - **Sky taken off**: a low percentile of the frame, or of the pixels round each one for the
   photographic plates, whose skies differ plate to plate; then a floor a few times the noise.
-- **Faded out** beyond the remnant, at a radius given for each.
+  The Crab's sky is a gradient in its picture -- red to the east, green in the south-west
+  corner -- and the nebula fills most of the frame, so a quadratic surface through the low
+  percentiles of the sky outside its 7′ × 5′ ellipse is taken off instead. Kepler's picture is
+  Hubble's field turned within a black square: only the field counts, so its own sky is
+  measured and taken off, not the black's nothing.
+- **Faded out** beyond the remnant, at a radius given for each; and, where the picture stops
+  short of that (the Crab's, Kepler's), over 0.3′ and 0.2′ inside its own edge, which shows no
+  straight side.
 - The Digitized Sky Survey's two plates made a colour picture: red the red plate, blue the
   blue, green their mean, the blue scaled so that the stars come out white on average.
 - Cassiopeia A's Hubble picture, in red and near-infrared filters, Vela's H-alpha and the

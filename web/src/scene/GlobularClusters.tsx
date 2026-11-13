@@ -68,7 +68,7 @@ import { mapStrength } from './Starfield.tsx';
  * (core/globularClusterLight.ts): a point, as a galaxy too small for a pixel is
  * (LocalGroup.tsx), on the galaxies' exposure -- a Gaussian of its half-light radius, never
  * narrower than MIN_SIGMA_PX, holding all its luminosity, its column over WHITE_MU's, drawn out to
- * where it fades below a display step however far past white its centre is (gaussianSprite.ts). So from
+ * where it rounds to black however far past white its centre is (gaussianSprite.ts). So from
  * outside the Milky Way 47 Tuc and Omega Cen are where they are with the marks off, as they
  * are in a photograph, on the exposure the Clouds beside them are drawn with.
  *

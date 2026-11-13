@@ -27,6 +27,7 @@ import type { SimClock } from '../core/time.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { starColor } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
+import { GLOW_FLOOR } from './glowBuffer.ts';
 import { LENS_VERTEX_GLSL, lensState, lensUniforms } from './lens.ts';
 import { pointShare, WHITE_MU } from './LocalGroup.tsx';
 import { GLOW_COLOUR, makeClusterGlow } from './nuclearClusterGlow.ts';
@@ -499,7 +500,8 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
           (toPoint * CLUSTER_LUMINOSITY_V) / (2 * Math.PI * pointSigmaPc * pointSigmaPc),
         )
       : 0;
-    const glowShows = glowStrength > 1e-3;
+    // Shown while any of it is above the glow's floor, where it rounds to black (glowBuffer.ts).
+    const glowShows = glowStrength > GLOW_FLOOR;
 
     group.visible = measuredShows || modelShows || glowShows;
     if (!group.visible) {

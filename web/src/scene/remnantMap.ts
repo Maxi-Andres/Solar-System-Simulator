@@ -28,7 +28,8 @@ import {
  * A photograph is a measurement: how much light, of what colour, comes from each point of the
  * sky. It says nothing of how deep along the line of sight that light is. So each point's light
  * is spread along its line of sight through the remnant -- the light measured, its depth a
- * model -- and the sum along every line of sight from Earth is exactly the photograph's pixel.
+ * model -- and the sum along every line of sight from Earth, through the glow's shoulder and its
+ * encode for the display, is exactly the photograph's pixel.
  * Seen from the Sun the volume is the photograph; from anywhere else it is the photograph's
  * light at a modelled depth, and the camera can fly round it and into it.
  *
@@ -355,8 +356,10 @@ ${GLOW_OUTPUT_GLSL}
       float second = smoothstep(0.3, 0.7, texture(uNoise, p * 0.8 + uSeed).b + (uShareB - 0.5));
       tint = mix(uColourA, uColourB, second * step(0.001, uShareB));
     }
+    // The photograph's pixel as linear light: the texture is sRGB, decoded as it is read.
     vec3 shown = min(textureLod(uMap, uv, lod).rgb * tint, vec3(0.97));
-    // What the column must add to, for 1 - e^-sum to give back the photograph's pixel.
+    // What the column must add to, for 1 - e^-sum to give back that light -- which the glow's
+    // composite encodes for the display (glowBuffer.ts glowDisplay), giving back the pixel.
     vec3 column = -log(1.0 - shown);
     vec2 weights = texture(uDepth, sky / (2.0 * uReach) + 0.5).rg;
     if (uHasContinuum < 0.5) return column * weights.r;

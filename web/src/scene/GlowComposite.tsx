@@ -3,8 +3,10 @@ import * as THREE from 'three';
 
 import {
   anyGlow,
+  GLOW_DISPLAY_GLSL,
   GLOW_LAYER,
   GLOW_MAX,
+  HALF_DISPLAY_STEP,
   haloLevels,
   haloShares,
   milkyWayGlow,
@@ -24,7 +26,8 @@ import {
  *    level of a pyramid, halving down to haloLevels; then back up, each level's share of the
  *    wing (haloShares) added as it goes;
  * 3. then the quad itself: the light kept, the core's share of the excess, the halo, one
- *    shoulder and half a display step of dither.
+ *    shoulder, the sRGB encode (glowDisplay) and half a display step of dither among the
+ *    display values; a pixel under half a step, rounding to black, not drawn at all.
  *
  * Nested inside the frame's render, as three's Reflector draws its mirror: the frame's own
  * uniforms are set by then, whichever component set them.
@@ -106,7 +109,7 @@ void main() {
 }
 `;
 
-/** The quad over the frame: kept light, the core's share of the excess, the halo; one shoulder. */
+/** The quad over the frame: kept light, the core's share of the excess, the halo; one shoulder, encoded for the display. */
 const COMPOSITE_FRAGMENT = /* glsl */ `
 uniform sampler2D uGlow;
 uniform sampler2D uMilkyWay;
@@ -117,17 +120,20 @@ uniform float uCore;
 uniform float uOn;
 varying vec2 vUv;
 ${TENT_GLSL}
+${GLOW_DISPLAY_GLSL}
 void main() {
   if (uOn < 0.5) discard;
   vec3 x = min(texture2D(uGlow, vUv).rgb + uMilkyWayOn * texture2D(uMilkyWay, vUv).rgb, vec3(${GLOW_MAX.toFixed(1)}));
   float peak = max(x.r, max(x.g, x.b));
   vec3 kept = peak > ${WHITE_X.toFixed(6)} ? x * (${WHITE_X.toFixed(6)} / peak) : x;
   vec3 total = kept + uCore * (x - kept) + tent(uHalo, vUv, uHaloTexel);
-  vec3 light = vec3(1.0) - exp(-total);
-  if (max(light.r, max(light.g, light.b)) < 0.0005) discard;
+  // The shoulder's linear light, encoded as the stars' is: display values from here on.
+  vec3 shown = glowDisplay(total);
+  // Under half a display step it rounds to black: not drawn, so the dither adds nothing there.
+  if (max(shown.r, max(shown.g, shown.b)) < ${HALF_DISPLAY_STEP.toPrecision(6)}) discard;
   // Half a display step of noise: a faint gradient in 8 bits is otherwise rings.
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  gl_FragColor = vec4(max(light + (n - 0.5) / 255.0, 0.0), 1.0);
+  gl_FragColor = vec4(max(shown + (n - 0.5) / 255.0, 0.0), 1.0);
 }
 `;
 

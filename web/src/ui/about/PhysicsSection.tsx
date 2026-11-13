@@ -1088,13 +1088,13 @@ export const physicsSection: AboutSection = {
           )}
           symbols={
             <>
-              j the light given off at a point; P the picture’s pixel on its line of sight from Earth, each colour;
-              w how that line of sight’s light is shared along it.
+              j the light given off at a point; P the picture’s pixel on its line of sight from Earth, each colour,
+              as linear light; w how that line of sight’s light is shared along it.
             </>
           }
         >
-          The scene adds light as 1 − e<sup>−∫j ds</sup>, so along every line of sight from Earth it adds up to
-          the picture’s pixel however w shares it out. w is the depth: a shell’s, the Crab’s synchrotron’s
+          The scene adds light as 1 − e<sup>−∫j ds</sup>, linear light encoded for the screen as the stars’ is,
+          so along every line of sight from Earth it adds up to the picture’s pixel however w shares it out. w is the depth: a shell’s, the Crab’s synchrotron’s
           through its spheroid, or Cassiopeia A’s measured.
         </Equation>
         <Equation

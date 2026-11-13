@@ -8,8 +8,20 @@ import {
 } from '../core/globularClusterLight.ts';
 import { clusterPopulation } from '../core/globularClusters.ts';
 import { faintLightShare, HALF_LIGHT_RADIUS_PC } from '../core/nuclearClusterLight.ts';
-import { GLOW_MAX, haloLevels, haloPyramid, haloShares, keptLight, WHITE_X } from './glowBuffer.ts';
-import { PSF_SIGMA_PX, STAR_WING_FRACTION } from './starRendering.ts';
+import {
+  GLOW_DISPLAY_GLSL,
+  GLOW_FLOOR,
+  GLOW_MAX,
+  glowDisplay,
+  HALF_DISPLAY_STEP,
+  haloLevels,
+  haloPyramid,
+  haloShares,
+  keptLight,
+  WHITE_X,
+} from './glowBuffer.ts';
+import { linearToSrgb } from './shading.ts';
+import { PSF_SIGMA_PX, srgbToLinear, STAR_WING_FRACTION } from './starRendering.ts';
 
 /**
  * The glow buffer (glowBuffer.ts): light past white spilled into a halo by the stars' own point
@@ -166,6 +178,46 @@ describe('light past white', () => {
     input[32 * 64 + 32] = 1e9;
     const { shown } = haloPyramid(input, 64, 64);
     expect(sum(shown)).toBeCloseTo(GLOW_MAX, -1);
+  });
+});
+
+describe('what the screen shows of the glow', () => {
+  it('is the shoulder’s linear light encoded as a star’s is', () => {
+    for (const x of [0, 1e-4, 0.01, 0.1, 1, 5]) {
+      expect(glowDisplay(x)).toBeCloseTo(linearToSrgb(1 - Math.exp(-x)), 12);
+    }
+    // A tenth of white: 87 of 255, where the shoulder's light unencoded showed 24.
+    expect(glowDisplay(0.1) * 255).toBeCloseTo(86.9, 1);
+    expect((1 - Math.exp(-0.1)) * 255).toBeCloseTo(24.3, 1);
+    // White itself, and far past it, under the display's own white.
+    expect(glowDisplay(WHITE_X) * 255).toBeCloseTo(208.2, 1);
+    expect(glowDisplay(GLOW_MAX)).toBeCloseTo(1, 12);
+  });
+
+  it('rises with the light, and from black', () => {
+    expect(glowDisplay(0)).toBe(0);
+    let last = 0;
+    for (let x = 1e-6; x < 20; x *= 1.1) {
+      const now = glowDisplay(x);
+      expect(now).toBeGreaterThan(last);
+      last = now;
+    }
+  });
+
+  it('cuts a glow where, encoded, it is half a display step: under it, black', () => {
+    expect(GLOW_FLOOR).toBeCloseTo(srgbToLinear(0.5 / 255), 15);
+    expect(GLOW_FLOOR).toBeCloseTo(1.518e-4, 7);
+    expect(glowDisplay(GLOW_FLOOR)).toBeLessThan(HALF_DISPLAY_STEP);
+    expect(glowDisplay(GLOW_FLOOR)).toBeGreaterThan(0.999 * HALF_DISPLAY_STEP);
+    // The floor it replaced, 0.0005, encoded is over a display step and a half.
+    expect(glowDisplay(0.0005) * 255).toBeGreaterThan(1.6);
+  });
+
+  it('is worked in the shader by the same curve', () => {
+    expect(GLOW_DISPLAY_GLSL).toContain('12.92 * v');
+    expect(GLOW_DISPLAY_GLSL).toContain('1.055 * pow(v, 1.0 / 2.4) - 0.055');
+    expect(GLOW_DISPLAY_GLSL).toContain('v <= 0.0031308');
+    expect(GLOW_DISPLAY_GLSL).toContain('vec3(1.0) - exp(-max(total, vec3(0.0)))');
   });
 });
 

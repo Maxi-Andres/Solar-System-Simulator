@@ -15,6 +15,7 @@ import {
 } from '../core/schwarzschildLens.ts';
 import type { SimClock } from '../core/time.ts';
 import { lensImageTexture, lensState, LENS_UNIFORMS, skyCapture } from './lens.ts';
+import { GLOW_DISPLAY_GLSL } from './glowBuffer.ts';
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { COMPOSITE_FRAGMENT_SHADER, COMPOSITE_VERTEX_SHADER } from './MilkyWay.tsx';
 import { KM_PER_UNIT } from './scale.ts';
@@ -117,6 +118,7 @@ void main() {
  * its derivatives -- which pick the mip level where the images crowd -- are defined.
  */
 const OVERLAY_FRAGMENT_SHADER = /* glsl */ `
+${GLOW_DISPLAY_GLSL}
 uniform samplerCube uSky;
 uniform sampler2D uScreenGlow;
 uniform sampler2D uDeflection;
@@ -153,7 +155,7 @@ void main() {
   // than the cube, whose faces have half its pixels to the degree.
   vec3 view = transpose(uViewToWorld) * source;
   vec2 ndc = view.xy / max(-view.z, 1e-6) / uTanHalf;
-  vec3 screenSky = vec3(1.0) - exp(-texture2D(uScreenGlow, ndc * 0.5 + 0.5).rgb);
+  vec3 screenSky = glowDisplay(texture2D(uScreenGlow, ndc * 0.5 + 0.5).rgb);
   // How much sky one pixel spans, in pixels: where the images crowd, more than one, and the
   // buffer, which has no mipmaps, would sparkle -- the cube's mipmaps average it instead.
   float spread = length(fwidth(source)) / uPixelAngle;
@@ -272,7 +274,7 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
   }, []);
 
   // The glow about the camera: a cube, its faces drawn through a half-float buffer of the
-  // glow's own and laid in with the glow's own shoulder (MilkyWay.tsx).
+  // glow's own and laid in with the glow's own shoulder and encode (MilkyWay.tsx).
   const capture = useMemo(() => {
     const cube = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, {
       generateMipmaps: true,

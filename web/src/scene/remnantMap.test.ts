@@ -4,7 +4,17 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { remnantEarthView, remnantShape, SUPERNOVA_REMNANTS } from '../core/supernovaRemnants.ts';
-import { depthWeights, mapReach, measuredDepth, pointsInRadii, remnantFrame, remnantRadiusArcmin } from './remnantMap.ts';
+import { glowDisplay } from './glowBuffer.ts';
+import {
+  depthWeights,
+  mapReach,
+  measuredDepth,
+  pointsInRadii,
+  REMNANT_MAP_FRAGMENT_SHADER,
+  remnantFrame,
+  remnantRadiusArcmin,
+} from './remnantMap.ts';
+import { srgbToLinear } from './starRendering.ts';
 
 /**
  * The remnants drawn from their pictures (remnantMap.ts): that every line of sight from Earth
@@ -27,6 +37,15 @@ function columnSum(weights: Float32Array, i: number, j: number, channel: number,
 }
 
 describe('a remnant drawn from its picture', () => {
+  it('gives back the photograph’s pixel on the screen: its light decoded, the column summed, the composite encoding it', () => {
+    // The map is read as an sRGB texture, decoded to linear light; the column is -ln(1 - light).
+    expect(REMNANT_MAP_FRAGMENT_SHADER).toContain('vec3 column = -log(1.0 - shown);');
+    for (const pixel of [1, 10, 40, 128, 200, 240]) {
+      const column = -Math.log(1 - srgbToLinear(pixel / 255));
+      expect(glowDisplay(column) * 255, `${pixel}`).toBeCloseTo(pixel, 6);
+    }
+  });
+
   it('puts all of each pixel’s light somewhere along its line of sight, filaments and synchrotron both', () => {
     for (const key of ['crab', 'sn-1006']) {
       const remnant = byKey(key);

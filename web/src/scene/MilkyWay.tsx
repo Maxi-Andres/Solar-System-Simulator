@@ -19,7 +19,8 @@ import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
 import { projectToScreen } from './screenProjection.ts';
-import { milkyWayGlow } from './glowBuffer.ts';
+import { GLOW_DISPLAY_GLSL, GLOW_FLOOR, milkyWayGlow } from './glowBuffer.ts';
+import { srgbToLinear } from './starRendering.ts';
 import { splitHigh, splitLow } from './stars3dShader.ts';
 
 /**
@@ -29,7 +30,9 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * a surface brightness -- the same however far back the camera stands, as a galaxy's has
  * -- until a sprite is down to a pixel and a half, past which it keeps that size and gives
  * up light in proportion to the area it no longer covers. Added, not blended over: light
- * from behind light.
+ * from behind light. Its parsecs are its population's, or wider where its population's points
+ * are sparse -- the outer disc, round the bulge -- with its light kept, so the sample's grain is
+ * not drawn as dots (core/milkyWay.ts spreadRadii).
  *
  * ## Drawn small, then laid over the picture
  *
@@ -40,9 +43,11 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * of the canvas's pixels (GLOW_SCALE each way), in half floats so a hundred faint sprites
  * add up without rounding to nothing, and that buffer is laid over the frame first, under
  * everything else, with every other glow, by the one composite (GlowComposite.tsx): through
- * one soft shoulder (1 - e^-x), the light past white -- where the bulge piles up -- spilled
- * into a halo by the stars' point spread rather than thrown away (glowBuffer.ts). A quarter
- * of the fragments, and the upsampling's filtering smooths the grain.
+ * one soft shoulder (1 - e^-x) and encoded for the display as the stars are, the light past
+ * white -- where the bulge piles up -- spilled into a halo by the stars' point spread rather
+ * than thrown away (glowBuffer.ts). A quarter of the fragments, and the upsampling's filtering
+ * smooths the grain. The colours go in as linear light, as every glow's does: the encode is
+ * the composite's.
  *
  * ## Dust, drawn as what it does
  *
@@ -119,7 +124,14 @@ export const GLOW_SCALE = 0.5;
 
 /** Smallest sprite, glow-buffer pixels; below the size its parsecs would give, light goes instead. */
 const MIN_SPRITE_PX = 1.5;
-/** Largest sprite, glow-buffer pixels: the near fade has taken a point long before it gets here. */
+/**
+ * Largest sprite, glow-buffer pixels, for a point at its population's own radius: past it the
+ * sprite is drawn this size and the rest of its light is lost -- as near the camera, where the
+ * near fade is taking it. A point spread where its population is sparse (spreadRadii) may be as
+ * many times larger as it was spread: some 50 pixels across from the breadcrumb's view of the
+ * whole galaxy, which cut to 16 lost nine tenths of its light, and the outer disc went dark
+ * instead of smooth. The points at their own radius, near the camera, are cut as they were.
+ */
 const MAX_SPRITE_PX = 16;
 
 /** The model fades in between these camera distances from the Sun, light years. */
@@ -225,6 +237,8 @@ uniform vec4 uSlab;
 
 attribute vec3 color;
 attribute float radiusPc;
+// How many times its population's own radius it is drawn at (spreadRadii): its largest size, too.
+attribute float spread;
 
 varying vec3 vColor;
 varying float vPeak;
@@ -247,7 +261,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
 
   float diameterPx = 2.0 * radiusPc / max(distancePc, 1e-3) * uPixelsPerRadian;
-  float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, ${MAX_SPRITE_PX.toFixed(1)});
+  float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, ${MAX_SPRITE_PX.toFixed(1)} * spread);
   // Below the floor the light goes, not the size: constant flux per point.
   float coverage = min(1.0, (diameterPx * diameterPx) / (drawnPx * drawnPx));
   vPeak = uPeak * share * coverage * smoothstep(0.5 * uNearFadePc, uNearFadePc, distancePc);
@@ -270,15 +284,17 @@ void main() {
   // square at 4 % of its peak (SPRITE_KERNEL); scaled to hold the light it held.
   float r2 = dot(offset, offset) * 25.0;
   float profile = max(exp(-0.5 * r2) - ${SPRITE_KERNEL.edge.toFixed(6)}, 0.0) * ${SPRITE_KERNEL.scale.toFixed(6)};
-  if (vPeak * profile < 1.0 / 1024.0) discard;
+  // Under the glow buffer's floor, which rounds to black (glowBuffer.ts GLOW_FLOOR): not drawn.
+  if (vPeak * profile < ${GLOW_FLOOR.toPrecision(6)}) discard;
   float amount = vPeak * profile;
   gl_FragColor = uDust > 0.5 ? vec4(vec3(1.0 - exp(-amount)), 1.0) : vec4(vColor * amount, 1.0);
 }
 `;
 
 /**
- * The glow buffer through the soft shoulder alone: what the black hole's lens draws into its
- * cube (BlackHoleLens.tsx). On the frame the buffer goes through GlowComposite.tsx.
+ * The glow buffer through the soft shoulder and the encode alone, no halo: what the black
+ * hole's lens draws into its cube (BlackHoleLens.tsx). On the frame the buffer goes through
+ * GlowComposite.tsx.
  */
 export const COMPOSITE_VERTEX_SHADER = /* glsl */ `
 varying vec2 vUv;
@@ -291,9 +307,9 @@ void main() {
 export const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler2D uGlow;
 varying vec2 vUv;
+${GLOW_DISPLAY_GLSL}
 void main() {
-  vec3 light = texture2D(uGlow, vUv).rgb;
-  gl_FragColor = vec4(vec3(1.0) - exp(-light), 1.0);
+  gl_FragColor = vec4(glowDisplay(texture2D(uGlow, vUv).rgb), 1.0);
 }
 `;
 
@@ -309,12 +325,16 @@ function toEcliptic(x: number, y: number, z: number, out: Float32Array | number[
   out[offset + 2] = ex.z * x + ey.z * y + ez.z * z;
 }
 
-/** A colour index as a display hue: the blackbody colour, brightest channel 1, sRGB. */
-function displayHue(colorIndex: number): [number, number, number] {
+/**
+ * A colour index as a hue of linear light: the blackbody colour, brightest channel 1. Linear,
+ * as the glow buffer holds light; the composite encodes it for the display. It was the display
+ * hue, encoded, when the composite did not encode -- through the encode now, that would be
+ * encoded twice and washed out.
+ */
+function linearHue(colorIndex: number): [number, number, number] {
   const [r, g, b] = starColor(colorIndex);
   const peak = Math.max(r, g, b);
-  const encode = (v: number): number => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
-  return [encode(r / peak), encode(g / peak), encode(b / peak)];
+  return [r / peak, g / peak, b / peak];
 }
 
 /** An emission spectrum of lines as a display hue: CIE 1931, then sRGB, brightest channel 1. */
@@ -343,26 +363,36 @@ export const BALMER_HUE = emissionHue([
   [486.13, 1],
 ]);
 
-function buildGeometry(sample: MilkyWaySample): THREE.BufferGeometry {
+/**
+ * The points as drawn: each at its radius (spreadRadii -- its population's own, or wider where
+ * its population is sparse), its colour times its gain taken down by the square of the widening,
+ * so that its light, peak times area, is the same however wide it is drawn.
+ */
+function buildGeometry(sample: MilkyWaySample, spread: Float32Array): THREE.BufferGeometry {
   const positions = new Float32Array(sample.count * 3);
   const colors = new Float32Array(sample.count * 3);
   const radii = new Float32Array(sample.count);
+  const spreads = new Float32Array(sample.count);
   const looks = POPULATIONS.map((population) => {
-    const hue = population.colorIndex === null ? BALMER_HUE : displayHue(population.colorIndex);
+    const hue = population.colorIndex === null ? BALMER_HUE.map(srgbToLinear) : linearHue(population.colorIndex);
     return { color: hue.map((channel) => channel * population.gain), radius: population.radiusPc };
   });
   for (let i = 0; i < sample.count; i += 1) {
     toEcliptic(sample.positions[i * 3]!, sample.positions[i * 3 + 1]!, sample.positions[i * 3 + 2]!, positions, i * 3);
     const look = looks[sample.populations[i]!]!;
-    colors[i * 3] = look.color[0]!;
-    colors[i * 3 + 1] = look.color[1]!;
-    colors[i * 3 + 2] = look.color[2]!;
-    radii[i] = look.radius;
+    const radius = Math.max(look.radius, spread[i]!);
+    const thinned = (look.radius / radius) ** 2;
+    colors[i * 3] = look.color[0]! * thinned;
+    colors[i * 3 + 1] = look.color[1]! * thinned;
+    colors[i * 3 + 2] = look.color[2]! * thinned;
+    radii[i] = radius;
+    spreads[i] = radius / look.radius;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute('radiusPc', new THREE.BufferAttribute(radii, 1));
+  geometry.setAttribute('spread', new THREE.BufferAttribute(spreads, 1));
   return geometry;
 }
 
@@ -377,6 +407,7 @@ function buildDustGeometry(dust: Float32Array): THREE.BufferGeometry {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
   geometry.setAttribute('radiusPc', new THREE.BufferAttribute(new Float32Array(count).fill(DUST_RADIUS_PC), 1));
+  geometry.setAttribute('spread', new THREE.BufferAttribute(new Float32Array(count).fill(1), 1));
   return geometry;
 }
 
@@ -543,8 +574,8 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       sampleAsked.current = true;
       const made = new Worker(new URL('../core/milkyWay.worker.ts', import.meta.url), { type: 'module' });
       worker.current = made;
-      made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; dust: Float32Array }>) => {
-        const cloud = new THREE.Points(buildGeometry(event.data.light), material);
+      made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; radii: Float32Array; dust: Float32Array }>) => {
+        const cloud = new THREE.Points(buildGeometry(event.data.light, event.data.radii), material);
         cloud.frustumCulled = false;
         // In each slab, after its dust: see the header.
         cloud.renderOrder = 1;

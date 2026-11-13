@@ -31,7 +31,9 @@ as face-on, so each map is that times q.
   al. 2015, who measured Andromeda's dust from its stars).
 
 The Large Magellanic Cloud, nine degrees across the sky, is in neither z0MGS nor its dust maps:
-its old stars from Spitzer's SAGE 3.6 um mosaic (Meixner et al. 2006), its star formation from
+its old stars from Spitzer's SAGE 3.6 um mosaic (Meixner et al. 2006) -- the mosaic's own
+background taken off (without_background), and past its edge the disc's exponential of its
+measured scale length (into_profile) -- its star formation from
 SHASSA's H-alpha (Gaustad et al. 2001) and SAGE's 24 um for what the dust hides (Kennicutt et
 al. 2009), its dust from Clark et al. 2023's surface density, calibrated so the Milky Way's
 diffuse gas has 150 times the mass of its dust -- A_V by that and Bohlin et al.'s. Each only
@@ -114,11 +116,19 @@ class Galaxy:
 
     def __init__(self, key, pgc, ngc, ra, dec, distance_pc, inclination, major_pa, near_pa, scale_length_pc,
                  half_pc, sfr_to_pc, bulge, overlapping, dust, sources='z0mgs', young_drift_pc=0.0,
-                 projection='disc', half_deg=None, sage=None, shassa=None, foreground=(), bounds=None):
+                 projection='disc', half_deg=None, sage=None, shassa=None, foreground=(), bounds=None,
+                 old_scale_pc=None, size=1024, depth_size=32):
         self.key, self.pgc, self.ngc = key, pgc, ngc
         self.ra, self.dec, self.distance_pc = ra, dec, distance_pc
         self.inclination, self.major_pa, self.far_pa = inclination, major_pa, near_pa + 180
         self.scale_length_pc = scale_length_pc
+        # The old stars' measured exponential scale length, pc -- in the disc, or on the sky for a
+        # galaxy mapped as seen from Earth: what a Magellanic Cloud's mosaic background is told
+        # apart by, and its light carried on with past the mosaic's edge (without_background,
+        # into_profile). The disc's own, unless given.
+        self.old_scale_pc = old_scale_pc or scale_length_pc
+        # The map's points each way (N), and the depth grid's (DEPTH_SIZE): set for each galaxy.
+        self.size, self.depth_size = size, depth_size
         self.projection, self.half_deg = projection, half_deg
         if projection == 'sky':
             half_pc = distance_pc * math.radians(half_deg)
@@ -149,15 +159,28 @@ BOUNDS = {
     'sfr': (-6.5, -1.0),
     'dust': (-3.5, 0.5),
 }
-# The SMC's, as seen from Earth: its old stars in IRAC's MJy/sr, at most some 0.34 once softened;
-# its star formation at most some 0.02 M_Sun/yr/kpc^2 once spread.
+# The SMC's, as seen from Earth: its old stars in IRAC's MJy/sr, at most some 0.3 once softened,
+# down to where their exponential is under the glow's floor (SMC_OLD_SCALE_DEG); its star
+# formation at most some 0.02 M_Sun/yr/kpc^2 once spread.
 SMC_BOUNDS = {
-    'old': (-4.0, 0.0),
+    'old': (-4.5, 0.0),
     'sfr': (-6.5, -1.5),
     'dust': (-3.5, 0.5),
 }
 
+# The LMC's: its old stars a decade fainter than BOUNDS' -- its exponential, carried past Spitzer's
+# edge, is under the glow's floor only some 12 kpc out, where it is 2e-4 of its centre's.
+LMC_BOUNDS = {
+    'old': (-4.5, 0.5),
+    'sfr': BOUNDS['sfr'],
+    'dust': BOUNDS['dust'],
+}
+
 SAGE_SMC = 'https://irsa.ipac.caltech.edu/data/SPITZER/SAGE-SMC/images/'
+
+# The SMC's old stars' exponential scale length on the sky, degrees: Nidever et al. 2011 (ApJ 733,
+# L10), its metal-poor giants counted from 3 to 7.5 degrees out, h_r 1.0 deg -- 1.09 kpc at 62.44.
+SMC_OLD_SCALE_DEG = 1.0
 
 GALAXIES = {
     'm31': Galaxy('m31', 'PGC2557', '0224', (0 + 42 / 60 + 44.3 / 3600) * 15, 41 + 16 / 60 + 9 / 3600,
@@ -166,13 +189,20 @@ GALAXIES = {
     'm33': Galaxy('m33', 'PGC5818', '0598', (1 + 33 / 60 + 50.9 / 3600) * 15, 30 + 39 / 60 + 37 / 3600,
                   10 ** (1 + 24.622 / 5), 52.0, 22.5, 22.5 + 270, 1600.0,
                   half_pc=12_000.0, sfr_to_pc=11_000.0, bulge=False, overlapping=(), dust='z0mgs'),
+    # 13 kpc either side: its disc's exponential, 1.4 kpc, at its centre about white (some 130
+    # L_Sun,V per pc^2 against 142), is under the glow's floor, 1.5e-4 of white, only past 12 kpc --
+    # so the map's round window, from 11 kpc, ends it where it already rounds to black. At 9 kpc
+    # the window cut it at a hundredth of white, a grey disc's rim.
     'lmc': Galaxy('lmc', None, None, (5 + 23 / 60 + 34.5 / 3600) * 15, -(69 + 45 / 60 + 22 / 3600),
                   49_590.0, 34.0, 139.1, 139.1 - 90, 1400.0,
-                  half_pc=9_000.0, sfr_to_pc=5_500.0, bulge=False, overlapping=(), dust='clark', sources='lmc',
+                  half_pc=13_000.0, sfr_to_pc=5_500.0, bulge=False, overlapping=(), dust='clark', sources='lmc',
                   young_drift_pc=200.0,
                   sage=(('SAGE_LMC_IRAC3.6_2_mosaic.fits', None), ('SAGE_LMC_MIPS24_E12.fits', None)),
-                  shassa=('013', (5.5, 6.3), None, None)),
-    # Seen from Earth, 5 degrees either side -- its bar, its Wing to the east, NGC 602 at its tip;
+                  shassa=('013', (5.5, 6.3), None, None), bounds=LMC_BOUNDS),
+    # Seen from Earth, 8 degrees either side -- its bar, its Wing to the east, NGC 602 at its tip,
+    # and its old stars' exponential, 1.0 degree, out to where it rounds to black: some 0.3 of
+    # white at its centre, under the glow's floor only past 7.6 degrees (at 5 the window cut it at
+    # a few thousandths, a rim);
     # star formation ending 4 degrees out, where the Bridge to the LMC begins. The Milky Way's
     # foreground H-alpha 4.5 to 6 degrees out, not towards the LMC: the Bridge's gas lies at
     # position angle 110 degrees, so 50 to 170 is left out. 47 Tuc and NGC 362 (Harris 1996, 2010
@@ -182,7 +212,7 @@ GALAXIES = {
     'smc': Galaxy('smc', None, None, (0 + 51 / 60) * 15, -(73 + 7 / 60 + 12 / 3600),
                   62_440.0, 0.0, 90.0, -180.0, None,
                   half_pc=None, sfr_to_pc=62_440.0 * math.radians(4.0), bulge=False, overlapping=(), dust='clark',
-                  sources='smc', young_drift_pc=200.0, projection='sky', half_deg=5.0,
+                  sources='smc', young_drift_pc=200.0, projection='sky', half_deg=8.0,
                   sage=(('SAGE_SMC_IRAC3.6_2_mosaic.fits',
                          SAGE_SMC + 'IRAC_10x6_2_mosaics/SAGE_SMC_IRAC3.6_2_mosaic.fits'),
                         ('SAGE_SMC_MIPS24_E012.fits', SAGE_SMC + 'MIPS/SAGE_SMC_MIPS24_E012.fits')),
@@ -191,7 +221,10 @@ GALAXIES = {
                                42 / 60, 10 / 60),
                               ('NGC 362', (1 + 3 / 60 + 14.26 / 3600) * 15, -(70 + 50 / 60 + 55.6 / 3600),
                                10 / 60, 5 / 60)),
-                  bounds=SMC_BOUNDS),
+                  bounds=SMC_BOUNDS, old_scale_pc=62_440.0 * math.radians(SMC_OLD_SCALE_DEG),
+                  # Its texels and its depth cells as they were 5 degrees either side: 0.0098 and
+                  # 0.31 degrees (core/skyMap.ts reads a third of a degree as its large scale).
+                  size=1640, depth_size=51),
 }
 # The galaxy being mapped.
 G = GALAXIES['m31']
@@ -200,7 +233,7 @@ G = GALAXIES['m31']
 # DISC_FLATTENING).
 OLD_FLATTENING = 1 / 7.3
 
-# The map: N x N, G.half_pc either side of the centre.
+# The map: N x N, G.half_pc either side of the centre (G.size).
 N = 1024
 
 # A_V per unit of each dust source.
@@ -768,28 +801,117 @@ def shassa_halpha():
     return data - foreground, wcs
 
 
-def beyond_edge(face, seen, sq, label):
-    """A disc past the edge of what was observed: its exponential, fitted to the observed outer
-    half of it, matched to it just inside the edge and blended across 600 pc so the edge does not
-    show."""
+def without_background(face, seen, label):
+    """A mosaic's own background taken off the old stars where it was observed: SAGE's 3.6 um
+    mosaics keep a level of their own under the galaxy -- the zodiacal light, which at 3.6 um and
+    near the south ecliptic pole the Clouds lie by is far from nothing, less what was taken off
+    tile by tile. It shows as a floor the galaxy's light stops falling into: the SMC's medians,
+    in rings, fall from the centre to some 3.7 kpc and then stay at 0.0035 MJy/sr out to 5.4 --
+    where the giants Nidever et al. counted fall another e^-1.5 -- and the floor, carried on past
+    the mosaic's edge and drawn on the screen's own curve, was a grey disc 5 degrees across.
+
+    So the medians of the observed map in rings 150 pc wide, from one scale length out (inside it
+    the bar and the arms are no exponential), fitted as A e^(-r / h) + b, h the galaxy's measured
+    scale length (G.old_scale_pc): b, the floor, is taken off where it was observed. What is left
+    under nothing is noise about it, and softened() fades it out."""
+    x, y, _ = face_on_grid(1.0)
+    r = np.hypot(x, y)
+    h = G.old_scale_pc
+    edges = np.arange(h, r[seen].max(), 150.0)
+    rings, medians = [], []
+    for inner, outer in zip(edges[:-1], edges[1:]):
+        ring = seen & (r >= inner) & (r < outer)
+        if ring.sum() > 200:
+            rings.append(0.5 * (inner + outer))
+            medians.append(np.median(face[ring]))
+    rings, medians = np.array(rings), np.array(medians)
+    (amplitude, floor), *_ = np.linalg.lstsq(np.c_[np.exp(-rings / h), np.ones_like(rings)], medians, rcond=None)
+    print(f'  {label}: its background {floor:.4g}, fitted with the measured scale length {h:.0f} pc '
+          f'over {rings.min():.0f}-{rings.max():.0f} pc, taken off -- {floor / amplitude * 100:.2f} % of '
+          f'the profile at its centre')
+    return np.where(seen, face - floor, 0.0)
+
+
+def without_corner_level(face, seen, label):
+    """A z0MGS map's own level where the galaxy is not: its median in the map's corners, past
+    0.96 of its half-width, taken off where it was observed. Triangulum's 3.4 um map settles at
+    -0.0018 MJy/sr there, its background taken off a little too deep; Andromeda's at nothing.
+    (Not fitted as the Clouds' is: Andromeda's outskirts fall faster than its disc's exponential,
+    and a fit with it reads that as a floor below nothing.)"""
+    x, y, _ = face_on_grid(1.0)
+    corners = seen & (np.hypot(x, y) > 0.96 * G.half_pc)
+    level = float(np.median(face[corners])) if corners.sum() > 1000 else 0.0
+    print(f'  {label}: its level in the corners {level:.4g}, taken off')
+    return np.where(seen, face - level, 0.0)
+
+
+def above_noise(face, seen):
+    """How far a map stands above its noise, 0 to 1, smoothly: its light smoothed over 8 texels
+    against the scatter of each texel about its neighbours' median, that scatter's median over
+    blocks of 8 a little smoothed -- nothing below 1.5 times the noise, all of it from 5."""
+    resid = np.abs(face - ndimage.median_filter(face, 9))
+    # (Texels at nothing left out: a map clipped at nothing, as Andromeda's is once its bulge is
+    # taken off, would read as noiseless where half of it is.)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        blocks = np.nanmedian(np.where(seen & (face != 0), resid, np.nan).reshape(N // 8, 8, N // 8, 8)
+                              .transpose(0, 2, 1, 3).reshape(N // 8, N // 8, 64), axis=-1)
+    blocks = np.where(np.isfinite(blocks), blocks, np.nanmedian(blocks))
+    noise = 1.4826 * ndimage.zoom(ndimage.median_filter(blocks, 5), 8, order=1)
+    signal = ndimage.gaussian_filter(np.where(seen, face, 0.0), 8)
+    t = np.clip((signal / np.maximum(noise, 1e-12) - 1.5) / (5 - 1.5), 0, 1)
+    return t
+
+
+def into_profile(face, seen, sq, label, carry_on=True):
+    """The old stars' map carried into the disc's exponential, of its measured scale length
+    (G.old_scale_pc), wherever the map stops telling the galaxy from its noise: past the edge of
+    what was observed, and in the outskirts where the light is down in the noise -- blended
+    across both by a weight, so neither the observed edge nor any rim shows.
+
+    Or, `carry_on` false, faded to nothing there instead: Andromeda's and Triangulum's maps hold
+    their discs out to where their light is lost in the noise, and before it each already falls
+    faster than its exponential -- Andromeda's past 12 kpc as if its scale length were 3 kpc, not
+    5.3 -- so no light is carried on past what was measured; only the noise goes, a smooth fade and not each
+    texel cut at a level of its own, which left the noise's peaks as streaks.
+
+    The weight: the map's own light, smoothed, against its noise -- the scatter of each texel
+    about its neighbours' median, its median over a kiloparsec or so -- nothing below 1.5 times
+    the noise, all of it from 5; and inside the observed area, rising over its outer 1000 pc. The
+    exponential's height matched to the map where the weight is halfway, the two the same there.
+
+    Drawn on the screen's curve, as the glows are, what lay in the noise showed: Triangulum's
+    3.4 um noise drawn out along its minor axis by the deprojection, a field of streaks round it;
+    the Clouds' edges, a square with a rim. Fitted to the observed outer half once, the slope came
+    out 2.35 kpc for the SMC, twice what its giants measure: the mosaic's floor and the Bridge to
+    the east held it up."""
     x, y, _ = face_on_grid(sq)
     r = np.hypot(x, y)
-    edge = np.percentile(r[seen], 99)
-    ring = seen & (r > 0.4 * edge) & (r < 0.95 * edge) & (face > 0)
-    slope, intercept = np.polyfit(r[ring], np.log(face[ring]), 1)
-    model = np.exp(intercept + slope * r)
-    distance = ndimage.distance_transform_edt(seen) * (2 * G.half_pc / N)
-    # Matched to the data just inside the edge, where the two meet.
-    band = seen & (distance > 200) & (distance < 800) & (face > 0)
-    model *= np.median(face[band] / model[band])
-    print(f'  {label}: past the observed edge, its exponential of scale length {-1 / slope:.0f} pc')
-    blend = np.clip(distance / 600.0, 0, 1)
-    return np.where(seen, blend * face + (1 - blend) * model, model)
+    pixel_pc = 2 * G.half_pc / N
+    model = np.exp(-r / G.old_scale_pc)
+    t = above_noise(face, seen)
+    inside = np.clip(ndimage.distance_transform_edt(seen) * pixel_pc / 1000.0, 0, 1)
+    weight = t * t * (3 - 2 * t) * inside * inside * (3 - 2 * inside)
+    if not carry_on:
+        kept = weight > 0.5
+        print(f'  {label}: faded out where the map is down in its noise -- kept over {kept.mean() * 100:.0f} % of it, '
+              f'out to {np.percentile(r[kept], 99):.0f} pc')
+        into_profile.weight = weight
+        return weight * face
+    band = seen & (weight > 0.3) & (weight < 0.7)
+    if band.sum() < 100:
+        band = seen & (weight > 0.1) & (weight < 0.9)
+    model *= np.median(face[band]) / np.median(model[band])
+    shown = weight > 0.5
+    print(f'  {label}: into its exponential of scale length {G.old_scale_pc:.0f} pc where the map is down '
+          f'in its noise or not observed -- the map kept over {shown.mean() * 100:.0f} % of it, out to '
+          f'{np.percentile(r[shown], 99):.0f} pc')
+    return weight * face + (1 - weight) * model
 
 
 def without_foreground(face, label, starlight):
     """The Milky Way's globular clusters in front of the galaxy (G.foreground) taken as not
-    observed: in the starlight, beyond_edge fills them with the galaxy's own; in the star
+    observed: in the starlight, into_profile fills them with the galaxy's own; in the star
     formation's bands, nothing is there."""
     if not G.foreground:
         return face
@@ -828,9 +950,12 @@ def magellanic_maps(old_sq, thin_sq):
     (irac_name, irac_url), (mips_name, mips_url) = G.sage
     print('old stars')
     irac, irac_wcs = binned(fetch_large(irac_url, irac_name), 5)
-    old = without_foreground(face_on_observed(irac, irac_wcs, old_sq, 'IRAC 3.6 um'), 'IRAC', True)
+    old = face_on_observed(irac, irac_wcs, old_sq, 'IRAC 3.6 um')
+    old = without_background(old, old != 0, 'IRAC')
+    old = without_foreground(old, 'IRAC', True)
+    seen = old != 0
     old = without_points(old, old_sq, 'IRAC')
-    old = softened(beyond_edge(old, old > 0, old_sq, 'old stars'), 'old stars')
+    old = softened(into_profile(old, seen, old_sq, 'old stars'), 'old stars')
     print('star formation')
     ha, ha_wcs = shassa_halpha()
     mips, mips_wcs = binned(fetch_large(mips_url, mips_name), 5)
@@ -866,22 +991,26 @@ def dust_map(thin_sq):
     dust = resample(av, wcs, thin_sq)[0]
     # Its noise, drawn out along Y, softened to a texel or so each way; on the sky, not drawn out.
     dust = ndimage.gaussian_filter(dust, 0.75 if G.projection == 'sky' else (1.5, 0.75))
-    if G.projection == 'sky':
-        dust = dust_faded(dust, np.isfinite(data), wcs)
+    if G.dust == 'clark':
+        dust = dust_faded(dust, np.isfinite(data), wcs, 1.0 if G.projection == 'sky' else thin_sq)
     return dust
 
 
-def dust_faded(dust, observed, wcs):
+def dust_faded(dust, observed, wcs, sq):
     """A dust map that covers only part of the galaxy -- Clark et al.'s of the SMC, its body and
-    the start of its Wing, some 4.3 x 4.9 degrees -- faded to nothing towards the edge of where it
-    was observed, rather than ending in a square that a volume would show from every side. Past it,
-    no dust: unlike the old stars there is no profile of it to carry on honestly. The fit's
-    outermost DUST_EDGE_DEG[0], where the far-infrared is faint and its rows come out as streaks,
-    dropped; then a smooth ramp to the whole map by DUST_EDGE_DEG[1] inside the edge. Where it was
-    observed: its finite pixels, gaps of a few closed."""
+    the start of its Wing, some 4.3 x 4.9 degrees; of the LMC, Spitzer's square -- faded to nothing
+    towards the edge of where it was observed, rather than ending in a square that a volume would
+    show from every side. Past it, no dust: unlike the old stars there is no profile of it to carry
+    on honestly. The fit's outermost DUST_EDGE_DEG[0], where the far-infrared is faint and its rows
+    come out as streaks, dropped; then a smooth ramp to the whole map by DUST_EDGE_DEG[1] inside the
+    edge. Where it was observed: its finite pixels, gaps of a few closed. (The LMC's streaks, A_V
+    twice the disc's within a degree of the edge, were a dark mottled band along its square once
+    the faint light round it showed.)"""
     footprint = ndimage.binary_fill_holes(ndimage.binary_closing(observed, iterations=6))
-    seen = resample(footprint.astype(np.float64), wcs, 1.0)[0] > 0.5
-    inside = ndimage.distance_transform_edt(seen) * (2 * G.half_deg / N)
+    seen = resample(footprint.astype(np.float64), wcs, sq)[0] / sq > 0.5
+    # A map pixel's size, degrees: on the sky; or for a disc, its parsecs at the galaxy's distance.
+    pixel_deg = 2 * G.half_deg / N if G.projection == 'sky' else math.degrees(2 * G.half_pc / N / G.distance_pc)
+    inside = ndimage.distance_transform_edt(seen) * pixel_deg
     ramp = np.clip((inside - DUST_EDGE_DEG[0]) / (DUST_EDGE_DEG[1] - DUST_EDGE_DEG[0]), 0, 1)
     faded = dust * ramp * ramp * (3 - 2 * ramp)
     pixel_pc2 = (2 * G.half_pc / N) ** 2 / AV_PER_DUST_MW150
@@ -1149,8 +1278,9 @@ def depth_grids():
 
 
 def make(galaxy):
-    global G
+    global G, N, DEPTH_SIZE
     G = galaxy
+    N, DEPTH_SIZE = G.size, G.depth_size
     print(f'== {G.key}')
     old_sq, thin_sq = squeeze(OLD_FLATTENING), squeeze(G.dust_flattening)
     if G.projection == 'sky':
@@ -1167,7 +1297,10 @@ def make(galaxy):
     print('old stars')
     w1 = without_points(face_on('w1_gauss7p5', maps, old_sq), old_sq, 'W1')
     shape = bulge_shape(w1, old_sq, 'W1') if G.bulge else None
-    old = softened(without_bulge(w1, shape, old_sq, 'W1') if shape else w1, 'old stars')
+    old = without_bulge(w1, shape, old_sq, 'W1') if shape else w1
+    old = without_corner_level(old, w1 != 0, 'W1')
+    old = softened(into_profile(old, w1 != 0, old_sq, 'old stars', carry_on=False), 'old stars')
+    disc = into_profile.weight
 
     print('star formation')
     # A bulge's old stars shine in the far-UV and its dust at 22 um too: neither is star formation.
@@ -1177,7 +1310,10 @@ def make(galaxy):
         fuv = without_bulge(fuv, shape, thin_sq, 'FUV')
         w4 = without_bulge(w4, shape, thin_sq, 'W4')
     fuv, w4 = unmatched_points(fuv, w4, thin_sq)
-    finish(old, SFR_PER_FUV * fuv + SFR_PER_24UM * w4, thin_sq)
+    # Faded out with the old stars' disc where that is lost in its noise (into_profile): stars
+    # form within the disc, and past it, cut texel by texel at a level, the bands' noise peaks
+    # were blue specks round it.
+    finish(old, (SFR_PER_FUV * fuv + SFR_PER_24UM * w4) * disc, thin_sq)
 
 
 def finish(old, sfr, thin_sq, nebula=None):
