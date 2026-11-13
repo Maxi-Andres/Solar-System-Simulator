@@ -1,5 +1,4 @@
 import { HYPERLEDA_PGC_BATCH, HYPERLEDA_SQL_URLS, REQUEST_TIMEOUT_MS } from '../config.ts';
-import { retryDelayMs } from '../horizons/client.ts';
 
 /**
  * HyperLEDA (Makarov et al. 2014, A&A 570, A13) for every galaxy G3 holds, by its PGC
@@ -39,7 +38,14 @@ export interface LedaRecord {
 }
 
 export const LEDA_FIELDS = 'objname,pgc,objtype,al2000,de2000,t,bt,vt,ag,logd25,logr25,pa,incl';
-const MAX_ATTEMPTS = 4;
+/**
+ * Rounds over every mirror before the run gives up, RETRY_WAIT_MS apart: about four minutes.
+ * atlas.obs-hp.fr refused GitHub's runners for a few minutes on 2026-11-13 (17:53-17:55 UTC,
+ * "fetch failed") and answered them the same morning; a quick exponential back-off was spent
+ * inside that outage, so the waits are long and even.
+ */
+const ROUNDS = 8;
+const RETRY_WAIT_MS = 30_000;
 const CONCURRENT = 3;
 
 /**
@@ -108,8 +114,8 @@ export function pgcClause(pgcs: readonly number[]): string {
 
 async function queryOnce(where: string): Promise<LedaRecord[]> {
   const failures: string[] = [];
-  for (const base of HYPERLEDA_SQL_URLS) {
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+  for (let round = 1; round <= ROUNDS; round += 1) {
+    for (const base of HYPERLEDA_SQL_URLS) {
       try {
         const response = await fetch(base, { method: 'POST', body: ledaForm(where), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
         if (!response.ok) {
@@ -117,11 +123,12 @@ async function queryOnce(where: string): Promise<LedaRecord[]> {
         }
         return parseLedaPgcCsv(await response.text());
       } catch (error) {
-        failures.push(`${base} #${attempt}: ${String(error).slice(0, 200)}`);
-        if (attempt < MAX_ATTEMPTS) {
-          await new Promise((done) => setTimeout(done, retryDelayMs(attempt, null)));
-        }
+        failures.push(`${base} #${round}: ${String(error).slice(0, 200)}`);
       }
+    }
+    if (round < ROUNDS) {
+      console.warn(`[laniakea] HyperLEDA: round ${round}/${ROUNDS} failed (${failures.at(-1)}); again in ${RETRY_WAIT_MS / 1000} s.`);
+      await new Promise((done) => setTimeout(done, RETRY_WAIT_MS));
     }
   }
   throw new Error(`HyperLEDA could not be read:\n  ${failures.join('\n  ')}`);

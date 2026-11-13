@@ -746,13 +746,12 @@ export const MEI_SBF_TABLE = 'J/ApJ/655/144';
  * HyperLEDA (Makarov, Prugniel, Terekhova, Courtois & Vauglin 2014, A&A 570, A13), for the
  * position angles and the axis ratios neither catalogue gives: its SQL interface, fG.cgi.
  * leda.univ-lyon1.fr redirects to the Observatoire de Haute-Provence's atlas.obs-hp.fr,
- * which answered over plain HTTP on 2026-11-12 and not over HTTPS; both are tried. Optional:
- * a run that cannot reach it publishes the galaxies without position angles (null).
+ * which answered over plain HTTP on 2026-11-12 and not over HTTPS. leda.univ-lyon1.fr/fG.cgi
+ * itself has answered 405 to GET and POST alike since (2026-11-13), so only atlas is asked.
+ * Optional for the Local Volume: a run that cannot reach it publishes the galaxies without
+ * position angles (null). Laniakea's run needs it (laniakea/ledaPgc.ts).
  */
-export const HYPERLEDA_SQL_URLS: readonly string[] = [
-  'http://atlas.obs-hp.fr/hyperleda/fG.cgi',
-  'http://leda.univ-lyon1.fr/fG.cgi',
-];
+export const HYPERLEDA_SQL_URLS: readonly string[] = ['http://atlas.obs-hp.fr/hyperleda/fG.cgi'];
 
 /** The output file. */
 export const LOCAL_VOLUME_FILE = 'local-volume.json';
