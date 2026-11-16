@@ -24,6 +24,7 @@
     "fetch:local-volume": "node src/localVolume/fetchLocalVolume.ts",
     "fetch:laniakea": "node src/laniakea/fetchLaniakea.ts",
     "fetch:cosmic-web": "node --max-old-space-size=6144 src/cosmicWeb/fetchCosmicWeb.ts",
+    "fetch:photos": "node src/photos/fetchPhotos.ts",
     "prepare:cmb": "node src/cmb/prepareCmb.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "astronomy-engine": "2.1.19",
+    "sharp": "^0.35.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   },

@@ -20,3 +20,6 @@ Thumbs.db
 
 # Python bytecode
 __pycache__/
+
+# The photo library, downloaded by tools/src/photos/fetchPhotos.ts (pnpm -C tools fetch:photos).
+tools/.cache/
