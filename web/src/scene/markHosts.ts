@@ -14,9 +14,16 @@ import {
 import { galaxyOf, galaxyPositionPc, GIANTS, type LocalGroupGalaxy } from '../core/localGroup.ts';
 import { localVolumeCatalog, regionOf, virgoCentre } from '../core/localVolume.ts';
 import { galacticCentrePc } from '../core/milkyWay.ts';
+import { recordHolderOf, recordHoldersFade } from '../core/recordHolders.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
-import { LOCAL_GROUP_EXTENT_KM, LOCAL_VOLUME_EXTENT_KM, MILKY_WAY_EXTENT_KM } from './homeName.ts';
+import {
+  LOCAL_GROUP_EXTENT_KM,
+  LOCAL_VOLUME_EXTENT_KM,
+  MILKY_WAY_EXTENT_KM,
+  MILKY_WAY_FOLD_PX,
+  NEARBY_UNIVERSE_EXTENT_KM,
+} from './homeName.ts';
 import { FoldHosts, UNFOLDED, type FoldOf } from './markFolding.ts';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 
@@ -55,7 +62,11 @@ import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
  *   supercluster, and a cluster in none, into the basin the galaxies' watersheds put it in
  *   (Dupuy & Courtois 2023); a basin, a void, a wall, a repeller into nothing. And all of them
  *   only once out of the Local Group (STRUCTURES_FROM_LY): from the Solar System they are not
- *   a second sky of names.
+ *   a second sky of names. And folded again, all into the Nearby Universe's name, once Laniakea's
+ *   catalogue's reach is small on the screen (`nearbyUniverseFold`), as homeName.ts folds their
+ *   names: from the observable universe's view they are one point.
+ * - **The record-holders** (G4, recordHolders.ts): into nothing; drawn only from far out
+ *   (recordHoldersFade), the focused one always.
  */
 
 /** The reach of a giant's satellites, pc: the virial radius both the Milky Way and Andromeda are given. */
@@ -270,9 +281,16 @@ export function bodyFoldStrength(
     return 1;
   }
   if (body.kind === 'structure') {
+    if (recordHolderOf(body.id) !== null) {
+      return structures.recordHolders;
+    }
     // Its own host's strength: what it folds into above it, and the structures' fade.
     const host = MARK_HOSTS.indexOf(`structure:${body.id}`);
-    return Math.min(structuresStrength(), host < 0 || host >= MARK_HOSTS.strength.length ? 1 : MARK_HOSTS.strength[host]!);
+    return Math.min(
+      structuresStrength(),
+      structures.nearbyUniverse,
+      host < 0 || host >= MARK_HOSTS.strength.length ? 1 : MARK_HOSTS.strength[host]!,
+    );
   }
   const fold = bodyFold(body, [
     (fromKm.x - sunKm.x) / PARSEC_KM,
@@ -287,7 +305,11 @@ export function pinnedHosts(focus: BodyId): number[] {
   const own = hostMarkedBy(focus);
   const galaxy = galaxyOf(focus);
   const above =
-    galaxy !== null ? galaxyFold(galaxy).host : focus === SGR_A_ID || structureOf(focus) !== null ? -1 : MILKY_WAY_HOST;
+    galaxy !== null
+      ? galaxyFold(galaxy).host
+      : focus === SGR_A_ID || structureOf(focus) !== null || recordHolderOf(focus) !== null
+        ? -1
+        : MILKY_WAY_HOST;
   return [...(own >= 0 ? MARK_HOSTS.chain(own) : []), ...(above >= 0 ? MARK_HOSTS.chain(above) : [])];
 }
 
@@ -315,7 +337,10 @@ export function updateMarkHosts(cameraPc: readonly [number, number, number], pix
     return;
   }
   MARK_HOSTS.update(cameraPc, pixelsPerRadian, pinnedHosts(focus));
-  structures.strength = structuresFade(Math.hypot(cameraPc[0], cameraPc[1], cameraPc[2]));
+  const fromSunPc = Math.hypot(cameraPc[0], cameraPc[1], cameraPc[2]);
+  structures.strength = structuresFade(fromSunPc);
+  structures.nearbyUniverse = nearbyUniverseFold((NEARBY_UNIVERSE_REACH_PC / fromSunPc) * pixelsPerRadian);
+  structures.recordHolders = recordHoldersFade(fromSunPc * PARSEC_KM);
   Object.assign(last, { x: cameraPc[0], y: cameraPc[1], z: cameraPc[2], scale: pixelsPerRadian, focus, count: MARK_HOSTS.count });
 }
 
@@ -404,7 +429,20 @@ export function structuresFade(cameraFromSunPc: number): number {
   return c * c * (3 - 2 * c);
 }
 
-const structures = { strength: 0 };
+const structures = { strength: 0, nearbyUniverse: 1, recordHolders: 0 };
+
+/** Laniakea's catalogue's reach, pc (homeName.ts NEARBY_UNIVERSE_EXTENT_KM). */
+export const NEARBY_UNIVERSE_REACH_PC = NEARBY_UNIVERSE_EXTENT_KM / PARSEC_KM;
+
+/**
+ * How much of the named structures' marks is left, 1 to 0, from the catalogue's reach on the
+ * screen, pixels: all of them while it is twice MILKY_WAY_FOLD_PX, none once it is that -- where
+ * homeName.ts names the whole the Nearby Universe.
+ */
+export function nearbyUniverseFold(reachPx: number): number {
+  const t = Math.min(1, Math.max(0, (reachPx - MILKY_WAY_FOLD_PX) / MILKY_WAY_FOLD_PX));
+  return t * t * (3 - 2 * t);
+}
 
 /** This frame's fade of the structures (structuresFade, from the camera given to updateMarkHosts). */
 export function structuresStrength(): number {

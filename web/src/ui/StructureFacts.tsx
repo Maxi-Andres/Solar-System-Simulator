@@ -90,6 +90,14 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
     <>
       {landmark.kind === 'cluster' && landmark.radiusPc !== null && <Row label="Radius">{`${formatMpc(landmark.radiusPc)}, estimated`}</Row>}
       {landmark.kind === 'wall' && landmark.radiusPc !== null && <Row label="Length">{formatMpc(2 * landmark.radiusPc)}</Row>}
+      {landmark.wall !== undefined && (
+        <>
+          <Row label="Width">{landmark.wall.width}</Row>
+          <Row label="Thickness">{landmark.wall.thickness}</Row>
+          <Row label="Found">{landmark.wall.discovered}</Row>
+        </>
+      )}
+
       {landmark.kind === 'void' && landmark.extentPc !== null && (
         <Row label="Extent">{`${landmark.extentPc.map((e) => Math.round(e / 1e6)).join(' × ')} Mpc, rough`}</Row>
       )}
@@ -103,7 +111,9 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
       })}
       {landmark.massSun !== null && <Row label="Mass">{`${formatMass(landmark.massSun)}, estimated`}</Row>}
       {landmark.members !== null && (
-        <Row label={landmark.kind === 'supercluster' ? 'Abell clusters' : 'Galaxies'}>{landmark.members.toLocaleString('en-US')}</Row>
+        <Row label={landmark.kind === 'supercluster' ? 'Abell clusters' : landmark.kind === 'wall' ? 'Galaxies here' : 'Galaxies'}>
+          {`${landmark.members.toLocaleString('en-US')}${landmark.kind === 'wall' ? ', estimated' : ''}`}
+        </Row>
       )}
       {basins !== null && (landmark.kind !== 'basin' || landmark.name === 'Laniakea Supercluster') && (
         <>
@@ -112,8 +122,9 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
         </>
       )}
       {behindThePlane(landmark, catalogue) && <Row label="">Behind the Milky Way’s plane: few galaxies seen</Row>}
-      {landmark.kind === 'wall' && <Row label="Drawn as">A line along it</Row>}
-      {landmark.kind === 'void' && <Row label="Drawn as">Ellipsoid of its extents</Row>}
+      {landmark.kind === 'wall' && <Row label="">Not bound: a pattern of the cosmic web</Row>}
+      {landmark.kind === 'wall' && <Row label="Drawn as">Its galaxies, tinted</Row>}
+      {landmark.kind === 'void' && <Row label="Drawn as">A soft shell of its extents</Row>}
       {landmark.kind === 'basin' && <Row label="Drawn as">{landmark.name === 'Laniakea Supercluster' ? 'Its basin’s outline' : 'Its attractor'}</Row>}
     </>
   );

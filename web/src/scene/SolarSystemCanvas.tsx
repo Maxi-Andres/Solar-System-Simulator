@@ -36,6 +36,7 @@ import { Laniakea } from './Laniakea.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
 import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
+import { CosmicMicrowaveBackground } from './CosmicMicrowaveBackground.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
@@ -130,6 +131,9 @@ export interface SolarSystemCanvasProps {
   readonly galaxyLabels: RefObject<(HTMLElement | null)[]>;
   /** The names of the Solar System's orbits laid over Sgr A* for scale (HorizonScale). */
   readonly horizonScaleLabels: RefObject<(HTMLElement | null)[]>;
+  /** The CMB's sphere and the record-holders (G4): the Observable Universe layer. */
+  readonly showObservableUniverse: boolean;
+  readonly cmbLabel: RefObject<HTMLElement | null>;
   /** The scale bar's nodes, written by ScaleBarProbe. */
   readonly scaleBar: RefObject<ScaleBarElements | null>;
   /** The Exoplanet Archive, its hosts' rings, and what a click on one does. */
@@ -159,6 +163,8 @@ export interface SolarSystemCanvasProps {
   readonly showLaniakea: boolean;
   readonly showLaniakeaBasin: boolean;
   readonly showShapleyBasin: boolean;
+  /** The Flow Lines layer: the velocity field's streamlines. */
+  readonly showFlowLines: boolean;
   readonly onPickLaniakeaGalaxy: (k: number) => void;
 }
 
@@ -187,6 +193,8 @@ export function SolarSystemCanvas({
   showNuclearCluster,
   galaxyLabels,
   horizonScaleLabels,
+  showObservableUniverse,
+  cmbLabel,
   scaleBar,
   exoplanets,
   showExoplanetHosts,
@@ -208,6 +216,7 @@ export function SolarSystemCanvas({
   showLaniakea,
   showLaniakeaBasin,
   showShapleyBasin,
+  showFlowLines,
   onPickLaniakeaGalaxy,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
@@ -251,6 +260,8 @@ export function SolarSystemCanvas({
     showLaniakea,
     showLaniakeaBasin,
     showShapleyBasin,
+    showFlowLines,
+    showObservableUniverse,
   ]);
 
   return (
@@ -378,6 +389,7 @@ export function SolarSystemCanvas({
         showMarks={showIcons}
         showBasin={showLaniakeaBasin}
         showShapley={showShapleyBasin}
+        showFlows={showFlowLines}
         onPick={onPickLaniakeaGalaxy}
       />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
@@ -393,6 +405,7 @@ export function SolarSystemCanvas({
         onPick={onPickCluster}
       />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
+      <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
       <LabelProjector

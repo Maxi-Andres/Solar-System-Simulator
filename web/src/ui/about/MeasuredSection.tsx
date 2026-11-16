@@ -38,6 +38,7 @@ export const measuredSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
     const { store, stars, beltInfo, beltTiers, satelliteInfo, stars3dInfo, exoplanetCatalog, pulsarCatalog } = data;
@@ -712,6 +713,13 @@ export const measuredSection: AboutSection = {
             <Cite k="valade2024" />.
           </Item>
           <Item>
+            <Strong>Where the galaxies flow</Strong>: the velocity of the same fit, 128³ voxels, published under CC BY
+            4.0 with the velocity’s scatter over the fit’s samples <Cite k={['courtois2023', 'courtoisCubes']} />. In
+            units of 52 km/s, and its first axis SGZ — the data say so: so read, its divergence is minus the
+            density, as linear theory has it, and 98% of the flow lines that reach an attractor end in the basin
+            Dupuy &amp; Courtois give their start; the other way, half. The Milky Way’s voxel moves at 460 km/s.
+          </Item>
+          <Item>
             The <Strong>named structures</Strong>: the clusters by their groups; the superclusters of Einasto et
             al.’s catalogue of Abell clusters <Cite k="einasto1997" />; the Great Attractor where its galaxies were
             seen to stream <Cite k="lyndenBell1988" />, the Norma Cluster near its heart behind the Milky Way’s plane{' '}
@@ -723,6 +731,42 @@ export const measuredSection: AboutSection = {
             The redshifts in the frame of the cosmic microwave background, by its dipole{' '}
             <Cite k="planck2020" />.{' '}
             <Xref to="estimated" sub="laniakea">
+              What is not measured
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="universe">
+          The observable universe
+        </Sub>
+        <Items>
+          <Item>
+            The <Strong>cosmic microwave background</Strong>: Planck’s 2018 map of its temperature, by the SMICA
+            component separation, its 50 million pixels of 1.7′ at 5′ resolution, the Milky Way’s plane and the
+            bright sources inpainted <Cite k={['planck2020compsep', 'gorski2005']} />. Each point its difference
+            from the mean, 2.7255 K <Cite k="fixsen2009" />, the dipole of our own motion taken out: a hundred
+            microkelvin, typically.
+          </Item>
+          <Item>
+            The <Strong>cosmology</Strong> every distance past Laniakea is in: Planck 2018’s, fitted to that sky —
+            H<sub>0</sub> 67.66 km/s/Mpc, Ω<sub>m</sub> 0.3111, an age of 13.787 billion years, last scattering at z
+            1089.8 <Cite k="planck2020params" />.
+          </Item>
+          <Item>
+            The <Strong>record-holders</Strong>, each by its redshift and its place on the sky: MoM-z14, z 14.44{' '}
+            <Cite k="naidu2026" />; JADES-GS-z14-0, 14.1796 <Cite k={['carniani2024', 'carniani2025', 'schouws2025']} />;
+            GN-z11, 10.6034 <Cite k="bunker2023" />; UHZ1, 10.073 <Cite k={['goulding2023', 'bogdan2024']} />; HD1, 4.0{' '}
+            <Cite k={['harikane2022', 'harikane2025']} />; Earendel’s galaxy, 5.926 <Cite k={['welch2022', 'pascale2025']} />;
+            the quasars EUCL J1729+6410, 7.77 <Cite k="yang2026" />, and J0313−1806, 7.6423 <Cite k="wang2021" />;
+            the gamma-ray bursts 090423, 8.26 <Cite k={['tanvir2009', 'salvaterra2009']} />, 250314A, 7.3{' '}
+            <Cite k={['cordier2025', 'levan2025']} />, and 221009A, 0.151 <Cite k="malesani2025" />; TON 618, 2.219{' '}
+            <Cite k="shemmer2004" />; El Gordo, 0.870 <Cite k="menanteau2012" />; Abell 2744, 0.308{' '}
+            <Cite k="jauzac2016" />; the Bullet Cluster, 0.296 <Cite k="clowe2006" />; the Saraswati Supercluster,
+            0.28 <Cite k="bagchi2017" />; ASASSN-15lh, 0.2326 <Cite k={['dong2016', 'leloudas2016']} />; 3C 273,
+            0.1583. All spectroscopic but GRB 090429B’s, 9.4 from its colours <Cite k="cucchiara2011" />. Positions
+            from the papers, else NED <Cite k="ned" />.{' '}
+            <Xref to="estimated" sub="universe">
               What is not measured
             </Xref>
             .

@@ -26,6 +26,7 @@ export const choicesSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
     const { stars } = data;
@@ -516,6 +517,14 @@ export const choicesSection: AboutSection = {
             faint dot in its colour; the few the camera is near are volumes, by the same three profiles.
             <Why>at these distances almost all are under a pixel; their map is what the catalogue is.</Why>
           </Item>
+          <Item title="The faint dot, by its neighbours">
+            That faint dot — a map aid, not light — is whole for a galaxy with eight others within 4 Mpc, and down
+            to 15% for one alone: groups and filaments stand out, the voids go dark. Its light is untouched. A
+            flux-limited survey counts fewer neighbours far off, so the far map’s dots fade with it. Galaxies
+            placed by their group’s distance or their redshift draw the web more sharply than those at their own
+            Cosmicflows-4 distance, 20% uncertain each, which scatter along the line of sight.
+            <Why>every galaxy at the same dot read as an even dust, and the web the catalogue holds did not show.</Why>
+          </Item>
           <Item title="Marks only near">
             A group is marked only while it is large on the screen, its galaxies with it; a named cluster’s
             galaxies fold into the cluster. The clusters, superclusters, basins, voids and walls are named from out
@@ -530,9 +539,30 @@ export const choicesSection: AboutSection = {
             <Why>the two reconstructions are of the same data, and neither is settled.</Why>
           </Item>
           <Item title="Drawn faint">
-            A basin and a void are outlines, their faces nearly clear; from inside a basin its outline is a quarter
-            as strong. A wall is a line along it: the CfA2 Great Wall is a sheet 50° tall, drawn through the Coma
-            Cluster’s declination.
+            A basin is a faint glow through its inside, strongest where the eye looks through most of it, and an
+            outline smoothed over about a voxel, its one-voxel bumps gone; from inside, the glow is a third as
+            strong and the outline a quarter, and nothing within 60 Mpc of the camera glows. A void is a soft shell
+            with no rim, an underdense region and not an object.
+            <Why>from inside, a basin’s raw outline crossed itself across the sky and said nothing of its shape.</Why>
+          </Item>
+          <Item title="A wall is its galaxies">
+            Its galaxies tinted, more while it is looked at, and its line a faint hint: those within its paper’s
+            span on the sky and 20 Mpc of its median distance — an estimate, since a wall has no list of members. It
+            is not bound: a pattern of the cosmic web, seen first in a survey’s slice.
+          </Item>
+          <Item title="Flow lines">
+            A few dozen streamlines of the Cosmicflows-4 velocity field, the longest of each basin, spread over it
+            and joining where they meet <Cite k="jobardLefer1997" />: where a galaxy would be carried if today’s flow
+            stood still. Not a galaxy’s path, and not measured motions — a model fitted to measured distances.
+            Laniakea’s gold, Shapley’s blue, the rest grey; each fades where the fit’s own error passes 100 to 160
+            km/s, and stops at a basin the data cannot constrain.
+            <Why>a few long lines read at a glance, as Tully et al. drew Laniakea’s <Cite k="tully2014" />; a
+            thousand are fur.</Why>
+          </Item>
+          <Item title="Their motion is not time">
+            A brightening runs down each line at the field’s speed there, 25 billion years of flow to a second. A
+            galaxy at 400 km/s goes 1 Mpc in 2.4 billion years; since the Big Bang it has moved a few Mpc along
+            these lines.
           </Item>
           <Item title="As far as 3 billion light years">
             The camera pulls back that far: focused on the Sun, from over the supergalactic pole, the superclusters
@@ -541,11 +571,54 @@ export const choicesSection: AboutSection = {
           </Item>
           <Item title="The Local Volume, named as one">
             From past about 124 Mpc the Milky Way’s name is the Local Volume’s, and the names of its galaxies and
-            the Virgo Cluster’s fold into it and into the Virgo Cluster’s own.
+            the Virgo Cluster’s fold into it and into the Virgo Cluster’s own. From past about 370 Mpc, where the
+            Local Volume is a speck, it is “You are here”, on a red ring.
           </Item>
           <Item title="Left out">
             The 813 galaxies the Local Group’s and the Local Volume’s catalogues draw, drawn from those; 239
             HyperLEDA records that are not galaxies.
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="universe">
+          The observable universe
+        </Sub>
+        <Items>
+          <Item title="Planck’s cosmology past Laniakea">
+            Laniakea’s catalogue stays in Cosmicflows-4’s H<sub>0</sub>, 74.6, measured from its own distances; past
+            it, everything is in Planck 2018’s, 67.66 <Cite k="planck2020params" />. At the catalogue’s edge, z 0.17,
+            the two differ by a tenth.
+            <Why>only Planck’s fits the expansion’s whole history: with 74.6 the universe would be younger than its oldest stars.</Why>
+          </Item>
+          <Item title="The CMB as it left, a thousand times stronger">
+            Today the CMB is 2.7 K, invisible. It is drawn the orange of 2,973 K, its colour when it left, and each
+            point a blackbody 1,000 times as far from that as Planck measured: hot spots yellower and brighter, cold
+            ones redder and dimmer. Its brightness overall is a display level.
+            <Why>its spots are a hundred-thousandth of its temperature: true to scale, a blank orange sphere.</Why>
+          </Item>
+          <Item title="Seen from outside">
+            The sphere is the sky turned inside out: from outside, Planck’s map mirrored. No one can stand there. It is
+            what every direction from here shows at 13.8 billion years’ look-back, centred on us; anyone elsewhere has a
+            sphere of their own. Drawn only from 60 billion ly out, whole from 150; never on a nearer sky.
+          </Item>
+          <Item title="What it encloses, drawn over it">
+            Its near side is drawn behind Laniakea’s galaxies and the record-holders’ marks.
+            <Why>a shell of opaque plasma seen from outside would hide everything in it.</Why>
+          </Item>
+          <Item title="Faint dots that crowd, gone">
+            A galaxy’s faint dot, drawn whatever its light, fades once the nearer half of its catalogue’s galaxies
+            are under two pixels apart on the screen, and is gone at one: past that the dots only added up to a
+            glare. Each is then its own light, which from tens of billions of light years is nothing.
+          </Item>
+          <Item title="Record-holders as marks">
+            Named from 3 billion ly out, all from 10 billion: not on Laniakea’s sky. Gone to, each is framed from a
+            billion ly on our side, looking out along our line of sight.
+          </Item>
+          <Item title="As far as 400 billion light years">
+            The camera pulls back that far: the observable universe in the inner half of the frame. The Observable
+            Universe view stands 250 billion ly out, over the supergalactic pole as Laniakea’s. From past about 26
+            to 32 billion ly, by the screen’s height, home is named the Nearby Universe and Laniakea’s structures
+            fold into it.
           </Item>
         </Items>
       </>

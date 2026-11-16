@@ -31,6 +31,7 @@ export const estimatedSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
     const { store, beltInfo, cometInfo, exoplanetCatalog } = data;
@@ -845,6 +846,33 @@ export const estimatedSection: AboutSection = {
             other catalogues place: the empty band there is not empty space. And 2MRS is flux-limited, and past 200
             Mpc only the SDSS north and 6dF south go on: the map thins with distance because the surveys do, not
             the universe.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="universe">
+          The observable universe
+        </Sub>
+        <Items>
+          <Item title="Every distance is a model’s">
+            A redshift is measured; a distance from it is Planck 2018’s ΛCDM integrated back to it{' '}
+            <Cite k="planck2020params" />. In Cosmicflows-4’s H<sub>0</sub>, 74.6, every one would be 8 % nearer — the
+            observable universe 42.6 billion ly in radius, not 46.2 — and the universe 12.6 billion years old: the
+            two H<sub>0</sub>s are the Hubble tension, unresolved.
+          </Item>
+          <Item title="Claims, said as claims">
+            HD1 is where its spectrum puts it, z 4.0, not the 13 its colours gave <Cite k="harikane2025" />.
+            Earendel may be a star cluster, not a star <Cite k="pascale2025" />. ASASSN-15lh may have been a star
+            torn apart, not a supernova <Cite k="leloudas2016" />. TON 618’s 66 billion M☉ is one spectrum’s line
+            width, uncertain by a factor of two or three. GRB 090429B’s redshift is its colours’.
+          </Item>
+          <Item title="Marks, not shapes">
+            Each record-holder is a mark at its place. The Saraswati Supercluster, 200 Mpc across, is marked at
+            Abell 2631, its centre <Cite k="bagchi2017" />.
+          </Item>
+          <Item title="The map’s own limits">
+            Where the Milky Way’s plane hid it, Planck’s map is inpainted: filled with the CMB’s own statistics, not
+            measured <Cite k="planck2020compsep" />. Each texel is the mean of Planck’s pixels in it, 10.5′ at the
+            equator, the temperature in steps of 4 µK, ±512 µK.
           </Item>
         </Items>
       </>

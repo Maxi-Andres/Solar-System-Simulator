@@ -10,6 +10,21 @@ import {
 } from '../types.ts';
 import { CMB_DIPOLE, H0, LITTLE_H, OMEGA_M } from './frames.ts';
 import { ZONE_OF_AVOIDANCE, type LaniakeaBuild } from './galaxies.ts';
+import {
+  encodeFlows,
+  FLOW_POSITION_SCALE,
+  FULL_BELOW_KMS,
+  GONE_ABOVE_KMS,
+  JOIN_VOXELS,
+  milkyWayVelocity,
+  SEED_SPACING,
+  SEPARATION_VOXELS,
+  SINK_KMS,
+  STEP_VOXELS,
+  VELOCITY_UNIT_KMS,
+  type FlowResult,
+  type VectorField,
+} from './flows.ts';
 import { BASINS, basinGrid, CF4_BOX_MPC_H, DENSITY_SCALE, voxelToScene, WATERSHED_FILES, type BasinCrop } from './watersheds.ts';
 
 /**
@@ -21,6 +36,7 @@ import { BASINS, basinGrid, CF4_BOX_MPC_H, DENSITY_SCALE, voxelToScene, WATERSHE
  * - groups.json: the groups galaxies were placed with (LaniakeaGroups);
  * - density.bin, basins.bin: the CF4 reconstruction's overdensity and its watersheds
  *   (watersheds.ts);
+ * - flows.bin: its velocity field's streamlines (flows.ts, LaniakeaFlows);
  * - laniakea.json: LaniakeaInfo, written last.
  */
 
@@ -31,6 +47,7 @@ export const LANIAKEA_FILES = {
   groups: 'groups.json',
   density: 'density.bin',
   basins: 'basins.bin',
+  flows: 'flows.bin',
 } as const;
 
 export interface LaniakeaOutput {
@@ -111,6 +128,50 @@ export interface LaniakeaAssembly {
   readonly basinSize: number;
   readonly landmarks: readonly LaniakeaLandmark[];
   readonly sources: LaniakeaInfo['sources'];
+  /** The streamlines traced (flows.ts), the field they were traced through, and where it is from. */
+  readonly flows: { readonly result: FlowResult; readonly velocity: VectorField; readonly source: string };
+}
+
+/** flows.bin and its description. */
+export function flowsOutput(flows: LaniakeaAssembly['flows']): { bytes: Uint8Array; info: NonNullable<LaniakeaInfo['flows']> } {
+  const size = flows.velocity.size;
+  const { bytes, vertices } = encodeFlows(flows.result.lines, size);
+  const count = (key: (line: FlowResult['lines'][number]) => string): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const line of flows.result.lines) out[key(line)] = (out[key(line)] ?? 0) + 1;
+    return out;
+  };
+  // Stored from the Milky Way's voxel: the grid's matrix with its corner there, over the scale.
+  const matrix = voxelToScene(size, [size / 2, size / 2, size / 2]).map((v, i) => (i < 12 ? v / FLOW_POSITION_SCALE : v));
+  const round = (v: number) => Math.round(v);
+  const [mx, my, mz] = milkyWayVelocity(flows.velocity);
+  return {
+    bytes,
+    info: {
+      file: LANIAKEA_FILES.flows,
+      bytes: bytes.length,
+      lines: flows.result.lines.length,
+      vertices,
+      cubeVoxels: size,
+      voxelPc: Math.round((CF4_BOX_MPC_H / size) * (1e6 / LITTLE_H)),
+      positionScale: FLOW_POSITION_SCALE,
+      vertexToScene: matrix.map((v) => Number(v.toPrecision(10))),
+      basinGrid: 'galaxiesAttraction',
+      linesByBasin: count((line) => String(line.basin)),
+      ends: count((line) => line.end),
+      agreement: Number(flows.result.agreement.toFixed(4)),
+      seeds: flows.result.seeds,
+      trace: { stepVoxels: STEP_VOXELS, seedSpacingVoxels: SEED_SPACING, separationVoxels: SEPARATION_VOXELS, joinVoxels: JOIN_VOXELS, sinkKmS: SINK_KMS },
+      constraint: {
+        fullBelowKmS: FULL_BELOW_KMS,
+        goneAboveKmS: GONE_ABOVE_KMS,
+        source: "The velocity's scatter over the fit's samples (CF4_new_64-z008_velocity_cube_error.fits, times 52); and nothing in a voxel of no kept basin, where Dupuy & Courtois say the watersheds cannot be constrained.",
+      },
+      milkyWayKmS: [round(mx), round(my), round(mz)],
+      velocityUnitKmS: VELOCITY_UNIT_KMS,
+      source: flows.source,
+    },
+  };
 }
 
 function percentile(sorted: readonly number[], p: number): number {
@@ -135,6 +196,7 @@ export function assembleLaniakea(parts: LaniakeaAssembly): LaniakeaOutput {
   const cropBytes = crop.size[0] * crop.size[1] * crop.size[2];
   const basins = new Uint8Array(cropBytes * gridOrder.length);
   gridOrder.forEach((grid, i) => basins.set(crop.grids[grid], i * cropBytes));
+  const flows = flowsOutput(parts.flows);
   const distances = build.galaxies.map((g) => g.distancePc).sort((a, b) => a - b);
   const voxelPc = (size: number) => (CF4_BOX_MPC_H / size) * (1e6 / LITTLE_H);
   const voxelMpc3 = (voxelPc(parts.basinSize) / 1e6) ** 3;
@@ -218,6 +280,7 @@ export function assembleLaniakea(parts: LaniakeaAssembly): LaniakeaOutput {
       source: 'Dupuy & Courtois 2023, A&A 678, A176: the watersheds of the Cosmicflows-4 velocity field of Courtois et al. 2023, https://projets.ip2i.in2p3.fr/cosmicflows/ (CF4_new_128-z008_watersheds-fits.zip).',
     },
     landmarks: parts.landmarks,
+    flows: flows.info,
   };
   return {
     info,
@@ -228,6 +291,7 @@ export function assembleLaniakea(parts: LaniakeaAssembly): LaniakeaOutput {
       [LANIAKEA_FILES.groups]: groups,
       [LANIAKEA_FILES.density]: density,
       [LANIAKEA_FILES.basins]: basins,
+      [LANIAKEA_FILES.flows]: flows.bytes,
     },
   };
 }
@@ -285,6 +349,14 @@ export function describeLaniakea(output: LaniakeaOutput, build: LaniakeaBuild): 
       .map(([grid, label]) => `${grid} ${label}`)
       .join(', ')}.`,
   );
+  if (info.flows !== undefined) {
+    const f = info.flows;
+    lines.push(
+      `[laniakea] streamlines: ${f.lines} lines, ${f.vertices} vertices, from ${f.seeds} seeds; ${(100 * f.agreement).toFixed(1)}% of those ending at an attractor end in their own voxel's basin. ` +
+        `By basin ${Object.entries(f.linesByBasin).map(([b, c]) => `${b}: ${c}`).join(', ')}; ends ${Object.entries(f.ends).map(([e, c]) => `${e} ${c}`).join(', ')}. ` +
+        `The Milky Way's voxel moves at ${Math.hypot(...f.milkyWayKmS).toFixed(0)} km/s (SG ${f.milkyWayKmS.join(', ')}).`,
+    );
+  }
   lines.push(`[laniakea] density ${info.density.cubeVoxels}^3 from ${info.density.source.split(':')[0]}; basins cropped to ${info.basins.size.join('x')} at ${info.basins.offset.join(',')}.`);
   lines.push(
     `[laniakea] landmarks: ${info.landmarks.map((l) => `${l.name} ${(l.distancePc / 1e6).toFixed(0)} Mpc${l.distanceEstimated ? '*' : ''}`).join(', ')} (* estimated).`,

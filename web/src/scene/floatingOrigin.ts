@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { RECORD_HOLDER_LAYER, recordHolderOf } from '../core/recordHolders.ts';
 import { satelliteBodyChip, satelliteChipLayer } from '../core/satelliteGroups.ts';
 import type { Vec3 } from '../core/vec3.ts';
 
@@ -128,6 +129,10 @@ export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>)
   // gone to (pulsars.ts) -- its marker is the Pulsars layer's, the body once made is drawn.
   if ((body.kind === 'star' && body.id !== 'sun') || body.kind === 'black-hole' || body.kind === 'neutron-star' || body.kind === 'globular-cluster') {
     return true;
+  }
+  // A record-holder is a structure by kind, and the Observable Universe layer's (recordHolders.ts).
+  if (body.kind === 'structure' && recordHolderOf(body.id) !== null) {
+    return visibleKinds.has(RECORD_HOLDER_LAYER);
   }
   return (
     visibleKinds.has(body.kind) &&

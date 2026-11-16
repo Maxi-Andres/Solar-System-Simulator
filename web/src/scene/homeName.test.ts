@@ -73,7 +73,21 @@ describe('the name of home from afar', () => {
       localGroupFolded: true,
       localVolumeFolded: true,
     });
-    expect(at(MAX_VIEW_DISTANCE_KM).centre).toBe('Local Volume');
+    expect(at(360e6 * PARSEC_KM).centre).toBe('Local Volume');
+  });
+
+  it('calls it “You are here” once the Local Volume is a speck: from Laniakea’s and the Nearby Universe’s views', () => {
+    // A third of the fold, 53 pixels on an 864 px screen: 372 Mpc out.
+    expect(at(380e6 * PARSEC_KM)).toMatchObject({ centre: 'You are here', here: true, localVolumeFolded: true });
+    expect(at(LANIAKEA_FRAMING_KM).centre).toBe('You are here');
+    expect(at(NEARBY_UNIVERSE_FRAMING_KM).centre).toBe('You are here');
+  });
+
+  it('calls it the Nearby Universe from the observable universe’s view, the structures folded into it', () => {
+    // Laniakea's catalogue's 700 Mpc 160 pixels in radius on an 864 px screen: 25.7 billion ly out.
+    expect(at(24e9 * LIGHT_YEAR_KM).centre).not.toBe('Nearby Universe');
+    expect(at(27e9 * LIGHT_YEAR_KM)).toMatchObject({ centre: 'Nearby Universe', nearbyUniverseFolded: true, localVolumeFolded: true });
+    expect(at(MAX_VIEW_DISTANCE_KM).centre).toBe('Nearby Universe');
   });
 
   it('goes up a level and never back down as the camera goes out', () => {
@@ -123,8 +137,8 @@ describe('the views beyond the Local Group', () => {
     expect(LOCAL_VOLUME_FRAMING_KM).toBeLessThan(NEARBY_UNIVERSE_FRAMING_KM);
     expect(LANIAKEA_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
     expect(NEARBY_UNIVERSE_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
-    // Three billion light years: past the catalogue's 703 Mpc, 2.3 billion.
-    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(3e9);
+    // Past the catalogue's 703 Mpc, 2.3 billion ly -- and since G4 past the observable universe.
+    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(400e9);
     expect(MAX_VIEW_DISTANCE_KM).toBeGreaterThan(703e6 * PARSEC_KM);
   });
 });

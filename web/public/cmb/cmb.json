@@ -1,0 +1,14 @@
+{
+  "file": "cmb.png",
+  "width": 2048,
+  "height": 1024,
+  "frame": "galactic",
+  "centreLongitudeDeg": 0,
+  "longitudeIncreases": "left",
+  "zeroLevel": 128,
+  "microkelvinPerStep": 4,
+  "rmsMicrokelvin": 103.8,
+  "clippedTexels": 1,
+  "source": "Planck PR3 SMICA, COM_CMB_IQU-smica_2048_R3.00_full.fits, column I_STOKES_INP (inpainted), Nside 2048",
+  "sourceUrl": "https://irsa.ipac.caltech.edu/data/Planck/release_3/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica_2048_R3.00_full.fits"
+}

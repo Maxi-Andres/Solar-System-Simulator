@@ -5,6 +5,7 @@ import {
   type BodyDefinition,
   type BodyId,
   type LaniakeaBasinGrid,
+  type LaniakeaFlows,
   type LaniakeaGroups,
   type LaniakeaInfo,
   type LaniakeaLandmark,
@@ -85,6 +86,52 @@ export interface LaniakeaCatalogue {
   readonly groupLandmark: ReadonlyMap<number, number>;
   /** The basins (basins.bin), or null where the file is not there. */
   readonly basins: BasinGrids | null;
+  /** The velocity field's streamlines (flows.bin), or null where the catalogue has none. */
+  readonly flows?: FlowLines | null;
+}
+
+/**
+ * flows.bin, read (tools/src/types.ts LaniakeaFlows): each line's vertices, downstream, in the
+ * scene frame, pc; the field's speed there, km/s; how constrained it is there, 0 to 1; and the
+ * basin of the galaxies' watersheds its streamline ends in.
+ */
+export interface FlowLines {
+  readonly lines: number;
+  readonly vertices: number;
+  /** Line l's vertices are starts[l] to starts[l + 1] - 1. */
+  readonly starts: Uint32Array;
+  readonly positions: Float32Array;
+  readonly speeds: Uint16Array;
+  readonly weights: Float32Array;
+  readonly basins: Uint8Array;
+}
+
+/** flows.bin's columns, checked against laniakea.json's description. */
+export function parseFlows(buffer: ArrayBuffer, info: LaniakeaFlows): FlowLines {
+  const L = info.lines;
+  const V = info.vertices;
+  const expected = 4 * (L + 1) + 6 * V + 2 * V + V + L;
+  if (buffer.byteLength !== expected) {
+    throw new Error(`flows.bin is ${buffer.byteLength} bytes, not the ${expected} laniakea.json says.`);
+  }
+  const starts = new Uint32Array(buffer.slice(0, 4 * (L + 1)));
+  if (starts[L] !== V) {
+    throw new Error(`flows.bin's lines end at vertex ${starts[L]}, not ${V}.`);
+  }
+  const raw = new Int16Array(buffer.slice(4 * (L + 1), 4 * (L + 1) + 6 * V));
+  const speeds = new Uint16Array(buffer.slice(4 * (L + 1) + 6 * V, 4 * (L + 1) + 8 * V));
+  const bytes = new Uint8Array(buffer);
+  const weights = Float32Array.from(bytes.subarray(4 * (L + 1) + 8 * V, 4 * (L + 1) + 9 * V), (w) => w / 255);
+  const basins = bytes.slice(4 * (L + 1) + 9 * V);
+  const positions = new Float32Array(3 * V);
+  const m = info.vertexToScene;
+  for (let v = 0; v < V; v += 1) {
+    const p = transformPoint(m, [raw[v * 3]!, raw[v * 3 + 1]!, raw[v * 3 + 2]!]);
+    positions[v * 3] = p[0];
+    positions[v * 3 + 1] = p[1];
+    positions[v * 3 + 2] = p[2];
+  }
+  return { lines: L, vertices: V, starts, positions, speeds, weights, basins };
 }
 
 /** basins.bin, its three grids. */
@@ -242,7 +289,7 @@ export function indexGroups(records: Float32Array, count: number, groups: number
   return { brightest, radius, members };
 }
 
-export function indexLaniakea(info: LaniakeaInfo, records: Float32Array, basins: BasinGrids | null): LaniakeaCatalogue {
+export function indexLaniakea(info: LaniakeaInfo, records: Float32Array, basins: BasinGrids | null, flows: FlowLines | null = null): LaniakeaCatalogue {
   const count = info.galaxies.count;
   const groups = indexGroups(records, count, info.groups.count);
   const groupLandmark = new Map<number, number>();
@@ -258,6 +305,7 @@ export function indexLaniakea(info: LaniakeaInfo, records: Float32Array, basins:
     groupMembers: groups.members,
     groupLandmark,
     basins,
+    flows,
   };
 }
 
@@ -483,8 +531,8 @@ export function setLaniakeaCatalogue(c: LaniakeaCatalogue | null): void {
 }
 
 /**
- * laniakea.json, then galaxies.bin and basins.bin together, each streamed into one buffer of
- * the size laniakea.json gives. No laniakea.json: no G3 data published, nothing drawn.
+ * laniakea.json, then galaxies.bin, basins.bin and flows.bin together, each streamed into one
+ * buffer of the size laniakea.json gives. No laniakea.json: no G3 data published, nothing drawn.
  */
 export async function loadLaniakeaCatalogue(fetchers: BeltFetchers, basePath = '/'): Promise<LaniakeaCatalogue | null> {
   const raw = await fetchers.json(`${basePath}data/laniakea/laniakea.json`);
@@ -493,14 +541,23 @@ export async function loadLaniakeaCatalogue(fetchers: BeltFetchers, basePath = '
     return null;
   }
   const info = parseLaniakeaInfo(raw);
-  const [galaxies, basins] = await Promise.all([
+  const flowsInfo = info.flows;
+  const [galaxies, basins, flows] = await Promise.all([
     fetchers.binary(`${basePath}data/laniakea/${info.galaxies.file}`, { expectedBytes: info.galaxies.bytes }),
     fetchers.binary(`${basePath}data/laniakea/${info.basins.file}`, { expectedBytes: info.basins.bytes }),
+    flowsInfo === undefined
+      ? Promise.resolve(null)
+      : fetchers.binary(`${basePath}data/laniakea/${flowsInfo.file}`, { expectedBytes: flowsInfo.bytes }),
   ]);
   if (galaxies === null) {
     return null;
   }
-  const catalogue = indexLaniakea(info, parseGalaxyRecords(galaxies, info.galaxies.count), basins === null ? null : parseBasins(basins, info));
+  const catalogue = indexLaniakea(
+    info,
+    parseGalaxyRecords(galaxies, info.galaxies.count),
+    basins === null ? null : parseBasins(basins, info),
+    flows === null || flowsInfo === undefined ? null : parseFlows(flows, flowsInfo),
+  );
   readCatalogue = catalogue;
   return catalogue;
 }

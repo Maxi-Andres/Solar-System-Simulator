@@ -29,6 +29,14 @@ export interface BoardLabel {
 
 export const labelBoard = { posted: [] as BoardLabel[] };
 
+/**
+ * The bodies whose names LabelProjector's last declutter pass showed, and whether it ran one
+ * (it does not while the Labels layer is off). A named structure's mark is drawn only while its
+ * name is (SolarSystem.tsx): a ring whose name lost its spot is a ring that says nothing. One
+ * frame behind, which the render tail settles.
+ */
+export const labelsShown = { active: false, ids: new Set<string>() };
+
 /** Measured widths and heights, by element, kept while its text stays the same. */
 const sizes = new WeakMap<HTMLElement, { text: string; width: number; height: number }>();
 

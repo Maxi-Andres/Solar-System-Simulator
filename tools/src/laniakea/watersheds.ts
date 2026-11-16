@@ -39,8 +39,10 @@ import { LITTLE_H, supergalacticToScene, type Vec3 } from './frames.ts';
  *
  * ## The grids
  *
- * Each a FITS image, BITPIX -64 (the basins) or -32 (delta), axes NAXIS1..3 = SGX, SGY, SGZ
- * -- the page's "(SGZ, SGY, SGX)" is the array's order in C, slowest first. Voxel (i, j, k)
+ * Each basin grid a FITS image, BITPIX -64, axes NAXIS1..3 = SGX, SGY, SGZ. Not so the density
+ * and the velocity (BITPIX -32): theirs are the other way about, NAXIS1 = SGZ, as the page's
+ * "(SGZ, SGY, SGX)" says, and they are transposed on reading (flows.ts says how that was found).
+ * Here, x is SGX in every grid written. Voxel (i, j, k)
  * is at supergalactic (i - N/2, j - N/2, k - N/2) x 1000/N Mpc/h: the Milky Way at the
  * voxel N/2, not between voxels. Both were found by the data rather than assumed: every
  * attractor and repeller of Dupuy & Courtois's Table A.1 falls in its own basin's voxel this
@@ -52,7 +54,7 @@ import { LITTLE_H, supergalacticToScene, type Vec3 } from './frames.ts';
  *
  * - **density.bin**: delta, the reconstruction's overdensity (rho / rho_mean - 1, a linear
  *   field: below -1 where the fit asks for it), as Int8 of 32 delta, rounded and clamped
- *   (a step of 1/32), the whole cube, 128^3 bytes (or 64^3 from the fallback).
+ *   (a step of 1/32), the whole cube, 128^3 bytes (or 64^3 from the fallback) SGX fastest.
  * - **basins.bin**: three Uint8 grids of basin numbers, cropped to the box holding every
  *   basin kept (BASINS): the galaxies' basins of attraction, their basins of repulsion, and
  *   the groups' basins of attraction. The basins the SDSS volume shows at the far edge of the

@@ -88,6 +88,7 @@ import {
 } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
+import { labelsShown } from './labelBoard.ts';
 import { headingDirection, surfaceFrame } from '../core/surface.ts';
 import { PATCH_SHOWN_KM, SurfaceGround } from './surfaceGround.ts';
 import {
@@ -114,6 +115,7 @@ const RING_LOCAL_NORMAL = new THREE.Vector3(0, 0, 1);
 const BODY_LOCAL_POLE = new THREE.Vector3(0, 1, 0);
 const scratchPole = new THREE.Vector3();
 const scratchScreen = new THREE.Vector3();
+const scratchMarkerView = new THREE.Vector3();
 
 
 /** The south ecliptic pole, as a direction in the scene's frame. */
@@ -581,7 +583,8 @@ export function SolarSystem({
           transparent: true,
           depthTest: false,
           depthWrite: false,
-          sizeAttenuation: true,
+          // Scaled per unit of depth, not in world units (see the frame's marker size below).
+          sizeAttenuation: false,
         }),
       );
       // Markers draw over everything: a planet behind the Sun still needs a label.
@@ -1153,9 +1156,14 @@ export function SolarSystem({
       handle.marker.visible = showIcons && ringOpacity > 0.005;
       if (handle.marker.visible) {
         (handle.marker.material as THREE.SpriteMaterial).opacity = ringOpacity;
-        // Constant on-screen size, whatever the distance.
+        // Constant on-screen size, whatever the distance. Given per unit of the marker's depth
+        // in front of the camera, as an unattenuated sprite takes it -- the same size on the
+        // screen as a world size would be: a world size overflowed float32 from 300 billion ly
+        // out, where three's sprite shader squares it (length(modelMatrix[0].xyz)), and the
+        // record-holders' rings were not drawn (G4).
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
-        handle.marker.scale.setScalar(worldSize);
+        scratchMarkerView.copy(handle.group.position).applyMatrix4(camera.matrixWorldInverse);
+        handle.marker.scale.setScalar(worldSize / Math.max(-scratchMarkerView.z, distanceUnits * 1e-6));
 
         if (projectToScreen(handle.group.position, camera, scratchScreen)) {
           markerCandidates.push({
@@ -1596,6 +1604,12 @@ export function SolarSystem({
         hiddenMarkers.add(id);
       } else {
         heldMarkers.add(id);
+        // A named structure's ring only with its name: one whose name lost its spot to
+        // another's would be a ring that says nothing (labelBoard.ts labelsShown). It comes
+        // back with its name, nearer or once the others move off.
+        if (labelsShown.active && id !== focus && !labelsShown.ids.has(id) && store.body(id).kind === 'structure') {
+          marker.visible = false;
+        }
       }
     }
 

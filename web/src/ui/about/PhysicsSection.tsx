@@ -55,6 +55,7 @@ export const physicsSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'universe', label: 'The observable universe' },
   ],
   Body: () => {
     const log10 = (...argument: Parameters<typeof row>) => row(sub(up('log'), mn('10')), paren(...argument));
@@ -1479,10 +1480,91 @@ export const physicsSection: AboutSection = {
           math={math(row(mi('f'), mo('='), mi('k'), mo('⊗'), mi('k'), mo('⊗'), mi('k'), mo('∗'), sub(mn('1'), mi('B')), gap(), mi('f'), mo('='), frac(mn('1'), mn('2'))))}
           symbols={<>1<sub>B</sub> one in the basin’s voxels, nought outside; k the kernel [1 2 1]/4 along one axis.</>}
         >
-          The watershed grid gives each 10.5 Mpc voxel to a basin. Its indicator blurred once, the surface is
-          drawn where it is a half — through the middle of a flat face, its corners rounded, nothing moved more
-          than half a voxel — by surface nets: a vertex in each cell it crosses, a quad for each edge.
+          The watershed grid gives each 10.5 Mpc voxel to a basin. Its indicator blurred twice, taken to a grid of
+          half the step and blurred twice more, the surface is drawn where it is a half — through the middle of a
+          flat face, its corners and one-voxel bumps rounded off, nothing moved more than a voxel and a half — by
+          surface nets: a vertex in each cell it crosses, a quad for each edge. The blurred field is the glow inside,
+          summed along each line of sight.
           <Cite k={['dupuyCourtois2023', 'gibson1998']} />
+        </Equation>
+        <Equation
+          title="A flow line"
+          code="tools/src/laniakea/flows.ts"
+          math={math(row(frac(row(mi('d'), mi('x')), row(mi('d'), mi('s'))), mo('='), frac(mi('v'), row(mi('max'), mo('('), mi('|v|'), mo(','), sub(mi('v'), mi('s')), mo(')')))))}
+          symbols={<>x a point of the line; v the velocity field there, trilinear between voxels; v<sub>s</sub> 30 km/s.</>}
+        >
+          Each line follows the velocity’s direction by fourth-order Runge–Kutta in steps of a quarter voxel,
+          slowing under 30 km/s so that it comes to rest where the velocity vanishes: the attractor.
+          <Cite k={['courtois2023', 'courtoisCubes']} />
+        </Equation>
+
+        <Sub section="physics" id="universe">
+          The observable universe
+        </Sub>
+        <Equation
+          title="Distances in an expanding universe"
+          code="web/src/core/cosmology.ts"
+          math={math(
+            lines(
+              row(
+                sub(mi('D'), mi('C')),
+                mo('='),
+                frac(mi('c'), sub(mi('H'), mn('0'))),
+                subsup(mo('∫'), sub(mi('a'), mi('e')), mn('1')),
+                frac(
+                  row(mi('d'), mi('a')),
+                  sqrt(row(sub(mi('Ω'), mi('r')), mo('+'), sub(mi('Ω'), mi('m')), mi('a'), mo('+'), sub(mi('Ω'), mi('Λ')), sup(mi('a'), mn('4')))),
+                ),
+              ),
+              row(
+                mi('t'),
+                mo('='),
+                frac(mn('1'), sub(mi('H'), mn('0'))),
+                subsup(mo('∫'), sub(mi('a'), mi('e')), mn('1')),
+                frac(
+                  row(mi('a'), mi('d'), mi('a')),
+                  sqrt(row(sub(mi('Ω'), mi('r')), mo('+'), sub(mi('Ω'), mi('m')), mi('a'), mo('+'), sub(mi('Ω'), mi('Λ')), sup(mi('a'), mn('4')))),
+                ),
+                gap(),
+                sub(mi('a'), mi('e')),
+                mo('='),
+                frac(mn('1'), row(mn('1'), mo('+'), mi('z'))),
+              ),
+            ),
+          )}
+          symbols={<>D<sub>C</sub> the comoving distance, where it is now; t how long its light has been on the way; a the scale factor, 1 today; Ω<sub>r</sub> the photons and neutrinos, 9.1 × 10<sup>−5</sup>; Planck 2018’s H<sub>0</sub> and Ω<sub>m</sub>; flat.</>}
+        >
+          A redshift gives three distances. Where the thing is now, D<sub>C</sub>: the one it is drawn at. How far
+          its light came, c t, the light-travel distance the news gives — MoM-z14’s 13.5 billion light years. And how
+          far it was when the light left, D<sub>C</sub>/(1 + z): 2.2 billion. Light from the farthest place, a → 0,
+          has been on the way 13.8 billion years, and the place is 46.2 billion light years off now: space grew
+          behind the light while it came. That is the observable universe’s radius, the particle horizon.
+          <Cite k={['planck2020params', 'fixsen2009']} />
+        </Equation>
+        <Items>
+          <Item title="Three spheres">
+            The Hubble sphere, 14.5 billion ly, c/H<sub>0</sub>: past it things recede faster than light, and are
+            still seen. The event horizon, 16.6 billion ly: light sent now will never reach what is past it. The
+            particle horizon, 46.2: nothing past it has been seen at all. The CMB’s sphere is 45.3, just inside.
+          </Item>
+        </Items>
+        <Equation
+          title="The CMB’s colour, exaggerated"
+          code="web/src/scene/cmb.ts"
+          math={math(
+            row(
+              mi('T'),
+              mo('='),
+              sub(mi('T'), mn('0')),
+              paren(mn('1'), mo('+'), sub(mi('z'), mo('*'))),
+              paren(mn('1'), mo('+'), mi('F'), frac(row(mi('Δ'), mi('T')), sub(mi('T'), mn('0')))),
+            ),
+          )}
+          symbols={<>T<sub>0</sub> 2.7255 K; z<sub>*</sub> 1089.8; ΔT the map’s difference from the mean; F 1,000, the exaggeration.</>}
+        >
+          Each point is drawn as a blackbody of that temperature through the eye’s response: its colour and its
+          brightness relative to the mean, 2,973 K.
+          <Cite k={['fixsen2009', 'planck2020params']} />
         </Equation>
       </>
     );

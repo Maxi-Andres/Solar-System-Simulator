@@ -20,7 +20,7 @@ describe('the logarithmic depth buffer', () => {
 
   it('keeps the same relative step at every distance past the near plane', () => {
     for (const w of [1e-3, 1, 1e3, 1e8]) {
-      expect(depthResolution(w) / w).toBeCloseTo(3.5719e-6, 8);
+      expect(depthResolution(w) / w).toBeCloseTo(3.8428e-6, 8);
     }
   });
 
@@ -80,20 +80,36 @@ describe('the logarithmic depth buffer', () => {
     const AU = 149_597.870_7;
     const EARTH_RADIUS = 6.378_137;
     const d4 = (w: number): number => depthResolution(w, true, 1e19);
-    expect(CAMERA_FAR_UNITS).toBe(1e20);
-    expect(depthResolution(METRE) / d4(METRE)).toBeCloseTo(86.37 / 83.05, 3);
-    expect(depthResolution(METRE) / METRE).toBeCloseTo(7.15e-6, 7);
-    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(23, 0);
-    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(530, -1);
+    const d5 = (w: number): number => depthResolution(w, true, 1e20);
+    expect(d5(METRE) / d4(METRE)).toBeCloseTo(86.37 / 83.05, 3);
+    expect(d5(METRE) / METRE).toBeCloseTo(7.15e-6, 7);
+    expect(d5(EARTH_RADIUS) / METRE).toBeCloseTo(23, 0);
+    expect(d5(AU) / METRE / 1000).toBeCloseTo(530, -1);
+  });
+
+  it('paid 8 % more for the observable universe, as logDepth.ts states', () => {
+    // Step G4: the far plane from 1e20 units to 1e22 (1,057 billion ly).
+    const AU = 149_597.870_7;
+    const EARTH_RADIUS = 6.378_137;
+    const d5 = (w: number): number => depthResolution(w, true, 1e20);
+    expect(CAMERA_FAR_UNITS).toBe(1e22);
+    expect(depthResolution(METRE) / d5(METRE)).toBeCloseTo(93.01 / 86.37, 3);
+    expect(depthResolution(METRE) / METRE).toBeCloseTo(7.7e-6, 7);
+    expect(depthResolution(20 * METRE) / METRE).toBeCloseTo(8.1e-5, 6);
+    expect(depthResolution(EARTH_RADIUS) / METRE).toBeCloseTo(25, 0);
+    expect(depthResolution(AU) / METRE / 1000).toBeCloseTo(575, 0);
+    // The buffer's own relative step, against float32's in the logarithm past 2^64 near planes.
+    expect(depthResolution(1e6) / 1e6).toBeCloseTo(3.84e-6, 8);
+    expect(2 ** -17 * Math.LN2).toBeGreaterThan(depthResolution(1e6) / 1e6);
   });
 
   it('holds the farthest place the camera can see from the farthest it can stand', () => {
-    // Focused on the catalogue's farthest galaxy, 703 Mpc out, the camera 3 billion ly off
-    // it, and the catalogue's far side 703 Mpc beyond the Sun the other way.
+    // Focused on the farthest record-holder, 34 billion ly out, the camera 400 billion ly off
+    // it, and the observable universe's far side 46.2 billion ly beyond the Sun the other way.
     const LY_KM = 299_792.458 * 365.25 * 86_400;
-    const MPC_KM = 3.085_677_581_491_367e19;
-    const farthestKm = 3e9 * LY_KM + 2 * 703 * MPC_KM;
+    const farthestKm = 400e9 * LY_KM + 34e9 * LY_KM + 46.2e9 * LY_KM;
     expect(kmToUnits(farthestKm)).toBeLessThan(CAMERA_FAR_UNITS);
+    expect(kmToUnits(farthestKm)).toBeGreaterThan(CAMERA_FAR_UNITS / 3);
     // And in float32, the logarithm the fragment writes still steps finer than the buffer.
     const w = kmToUnits(farthestKm) / CAMERA_NEAR_UNITS;
     expect(Number.isFinite(Math.fround(w))).toBe(true);

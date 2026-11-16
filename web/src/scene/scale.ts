@@ -80,11 +80,33 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **3 billion light years** since
- * Laniakea (G3); 200 million since the Local Volume and the Virgo Cluster (G2); 40 million since
- * the Local Group (G1); 400,000 since the Milky Way model (D2b), 3,000 before it.
+ * The farthest the camera may pull back from its focus, km: **400 billion light years** since
+ * the observable universe (G4); 3 billion since Laniakea (G3); 200 million since the Local Volume
+ * and the Virgo Cluster (G2); 40 million since the Local Group (G1); 400,000 since the Milky Way
+ * model (D2b), 3,000 before it.
  *
- * Now set by the superclusters, by the same rule as everything before it: the farthest thing
+ * Now set by the observable universe, by the same rule as everything before it: the farthest
+ * thing worth seeing whole -- and there is nothing farther. Its radius, the comoving distance to
+ * the particle horizon, is 14,160 Mpc, 46.2 billion ly, in Planck 2018's cosmology (cosmology.ts
+ * OBSERVABLE_RADIUS_MPC); the CMB's last-scattering sphere is just inside it, 45.3 billion. In
+ * the inner half of the 27-degree frame's height, an angular radius of 6.75 degrees, the sphere
+ * fits from 46.2 / sin(6.75 deg) = 393 billion ly: 400, rounded up, as the 3,000 ly was.
+ *
+ * **The number depends on the cosmology, and mostly on H0.** At a fixed matter density every
+ * distance here scales as 1 / H0: in Laniakea's catalogue's cosmology, Cosmicflows-4's H0 74.6
+ * and Omega_m 0.3, the radius is 42.6 billion ly, the CMB's sphere 41.7 -- 8 % nearer, about the
+ * ratio of the two H0s, 67.66 / 74.6 = 0.907, the rest Omega_m's 0.3111 against 0.3. Planck's is
+ * the one used for everything past the catalogue (cosmology.ts says why); 400 billion frames
+ * either.
+ *
+ * float32 at the camera is then 3.8e21 scene units out: a step of 2^48 = 2.8e14 units, 30,000
+ * ly, 7.4e-8 of the distance, as at every scale before -- a ten-thousandth of a pixel's angle. The depth buffer's range is logDepth.ts's. Nothing here reaches the GPU as an absolute
+ * position: the CMB's sphere is a unit sphere scaled about the Sun, relative to the focus, and
+ * the record-holders are bodies, placed as every body is.
+ *
+ * What the 3 billion was, kept because its argument still holds at its own scale:
+ *
+ * Set by the superclusters, by the same rule as everything before it: the farthest thing
  * worth seeing whole. The catalogue reaches 703 Mpc, 2.3 billion ly (laniakea.json), but past
  * the 2MASS Redshift Survey's depth -- its median 120 Mpc, few galaxies past 300 -- it is the
  * SDSS's and 6dF's patches alone, not a map. What is mapped whole is the superclusters about
@@ -158,7 +180,16 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 3e9 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 400e9 * LIGHT_YEAR_KM;
+
+/**
+ * Where the breadcrumb's Observable Universe puts the camera, km from the Sun: 250 billion ly,
+ * over the supergalactic pole turned as Laniakea's (supergalactic.ts OBSERVABLE_UNIVERSE_VIEW),
+ * so the zoom out from Laniakea's view goes on along the same line. The observable universe's
+ * 46.2 billion ly is asin(46.2 / 250) = 10.6 degrees from here, inside the frame's half-height of
+ * 13.5: the CMB's sphere whole, with room about it.
+ */
+export const OBSERVABLE_UNIVERSE_FRAMING_KM = 250e9 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Local Group puts the camera, km from the Sun: 8 million ly, looking

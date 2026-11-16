@@ -2105,6 +2105,12 @@ export const LANIAKEA_FLAGS = {
    * Galactic centre), which 2MRS does not survey: there by another catalogue's distance.
    */
   ZONE_OF_AVOIDANCE: 4096,
+  /**
+   * In a wall as its paper drew it (laniakea/landmarks.ts wallMembers): within its span on the
+   * sky and WALL_HALF_DEPTH_PC of its median redshift's distance -- the depth an estimate.
+   */
+  WALL_SLOAN: 8192,
+  WALL_CFA2: 16384,
 } as const;
 
 /** The bits of a galaxy's distance methods in details.bin: each one Cosmicflows-4 measured it by. */
@@ -2163,6 +2169,19 @@ export interface LaniakeaLandmark {
   readonly basin: readonly { readonly grid: LaniakeaBasinGrid; readonly label: number }[] | null;
   /** For a wall: points along it, scene frame, parsecs. */
   readonly path: readonly (readonly [number, number, number])[] | null;
+  /**
+   * For a wall: its galaxies' flag (LANIAKEA_FLAGS), its span on the sky and the depth its
+   * members were taken within, who found it and when, and what was not measured.
+   */
+  readonly wall?: {
+    readonly flag: number;
+    readonly raHours: readonly [number, number];
+    readonly decDeg: readonly [number, number];
+    readonly halfDepthPc: number;
+    readonly discovered: string;
+    readonly width: string;
+    readonly thickness: string;
+  };
   readonly source: string;
   readonly note: string | null;
 }
@@ -2279,4 +2298,79 @@ export interface LaniakeaInfo {
     readonly source: string;
   };
   readonly landmarks: readonly LaniakeaLandmark[];
+  /** The velocity field's streamlines (flows.bin); absent from a catalogue built before them. */
+  readonly flows?: LaniakeaFlows;
+}
+
+/**
+ * `laniakea/flows.bin`: the streamlines of the Cosmicflows-4 galaxies' velocity field
+ * (Courtois et al. 2023), traced by tools/src/laniakea/flows.ts. Little-endian, one column
+ * after another:
+ *
+ *   Uint32 [lines + 1]   each line's first vertex, and one past the last line's
+ *   Int16  [3 vertices]  x, y, z: the velocity grid's voxels from the Milky Way's, times
+ *                        positionScale (scene frame: vertexToScene)
+ *   Uint16 [vertices]    the field's speed there, km/s
+ *   Uint8  [vertices]    how constrained the field is there, 0 (not: the line's end) to 255
+ *   Uint8  [lines]       the basin of `basinGrid` its streamline ends in, 0 none
+ *
+ * A line runs downstream, the way the galaxies flow.
+ */
+export interface LaniakeaFlows {
+  readonly file: string;
+  readonly bytes: number;
+  readonly lines: number;
+  readonly vertices: number;
+  /** The velocity grid traced: cubeVoxels^3 over 1000 Mpc/h, a voxel voxelPc. */
+  readonly cubeVoxels: number;
+  readonly voxelPc: number;
+  readonly positionScale: number;
+  /** A vertex's scene position, pc: M (x, y, z, 1) / positionScale's (x, y, z), M column-major. */
+  readonly vertexToScene: readonly number[];
+  readonly basinGrid: LaniakeaBasinGrid;
+  readonly linesByBasin: Readonly<Record<string, number>>;
+  /** How the lines end as drawn: at an attractor, joining another, where the data stop, at the grid's edge. */
+  readonly ends: Readonly<Record<string, number>>;
+  /** Of the seeds whose streamline ends at an attractor, the share ending in their own voxel's basin of Dupuy & Courtois's. */
+  readonly agreement: number;
+  readonly seeds: number;
+  /** The tracing's numbers, the grid's voxels at 128^3. */
+  readonly trace: {
+    readonly stepVoxels: number;
+    readonly seedSpacingVoxels: number;
+    readonly separationVoxels: number;
+    readonly joinVoxels: number;
+    readonly sinkKmS: number;
+  };
+  /** A line is whole where the velocity's error is under the first, km/s, and gone over the second. */
+  readonly constraint: { readonly fullBelowKmS: number; readonly goneAboveKmS: number; readonly source: string };
+  /** The field at the Milky Way's voxel, supergalactic x, y, z, km/s. */
+  readonly milkyWayKmS: readonly [number, number, number];
+  /** The published values' unit, km/s. */
+  readonly velocityUnitKmS: number;
+  readonly source: string;
+}
+
+/**
+ * `web/public/cmb/cmb.json` (G4, tools/src/cmb/prepareCmb.ts): how cmb.png, Planck's CMB map made
+ * equirectangular, is laid out and encoded. Committed with the map, not generated in CI.
+ */
+export interface CmbMapInfo {
+  readonly file: string;
+  readonly width: number;
+  readonly height: number;
+  readonly frame: 'galactic';
+  /** The Galactic longitude of the picture's middle column, degrees; the top row is b = +90. */
+  readonly centreLongitudeDeg: number;
+  /** Which way l grows across the picture: to the left, as on Planck's maps of the sky from inside. */
+  readonly longitudeIncreases: 'left';
+  /** A texel's byte is zeroLevel + dT / microkelvinPerStep. */
+  readonly zeroLevel: number;
+  readonly microkelvinPerStep: number;
+  /** The texels' scatter about the mean, uK. */
+  readonly rmsMicrokelvin: number;
+  /** Texels past the byte's range, clipped. */
+  readonly clippedTexels: number;
+  readonly source: string;
+  readonly sourceUrl: string;
 }

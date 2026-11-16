@@ -37,6 +37,9 @@ Where things come from:
   the CF4 watersheds and the named clusters, superclusters, basins, voids and walls
   (`laniakea/`, `tools/src/laniakea/`), drawn by `web/src/core/laniakea.ts` and
   `web/src/scene/Laniakea.tsx`; the structures are bodies, found by search.
+- **The observable universe** (G4): the record-holders, bodies with their redshifts and papers
+  (`web/src/core/recordHolders.ts`), placed in Planck 2018's cosmology (`web/src/core/cosmology.ts`);
+  the CMB's last-scattering sphere with Planck's map (`tools/src/cmb/`, `web/public/cmb/`).
 
 ## Near Earth and the atmosphere (to about 1,000 km)
 
@@ -323,13 +326,13 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [ ] Caelum Supercluster: not in G3's landmarks. G3.
 - [x] Sloan Great Wall: a structure, drawn as a line (Gott et al. 2005).
 - [x] Corona Borealis Supercluster: a structure.
-- [ ] ASASSN-15lh, "brightest supernova": maybe not a supernova (see README). G4.
+- [x] ASASSN-15lh, "brightest supernova": a record-holder (`web/src/core/recordHolders.ts`), z 0.2326, its panel saying it may be a tidal disruption.
 - [~] Boötes Void: the CF4 repeller near it (`Near the Bootes Void repeller`); the void not outlined.
-- [ ] Pandora's Cluster (Abell 2744): z = 0.31, past G3's reach. G4.
-- [ ] Bullet Cluster: z = 0.30. G4.
-- [ ] Saraswati Supercluster: z = 0.28. G4.
+- [x] Pandora's Cluster (Abell 2744): a record-holder, z 0.308.
+- [x] Bullet Cluster: a record-holder, z 0.296.
+- [x] Saraswati Supercluster: a record-holder, z 0.28, marked at Abell 2631, its centre.
 - [ ] Giant GRB Ring: a claim (see README). G4.
-- [ ] El Gordo Cluster: z = 0.87. G4.
+- [x] El Gordo Cluster: a record-holder, z 0.870.
 - [ ] Cosmic web of galaxies: G4.
 
 ## The far universe
@@ -338,15 +341,15 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [ ] Clowes-Campusano LQG: G4.
 - [ ] Huge-LQG: a claim. G4.
 - [ ] U1.11 LQG: G4.
-- [ ] J0313-1806, most distant known quasar (z = 7.64): G4.
-- [ ] GRB 090429B, most distant gamma-ray burst: its z of about 9.4 is photometric. G4.
-- [ ] HD1, "most distant known galaxy": an unconfirmed candidate; the confirmed record is
-  MoM-z14 (z = 14.44), before it JADES-GS-z14-0. G4, with the confirmed ones.
-- [ ] Tonantzintla 618, "most massive black hole": an estimate, not a measured record. G4.
-- [ ] Earendel (the map's "Ereandel"), most distant single star (z of about 6.2): G4.
-- [ ] Farthest visible galaxies: G4.
-- [ ] Unreachable (the cosmic event horizon): G4.
-- [ ] Cosmic microwave background: G4.
+- [x] J0313-1806, most distant known quasar (z = 7.64): a record-holder, z 7.6423; EUCL J1729+6410, z 7.77, the record now, beside it.
+- [x] GRB 090429B, most distant gamma-ray burst: a record-holder at its photometric z 9.4, said so; GRB 090423, z 8.26 spectroscopic, beside it.
+- [x] HD1, "most distant known galaxy": a record-holder at z 4.0, where its JWST spectrum puts it,
+  its panel giving the z 13 claim; MoM-z14 (z 14.44) and JADES-GS-z14-0 (z 14.1796) beside it.
+- [x] Tonantzintla 618, "most massive black hole": a record-holder, z 2.219, its mass said to be an estimate.
+- [x] Earendel (the map's "Ereandel"), most distant single star: a record-holder at its galaxy's z 5.926, its panel saying it may be a cluster.
+- [~] Farthest visible galaxies: MoM-z14, JADES-GS-z14-0, GN-z11 and UHZ1 as record-holders; no deep field.
+- [ ] Unreachable (the cosmic event horizon): stated in the About (16.6 billion ly), not drawn. G4.
+- [x] Cosmic microwave background: the last-scattering sphere, Planck's 2018 map, from far outside (`web/src/scene/cmb.ts`).
 - [ ] Big Bang: G4.
 
 ## Labels on the map that have aged
@@ -462,26 +465,26 @@ What the map does not show but a realism-first simulator should. These are unche
 - [~] The Dipole Repeller; Ho'oleilana; Quipu (2025): the Dipole Repeller (with the Cold Spot Repeller, one CF4 basin); not Ho'oleilana or Quipu
 - [~] Galaxies: the Antennae, Stephan's Quintet, Arp 220, Malin 1, NGC 4993 (GW170817): NGC 4038, NGC 7317 and NGC 7319, NGC 4993; not NGC 4039, the rest of the quintet, Arp 220 or Malin 1
 - [ ] Supernovae: SN 2023ixf, SN 2011fe, SN 2014J
+- [x] The flow of galaxies: the Cosmicflows-4 velocity field's streamlines (Courtois et al. 2023): 53, coloured by the basin each ends in, Laniakea's 18 in its gold (`laniakea/flows.bin`, `tools/src/laniakea/flows.ts`, the Flow Lines layer); Laniakea's basin filled; "You are here" past 370 Mpc
+- [x] The walls as their galaxies: the Sloan and CfA2 Great Walls' galaxies tinted, by their papers' spans on the sky and an estimated depth
 
 ### The far universe (G4)
 - [ ] Clusters: Phoenix, Abell 370, MACS J0717, the Musket Ball
 - [ ] Protoclusters: Spiderweb, SPT2349-56, Hyperion; the BOSS Great Wall
 - [ ] The Giant Arc, the Big Ring [disputed]
-- [ ] Quasars and supermassive black holes: 3C 273, OJ 287, Phoenix A, Holmberg 15A, the Cosmic Horseshoe
-- [ ] Transients: GW150914, GW231123, GRB 221009A "the BOAT", Swift J1644+57, fast radio bursts
+- [~] Quasars and supermassive black holes: 3C 273 a record-holder; not OJ 287, Phoenix A, Holmberg 15A, the Cosmic Horseshoe
+- [~] Transients: GRB 221009A "the BOAT" a record-holder; not GW150914, GW231123, Swift J1644+57, fast radio bursts
 - [ ] Deep fields: Hubble's Deep and Ultra Deep Fields, SMACS 0723, JADES, CEERS, COSMOS-Web
-- [ ] The distance record and its runners-up:
-  - MoM-z14 (the record), JADES-GS-z14-0, GN-z11, UHZ1;
+- [~] The distance record and its runners-up: MoM-z14 (the record), JADES-GS-z14-0, GN-z11, UHZ1,
+  EUCL J1729+6410 (the farthest quasar), GRB 090423 and GRB 250314A are record-holders; not yet:
   - CAPERS-LRD-z9 and the little red dots;
-  - EUCL J1729+6410 (the farthest quasar);
-  - GRB 090423, GRB 250314A;
-  - the lensed star Icarus; LAP1
-- [ ] Epochs as shells: reionisation, cosmic dawn, the dark ages, the last-scattering surface
+  - the lensed star Icarus (no position found); LAP1
+- [~] Epochs as shells: the last-scattering surface drawn; not reionisation, cosmic dawn, the dark ages
 
 ### Cosmology
 - [ ] The CMB dipole (the Sun's 370 km/s); the Cold Spot and the Eridanus supervoid [disputed]
-- [ ] The Hubble sphere (~14.4 Gly), the event horizon (~16.5 Gly), the particle horizon (~46.5 Gly)
-- [ ] The cosmology the app uses, stated, given the Hubble tension
+- [~] The Hubble sphere (14.5 Gly), the event horizon (16.6 Gly), the particle horizon (46.2 Gly): in the About, Planck 2018; the camera zooms out past the last; none drawn
+- [x] The cosmology the app uses, stated, given the Hubble tension: Planck 2018 past Laniakea, Cosmicflows-4's H0 within it (`web/src/core/cosmology.ts`, About)
 
 ## Summary
 
@@ -489,10 +492,10 @@ As of 13 November 2026, 244 labels:
 
 | Status | Count |
 | --- | --- |
-| `[x]` in the app | 165 |
-| `[~]` partly | 12 |
-| `[ ]` missing | 67 |
+| `[x]` in the app | 176 |
+| `[~]` partly | 13 |
+| `[ ]` missing | 55 |
 
-Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 7, G4 20.
+Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 7, G4 8.
 
 The counts are the map's labels only, not "Beyond the map".

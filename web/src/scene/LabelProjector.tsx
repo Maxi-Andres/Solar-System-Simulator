@@ -14,7 +14,7 @@ import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
 import { galaxyLuminosity, galaxyOf } from '../core/localGroup.ts';
 import { homeNames } from './homeName.ts';
-import { labelBoard } from './labelBoard.ts';
+import { labelBoard, labelsShown } from './labelBoard.ts';
 import { foldedShown } from './markFolding.ts';
 import { bodyFoldStrength, focusLineage, updateMarkHostsFromScene } from './markHosts.ts';
 import { angularRadiusPixels, kmToUnits, unitsToKm } from './scale.ts';
@@ -296,6 +296,7 @@ export function LabelProjector({
     labelBoard.posted = [];
 
     if (!visible) {
+      labelsShown.active = false;
       for (const element of map.values()) {
         hide(element);
       }
@@ -600,6 +601,8 @@ export function LabelProjector({
     for (const id of shown) {
       held.add(id);
     }
+    labelsShown.active = true;
+    labelsShown.ids = held;
   });
 
   return null;

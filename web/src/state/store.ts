@@ -77,6 +77,8 @@ export type LayerId =
   | 'laniakea'
   | 'laniakeaBasin'
   | 'shapleyBasin'
+  | 'flowLines'
+  | 'observableUniverse'
   | 'nuclearCluster'
   | 'spacecraft'
   | 'satellites'
@@ -145,6 +147,13 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The groups' reconstruction's answer: the Milky Way's flow ends at Shapley, and Laniakea is
   // part of Shapley's basin. Off, as the other answer is on; the About says why both.
   { id: 'shapleyBasin', label: 'Shapley Basin', pending: null },
+  // The Cosmicflows-4 velocity field's streamlines (core/laniakea.ts FlowLines): where the
+  // galaxies' flow goes: a few dozen, Laniakea's in its gold, a brightening running down each
+  // toward its attractor. On: it is what makes a basin of attraction a basin.
+  { id: 'flowLines', label: 'Flow Lines', pending: null },
+  // The observable universe (G4, scene/cmb.ts, core/recordHolders.ts): the CMB's
+  // last-scattering sphere, drawn only from far outside it, and the record-holders.
+  { id: 'observableUniverse', label: 'Observable Universe', pending: null },
   // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
   // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
   // none a particular one. A layer of its own, as the galaxy's model is, so the measured
@@ -195,6 +204,8 @@ const DEFAULT_LAYERS: LayerState = {
   laniakea: true,
   laniakeaBasin: true,
   shapleyBasin: false,
+  flowLines: true,
+  observableUniverse: true,
   nuclearCluster: true,
   spacecraft: true,
   satellites: false,

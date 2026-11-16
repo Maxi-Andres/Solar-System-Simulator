@@ -29,9 +29,23 @@ import {
   LOCAL_VOLUME_FRAMING_KM,
   NEARBY_UNIVERSE_FRAMING_KM,
   NEIGHBOURHOOD_FRAMING_KM,
+  OBSERVABLE_UNIVERSE_FRAMING_KM,
   VIRGO_FRAMING_KM,
 } from '../scene/scale.ts';
-import { LANIAKEA_VIEW, LOCAL_VOLUME_VIEW, NEARBY_UNIVERSE_VIEW, VIRGO_VIEW } from '../scene/supergalactic.ts';
+import {
+  LANIAKEA_VIEW,
+  LOCAL_VOLUME_VIEW,
+  NEARBY_UNIVERSE_VIEW,
+  OBSERVABLE_UNIVERSE_VIEW,
+  VIRGO_VIEW,
+} from '../scene/supergalactic.ts';
+import {
+  RECORD_HOLDERS,
+  recordHolderBodyId,
+  recordHolderKindLabel,
+  recordHolderOf,
+  type RecordHolder,
+} from '../core/recordHolders.ts';
 import {
   ensureStructureBodies,
   inLaniakea,
@@ -80,7 +94,12 @@ import { Presence, useClosing } from './Presence.tsx';
  * the same way (VIRGO_FRAMING_KM), and its list the cluster's own groups and the way back. At a
  * galaxy of the Local Volume, Local Volume and that galaxy.
  *
- * Above it all, **Laniakea** (G3): its attractor, the camera 1.8 billion light years out over the
+ * Above it all, **Observable Universe** (G4): the Sun, the camera 250 billion light years out over
+ * the supergalactic pole, the CMB's last-scattering sphere whole (OBSERVABLE_UNIVERSE_FRAMING_KM);
+ * its list, the record-holders, farthest first (recordHolders.ts). At one of them the breadcrumb
+ * is Observable Universe and that record-holder: none is in Laniakea or near it.
+ *
+ * Below it, **Laniakea** (G3): its attractor, the camera 1.8 billion light years out over the
  * supergalactic pole, its basin's outline about the frame (LANIAKEA_FRAMING_KM); its list, the
  * Nearby Universe -- the Sun from 1.5 billion light years, out to the Shapley Supercluster
  * (NEARBY_UNIVERSE_FRAMING_KM) -- Laniakea and the Local Volume, then the named structures by
@@ -302,6 +321,14 @@ export function BodyPicker({
     onFocus('sun');
     renderDemand.request();
   };
+  // The observable universe: the Sun from 250 billion ly, and the record-holders under its caret.
+  const recordHolder = recordHolderOf(focus);
+  const toObservableUniverse = (): void => {
+    requestFraming(OBSERVABLE_UNIVERSE_FRAMING_KM, OBSERVABLE_UNIVERSE_VIEW);
+    onFocus('sun');
+    renderDemand.request();
+  };
+  const [universeOpen, setUniverseOpen] = useState(false);
   // Laniakea's structures, under its caret.
   const [laniakeaOpen, setLaniakeaOpen] = useState(false);
   // The Local Group's big galaxies, under its own caret.
@@ -334,8 +361,9 @@ export function BodyPicker({
     renderDemand.request();
   };
   // Opening one list closes the others.
-  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies' | 'volume' | 'laniakea'): void => {
+  const only = (which: 'bodies' | 'systems' | 'places' | 'galaxies' | 'volume' | 'laniakea' | 'universe'): void => {
     setOpen((value) => which === 'bodies' && !value);
+    setUniverseOpen((value) => which === 'universe' && !value);
     setLaniakeaOpen((value) => which === 'laniakea' && !value);
     if (which === 'laniakea') {
       void laniakea.request();
@@ -352,11 +380,12 @@ export function BodyPicker({
 
   // Closes on a click anywhere else and on Escape, like any menu.
   useEffect(() => {
-    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen && !volumeOpen && !laniakeaOpen) {
+    if (!open && !systemsOpen && !blackHolesOpen && !galaxiesOpen && !volumeOpen && !laniakeaOpen && !universeOpen) {
       return;
     }
     const closeAll = (): void => {
       setOpen(false);
+      setUniverseOpen(false);
       setLaniakeaOpen(false);
       setSystemsOpen(false);
       setBlackHolesOpen(false);
@@ -379,7 +408,7 @@ export function BodyPicker({
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen, volumeOpen, laniakeaOpen]);
+  }, [open, systemsOpen, blackHolesOpen, galaxiesOpen, volumeOpen, laniakeaOpen, universeOpen]);
 
   // A focus with no list of its own closes the one left open, rather than keep it to reopen later.
   useEffect(() => {
@@ -411,21 +440,40 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={beyondLaniakea ? toNearbyUniverse : toLaniakea} outer>
-          {beyondLaniakea ? 'Nearby Universe' : 'Laniakea'}
+        <Crumb onClick={toObservableUniverse} outer>
+          Observable Universe
         </Crumb>
         <button
           type="button"
-          aria-label="Structures of Laniakea and beyond"
+          aria-label="Record-holders of the observable universe"
           aria-haspopup="listbox"
-          aria-expanded={laniakeaOpen}
-          title="Go to a cluster, supercluster or void"
-          onClick={() => only('laniakea')}
+          aria-expanded={universeOpen}
+          title="Go to a record-holder"
+          onClick={() => only('universe')}
           style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
         >
-          <Caret open={laniakeaOpen} />
+          <Caret open={universeOpen} />
         </button>
         <Separator />
+        {recordHolder === null && (
+          <>
+            <Crumb onClick={beyondLaniakea ? toNearbyUniverse : toLaniakea} outer>
+              {beyondLaniakea ? 'Nearby Universe' : 'Laniakea'}
+            </Crumb>
+            <button
+              type="button"
+              aria-label="Structures of Laniakea and beyond"
+              aria-haspopup="listbox"
+              aria-expanded={laniakeaOpen}
+              title="Go to a cluster, supercluster or void"
+              onClick={() => only('laniakea')}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, display: 'inline-flex', alignItems: 'center' }}
+            >
+              <Caret open={laniakeaOpen} />
+            </button>
+            <Separator />
+          </>
+        )}
         {!deep && (
           <>
             <Crumb onClick={region === 'virgo' ? toVirgo : toLocalVolume} outer>
@@ -586,6 +634,25 @@ export function BodyPicker({
                   setSystemsOpen(false);
                 }
           }
+        />
+      </Presence>
+
+      <Presence show={universeOpen}>
+        <UniverseList
+          active={recordHolder === null ? null : focus}
+          onObservableUniverse={() => {
+            toObservableUniverse();
+            setUniverseOpen(false);
+          }}
+          onLaniakea={() => {
+            toLaniakea();
+            setUniverseOpen(false);
+          }}
+          onChoose={(holder) => {
+            onFocus(recordHolderBodyId(holder));
+            renderDemand.request();
+            setUniverseOpen(false);
+          }}
         />
       </Presence>
 
@@ -1648,6 +1715,45 @@ function LaniakeaList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The list under Observable Universe: the view itself and Laniakea, then the record-holders
+ * (recordHolders.ts), farthest first, each with its kind and redshift.
+ */
+function UniverseList({
+  active,
+  onObservableUniverse,
+  onLaniakea,
+  onChoose,
+}: {
+  active: BodyId | null;
+  onObservableUniverse: () => void;
+  onLaniakea: () => void;
+  onChoose: (holder: RecordHolder) => void;
+}) {
+  const closing = useClosing();
+  const holders = [...RECORD_HOLDERS].sort((a, b) => b.z - a.z);
+  return (
+    <div
+      role="listbox"
+      aria-label="Record-holders of the observable universe"
+      className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
+      style={{ ...LIST_STYLE, width: '17rem', maxHeight: '70vh', overflowY: 'auto' }}
+    >
+      <MemberRow name="Observable Universe" active={false} onChoose={onObservableUniverse} />
+      <MemberRow name="Laniakea" active={false} onChoose={onLaniakea} />
+      <div style={SECTION_HEADING}>Record-holders</div>
+      {holders.map((holder) => (
+        <MemberRow
+          key={holder.key}
+          name={`${holder.name} · ${recordHolderKindLabel(holder.kind).toLowerCase()}, z ${holder.z}`}
+          active={active === recordHolderBodyId(holder)}
+          onChoose={() => onChoose(holder)}
+        />
+      ))}
     </div>
   );
 }

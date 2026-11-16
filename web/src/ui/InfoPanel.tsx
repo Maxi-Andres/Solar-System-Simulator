@@ -19,6 +19,8 @@ import { PulsarPanel } from './PulsarFacts.tsx';
 import { ClusterPanel } from './ClusterFacts.tsx';
 import { RemnantPanel } from './RemnantFacts.tsx';
 import { StructurePanel } from './StructureFacts.tsx';
+import { RecordHolderPanel } from './RecordHolderFacts.tsx';
+import { recordHolderOf } from '../core/recordHolders.ts';
 import { GalaxyPanel } from './GalaxyFacts.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
@@ -54,6 +56,10 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   // A pulsar gone to: its spin, and where its distance is from (pulsars.ts).
   if (body.kind === 'supernova-remnant') {
     return <RemnantPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
+  // A record-holder is a structure by kind (recordHolders.ts), with facts of its own.
+  if (body.kind === 'structure' && recordHolderOf(focus) !== null) {
+    return <RecordHolderPanel focus={focus} onClose={closePanel} />;
   }
   if (body.kind === 'structure') {
     return <StructurePanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;

@@ -26,6 +26,15 @@ import { angularRadiusPixels, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
  *   (G3) one place among its clusters, and the names of its galaxies and the Virgo Cluster's
  *   fold into it and into the Virgo Cluster's own (`localVolumeFolded`). Laniakea itself is a
  *   basin of the flow, named at its attractor, never a point on the Sun.
+ * - Once the Local Volume is a third of that, HERE_FOLD_PX in radius -- Laniakea's and the
+ *   Nearby Universe's views, past about 370 Mpc on a 1080-pixel screen -- "You are here"
+ *   (`centre`, `here`): among a hundred thousand galaxies the Local Volume is a speck, and the
+ *   point that matters is the one the map is seen from (Laniakea.tsx draws its mark).
+ * - Once the Nearby Universe -- Laniakea's catalogue's reach, NEARBY_UNIVERSE_EXTENT_KM -- is
+ *   as small again, the Nearby Universe (`centre`): from the observable universe's view (G4) the
+ *   whole of the mapped galaxies is one place among the record-holders, and the names of the
+ *   clusters, superclusters, voids and walls fold into it (`nearbyUniverseFolded`; their marks
+ *   too, markHosts.ts). On a 1080-pixel screen that is from 32 billion light years out.
  *
  * By the camera's distance from the Sun, for both: from where the galaxy folds, 5 million
  * light years, its centre and the Sun are the same point.
@@ -48,13 +57,17 @@ export const MILKY_WAY_FOLD_PX = 160;
 export const LOCAL_GROUP_EXTENT_KM = 1e6 * PARSEC_KM;
 /** The Local Volume's: the UNGC's 11 Mpc (Karachentsev, Makarov & Kaisina 2013, AJ 145, 101). */
 export const LOCAL_VOLUME_EXTENT_KM = 11e6 * PARSEC_KM;
+/** The Nearby Universe's: Laniakea's catalogue's reach, 700 Mpc (laniakea.json, Cosmicflows-4 and 2MRS). */
+export const NEARBY_UNIVERSE_EXTENT_KM = 700e6 * PARSEC_KM;
 export const ARM_NAMES_FROM_PX = 320;
+/** The Local Volume's radius on screen, pixels, below which home is named "You are here". */
+export const HERE_FOLD_PX = MILKY_WAY_FOLD_PX / 3;
 
 export interface HomeNames {
   /** The Sun's label: its own (or the Solar System's fold), another name, or none. */
   readonly sun: 'own' | 'none' | 'Solar Neighbourhood';
   /** The Galactic Centre's label. */
-  readonly centre: 'Galactic Centre' | 'Milky Way' | 'Local Group' | 'Local Volume';
+  readonly centre: 'Galactic Centre' | 'Milky Way' | 'Local Group' | 'Local Volume' | 'You are here' | 'Nearby Universe';
   /** The arms' names shown; the names of what is in the galaxy folded into its own. */
   readonly arms: boolean;
   readonly galaxyFolded: boolean;
@@ -62,11 +75,29 @@ export interface HomeNames {
   readonly localGroupFolded?: boolean;
   /** The Local Volume's and the Virgo Cluster's galaxies' names folded into theirs. */
   readonly localVolumeFolded?: boolean;
+  /** Laniakea's named structures' names folded into the Nearby Universe's. */
+  readonly nearbyUniverseFolded?: boolean;
+  /** Home is a speck among Laniakea's galaxies: its "You are here" mark drawn (Laniakea.tsx). */
+  readonly here?: boolean;
 }
 
 export function homeNames(cameraFromSunKm: number, viewportHeightPx: number, fovDeg: number): HomeNames {
   const px = (extentKm: number) => angularRadiusPixels(extentKm, cameraFromSunKm, viewportHeightPx, fovDeg);
   const galaxyPx = px(MILKY_WAY_EXTENT_KM);
+  if (px(NEARBY_UNIVERSE_EXTENT_KM) < MILKY_WAY_FOLD_PX) {
+    return {
+      sun: 'none',
+      centre: 'Nearby Universe',
+      arms: false,
+      galaxyFolded: true,
+      localGroupFolded: true,
+      localVolumeFolded: true,
+      nearbyUniverseFolded: true,
+    };
+  }
+  if (px(LOCAL_VOLUME_EXTENT_KM) < HERE_FOLD_PX) {
+    return { sun: 'none', centre: 'You are here', arms: false, galaxyFolded: true, localGroupFolded: true, localVolumeFolded: true, here: true };
+  }
   if (px(LOCAL_VOLUME_EXTENT_KM) < MILKY_WAY_FOLD_PX) {
     return { sun: 'none', centre: 'Local Volume', arms: false, galaxyFolded: true, localGroupFolded: true, localVolumeFolded: true };
   }

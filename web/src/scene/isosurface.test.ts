@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blur121, labelSurface, surfaceNets } from './isosurface.ts';
+import { blur121, labelSurface, labelVolume, surfaceNets, upsample2 } from './isosurface.ts';
 
 /** Every edge of a closed surface is shared by exactly two triangles, once each way. */
 function edgeUses(indices: Uint32Array): Map<string, number> {
@@ -88,9 +88,45 @@ describe('a basin netted into a surface', () => {
       most = Math.max(most, Math.abs(mesh.positions[v]! - 2));
     }
     expect(sx / (mesh.positions.length / 3)).toBeCloseTo(2, 5);
-    // Never past half a voxel beyond its outer voxels' centres; a cube this small rounds in.
-    expect(most).toBeGreaterThan(1);
+    // Never past half a voxel beyond its outer voxels' centres; a cube this small, three voxels
+    // across, rounds in almost to a point -- smoothed as a basin is, it is a bump.
+    expect(most).toBeGreaterThan(0);
     expect(most).toBeLessThanOrEqual(1.5);
     expect(labelSurface(cube, [n, n, n], 9)).toBeNull();
+  });
+
+  it('keeps a large flat face where it is, and rounds a one-voxel bump off it', () => {
+    const n = 24;
+    const labels = new Uint8Array(n * n * n);
+    // A slab filling x < 12, and a single voxel standing out of its face at (12, 12, 12).
+    for (let k = 0; k < n; k += 1) for (let j = 0; j < n; j += 1) for (let i = 0; i < 12; i += 1) labels[i + n * (j + n * k)] = 1;
+    labels[12 + n * (12 + n * 12)] = 1;
+    const mesh = labelSurface(labels, [n, n, n], 1)!;
+    let atFace = 0;
+    let most = 0;
+    for (let v = 0; v < mesh.positions.length; v += 3) {
+      const [x, y, z] = [mesh.positions[v]!, mesh.positions[v + 1]!, mesh.positions[v + 2]!];
+      if (x > 6 && x < 18 && Math.abs(y - 12) > 6 && y > 3 && y < 20 && z > 3 && z < 20) {
+        expect(Math.abs(x - 11.5)).toBeLessThan(0.05);
+        atFace += 1;
+      }
+      if (Math.abs(y - 12) < 1 && Math.abs(z - 12) < 1) most = Math.max(most, x);
+    }
+    expect(atFace).toBeGreaterThan(10);
+    // The bump: its voxel's centre half a voxel out of the face, less than half of that left.
+    expect(most).toBeLessThan(11.5 + 0.25);
+  });
+
+  it('gives a label’s blurred field as bytes, and samples a coarse field at its midpoints', () => {
+    const labels = new Uint8Array(8 * 8 * 8);
+    labels[4 + 8 * (4 + 8 * 4)] = 2;
+    const volume = labelVolume(labels, [8, 8, 8], 2)!;
+    const [mx, my] = volume.size;
+    const centre = volume.data[4 - volume.origin[0] + mx * (4 - volume.origin[1] + my * (4 - volume.origin[2]))]!;
+    expect(centre).toBe(Math.round(255 * 0.375 ** 3));
+    const up = upsample2(Float32Array.from([0, 1, 2, 3, 4, 5, 6, 7]), 2, 2, 2);
+    expect(up.nx).toBe(3);
+    expect(up.field[1 + 3 * (1 + 3 * 1)]).toBeCloseTo(3.5, 6);
+    expect(up.field[2 + 3 * (2 + 3 * 2)]).toBe(7);
   });
 });

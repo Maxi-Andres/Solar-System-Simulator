@@ -10,6 +10,8 @@ web/public/data/
 tools/remnants/.cache/
 # The galaxies' maps' downloaded sources (tools/galaxies/prepare.py).
 tools/galaxies/.cache/
+# Planck's CMB map, downloaded by tools/src/cmb/prepareCmb.ts (2 GB).
+tools/cmb/.cache/
 
 .env
 .env.local

@@ -34,6 +34,7 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
+import { floorKept, halfCountRadiusPc } from './crowding.ts';
 import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { setMarkerPointer } from './markerPointer.ts';
 import { foldMembers } from './markFolding.ts';
@@ -548,6 +549,7 @@ uniform vec3 uCameraPc;
 uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uFade;
+uniform float uFloorKept;
 // Where it is, pc; the colour times the luminosity over the white column; the half-light
 // radius, pc; the share drawn as a point (pointShare, worked out on the CPU each frame).
 attribute vec3 aCentre;
@@ -568,7 +570,8 @@ void main() {
   // Every galaxy at least a faint dot, its own colour at FAINT_GALAXY_FLOOR whatever its
   // light: a choice, not what a photograph shows.
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aShare * uFade);
+  // And none once the catalogue crowds on the screen (crowding.ts floorKept).
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * uFloorKept * aShare * uFade);
   vSigmaPx = sigmaPx;
   // Out to where its light falls below the floor (gaussianSprite.ts): a bright one's wing
   // is not cut square.
@@ -1107,6 +1110,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       uPixelsPerRadian: { value: 1 },
       uViewportPx: { value: new THREE.Vector2(1, 1) },
       uFade: { value: 0 },
+      uFloorKept: { value: 1 },
     }),
     [],
   );
@@ -1148,7 +1152,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     object.frustumCulled = false;
     object.raycast = noRaycast;
     drawIntoGlow(object);
-    return { object, centres, halfLightPc, keys, share };
+    return { object, centres, halfLightPc, keys, share, halfCountPc: halfCountRadiusPc(position, list.length) };
   }, [entries, pointUniforms]);
 
   // The dwarfs' marks.
@@ -1407,6 +1411,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
       renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
       pointUniforms['uFade']!.value = fade;
+      pointUniforms['uFloorKept']!.value = floorKept(points.halfCountPc, points.centres.length, cameraPc.length(), pixelsPerRadian);
     }
 
     // The marks, about the camera, decluttered.

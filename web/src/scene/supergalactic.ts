@@ -77,3 +77,9 @@ export const LANIAKEA_VIEW: FramingView = turnedView(LOCAL_VOLUME_VIEW, LANIAKEA
 
 /** Where the breadcrumb's Nearby Universe looks from, on the Sun: the same way. */
 export const NEARBY_UNIVERSE_VIEW: FramingView = LANIAKEA_VIEW;
+
+/**
+ * Where the breadcrumb's Observable Universe looks from (scale.ts OBSERVABLE_UNIVERSE_FRAMING_KM),
+ * on the Sun: the same way again, so that pulling out from Laniakea's view goes on along one line.
+ */
+export const OBSERVABLE_UNIVERSE_VIEW: FramingView = NEARBY_UNIVERSE_VIEW;

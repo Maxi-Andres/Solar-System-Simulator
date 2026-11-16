@@ -6,8 +6,8 @@
  *
  * Five VizieR tables (Cosmicflows-4's galaxies and groups, 2MRS, Tully's 2MASS groups,
  * Einasto et al.'s superclusters; 50 MB of text), HyperLEDA for some 87,000 galaxies by PGC
- * number (about 45 queries), the CF4 density cube from Zenodo (8 MB) and the watersheds from
- * the CosmicFlows project page (67 MB); and local-group.json's and local-volume.json's
+ * number (about 45 queries), the CF4 density and velocity cubes from Zenodo (8 and 25 MB), the
+ * velocity's error and the watersheds from the CosmicFlows project page (2 and 67 MB); and local-group.json's and local-volume.json's
  * catalogues, read afresh, to leave out the galaxies they draw. Writes laniakea/ and
  * touches nothing else. The full run (fetchData.ts) calls loadLaniakea() too, handing it
  * the Local Group and the Local Volume it has already read.
@@ -21,6 +21,8 @@ import {
   CF4_DENSITY_URLS,
   CF4_GALAXY_TABLE,
   CF4_GROUP_TABLE,
+  CF4_VELOCITY_ERROR_URL,
+  CF4_VELOCITY_URLS,
   CF4_WATERSHEDS_URL,
   DATA_USER_AGENT,
   EINASTO_1997_TABLE,
@@ -45,13 +47,17 @@ import {
   type LaniakeaBuild,
 } from './galaxies.ts';
 import { assembleLaniakea, describeLaniakea, type LaniakeaOutput } from './laniakea.ts';
-import { basinLandmarks, clusterLandmarks, greatAttractor, superclusterLandmarks, voidLandmarks, wallLandmarks } from './landmarks.ts';
+import { basinLandmarks, clusterLandmarks, greatAttractor, superclusterLandmarks, voidLandmarks, wallLandmarks, wallMembers } from './landmarks.ts';
 import { fetchLedaByPgc } from './ledaPgc.ts';
-import { checkAttractors, cropBasins, quantiseDensity, readFitsCube, readZip, WATERSHED_FILES, type WatershedGrid } from './watersheds.ts';
+import { checkVelocityAxes, FLOW_AGREEMENT_LEAST, FLOW_AXES_MOST, LANIAKEA_LINES, readFitsVectorCube, traceFlows, transposeCube, VELOCITY_UNIT_KMS, type VectorField } from './flows.ts';
+import { BASINS, checkAttractors, cropBasins, keptLabels, quantiseDensity, readFitsCube, readZip, WATERSHED_FILES, type WatershedGrid } from './watersheds.ts';
 
 const LOG = '[laniakea]';
 
-/** The density cube: Zenodo's 128^3, else the project page's 64^3. */
+/**
+ * The density cube: Zenodo's 128^3, else the project page's 64^3; made SGX fastest, as the
+ * watersheds are -- its file has NAXIS1 = SGZ (flows.ts explains how that was found).
+ */
 async function readDensity(): Promise<{ size: number; values: Float64Array; url: string }> {
   const failures: string[] = [];
   for (const { url, voxels } of CF4_DENSITY_URLS) {
@@ -60,13 +66,39 @@ async function readDensity(): Promise<{ size: number; values: Float64Array; url:
       if (cube.size !== voxels) {
         throw new Error(`a cube of ${cube.size}^3, where ${voxels}^3 was expected`);
       }
-      return { ...cube, url };
+      return { size: cube.size, values: transposeCube(cube.values, cube.size), url };
     } catch (error) {
       failures.push(`${url}: ${String(error).slice(0, 300)}`);
       console.warn(`${LOG} the CF4 density cube: ${url} failed (${String(error).slice(0, 200)}); trying the next.`);
     }
   }
   throw new Error(`Could not read the CF4 density cube:\n  ${failures.join('\n  ')}`);
+}
+
+/** The velocity cube: Zenodo's 128^3, else the project page's 64^3, SGX fastest, km/s. */
+async function readVelocity(): Promise<VectorField & { url: string }> {
+  const failures: string[] = [];
+  for (const { url, voxels } of CF4_VELOCITY_URLS) {
+    try {
+      const field = readFitsVectorCube(await download(url, 'the CF4 velocity cube', { 'User-Agent': DATA_USER_AGENT }));
+      if (field.size !== voxels) {
+        throw new Error(`a cube of ${field.size}^3 x 3, where ${voxels}^3 x 3 was expected`);
+      }
+      return { ...field, url };
+    } catch (error) {
+      failures.push(`${url}: ${String(error).slice(0, 300)}`);
+      console.warn(`${LOG} the CF4 velocity cube: ${url} failed (${String(error).slice(0, 200)}); trying the next.`);
+    }
+  }
+  throw new Error(`Could not read the CF4 velocity cube:\n  ${failures.join('\n  ')}`);
+}
+
+/** The velocity's error cube, 64^3, SGX fastest, km/s. */
+async function readVelocityError(): Promise<{ size: number; values: Float64Array }> {
+  const cube = readFitsCube(await download(CF4_VELOCITY_ERROR_URL, 'the CF4 velocity error cube', { 'User-Agent': DATA_USER_AGENT }));
+  const values = transposeCube(cube.values, cube.size);
+  for (let at = 0; at < values.length; at += 1) values[at] = values[at]! * VELOCITY_UNIT_KMS;
+  return { size: cube.size, values };
 }
 
 export interface LaniakeaLoad {
@@ -81,7 +113,7 @@ export async function loadLaniakea(
 ): Promise<LaniakeaLoad> {
   const queriedAt = new Date().toISOString();
   const lg = localGroup ?? loadLocalGroup();
-  const [cf4Rows, groupRows, mrsRows, tullyRows, einastoRows, watershedZip, density, lgCatalog, lvCatalog] = await Promise.all([
+  const [cf4Rows, groupRows, mrsRows, tullyRows, einastoRows, watershedZip, density, velocity, velocityError, lgCatalog, lvCatalog] = await Promise.all([
     readVizierTable(CF4_GALAXY_TABLE, 'Cosmicflows-4\'s galaxies', ['PGC', '1PGC', 'Vcmb', 'DM', 'e_DM', 'DMtf', 'DMfp', 'DMsnIa', 'RAJ2000', 'DEJ2000'], 55000, LOG),
     readVizierTable(CF4_GROUP_TABLE, 'Cosmicflows-4\'s groups', ['1PGC', 'Ngal', 'DMzp', 'e_DMzp', 'Vcmb', 'RAJ2000', 'DEJ2000'], 38000, LOG),
     readVizierTable(TWO_MRS_TABLE, 'the 2MASS Redshift Survey', ['ID', 'RAJ2000', 'DEJ2000', 'GLON', 'GLAT', 'Ktmag', 'Riso', 'b/a', 'type', 'cz'], 44000, LOG),
@@ -89,6 +121,8 @@ export async function loadLaniakea(
     readVizierTable(EINASTO_1997_TABLE, 'Einasto et al.\'s superclusters', ['SC', 'Nmembers', 'Dist', 'ID', '_RAJ2000', '_DEJ2000'], 800, LOG, '&-out.add=_RAJ,_DEJ'),
     download(CF4_WATERSHEDS_URL, 'the CF4 watersheds', { 'User-Agent': DATA_USER_AGENT }),
     readDensity(),
+    readVelocity(),
+    readVelocityError(),
     lg,
     localVolume ?? loadLocalVolume(lg),
   ]);
@@ -121,6 +155,28 @@ export async function loadLaniakea(
   const basins = cropBasins(cubes);
   const basinSize = cubes.galaxiesAttraction.size;
 
+  // The streamlines, checked twice: the planes' order against the density, and the lines' ends
+  // against Dupuy & Courtois's watersheds -- which is what says the grids' axes are read right.
+  const axes = checkVelocityAxes(velocity, density);
+  if (!(axes < FLOW_AXES_MOST)) {
+    throw new Error(`The CF4 velocity's divergence correlates ${axes.toFixed(3)} with its density, where linear theory gives -1: its planes are not read as flows.ts says.`);
+  }
+  const flowsQueriedAt = new Date().toISOString();
+  // Laniakea's lines the most: the basin the view is of.
+  const laniakeaLabel = BASINS.find((row) => row.name === 'Laniakea')!.galaxies!.label;
+  const flows = traceFlows({
+    velocity,
+    error: velocityError,
+    density,
+    basins: cubes.galaxiesAttraction,
+    kept: keptLabels('galaxiesAttraction'),
+    budgets: new Map([[laniakeaLabel, LANIAKEA_LINES]]),
+  });
+  if (!(flows.agreement >= FLOW_AGREEMENT_LEAST)) {
+    throw new Error(`Only ${(100 * flows.agreement).toFixed(1)}% of the CF4 streamlines end in their own voxel's watershed basin: the velocity grid is not aligned with the watersheds.`);
+  }
+  console.log(`${LOG} streamlines: divergence against density ${axes.toFixed(4)}; ${flows.seeds} seeds, ${(100 * flows.agreement).toFixed(1)}% ending in their own voxel's basin; ${flows.lines.length} lines kept.`);
+
   const clusters = clusterLandmarks({ cf4, cf4Groups, tully, einasto: einastoRows.rows, groups: build.groups, basinVoxels: basins.voxels, basinVoxelSize: basinSize });
   const superclusters = superclusterLandmarks(einastoRows.rows);
   for (const missing of [...clusters.missing, ...superclusters.missing]) {
@@ -134,6 +190,16 @@ export async function loadLaniakea(
     ...voidLandmarks(),
     ...wallLandmarks(),
   ];
+  // The walls' galaxies, flagged in their records, and counted as their members.
+  const walls = wallMembers(build.galaxies, landmarks);
+  build.galaxies.forEach((g, k) => {
+    if (walls.flags[k] !== 0) build.galaxies[k] = { ...g, flags: g.flags | walls.flags[k]! };
+  });
+  landmarks.forEach((l, i) => {
+    const count = walls.counts.get(l.name);
+    if (count !== undefined) landmarks[i] = { ...l, members: count };
+  });
+  console.log(`${LOG} walls' galaxies: ${[...walls.counts].map(([name, count]) => `${name} ${count}`).join(', ')}.`);
 
   const sources: LaniakeaInfo['sources'] = {
     cf4: { citation: 'Tully et al. 2023, ApJ 944, 94 (Cosmicflows-4), table2', url: cf4Rows.url, queriedAt, rows: cf4Rows.rows.length },
@@ -149,6 +215,13 @@ export async function loadLaniakea(
       rows: null,
     },
     cf4Watersheds: { citation: 'Dupuy & Courtois 2023, A&A 678, A176 (Laniakea and five more watershed superclusters)', url: CF4_WATERSHEDS_URL, queriedAt, rows: null },
+    cf4Velocity: {
+      citation: 'Courtois et al. 2023, A&A 670, L15 (density and velocity fields from CosmicFlows-4); data: H. Courtois, Zenodo doi 10.5281/zenodo.20653238 (CC BY 4.0)',
+      url: velocity.url,
+      queriedAt: flowsQueriedAt,
+      rows: null,
+    },
+    cf4VelocityError: { citation: 'Courtois et al. 2023, A&A 670, L15: the velocity error cube, CosmicFlows project page', url: CF4_VELOCITY_ERROR_URL, queriedAt: flowsQueriedAt, rows: null },
   };
   const output = assembleLaniakea({
     build,
@@ -161,6 +234,11 @@ export async function loadLaniakea(
     basinSize,
     landmarks,
     sources,
+    flows: {
+      result: flows,
+      velocity,
+      source: `Courtois et al. 2023, A&A 670, L15: the CF4 galaxies' reconstruction's velocity, ${velocity.size}^3 x 3 over 1000 Mpc/h (${velocity.url}); its error, ${velocityError.size}^3 (${CF4_VELOCITY_ERROR_URL}).`,
+    },
   });
   return { output, build };
 }

@@ -1,4 +1,4 @@
-import type { LaniakeaLandmark } from '../types.ts';
+import { LANIAKEA_FLAGS, type LaniakeaLandmark } from '../types.ts';
 import { asuNumber, type AsuRow } from '../localVolume/asu.ts';
 import {
   C_KM_S,
@@ -14,7 +14,7 @@ import {
   unitVector,
   type Vec3,
 } from './frames.ts';
-import type { Cf4Galaxy, Cf4Group, PlacedGroup, TullyGalaxy } from './galaxies.ts';
+import { type Cf4Galaxy, type Cf4Group, type PlacedGalaxy, type PlacedGroup, type TullyGalaxy } from './galaxies.ts';
 import { BASINS, basinGrid, CF4_BOX_MPC_H, type WatershedGrid } from './watersheds.ts';
 
 /**
@@ -71,6 +71,13 @@ import { BASINS, basinGrid, CF4_BOX_MPC_H, type WatershedGrid } from './watershe
  * - The CfA2 Great Wall (Geller & Huchra 1989, Science 246, 897), the "Coma Wall": from 9h to
  *   16.7h at a median z of 0.029, over Dec -8.5 to +42 (Gott et al.'s description) -- drawn
  *   through the Coma Cluster's declination.
+ *
+ * A wall is not a bound object and has no catalogue of members: it is a pattern the eye finds
+ * in a survey's slice. Its galaxies here (wallMembers, the record's WALL_ flags) are those in
+ * the span on the sky its paper gives and within WALL_HALF_DEPTH_PC of its median redshift's
+ * distance -- a depth chosen, not measured: the walls' thickness is not given by the numbers
+ * these papers' abstracts state, and a galaxy placed by its redshift is a few Mpc off along
+ * the line of sight anyway.
  */
 
 // ---------------------------------------------------------------------------------------
@@ -413,8 +420,17 @@ export function wallLandmarks(): LaniakeaLandmark[] {
       radiusPc: Math.round((450 / 2) * (71 / 74.6) * 1e6),
       sizeNote: 'Half its comoving length, 450 Mpc at Gott et al.\'s H0 71 (1.37 billion light years as seen), at H0 74.6.',
       path: sloanPath,
+      wall: {
+        flag: LANIAKEA_FLAGS.WALL_SLOAN,
+        raHours: [8.7, 13.7],
+        decDeg: [-2, 2],
+        halfDepthPc: WALL_HALF_DEPTH_PC,
+        discovered: 'Gott et al. 2005 (preprint 2003), SDSS',
+        width: 'Not measured: a slice 4° thick',
+        thickness: 'Not measured',
+      },
       source: 'Gott et al. 2005, ApJ 624, 463: 8.7h to 13.7h in the SDSS equatorial slice, z 0.073.',
-      note: 'Seen in a slice 4 degrees thick: its extent north and south of the equator is not measured there. Drawn as a line.',
+      note: 'Seen in a slice 4 degrees thick: its extent north and south of the equator is not measured there. Drawn as its galaxies here.',
     }),
     landmark({
       name: 'CfA2 Great Wall',
@@ -428,8 +444,40 @@ export function wallLandmarks(): LaniakeaLandmark[] {
       radiusPc: Math.round((240 / 2) * (71 / 74.6) * 1e6),
       sizeNote: 'Half its comoving length, 240 Mpc at Gott et al.\'s H0 71, at H0 74.6.',
       path: cfaPath,
+      wall: {
+        flag: LANIAKEA_FLAGS.WALL_CFA2,
+        raHours: [9, 16.7],
+        decDeg: [-8.5, 42],
+        halfDepthPc: WALL_HALF_DEPTH_PC,
+        discovered: 'Geller & Huchra 1989, CfA2',
+        width: 'About 50° of declination',
+        thickness: 'Not measured here',
+      },
       source: 'Geller & Huchra 1989, Science 246, 897; extent from Gott et al. 2005: 9h to 16.7h, Dec -8.5 to +42, median z 0.029.',
-      note: 'A sheet spanning 50 degrees of declination, drawn as a line through the Coma Cluster\'s.',
+      note: 'A sheet spanning 50 degrees of declination, drawn as its galaxies here.',
     }),
   ];
+}
+
+/** How far either side of a wall's median distance its galaxies are taken, pc: an estimate (see the header). */
+export const WALL_HALF_DEPTH_PC = 20e6;
+
+/** Each wall's galaxies, flagged as LANIAKEA_FLAGS says: by its landmark's span and depth. */
+export function wallMembers(galaxies: readonly PlacedGalaxy[], walls: readonly LaniakeaLandmark[]): { flags: Uint16Array; counts: Map<string, number> } {
+  const flags = new Uint16Array(galaxies.length);
+  const counts = new Map<string, number>();
+  for (const wall of walls) {
+    const w = wall.wall;
+    if (w === undefined) continue;
+    let count = 0;
+    galaxies.forEach((g, k) => {
+      const hours = g.raDeg / 15;
+      if (hours < w.raHours[0] || hours > w.raHours[1] || g.decDeg < w.decDeg[0] || g.decDeg > w.decDeg[1]) return;
+      if (Math.abs(g.distancePc - wall.distancePc) > w.halfDepthPc) return;
+      flags[k] = flags[k]! | w.flag;
+      count += 1;
+    });
+    counts.set(wall.name, count);
+  }
+  return { flags, counts };
 }

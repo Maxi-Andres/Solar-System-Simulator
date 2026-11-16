@@ -1,4 +1,4 @@
-import type { BodyId, LaniakeaLandmark } from '@sss/tools/types';
+import { LANIAKEA_FLAGS, type BodyId, type LaniakeaLandmark } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
@@ -7,12 +7,14 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   basinAt,
   FIELD,
+  structureOf,
   FIELD_GALAXY_REACH,
   laniakeaGalaxy,
   laniakeaKey,
   laniakeaNames,
   luminosityOf,
   transformPoint,
+  type FlowLines,
   type LaniakeaCatalogue,
   type LaniakeaNameIndex,
 } from '../core/laniakea.ts';
@@ -33,12 +35,14 @@ import { PARSEC_KM } from '../core/stars3d.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
+import { floorKept, halfCountRadiusPc } from './crowding.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { galacticDirection } from './galactic.ts';
 import { DISC_VOLUME_FRAGMENT, DISC_VOLUME_VERTEX, SERSIC_VOLUME_FRAGMENT, SERSIC_VOLUME_VERTEX, sersicAtlas } from './galaxyColumns.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
-import { labelSurface } from './isosurface.ts';
+import { homeNames } from './homeName.ts';
+import { labelSurface, labelVolume } from './isosurface.ts';
 import {
   boxMatrix,
   CLICK_SLOP_PX,
@@ -60,7 +64,7 @@ import {
   type Marks,
 } from './LocalGroup.tsx';
 import { systemStrength } from './markFolding.ts';
-import { laniakeaFolds, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, structuresFade, updateMarkHosts } from './markHosts.ts';
+import { GALACTIC_CENTRE_SCENE_PC, laniakeaFolds, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, structuresFade, updateMarkHosts } from './markHosts.ts';
 import { setMarkerPointer } from './markerPointer.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
@@ -108,17 +112,31 @@ import { SUPERGALACTIC_POLE } from './supergalactic.ts';
  * ## The basin
  *
  * Laniakea's boundary as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois 2023,
- * basins.bin), a surface netted from the grid (isosurface.ts), faint and lit at its rim so it
- * reads as an outline and not a wall: the Basins layer. And the groups' reconstruction's
+ * basins.bin), a smoothed surface netted from the grid (isosurface.ts), faint and lit at its rim
+ * so it reads as an outline and not a wall, and its inside a faint glow marched through the
+ * blurred grid (FILL_FRAGMENT), so the basin reads as a region and not as crossed sheets: the
+ * Basins layer. From inside, both weaker, and nothing within BASIN_NEAR_PC of the camera. And the groups' reconstruction's
  * answer beside it, where the Milky Way's flow ends at Shapley and Laniakea is a part of
  * Shapley's basin (Valade et al. 2024 find the data slightly prefer it): the Shapley Basin
  * layer. Neither is drawn as the truth; the About and the panels say both.
  *
+ * ## Where the galaxies flow
+ *
+ * The velocity field's streamlines (core/laniakea.ts FlowLines, tools/src/laniakea/flows.ts): a
+ * few dozen ribbons a few pixels wide, splined, tapering to their attractor, a brightening
+ * running down each at the field's speed sped up FLOW_GYR_PER_SECOND times: the Flow Lines layer.
+ *
  * ## Voids and walls
  *
- * Tully et al. 2019's voids as ellipsoids of their rough extents along the supergalactic axes,
- * outlined as the basin is; the walls as lines along their paths. Faint, with the structures'
- * names, and only once out of the Local Group (markHosts.ts structuresFade).
+ * Tully et al. 2019's voids as soft shells of their rough extents along the supergalactic axes,
+ * no rim (VOID_FRAGMENT); a wall as its galaxies (the records' WALL_ flags), their dots tinted,
+ * brighter while it is the focus, its path a faint hint. Faint, with the structures' names, and
+ * only once out of the Local Group (markHosts.ts structuresFade).
+ *
+ * ## Home
+ *
+ * "You are here": the Milky Way's mark, two rings, once the Local Volume is a speck
+ * (homeName.ts HERE_FOLD_PX), where its name is too.
  */
 
 /** Where the catalogue is fetched, light years from the Sun: past the Local Group's view (8 million), before the Local Volume's (100 million). */
@@ -164,6 +182,51 @@ export const SHAPLEY_OUTLINE_COLOR = '#6fa8d8';
 export const VOID_COLOR = '#8a8f9e';
 export const WALL_COLOR = '#d9c38e';
 
+/**
+ * The flow lines (core/laniakea.ts FlowLines), a few dozen: each a ribbon FLOW_WIDTH_PX wide on
+ * the screen, Laniakea's wider and in its outline's gold, any other basin's narrower in a muted
+ * grey-blue (Shapley's in its blue); narrowing over its last FLOW_TAPER_PC to its end, the way it
+ * flows. A gentle brightening runs down each, one every FLOW_PULSE_GYR of flow, at
+ * FLOW_GYR_PER_SECOND of flow a second -- not time as it passes: at 400 km/s a galaxy goes 1 Mpc
+ * in 2.4 Gyr, and the brightening 10 Mpc a second. Gone within FLOW_NEAR_PC of the camera.
+ */
+export const FLOW_OTHER_COLOR = '#7f8899';
+export const FLOW_WIDTH_PX = 1.8;
+export const FLOW_LANIAKEA_WIDTH_PX = 2.8;
+export const FLOW_TAPER_PC = 25e6;
+export const FLOW_BASE = 0.32;
+export const FLOW_OTHER_BASE = 0.26;
+export const FLOW_PULSE = 0.35;
+export const FLOW_PULSE_GYR = 80;
+export const FLOW_GYR_PER_SECOND = 25;
+export const FLOW_NEAR_PC = 8e6;
+/** Gyr for a parsec at 1 km/s: a parsec in km over a Gyr in seconds. */
+export const GYR_PER_PC_AT_KMS = 3.0857e13 / 3.15576e16;
+
+/**
+ * A basin's fill: the steps of the march, the glow a voxel of the basin adds (so a ray through
+ * Laniakea's middle, 20 voxels, is about 0.08), and its share from inside the basin, where it
+ * is everywhere about the camera.
+ */
+export const FILL_STEPS = 48;
+export const FILL_DENSITY = 0.004;
+export const FILL_INSIDE = 0.35;
+
+/** A void's shell begins at this share of its radius; its strength, and from inside it. */
+export const VOID_SHELL_FROM = 0.55;
+export const VOID_SHELL = 0.07;
+export const VOID_INSIDE = 0.4;
+
+/** A wall's line, now a hint under its galaxies (the Laniakea layer's dots, tinted). */
+export const WALL_LINE_OPACITY = 0.12;
+/** A wall's galaxies' dot, times the faint floor: always, and while the wall is the focus. */
+export const WALL_TINT = 0.8;
+export const WALL_TINT_FOCUSED = 12;
+
+/** "You are here": its mark's size, pixels, and colour, the folded home name's neutral white (MilkyWay.tsx). */
+export const HERE_PX = 18;
+export const HERE_COLOR = '#c0c0c0';
+
 /** The supergalactic axes, scene frame: SGX towards galactic longitude 137.37 in the Galactic plane, SGZ the pole. */
 export const SUPERGALACTIC_X = galacticDirection(137.37, 0);
 export const SUPERGALACTIC_Z = SUPERGALACTIC_POLE;
@@ -199,9 +262,15 @@ uniform vec3 uCameraPc;
 uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uFade;
+uniform vec2 uWallTint;
+uniform vec3 uWallColor;
 attribute vec3 aCentre;
 attribute vec3 aLight;
 attribute float aHalfLightPc;
+attribute float aWall;
+attribute float aFloor;
+// The floor kept as the catalogue crowds on the screen (crowding.ts floorKept): none from far off.
+uniform float uFloorKept;
 varying vec3 vPeak;
 varying float vSigmaPx;
 ${SPRITE_VERTEX_GLSL}
@@ -217,7 +286,10 @@ void main() {
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   vPeak = aLight * share * uFade / (6.2831853 * sigmaPc * sigmaPc);
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * share * uFade);
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aFloor * uFloorKept * share * uFade);
+  // A wall's galaxy (aWall: 1 the Sloan Great Wall's, 2 the CfA2's): its dot tinted, brighter while the wall is the focus.
+  float tint = max(mod(aWall, 2.0) * uWallTint.x, step(1.5, aWall) * uWallTint.y);
+  vPeak += uWallColor * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * tint * uFloorKept * share * uFade;
   vSigmaPx = sigmaPx;
   gl_Position = spriteCorner(projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0), spriteRadiusPx(vPeak, sigmaPx));
   #include <logdepthbuf_vertex>
@@ -298,6 +370,283 @@ void main() {
 }
 `;
 
+/**
+ * A flow line as a ribbon: each vertex twice, either side of the line, pushed apart on the screen
+ * across the line's direction there (from the vertices before and after it), so it is as wide in
+ * pixels from any distance; its Gyr down the line, its weight, its colour and its width.
+ */
+const FLOW_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+uniform vec3 uCameraPc;
+uniform float uUnitsPerPc;
+uniform vec2 uViewportPx;
+attribute vec3 aPrev;
+attribute vec3 aNext;
+attribute float aSide;
+attribute float aGyr;
+attribute float aWeight;
+attribute vec3 aColor;
+attribute float aWidthPx;
+attribute float aToEndPc;
+varying float vGyr;
+varying float vWeight;
+varying vec3 vColor;
+varying float vDistancePc;
+varying float vSide;
+
+vec2 screen(vec4 clip) {
+  return clip.xy / max(clip.w, 1e-20) * 0.5 * uViewportPx;
+}
+
+void main() {
+  mat4 m = projectionMatrix * modelViewMatrix;
+  vec3 rel = position - uCameraPc;
+  vec4 clip = m * vec4(rel * uUnitsPerPc, 1.0);
+  vec2 a = screen(m * vec4((aPrev - uCameraPc) * uUnitsPerPc, 1.0));
+  vec2 b = screen(m * vec4((aNext - uCameraPc) * uUnitsPerPc, 1.0));
+  vec2 dir = b - a;
+  dir = length(dir) > 1e-6 ? normalize(dir) : vec2(1.0, 0.0);
+  // Narrowing to its end, the way it flows.
+  float taper = mix(0.15, 1.0, smoothstep(0.0, ${FLOW_TAPER_PC.toExponential(3)}, aToEndPc));
+  vec2 offset = vec2(-dir.y, dir.x) * aSide * 0.5 * aWidthPx * taper;
+  clip.xy += offset / (0.5 * uViewportPx) * clip.w;
+  gl_Position = clip;
+  vGyr = aGyr;
+  vWeight = aWeight;
+  vColor = aColor;
+  vDistancePc = length(rel);
+  vSide = aSide;
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const FLOW_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform float uOpacity;
+uniform float uClockGyr;
+uniform float uNearPc;
+varying float vGyr;
+varying float vWeight;
+varying vec3 vColor;
+varying float vDistancePc;
+varying float vSide;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  // A broad brightening, its front where the pattern wraps, which moves downstream.
+  float u = fract((vGyr - uClockGyr) / ${FLOW_PULSE_GYR.toFixed(1)});
+  float pulse = u * u * u;
+  float near = smoothstep(0.5 * uNearPc, uNearPc, vDistancePc);
+  float across = 1.0 - vSide * vSide;
+  float alpha = uOpacity * vWeight * near * across * (1.0 + ${(FLOW_PULSE / FLOW_BASE).toFixed(3)} * pulse);
+  if (alpha < 0.002) discard;
+  gl_FragColor = vec4(vColor, alpha);
+}
+`;
+
+/**
+ * A basin's inside, marched: the box of its blurred field (isosurface.ts labelVolume), drawn by
+ * its back faces so it is there from inside too; along each ray from the camera, or from where
+ * the ray enters the box, to the face, the field summed, and drawn as that much of a glow --
+ * thin where the ray grazes the basin, thicker through it. Nothing within uNearVoxels of the
+ * camera counts: from inside, the basin about it is not a fog over the galaxies.
+ */
+const FILL_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+uniform vec3 uCameraPc;
+uniform float uUnitsPerPc;
+uniform mat4 uVoxelToScene;
+uniform vec3 uOrigin;
+uniform vec3 uSize;
+varying vec3 vVoxel;
+
+void main() {
+  vVoxel = uOrigin - 0.5 + position * uSize;
+  vec3 scene = (uVoxelToScene * vec4(vVoxel, 1.0)).xyz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4((scene - uCameraPc) * uUnitsPerPc, 1.0);
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const FILL_FRAGMENT = /* glsl */ `
+precision highp sampler3D;
+#include <logdepthbuf_pars_fragment>
+uniform sampler3D uField;
+uniform vec3 uCameraVoxel;
+uniform vec3 uOrigin;
+uniform vec3 uSize;
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uDensity;
+uniform float uNearVoxels;
+varying vec3 vVoxel;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 lo = uOrigin - 0.5;
+  vec3 hi = lo + uSize;
+  vec3 ray = vVoxel - uCameraVoxel;
+  float far = length(ray);
+  vec3 dir = ray / far;
+  vec3 inv = 1.0 / dir;
+  vec3 t0 = (lo - uCameraVoxel) * inv;
+  vec3 t1 = (hi - uCameraVoxel) * inv;
+  vec3 tmin = min(t0, t1);
+  float enter = max(0.0, max(tmin.x, max(tmin.y, tmin.z)));
+  const int STEPS = ${FILL_STEPS};
+  float dt = max(far - enter, 0.0) / float(STEPS);
+  // A step's start moved by a fixed draw per pixel: no bands where the steps line up.
+  float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  float sum = 0.0;
+  for (int i = 0; i < STEPS; i++) {
+    float t = enter + (float(i) + jitter) * dt;
+    vec3 p = uCameraVoxel + dir * t;
+    float f = texture(uField, (p - lo) / uSize).r;
+    sum += f * smoothstep(0.5 * uNearVoxels, uNearVoxels, t);
+  }
+  float alpha = uOpacity * (1.0 - exp(-uDensity * sum * dt));
+  if (alpha < 0.002) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+/**
+ * A void, as its shell: in the unit sphere of its ellipsoid, a ray's path through the shell
+ * between VOID_SHELL_FROM of its radius and its edge summed, rising and falling smoothly --
+ * an underdense region's soft boundary, with no rim and nothing at its middle.
+ */
+const VOID_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform vec3 uCameraPc;
+uniform vec3 uCentre;
+uniform mat3 uToUnit;
+uniform vec3 uColor;
+uniform float uOpacity;
+varying vec3 vNormal;
+varying vec3 vRel;
+
+float shell(float r) {
+  return smoothstep(${VOID_SHELL_FROM.toFixed(2)}, 0.88, r) * (1.0 - smoothstep(0.88, 1.0, r));
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  vec3 o = uToUnit * (uCameraPc - uCentre);
+  vec3 d = uToUnit * vRel;
+  // Where the ray from the camera enters the unit sphere, as a share of the way to this face.
+  float a = dot(d, d);
+  float b = dot(o, d);
+  float c = dot(o, o) - 1.0;
+  float disc = max(b * b - a * c, 0.0);
+  float enter = max(0.0, (-b - sqrt(disc)) / a);
+  float len = sqrt(a);
+  float sum = 0.0;
+  const int STEPS = 24;
+  float dt = (1.0 - enter) / float(STEPS);
+  for (int i = 0; i < STEPS; i++) {
+    float t = enter + (float(i) + 0.5) * dt;
+    sum += shell(length(o + d * t));
+  }
+  float alpha = uOpacity * sum * dt * len;
+  if (alpha < 0.002) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+/** "You are here": two rings, one in the other, in the marks' own neutral white: a mark like the others, doubled. */
+const HERE_VERTEX = /* glsl */ `
+#include <common>
+#include <logdepthbuf_pars_vertex>
+uniform vec3 uCameraPc;
+uniform float uUnitsPerPc;
+uniform float uPixelRatio;
+
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4((position - uCameraPc) * uUnitsPerPc, 1.0);
+  gl_PointSize = ${HERE_PX.toFixed(1)} * uPixelRatio;
+  #include <logdepthbuf_vertex>
+}
+`;
+
+const HERE_FRAGMENT = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform vec3 uColor;
+uniform float uFade;
+
+void main() {
+  #include <logdepthbuf_fragment>
+  float r = length(gl_PointCoord - 0.5) * ${HERE_PX.toFixed(1)};
+  float outer = 1.0 - smoothstep(0.5, 1.2, abs(r - ${(HERE_PX / 2 - 2).toFixed(1)}));
+  float inner = 1.0 - smoothstep(0.5, 1.2, abs(r - ${(HERE_PX / 4).toFixed(1)}));
+  float alpha = uFade * 0.75 * max(outer, inner);
+  if (alpha < 0.004) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+/**
+ * The faint dot every galaxy is given (FAINT_GALAXY_FLOOR: a map aid, not its light), weighted by
+ * its neighbours: the galaxies within FLOOR_REACH_PC, FLOOR_FULL_AT of them for the whole dot,
+ * FLOOR_LEAST of it alone. In a group or along a filament a galaxy keeps its dot; alone in a void
+ * it is fainter, so the web the catalogue holds shows instead of an even dust. Its light -- the
+ * sprite of its luminosity -- is never touched. A flux-limited survey thins with distance, so
+ * far off fewer are counted about any galaxy, and the far map's dots fade with it.
+ */
+export const FLOOR_REACH_PC = 4e6;
+export const FLOOR_FULL_AT = 8;
+export const FLOOR_LEAST = 0.15;
+/** Galaxies weighed a tick: some tens of milliseconds. */
+export const FLOOR_SLICE = 6000;
+
+/** The galaxies by cell of FLOOR_REACH_PC, for floorWeights: a cell's key its indices packed small. */
+export function floorGrid(records: Float32Array, count: number): Map<number, number[]> {
+  const grid = new Map<number, number[]>();
+  for (let k = 0; k < count; k += 1) {
+    const at = k * 12;
+    const id = floorCell(Math.floor(records[at]! / FLOOR_REACH_PC), Math.floor(records[at + 1]! / FLOOR_REACH_PC), Math.floor(records[at + 2]! / FLOOR_REACH_PC));
+    const list = grid.get(id);
+    if (list === undefined) grid.set(id, [k]);
+    else list.push(k);
+  }
+  return grid;
+}
+
+/** A cell's key: within 512 cells of the Sun's (2 Gpc) along each axis, packed into a small integer. */
+const floorCell = (i: number, j: number, k: number) => (i + 512) * 1048576 + (j + 512) * 1024 + (k + 512);
+
+/** The weights of galaxies `from` to `to` into `out` (see FLOOR_REACH_PC): done a slice at a time. */
+export function floorWeights(records: Float32Array, grid: ReadonlyMap<number, readonly number[]>, out: Float32Array, from: number, to: number): void {
+  const reach2 = FLOOR_REACH_PC * FLOOR_REACH_PC;
+  for (let k = from; k < to; k += 1) {
+    const at = k * 12;
+    const x = records[at]!;
+    const y = records[at + 1]!;
+    const z = records[at + 2]!;
+    const ci = Math.floor(x / FLOOR_REACH_PC);
+    const cj = Math.floor(y / FLOOR_REACH_PC);
+    const ck = Math.floor(z / FLOOR_REACH_PC);
+    let n = 0;
+    for (let dk = -1; dk <= 1 && n < FLOOR_FULL_AT; dk += 1) {
+      for (let dj = -1; dj <= 1 && n < FLOOR_FULL_AT; dj += 1) {
+        for (let di = -1; di <= 1 && n < FLOOR_FULL_AT; di += 1) {
+          const list = grid.get(floorCell(ci + di, cj + dj, ck + dk));
+          if (list === undefined) continue;
+          for (const j of list) {
+            if (j === k) continue;
+            const dx = records[j * 12]! - x;
+            const dy = records[j * 12 + 1]! - y;
+            const dz = records[j * 12 + 2]! - z;
+            if (dx * dx + dy * dy + dz * dz < reach2 && (n += 1) >= FLOOR_FULL_AT) break;
+          }
+        }
+      }
+    }
+    out[k] = FLOOR_LEAST + (1 - FLOOR_LEAST) * Math.min(1, n / FLOOR_FULL_AT);
+  }
+}
+
 /** A basin's surface (isosurface.ts) in parsecs about the Sun, its normals worked out there. */
 export function basinGeometry(
   labels: Uint8Array,
@@ -317,6 +666,170 @@ export function basinGeometry(
   geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/** How many points of a line's spline there are to each of its vertices. */
+export const FLOW_SPLINE = 3;
+
+/**
+ * The flow lines as ribbons about the Sun, pc (FLOW_VERTEX): each line a centripetal Catmull-Rom
+ * spline through its vertices, FLOW_SPLINE points to a vertex, its speed and weight interpolated
+ * along it; with its Gyr down the line, its distance to its end, and its basin's colour, opacity
+ * and width.
+ */
+export function flowGeometry(
+  flows: FlowLines,
+  styleOf: (basin: number) => { color: THREE.Color; opacity: number; widthPx: number },
+): THREE.BufferGeometry {
+  const { starts, positions, speeds, weights, basins } = flows;
+  const pos: number[] = [];
+  const prev: number[] = [];
+  const next: number[] = [];
+  const side: number[] = [];
+  const gyr: number[] = [];
+  const weight: number[] = [];
+  const color: number[] = [];
+  const width: number[] = [];
+  const toEnd: number[] = [];
+  const index: number[] = [];
+  for (let l = 0; l < flows.lines; l += 1) {
+    const first = starts[l]!;
+    const count = starts[l + 1]! - first;
+    if (count < 2) continue;
+    const style = styleOf(basins[l]!);
+    const curve = new THREE.CatmullRomCurve3(
+      Array.from({ length: count }, (_, i) => new THREE.Vector3(positions[(first + i) * 3]!, positions[(first + i) * 3 + 1]!, positions[(first + i) * 3 + 2]!)),
+      false,
+      'centripetal',
+    );
+    const n = (count - 1) * FLOW_SPLINE + 1;
+    const pts: THREE.Vector3[] = [];
+    const sp: number[] = [];
+    const wt: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const t = i / (n - 1);
+      pts.push(curve.getPoint(t));
+      const f = t * (count - 1);
+      const i0 = Math.min(count - 2, Math.floor(f));
+      const k = f - i0;
+      sp.push(speeds[first + i0]! * (1 - k) + speeds[first + i0 + 1]! * k);
+      wt.push(weights[first + i0]! * (1 - k) + weights[first + i0 + 1]! * k);
+    }
+    // Gyr down the line, at the speed between each pair of points (the slower weighing more).
+    const along = [0];
+    const dist = [0];
+    for (let i = 1; i < n; i += 1) {
+      const ds = pts[i]!.distanceTo(pts[i - 1]!);
+      const speed = Math.max(5, 2 / (1 / Math.max(1, sp[i]!) + 1 / Math.max(1, sp[i - 1]!)));
+      along.push(along[i - 1]! + (ds / speed) * GYR_PER_PC_AT_KMS);
+      dist.push(dist[i - 1]! + ds);
+    }
+    const base = pos.length / 3;
+    for (let i = 0; i < n; i += 1) {
+      const p = pts[i]!;
+      const a = pts[Math.max(0, i - 1)]!;
+      const b = pts[Math.min(n - 1, i + 1)]!;
+      for (const s of [-1, 1]) {
+        pos.push(p.x, p.y, p.z);
+        prev.push(a.x, a.y, a.z);
+        next.push(b.x, b.y, b.z);
+        side.push(s);
+        gyr.push(along[i]!);
+        weight.push(wt[i]! * style.opacity);
+        color.push(style.color.r, style.color.g, style.color.b);
+        width.push(style.widthPx);
+        toEnd.push(dist[n - 1]! - dist[i]!);
+      }
+      if (i > 0) {
+        const v = base + 2 * i;
+        index.push(v - 2, v - 1, v, v - 1, v + 1, v);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  const attribute = (values: number[], size: number) => new THREE.BufferAttribute(new Float32Array(values), size);
+  geometry.setAttribute('position', attribute(pos, 3));
+  geometry.setAttribute('aPrev', attribute(prev, 3));
+  geometry.setAttribute('aNext', attribute(next, 3));
+  geometry.setAttribute('aSide', attribute(side, 1));
+  geometry.setAttribute('aGyr', attribute(gyr, 1));
+  geometry.setAttribute('aWeight', attribute(weight, 1));
+  geometry.setAttribute('aColor', attribute(color, 3));
+  geometry.setAttribute('aWidthPx', attribute(width, 1));
+  geometry.setAttribute('aToEndPc', attribute(toEnd, 1));
+  geometry.setIndex(index);
+  return geometry;
+}
+
+/** A unit cube, 0 to 1 along each axis: the box a basin's fill is marched in. */
+export function unitBox(): THREE.BufferGeometry {
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  box.translate(0.5, 0.5, 0.5);
+  return box;
+}
+
+/** A basin drawn: its outline, its fill and the fill's field. */
+export interface BasinObjects {
+  readonly outline: THREE.Mesh;
+  readonly fill: THREE.Mesh;
+  readonly texture: THREE.Data3DTexture;
+}
+
+/** A basin's outline (basinGeometry) and its fill (FILL_FRAGMENT), in `color`; null where the grid has no such basin. */
+export function basinObjectsFor(
+  catalogue: LaniakeaCatalogue,
+  grid: 'galaxiesAttraction' | 'groupsAttraction',
+  name: string,
+  color: string,
+  outlineMaterial: (color: string, rim: number, face: number, nearPc: number) => THREE.ShaderMaterial,
+): BasinObjects | null {
+  const basins = catalogue.basins;
+  const label = catalogue.info.basins.basins.find((b) => b.grid === grid && b.name === name)?.label;
+  if (basins === null || label === undefined) return null;
+  const geometry = basinGeometry(basins.grids[grid], basins.size, label, basins.voxelToScene);
+  const volume = labelVolume(basins.grids[grid], basins.size, label);
+  if (geometry === null || volume === null) return null;
+  const outline = new THREE.Mesh(geometry, outlineMaterial(color, BASIN_RIM, BASIN_FACE, BASIN_NEAR_PC));
+  outline.frustumCulled = false;
+  outline.raycast = noRaycast;
+  outline.renderOrder = 1;
+  const [sx, sy, sz] = volume.size;
+  const texture = new THREE.Data3DTexture(volume.data, sx, sy, sz);
+  texture.format = THREE.RedFormat;
+  texture.type = THREE.UnsignedByteType;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.unpackAlignment = 1;
+  texture.needsUpdate = true;
+  const fill = new THREE.Mesh(
+    unitBox(),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uCameraPc: { value: new THREE.Vector3() },
+        uUnitsPerPc: { value: UNITS_PER_PC },
+        uVoxelToScene: { value: new THREE.Matrix4().fromArray(basins.voxelToScene) },
+        uOrigin: { value: new THREE.Vector3(...volume.origin) },
+        uSize: { value: new THREE.Vector3(sx, sy, sz) },
+        uField: { value: texture },
+        uCameraVoxel: { value: new THREE.Vector3() },
+        uColor: { value: new THREE.Color().setStyle(color, THREE.LinearSRGBColorSpace) },
+        uOpacity: { value: 0 },
+        uDensity: { value: FILL_DENSITY },
+        uNearVoxels: { value: BASIN_NEAR_PC / basins.voxelPc },
+      },
+      vertexShader: FILL_VERTEX,
+      fragmentShader: FILL_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      toneMapped: false,
+    }),
+  );
+  fill.frustumCulled = false;
+  fill.raycast = noRaycast;
+  fill.renderOrder = 1;
+  return { outline, fill, texture };
 }
 
 /** A void as an ellipsoid of its extents along the supergalactic axes, in parsecs about the Sun. */
@@ -363,6 +876,8 @@ export interface LaniakeaProps {
   /** The Basins layer: Laniakea's outline; and the groups' reconstruction's Shapley basin. */
   readonly showBasin: boolean;
   readonly showShapley: boolean;
+  /** The Flow Lines layer: the velocity field's streamlines, flowing. */
+  readonly showFlows: boolean;
   /** A galaxy's mark clicked: its record. */
   readonly onPick: (k: number) => void;
 }
@@ -417,7 +932,7 @@ function volumeFixed(galaxy: LocalGroupGalaxy, layerOf: (n: number) => number): 
   };
 }
 
-export function Laniakea({ source, names, store, clock, focus, visible, showMarks, showBasin, showShapley, onPick }: LaniakeaProps) {
+export function Laniakea({ source, names, store, clock, focus, visible, showMarks, showBasin, showShapley, showFlows, onPick }: LaniakeaProps) {
   const { gl, camera } = useThree();
   const catalogue = useSyncExternalStore(source.subscribe, () => source.value);
   const nameIndex = useSyncExternalStore(names.subscribe, () => names.value);
@@ -438,6 +953,9 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       uPixelsPerRadian: { value: 1 },
       uViewportPx: { value: new THREE.Vector2(1, 1) },
       uFade: { value: 0 },
+      uFloorKept: { value: 1 },
+      uWallTint: { value: new THREE.Vector2(WALL_TINT, WALL_TINT) },
+      uWallColor: { value: new THREE.Color().setStyle(WALL_COLOR, THREE.LinearSRGBColorSpace) },
     }),
     [],
   );
@@ -447,6 +965,9 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     const centre = new Float32Array(count * 3);
     const light = new Float32Array(count * 3);
     const halfLight = new Float32Array(count);
+    const wall = new Float32Array(count);
+    // Whole until weighed: a few hundred milliseconds, done after, a slice a tick (below).
+    const floor = new Float32Array(count).fill(1);
     const white = columnAt(WHITE_MU);
     for (let k = 0; k < count; k += 1) {
       const at = k * 12;
@@ -461,11 +982,16 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       light[k * 3 + 1] = g * l;
       light[k * 3 + 2] = b * l;
       halfLight[k] = recordHalfLightPc(records, k);
+      const flags = records[at + FIELD.flags]!;
+      wall[k] = (flags & LANIAKEA_FLAGS.WALL_SLOAN ? 1 : 0) + (flags & LANIAKEA_FLAGS.WALL_CFA2 ? 2 : 0);
     }
     const geometry = spriteGeometry(count);
     geometry.setAttribute('aCentre', new THREE.InstancedBufferAttribute(centre, 3));
     geometry.setAttribute('aLight', new THREE.InstancedBufferAttribute(light, 3));
     geometry.setAttribute('aHalfLightPc', new THREE.InstancedBufferAttribute(halfLight, 1));
+    geometry.setAttribute('aWall', new THREE.InstancedBufferAttribute(wall, 1));
+    const floorAttribute = new THREE.InstancedBufferAttribute(floor, 1);
+    geometry.setAttribute('aFloor', floorAttribute);
     const object = new THREE.Mesh(
       geometry,
       new THREE.ShaderMaterial({
@@ -481,8 +1007,31 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     object.frustumCulled = false;
     object.raycast = noRaycast;
     drawIntoGlow(object);
-    return { object, halfLight };
+    return { object, halfLight, floor, floorAttribute, halfCountPc: halfCountRadiusPc(centre, count) };
   }, [catalogue, pointUniforms]);
+
+  // Each galaxy's faint dot weighed by its neighbours (floorWeights), FLOOR_SLICE galaxies a tick.
+  useEffect(() => {
+    if (catalogue === null || points === null) return;
+    const grid = floorGrid(catalogue.records, catalogue.count);
+    const weighed = new Float32Array(catalogue.count);
+    let from = 0;
+    let handle = 0;
+    const step = () => {
+      const to = Math.min(catalogue.count, from + FLOOR_SLICE);
+      floorWeights(catalogue.records, grid, weighed, from, to);
+      from = to;
+      if (from < catalogue.count) {
+        handle = window.setTimeout(step, 0);
+        return;
+      }
+      points.floor.set(weighed);
+      points.floorAttribute.needsUpdate = true;
+      renderDemand.request();
+    };
+    handle = window.setTimeout(step, 0);
+    return () => window.clearTimeout(handle);
+  }, [catalogue, points]);
 
   // ---- The volumes: the few galaxies near enough, three instanced draws.
   const atlas = useMemo(() => sersicAtlas([BULGE_SERSIC_N]), []);
@@ -605,7 +1154,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     renderDemand.request();
   }, [marks, store, version]);
 
-  // ---- The outlines: Laniakea's basin, Shapley's, the voids; the walls.
+  // ---- The outlines and fills: Laniakea's basin, Shapley's; the voids; the walls.
   const outlineMaterial = (color: string, rim: number, face: number, nearPc: number) =>
     new THREE.ShaderMaterial({
       uniforms: {
@@ -624,34 +1173,29 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       side: THREE.DoubleSide,
       toneMapped: false,
     });
-  const [basinMeshes, setBasinMeshes] = useState<{ laniakea: THREE.Mesh | null; shapley: THREE.Mesh | null } | null>(null);
-  const wantBasins = showBasin || showShapley;
+  // Each basin netted and its field made a texture once, after the frame that first asked for
+  // it: some tens of milliseconds for Laniakea's, half a second for Shapley's, never for a layer
+  // left off.
+  const [basinObjects, setBasinObjects] = useState<Partial<Record<'laniakea' | 'shapley', BasinObjects | null>>>({});
   useEffect(() => {
-    if (catalogue === null || catalogue.basins === null || !wantBasins || basinMeshes !== null) return;
-    // Netted once, after the frame that asked: a few tens of milliseconds for the two.
+    if (catalogue === null || catalogue.basins === null) return;
+    const wanted = (['laniakea', 'shapley'] as const).filter((key) => (key === 'laniakea' ? showBasin : showShapley) && !(key in basinObjects));
+    if (wanted.length === 0) return;
     const handle = window.setTimeout(() => {
-      const basins = catalogue.basins!;
-      const info = catalogue.info.basins;
-      const make = (grid: 'galaxiesAttraction' | 'groupsAttraction', name: string, color: string) => {
-        const label = info.basins.find((b) => b.grid === grid && b.name === name)?.label;
-        const geometry = label === undefined ? null : basinGeometry(basins.grids[grid], basins.size, label, basins.voxelToScene);
-        if (geometry === null) return null;
-        const mesh = new THREE.Mesh(geometry, outlineMaterial(color, BASIN_RIM, BASIN_FACE, BASIN_NEAR_PC));
-        mesh.frustumCulled = false;
-        mesh.raycast = noRaycast;
-        mesh.renderOrder = 1;
-        return mesh;
-      };
-      setBasinMeshes({
-        laniakea: make('galaxiesAttraction', 'Laniakea', LANIAKEA_OUTLINE_COLOR),
-        // The groups' reconstruction: the basin the Milky Way's voxel is in there (info.home), Shapley's.
-        shapley: make('groupsAttraction', 'Shapley', SHAPLEY_OUTLINE_COLOR),
-      });
+      const made: Partial<Record<'laniakea' | 'shapley', BasinObjects | null>> = {};
+      for (const key of wanted) {
+        made[key] =
+          key === 'laniakea'
+            ? basinObjectsFor(catalogue, 'galaxiesAttraction', 'Laniakea', LANIAKEA_OUTLINE_COLOR, outlineMaterial)
+            : // The groups' reconstruction: the basin the Milky Way's voxel is in there (info.home), Shapley's.
+              basinObjectsFor(catalogue, 'groupsAttraction', 'Shapley', SHAPLEY_OUTLINE_COLOR, outlineMaterial);
+      }
+      setBasinObjects((before) => ({ ...before, ...made }));
       renderDemand.request();
     }, 0);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalogue, wantBasins, basinMeshes]);
+  }, [catalogue, showBasin, showShapley, basinObjects]);
 
   const structures = useMemo(() => {
     if (catalogue === null) return null;
@@ -660,13 +1204,39 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     for (const landmark of catalogue.info.landmarks) {
       if (landmark.kind === 'void') {
         const geometry = voidGeometry(landmark);
-        if (geometry === null) continue;
-        const mesh = new THREE.Mesh(geometry, outlineMaterial(VOID_COLOR, VOID_RIM, VOID_FACE, VOID_NEAR_PC));
+        if (geometry === null || landmark.extentPc === null) continue;
+        // Its shell marched in its own unit sphere: the map from the scene there.
+        const [a, b, c] = landmark.extentPc.map((e) => e / 2) as [number, number, number];
+        const X = SUPERGALACTIC_X;
+        const Y = SUPERGALACTIC_Y;
+        const Z = SUPERGALACTIC_Z;
+        const toUnit = new THREE.Matrix3().set(X.x / a, X.y / a, X.z / a, Y.x / b, Y.y / b, Y.z / b, Z.x / c, Z.y / c, Z.z / c);
+        const mesh = new THREE.Mesh(
+          geometry,
+          new THREE.ShaderMaterial({
+            uniforms: {
+              uCameraPc: { value: new THREE.Vector3() },
+              uUnitsPerPc: { value: UNITS_PER_PC },
+              uCentre: { value: new THREE.Vector3(landmark.x, landmark.y, landmark.z) },
+              uToUnit: { value: toUnit },
+              uColor: { value: new THREE.Color().setStyle(VOID_COLOR, THREE.LinearSRGBColorSpace) },
+              uOpacity: { value: 0 },
+            },
+            vertexShader: OUTLINE_VERTEX,
+            fragmentShader: VOID_FRAGMENT,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.BackSide,
+            toneMapped: false,
+          }),
+        );
         mesh.frustumCulled = false;
         mesh.raycast = noRaycast;
+        mesh.userData['landmark'] = landmark;
         voids.push(mesh);
       } else if (landmark.kind === 'wall' && landmark.path !== null && landmark.path.length > 1) {
-        // A smooth curve through its points, as the wall is drawn in its papers.
+        // A smooth curve through its points, as the wall is drawn in its papers: a hint now, its galaxies the wall.
         const curve = new THREE.CatmullRomCurve3(landmark.path.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
         const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(64));
         const line = new THREE.Line(
@@ -688,26 +1258,98 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         line.frustumCulled = false;
         line.raycast = noRaycast;
         line.userData['points'] = curve.getPoints(64);
+        line.userData['landmark'] = landmark;
         walls.push(line);
       }
     }
     return { voids, walls };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogue]);
 
+  // ---- The flow lines: one draw of segments, a dash running down each.
+  const flows = useMemo(() => {
+    const lines = catalogue?.flows ?? null;
+    if (catalogue === null || lines === null) return null;
+    const named = new Map(catalogue.info.basins.basins.filter((b) => b.grid === 'galaxiesAttraction').map((b) => [b.label, b.name]));
+    const colours = {
+      Laniakea: new THREE.Color().setStyle(LANIAKEA_OUTLINE_COLOR, THREE.LinearSRGBColorSpace),
+      Shapley: new THREE.Color().setStyle(SHAPLEY_OUTLINE_COLOR, THREE.LinearSRGBColorSpace),
+      other: new THREE.Color().setStyle(FLOW_OTHER_COLOR, THREE.LinearSRGBColorSpace),
+    };
+    const styleOf = (basin: number) => {
+      const name = named.get(basin);
+      return name === 'Laniakea'
+        ? { color: colours.Laniakea, opacity: FLOW_BASE, widthPx: FLOW_LANIAKEA_WIDTH_PX }
+        : { color: name === 'Shapley' ? colours.Shapley : colours.other, opacity: FLOW_OTHER_BASE, widthPx: FLOW_WIDTH_PX };
+    };
+    const object = new THREE.Mesh(
+      flowGeometry(lines, styleOf),
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uCameraPc: { value: new THREE.Vector3() },
+          uUnitsPerPc: { value: UNITS_PER_PC },
+          uViewportPx: { value: new THREE.Vector2(1, 1) },
+          uOpacity: { value: 0 },
+          uClockGyr: { value: 0 },
+          uNearPc: { value: FLOW_NEAR_PC },
+        },
+        vertexShader: FLOW_VERTEX,
+        fragmentShader: FLOW_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    );
+    object.frustumCulled = false;
+    object.raycast = noRaycast;
+    object.renderOrder = 2;
+    return object;
+  }, [catalogue]);
+
+  // ---- "You are here": the Milky Way's mark once home is a speck (homeName.ts).
+  const here = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(GALACTIC_CENTRE_SCENE_PC), 3));
+    const object = new THREE.Points(
+      geometry,
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uCameraPc: { value: new THREE.Vector3() },
+          uUnitsPerPc: { value: UNITS_PER_PC },
+          uPixelRatio: { value: 1 },
+          uColor: { value: new THREE.Color().setStyle(HERE_COLOR, THREE.LinearSRGBColorSpace) },
+          uFade: { value: 0 },
+        },
+        vertexShader: HERE_VERTEX,
+        fragmentShader: HERE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        toneMapped: false,
+      }),
+    );
+    object.frustumCulled = false;
+    object.raycast = noRaycast;
+    object.renderOrder = 5;
+    return object;
+  }, []);
+
   useEffect(() => {
-    const objects: THREE.Object3D[] = [volumes.disc.mesh, volumes.sersic.mesh, volumes.plummer.mesh];
+    const objects: THREE.Object3D[] = [volumes.disc.mesh, volumes.sersic.mesh, volumes.plummer.mesh, here];
     if (points !== null) objects.push(points.object);
     if (marks !== null) objects.push(marks.object);
     if (structures !== null) objects.push(...structures.voids, ...structures.walls);
-    if (basinMeshes?.laniakea) objects.push(basinMeshes.laniakea);
-    if (basinMeshes?.shapley) objects.push(basinMeshes.shapley);
+    if (flows !== null) objects.push(flows);
+    for (const basin of Object.values(basinObjects)) {
+      if (basin) objects.push(basin.outline, basin.fill);
+    }
     group.add(...objects);
     renderDemand.request();
     return () => {
       group.remove(...objects);
     };
-  }, [group, volumes, points, marks, structures, basinMeshes]);
+  }, [group, volumes, points, marks, structures, basinObjects, flows, here]);
 
   // Disposed with what made them.
   useEffect(() => () => {
@@ -736,12 +1378,26 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     }
   }, [structures]);
   useEffect(() => () => {
-    for (const mesh of [basinMeshes?.laniakea, basinMeshes?.shapley]) {
-      if (!mesh) continue;
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+    if (flows === null) return;
+    flows.geometry.dispose();
+    (flows.material as THREE.Material).dispose();
+  }, [flows]);
+  useEffect(() => () => {
+    here.geometry.dispose();
+    (here.material as THREE.Material).dispose();
+  }, [here]);
+  // A catalogue read anew drops the basins made from the old one.
+  useEffect(() => () => setBasinObjects({}), [catalogue]);
+  useEffect(() => () => {
+    for (const basin of Object.values(basinObjects)) {
+      if (!basin) continue;
+      for (const mesh of [basin.outline, basin.fill]) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+      basin.texture.dispose();
     }
-  }, [basinMeshes]);
+  }, [basinObjects]);
 
   // Scratch for the frame: the volumes drawn this frame.
   const resolved = useMemo(() => ({ k: [] as number[], px: [] as number[] }), []);
@@ -784,6 +1440,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
       renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
       pointUniforms['uFade']!.value = fade;
+      pointUniforms['uFloorKept']!.value = floorKept(points.halfCountPc, catalogue.count, cameraPc.length(), pixelsPerRadian);
     }
 
     // The volumes: those over UNRESOLVED_PX, the largest first.
@@ -871,24 +1528,46 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       }
     }
 
-    // The outlines and the walls, faint, with the structures.
-    const outline = (object: THREE.Object3D | null | undefined, opacity: number) => {
+    // The outlines and fills, the voids and the walls, faint, with the structures.
+    const setUniforms = (object: THREE.Object3D | null | undefined, opacity: number) => {
       if (!object) return;
       object.visible = opacity > 0;
       const uniforms = ((object as THREE.Mesh).material as THREE.ShaderMaterial).uniforms;
       (uniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
       uniforms['uOpacity']!.value = opacity;
     };
-    const inside = (grid: 'galaxiesAttraction' | 'groupsAttraction', name: string): number => {
+    const inside = (grid: 'galaxiesAttraction' | 'groupsAttraction', name: string): boolean => {
       const basins = catalogue.basins;
       const label = catalogue.info.basins.basins.find((b) => b.grid === grid && b.name === name)?.label;
-      return basins !== null && label !== undefined && basinAt(basins, grid, [cameraPc.x, cameraPc.y, cameraPc.z]) === label
-        ? OUTLINE_INSIDE
-        : 1;
+      return basins !== null && label !== undefined && basinAt(basins, grid, [cameraPc.x, cameraPc.y, cameraPc.z]) === label;
     };
-    outline(basinMeshes?.laniakea, showBasin ? structureFade * inside('galaxiesAttraction', 'Laniakea') : 0);
-    outline(basinMeshes?.shapley, showShapley ? structureFade * inside('groupsAttraction', 'Shapley') : 0);
-    for (const mesh of structures?.voids ?? []) outline(mesh, visible ? structureFade : 0);
+    const basin = (objects: BasinObjects | null | undefined, shown: boolean, grid: 'galaxiesAttraction' | 'groupsAttraction', name: string) => {
+      if (!objects) return;
+      const within = inside(grid, name);
+      setUniforms(objects.outline, shown ? structureFade * (within ? OUTLINE_INSIDE : 1) : 0);
+      setUniforms(objects.fill, shown ? structureFade * (within ? FILL_INSIDE : 1) : 0);
+      if (shown && catalogue.basins !== null) {
+        const [x, y, z] = transformPoint(catalogue.basins.sceneToVoxel, [cameraPc.x, cameraPc.y, cameraPc.z]);
+        const uniforms = (objects.fill.material as THREE.ShaderMaterial).uniforms;
+        (uniforms['uCameraVoxel']!.value as THREE.Vector3).set(x, y, z);
+      }
+    };
+    basin(basinObjects.laniakea, showBasin, 'galaxiesAttraction', 'Laniakea');
+    basin(basinObjects.shapley, showShapley, 'groupsAttraction', 'Shapley');
+    for (const mesh of structures?.voids ?? []) {
+      const landmark = mesh.userData['landmark'] as LaniakeaLandmark;
+      // From inside, its shell is all about the camera: fainter.
+      const [a, b, c] = (landmark.extentPc ?? [1, 1, 1]).map((e) => e / 2) as [number, number, number];
+      const dx = cameraPc.x - landmark.x;
+      const dy = cameraPc.y - landmark.y;
+      const dz = cameraPc.z - landmark.z;
+      const u = (dx * SUPERGALACTIC_X.x + dy * SUPERGALACTIC_X.y + dz * SUPERGALACTIC_X.z) / a;
+      const v = (dx * SUPERGALACTIC_Y.x + dy * SUPERGALACTIC_Y.y + dz * SUPERGALACTIC_Y.z) / b;
+      const w = (dx * SUPERGALACTIC_Z.x + dy * SUPERGALACTIC_Z.y + dz * SUPERGALACTIC_Z.z) / c;
+      const within = u * u + v * v + w * w < 1;
+      setUniforms(mesh, visible ? structureFade * VOID_SHELL * (within ? VOID_INSIDE : 1) : 0);
+    }
+    const focusedWall = structureOf(focus)?.kind === 'wall' ? structureOf(focus)!.name : null;
     for (const line of structures?.walls ?? []) {
       // Faded as the camera comes near it: beside Coma the CfA2 wall is a line across the frame.
       let nearest = Infinity;
@@ -896,7 +1575,36 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         nearest = Math.min(nearest, Math.hypot(p.x - cameraPc.x, p.y - cameraPc.y, p.z - cameraPc.z));
       }
       const t = Math.min(1, Math.max(0, (nearest - WALL_NEAR_PC / 2) / (WALL_NEAR_PC / 2)));
-      outline(line, visible ? structureFade * 0.45 * t * t * (3 - 2 * t) : 0);
+      setUniforms(line, visible ? structureFade * WALL_LINE_OPACITY * t * t * (3 - 2 * t) : 0);
+    }
+    // A wall's galaxies: their dots tinted, brighter while it is the focus.
+    (pointUniforms['uWallTint']!.value as THREE.Vector2).set(
+      focusedWall === 'Sloan Great Wall' ? WALL_TINT_FOCUSED : WALL_TINT,
+      focusedWall === 'CfA2 Great Wall' ? WALL_TINT_FOCUSED : WALL_TINT,
+    );
+
+    // The flow lines: a dash down each, at FLOW_GYR_PER_SECOND of flow a second of the wall clock.
+    if (flows !== null) {
+      const opacity = showFlows ? structureFade : 0;
+      setUniforms(flows, opacity);
+      if (opacity > 0) {
+        const uniforms = (flows.material as THREE.ShaderMaterial).uniforms;
+        uniforms['uClockGyr']!.value = ((performance.now() / 1000) * FLOW_GYR_PER_SECOND) % (FLOW_PULSE_GYR * 1000);
+        renderer.getDrawingBufferSize(uniforms['uViewportPx']!.value as THREE.Vector2);
+        // Moving, so a frame is wanted while they are shown.
+        renderDemand.request(2);
+      }
+    }
+
+    // "You are here", once home is a speck (homeName.ts): with the marks.
+    {
+      const element = renderer.domElement;
+      const home = homeNames(cameraPc.length() * PARSEC_KM, element.clientHeight, fov);
+      const uniforms = (here.material as THREE.ShaderMaterial).uniforms;
+      here.visible = home.here === true && showMarks;
+      (uniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
+      uniforms['uPixelRatio']!.value = renderer.getPixelRatio();
+      uniforms['uFade']!.value = here.visible ? 1 : 0;
     }
 
     // The marks: folded into their groups, present only near (see the header), decluttered.

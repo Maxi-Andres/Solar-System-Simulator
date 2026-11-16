@@ -51,6 +51,13 @@ import {
   structureOf,
 } from './core/laniakea.ts';
 import { renderDemand } from './core/renderDemand.ts';
+import {
+  ensureRecordHolders,
+  RECORD_HOLDER_FRAMING_KM,
+  RECORD_HOLDER_LAYER,
+  recordHolderEarthView,
+  recordHolderOf,
+} from './core/recordHolders.ts';
 import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
 import {
@@ -74,6 +81,11 @@ import { Toolbar } from './ui/Toolbar.tsx';
 // radii out -- all of it in view: whichever way it is focused. A galaxy of the Local Group the
 // same way, as its photographs show it, all of it in view (localGroup.ts).
 setFocusFraming((id) => {
+  // A record-holder from a billion light years on our side of it, looking out (recordHolders.ts).
+  const holder = recordHolderOf(id);
+  if (holder !== null) {
+    return { km: RECORD_HOLDER_FRAMING_KM, view: recordHolderEarthView(holder) };
+  }
   const structure = structureOf(id);
   if (structure !== null) {
     return { km: structureFramingKm(structure), view: structureEarthView(structure) };
@@ -123,6 +135,9 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   localGroup: ['galaxy'],
   // The named clusters, superclusters, basins, voids and walls, bodies once loaded (laniakea.ts).
   laniakea: ['structure'],
+  // The record-holders, structures by kind but this layer's (floatingOrigin.ts isShown); the
+  // CMB's sphere is drawn by the same switch.
+  observableUniverse: [RECORD_HOLDER_LAYER],
 };
 
 export function App() {
@@ -441,6 +456,7 @@ export function App() {
       ensureBlackHoles(store);
       ensureSupernovaRemnants(store);
       ensureLocalGroupGiants(store);
+      ensureRecordHolders(store);
       renderDemand.request();
     }
   }, [store]);
@@ -475,6 +491,7 @@ export function App() {
   }, [store, stars3d, starNames]);
   const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
   const horizonScaleLabels = useRef<(HTMLElement | null)[]>([]);
+  const cmbLabel = useRef<HTMLElement | null>(null);
   const scaleBar = useRef<ScaleBarElements | null>(null);
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
@@ -647,6 +664,8 @@ export function App() {
         showNuclearCluster={layers.nuclearCluster}
         galaxyLabels={galaxyLabels}
         horizonScaleLabels={horizonScaleLabels}
+        showObservableUniverse={layers.observableUniverse}
+        cmbLabel={cmbLabel}
         scaleBar={scaleBar}
         exoplanets={exoplanets}
         showExoplanetHosts={layers.exoplanetHosts}
@@ -668,6 +687,7 @@ export function App() {
         showLaniakea={layers.laniakea}
         showLaniakeaBasin={layers.laniakeaBasin}
         showShapleyBasin={layers.shapleyBasin}
+        showFlowLines={layers.flowLines}
         onPickLaniakeaGalaxy={goToLaniakeaGalaxy}
       />
 
@@ -676,6 +696,13 @@ export function App() {
       )}
       {layers.milkyWay && layers.labels && uiVisible && <GalaxyLabels elements={galaxyLabels} />}
       {layers.labels && uiVisible && <HorizonScaleLabels elements={horizonScaleLabels} />}
+      {layers.labels && uiVisible && (
+        <div style={LABEL_LAYER_STYLE}>
+          <span className="tracks-scene" ref={(element) => void (cmbLabel.current = element)} style={RING_LABEL_STYLE}>
+            Cosmic microwave background
+          </span>
+        </div>
+      )}
 
       <LabelLayer
         store={store}

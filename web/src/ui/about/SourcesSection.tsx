@@ -154,6 +154,16 @@ export const sourcesSection: AboutSection = {
             by European-led Principal Investigator consortia and with important participation from NASA.
           </Item>
           <Item>
+            The cosmic microwave background’s map: Credit: ESA, Planck Collaboration. Planck 2018 SMICA map, from the
+            Planck Legacy Archive through the NASA/IPAC Infrared Science Archive, adapted — made equirectangular,
+            8-bit — by tools/src/cmb/prepareCmb.ts, credited in web/public/cmb/CREDITS.md; CC BY-NC 3.0 IGO.
+          </Item>
+          <Item>
+            This research has made use of the NASA/IPAC Extragalactic Database (NED) and the NASA/IPAC Infrared
+            Science Archive, which are funded by the National Aeronautics and Space Administration and operated by
+            the California Institute of Technology.
+          </Item>
+          <Item>
             Supernova remnants’ positions and sizes from D. A. Green’s Catalogue of Galactic Supernova Remnants
             (2024 October version), https://www.mrao.cam.ac.uk/surveys/snrs/.
           </Item>

@@ -20,7 +20,7 @@ import * as THREE from 'three';
  *   depth = log2(1 + w / near) / log2(1 + far / near)
  *
  * Now every distance gets the same relative step, 2^-24 * ln 2 * log2(1 + far / near) of
- * itself -- 3.3e-6 with the far plane below -- and at the planets' distances the buffer
+ * itself -- 3.8e-6 with the far plane below -- and at the planets' distances the buffer
  * behaves as it did under three's own formula.
  *
  * ## The far plane moved for the light years (step D1), and what it cost
@@ -91,6 +91,26 @@ import * as THREE from 'three';
  * 86.4, has the same float32 step, 7.6e-6. And the projection term is still exactly 1 (far /
  * near = 1e26).
  *
+ * ## And again for the observable universe (step G4)
+ *
+ * The camera now pulls back to 400 billion ly (scale.ts), and may be focused on a record-holder
+ * 34 billion ly out; the far side of the CMB's sphere, 45.3 billion ly about the Sun, and of the
+ * observable universe, 46.2, are then up to 480 billion ly from it. So the far plane is 1e22
+ * units, 1e25 km, 1,057 billion ly -- twice that, as 1e20 was three times the 3.2 billion it
+ * had to hold. log2(1e28) against log2(1e26): another 8 %, 93.01 / 86.37, on every step:
+ *
+ *                     far 1e20 (G3)    far 1e22 (G4)
+ *   at 1 m              7.1 um           7.7 um
+ *   at 20 m (JWST)      0.075 mm         0.081 mm
+ *   at Earth's radius   23 m             25 m
+ *   at 1 AU             534 km           575 km
+ *
+ * vFragDepth reaches 1 + 4.7e21 * 1e6 = 4.7e27, inside float32's 3.4e38, and log2 of it, 91.9,
+ * has the same float32 step, 7.6e-6: a relative distance step of 5.3e-6, coarser than the
+ * buffer's own (3.8e-6 now) only past 2^64 metres, 1,950 ly, where everything drawn is a point,
+ * as before. And the projection term is still exactly 1 (far / near = 1e28), so nothing is ever
+ * far-clipped. The near plane stays at a metre.
+ *
  * Applied by replacing the two shader chunks that compute it, which every built-in
  * material and every custom shader here that includes them picks up. It must run before
  * the first material compiles; importing this module does it.
@@ -99,8 +119,8 @@ import * as THREE from 'three';
 /** The camera's near plane, scene units: one metre. */
 export const CAMERA_NEAR_UNITS = 1e-6;
 
-/** The camera's far plane, scene units: 1e23 km, 10.6 billion ly. See the header. */
-export const CAMERA_FAR_UNITS = 1e20;
+/** The camera's far plane, scene units: 1e25 km, 1,057 billion ly. See the header. */
+export const CAMERA_FAR_UNITS = 1e22;
 
 /** The 24-bit depth buffer's smallest step, as a fraction of the buffer's range. */
 const DEPTH_STEP = 2 ** -24;

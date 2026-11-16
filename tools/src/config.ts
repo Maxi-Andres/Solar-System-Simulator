@@ -803,6 +803,18 @@ export const CF4_DENSITY_URLS: readonly { readonly url: string; readonly voxels:
 ];
 
 /**
+ * The velocity of the same fit (Courtois et al. 2023), the field Laniakea's streamlines are
+ * traced through (laniakea/flows.ts): 128^3 x 3 on the same Zenodo record (25 MB), the 64^3 on
+ * the project page as the fallback; and the 64^3 error cube, the velocity's scatter over the
+ * fit's samples, published on the project page only (2 MB).
+ */
+export const CF4_VELOCITY_URLS: readonly { readonly url: string; readonly voxels: number }[] = [
+  { url: 'https://zenodo.org/records/20653238/files/CF4_new_128-z008_velocity.fits?download=1', voxels: 128 },
+  { url: 'https://projets.ip2i.in2p3.fr/cosmicflows/CF4_new_64-z008_velocity.fits', voxels: 64 },
+];
+export const CF4_VELOCITY_ERROR_URL = 'https://projets.ip2i.in2p3.fr/cosmicflows/CF4_new_64-z008_velocity_cube_error.fits';
+
+/**
  * The watersheds of that field (Dupuy & Courtois 2023, A&A 678, A176): its basins of
  * attraction and of repulsion, for the CF4 galaxies and for the CF4 groups, as four 128^3
  * FITS grids of basin numbers in one zip (67 MB, stored uncompressed) on the CosmicFlows

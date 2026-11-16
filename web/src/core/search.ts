@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { isSmallMoon } from '../scene/floatingOrigin.ts';
+import { recordHolderAliases, recordHolderKindLabel, recordHolderOf } from './recordHolders.ts';
 import { satelliteBodyTag } from './satelliteGroups.ts';
 import { structureKindLabel, structureOf } from './structures.ts';
 import type { LayerId } from '../state/store.ts';
@@ -74,7 +75,12 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
       return 'Galaxy';
     case 'structure': {
       const structure = structureOf(body.id);
-      return structure === null ? 'Structure' : structureKindLabel(structure.kind);
+      const holder = structure === null ? recordHolderOf(body.id) : null;
+      return structure !== null
+        ? structureKindLabel(structure.kind)
+        : holder !== null
+          ? `${recordHolderKindLabel(holder.kind)} · z ${holder.z}`
+          : 'Structure';
     }
   }
 }
@@ -118,7 +124,7 @@ export function layersFor(body: BodyDefinition): LayerId[] {
     case 'galaxy':
       return ['localGroup'];
     case 'structure':
-      return ['laniakea'];
+      return recordHolderOf(body.id) !== null ? ['observableUniverse'] : ['laniakea'];
   }
 }
 
@@ -203,9 +209,12 @@ export function searchBodies(
     // A satellite is also found by its catalogue name and numbers: "ISS", "HST", "25544",
     // "1998-067A". The International Space Station is "ISS (ZARYA)" in the catalogue, and
     // without that, "iss" found Larissa first.
+    // A record-holder by its other names likewise: "Pandora's Cluster", "Tonantzintla 618".
     const catalogue =
       tag === null
-        ? ''
+        ? body.kind === 'structure'
+          ? normalizeName(recordHolderAliases(body.id))
+          : ''
         : normalizeName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
