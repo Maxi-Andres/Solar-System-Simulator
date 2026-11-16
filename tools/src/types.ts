@@ -2374,3 +2374,166 @@ export interface CmbMapInfo {
   readonly source: string;
   readonly sourceUrl: string;
 }
+
+// ---------------------------------------------------------------------------------------
+// The cosmic web: cosmic-web/ (tools/src/cosmicWeb/)
+
+/**
+ * A `cosmic-web/` position's unit, parsecs: positions are Int16, scene frame (as laniakea/'s:
+ * heliocentric, ICRS rotated about its x axis by the IAU 1976 obliquity), at the comoving
+ * distance in Laniakea's cosmology -- so +-3,276.7 Mpc, z 0.98, in steps of 0.1 Mpc, finer
+ * than any redshift distance is known to.
+ */
+export const COSMIC_WEB_POSITION_UNIT_PC = 100_000;
+
+/**
+ * Bytes per galaxy in a `cosmic-web/galaxies-<k>.bin` chunk of n galaxies, one column after
+ * another, little-endian:
+ *
+ *   Int16 [3n]  x, y, z interleaved, COSMIC_WEB_POSITION_UNIT_PC
+ *   Uint8 [n]   absolute V, Vega: COSMIC_WEB_ABS_V.min + code x step (255: not known)
+ *   Uint8 [n]   B-V, Vega, rest frame: COSMIC_WEB_BV.min + code x step (255: not known)
+ *   Uint8 [n]   COSMIC_WEB_FLAGS bits
+ *
+ * The chunks together are one list ordered by absolute V, most luminous first, those without
+ * one last: any number of chunks from the first is the layer's most luminous galaxies.
+ */
+export const COSMIC_WEB_GALAXY_BYTES = 9;
+export const COSMIC_WEB_ABS_V = { min: -26, step: 0.05, unknown: 255 } as const;
+export const COSMIC_WEB_BV = { min: -0.25, step: 0.01, unknown: 255 } as const;
+
+/** The bits of a `cosmic-web/` galaxy's flags. */
+export const COSMIC_WEB_FLAGS = {
+  /** In the SDSS DR8 main galaxy sample as Tempel et al. 2014 give it (z 0.009-0.2). */
+  SDSS_MAIN: 1,
+  /** In BOSS DR12's LOWZ+CMASS large-scale-structure sample (z to 0.8). */
+  BOSS: 2,
+  /**
+   * In a Friends-of-Friends group of two or more (Tempel et al. 2012): placed at the group's
+   * finger-of-god-suppressed distance, the group's spread along the line of sight made its
+   * spread on the sky -- not at its own redshift's.
+   */
+  GROUP_COMPRESSED: 4,
+  /** Within 0.5 h^-1 Mpc, the filaments' radius, of a Tempel et al. 2014 filament's axis. */
+  IN_FILAMENT: 8,
+  /** Rest-frame V (or B) past the SDSS z band: the i - z slope carried on (z > 0.63). */
+  COLOUR_EXTRAPOLATED: 16,
+  /** BOSS's redshift is SDSS-I/II's (Legacy, IMATCH 2), not BOSS's own. */
+  LEGACY_REDSHIFT: 32,
+} as const;
+
+/** A `cosmic-web/` filament catalogue, in filaments.bin's catalogue column. */
+export const COSMIC_WEB_FILAMENT_CATALOGUES = { tempel2014: 0, malavasi2020: 1 } as const;
+
+/** A survey's footprint on the sky, as `cosmic-web.json` gives it. */
+export interface CosmicWebFootprint {
+  readonly name: string;
+  /** What it is a footprint of: the galaxies, or the filaments as kept. */
+  readonly of: 'galaxies' | 'filaments';
+  /** Base64 of a bit a cell of `footprints.grid` (bit i in byte i >> 3, least significant first): set where it has a galaxy or a filament point. */
+  readonly cells: string;
+  readonly cellCount: number;
+  readonly areaDeg2: number;
+  /** The CMB-frame redshifts it spans, and the comoving distances, pc. */
+  readonly zMin: number;
+  readonly zMax: number;
+  readonly distanceMinPc: number;
+  readonly distanceMaxPc: number;
+  readonly note: string;
+}
+
+/**
+ * `cosmic-web/cosmic-web.json`: what the other files in `cosmic-web/` hold and how they were
+ * made. Written last, so a run cut short leaves none (the app reads that as no cosmic web).
+ */
+export interface CosmicWebInfo {
+  readonly generatedAt: string;
+  readonly sources: Readonly<
+    Record<
+      string,
+      {
+        readonly citation: string;
+        readonly url: string;
+        readonly queriedAt: string;
+        readonly rows: number | null;
+        /** The terms it is used under, as its publisher states them (or that none is stated). */
+        readonly licence: string;
+        /** The credit line the publisher asks for. */
+        readonly credit: string;
+      }
+    >
+  >;
+  readonly frame: string;
+  readonly obliquityArcsec: number;
+  readonly positionUnitPc: typeof COSMIC_WEB_POSITION_UNIT_PC;
+  readonly cosmology: {
+    readonly h0KmSMpc: number;
+    readonly omegaM: number;
+    readonly cmbDipole: { readonly speedKmS: number; readonly lDeg: number; readonly bDeg: number };
+    readonly note: string;
+  };
+  readonly galaxies: {
+    readonly count: number;
+    readonly bytesPerGalaxy: typeof COSMIC_WEB_GALAXY_BYTES;
+    readonly chunks: readonly { readonly file: string; readonly bytes: number; readonly count: number; readonly absVBrightest: number; readonly absVFaintest: number }[];
+    readonly absV: typeof COSMIC_WEB_ABS_V;
+    readonly bv: typeof COSMIC_WEB_BV;
+    readonly flags: typeof COSMIC_WEB_FLAGS;
+    /** Kept a survey, and why the rest were not. */
+    readonly counts: Readonly<Record<string, number>>;
+    /** Nearest, median and farthest placed, comoving, pc. */
+    readonly distanceRangePc: { readonly min: number; readonly median: number; readonly max: number };
+    /** The offsets V and B-V were moved by onto G3's, and on how many galaxies they were measured. */
+    readonly calibration: readonly {
+      readonly survey: string;
+      readonly onto: string;
+      readonly quantity: 'V' | 'B-V';
+      readonly offset: number;
+      readonly scatter: number;
+      readonly galaxies: number;
+    }[];
+    readonly photometryNote: string;
+    readonly placementNote: string;
+  };
+  /**
+   * `filaments.bin`, little-endian, one column after another:
+   *
+   *   Uint32 [lines + 1]  each line's first vertex, and one past the last line's
+   *   Int16  [3 vertices] x, y, z, COSMIC_WEB_POSITION_UNIT_PC
+   *   Uint16 [lines]      the line's length as placed, 0.1 Mpc
+   *   Uint16 [lines]      galaxies within its radius (Tempel's Ng0.5); 65535 not counted
+   *   Uint8  [vertices]   the catalogue's value there: catalogues[].vertexValue says which
+   *   Uint8  [lines]      its catalogue, COSMIC_WEB_FILAMENT_CATALOGUES
+   */
+  readonly filaments: {
+    readonly file: string;
+    readonly bytes: number;
+    readonly lines: number;
+    readonly vertices: number;
+    readonly catalogues: readonly {
+      readonly key: keyof typeof COSMIC_WEB_FILAMENT_CATALOGUES;
+      readonly name: string;
+      readonly firstLine: number;
+      readonly lines: number;
+      readonly vertices: number;
+      /** What the vertex byte holds: value = min + code x step (255 none). */
+      readonly vertexValue: { readonly meaning: string; readonly min: number; readonly step: number };
+      readonly lengthMpc: { readonly median: number; readonly p90: number; readonly max: number };
+      readonly zRange: readonly [number, number];
+      /** What was taken out, and why, by count. */
+      readonly dropped: Readonly<Record<string, number>>;
+      readonly note: string;
+    }[];
+  };
+  readonly footprints: {
+    /** Equal-area cells: decBands bands even in sin(Dec) from the south pole, raCells columns from RA 0 eastward; cell = band x raCells + column. */
+    readonly grid: { readonly decBands: number; readonly raCells: number; readonly cellDeg2: number };
+    readonly surveys: readonly CosmicWebFootprint[];
+  };
+  /** Galaxies kept a survey in shells of `widthPc` from the Sun, comoving: how each thins with distance. */
+  readonly shells: { readonly widthPc: number; readonly counts: Readonly<Record<string, readonly number[]>> };
+  /** Checks this run made of the catalogues' frames, with their numbers. */
+  readonly checks: Readonly<Record<string, { readonly passed: boolean; readonly value: number; readonly note: string }>>;
+  /** What each catalogue covers, and where the map is empty because the surveys stop. */
+  readonly coverage: readonly string[];
+}

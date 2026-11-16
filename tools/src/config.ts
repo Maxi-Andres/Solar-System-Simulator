@@ -835,3 +835,41 @@ export const DATA_USER_AGENT = 'Solar-System-Simulator data build (+https://gith
 /** The output directory, and the description written last within it. */
 export const LANIAKEA_DIR = 'laniakea';
 export const LANIAKEA_INFO_FILE = 'laniakea.json';
+
+/**
+ * The cosmic web (cosmicWeb/): filaments and the SDSS's redshift surveys' galaxies past
+ * Laniakea's catalogue.
+ *
+ * Tempel et al. 2014 (MNRAS 438, 3465; VizieR J/MNRAS/438/3465, doi 10.26093/cds/vizier.74383465):
+ * table1, the 15,421 filaments of the SDSS DR8 main sample found by the Bisous model; table2,
+ * their 275,599 spine points; table3, the 576,493 galaxies they were found in. Read from the
+ * CfA's VizieR mirror (VIZIER_ASU_MIRRORS), only the columns used: 30 MB and 72 MB of text.
+ */
+export const TEMPEL_2014_FILAMENT_TABLE = 'J/MNRAS/438/3465/table1';
+export const TEMPEL_2014_POINT_TABLE = 'J/MNRAS/438/3465/table2';
+export const TEMPEL_2014_GALAXY_TABLE = 'J/MNRAS/438/3465/table3';
+
+/**
+ * Malavasi et al. 2020 (A&A 642, A19): the DisPerSE skeleton of BOSS DR12 LOWZ+CMASS in the
+ * northern galactic cap, 5 sigma persistence, unsmoothed density, skeleton smoothed once
+ * (S001), broken at bifurcations -- one of the 24 published on the ByoPiC team's L3S/COSFIL
+ * page (https://l3s.osups.universite-paris-saclay.fr/cosfil.html), 7.5 MB of NDskl ASCII.
+ * The IAS's old host (www.ias.u-psud.fr) redirects here.
+ */
+export const MALAVASI_2020_SKELETON_URL =
+  'https://www.ias.universite-paris-saclay.fr/douspis/FILAMENTS/lc_north_dis.dat.NDnet_s5.up.NDskl.BRK.S001.a.NDskl';
+export const MALAVASI_2020_PAGE = 'https://l3s.osups.universite-paris-saclay.fr/cosfil.html';
+
+/**
+ * BOSS DR12's large-scale-structure galaxy catalogues (Reid et al. 2016, MNRAS 455, 1553), on
+ * the SDSS Science Archive Server: CMASSLOWZTOT, the LOWZ and CMASS samples joined, north
+ * (953,255 rows, 217 MB gzipped) and south (83 MB).
+ */
+export const BOSS_DR12_GALAXY_URLS = {
+  north: 'https://data.sdss.org/sas/dr12/boss/lss/galaxy_DR12v5_CMASSLOWZTOT_North.fits.gz',
+  south: 'https://data.sdss.org/sas/dr12/boss/lss/galaxy_DR12v5_CMASSLOWZTOT_South.fits.gz',
+} as const;
+
+/** The output directory, and the description written last within it. */
+export const COSMIC_WEB_DIR = 'cosmic-web';
+export const COSMIC_WEB_INFO_FILE = 'cosmic-web.json';

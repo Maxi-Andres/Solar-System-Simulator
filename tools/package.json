@@ -23,6 +23,7 @@
     "fetch:local-group": "node src/localGroup/fetchLocalGroup.ts",
     "fetch:local-volume": "node src/localVolume/fetchLocalVolume.ts",
     "fetch:laniakea": "node src/laniakea/fetchLaniakea.ts",
+    "fetch:cosmic-web": "node --max-old-space-size=6144 src/cosmicWeb/fetchCosmicWeb.ts",
     "prepare:cmb": "node src/cmb/prepareCmb.ts",
     "write:catalog": "node src/writeCatalog.ts",
     "moons:list": "node src/moons/buildMoonList.ts",

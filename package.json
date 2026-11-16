@@ -21,6 +21,7 @@
     "fetch:clusters": "pnpm --filter @sss/tools fetch:clusters",
     "fetch:local-group": "pnpm --filter @sss/tools fetch:local-group",
     "fetch:laniakea": "pnpm --filter @sss/tools fetch:laniakea",
+    "fetch:cosmic-web": "pnpm --filter @sss/tools fetch:cosmic-web",
     "write:catalog": "pnpm --filter @sss/tools write:catalog",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

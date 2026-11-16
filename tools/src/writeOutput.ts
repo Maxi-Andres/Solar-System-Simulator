@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import {
   BELT_NAMES_FILE,
   COMETS_INFO_FILE,
+  COSMIC_WEB_DIR,
+  COSMIC_WEB_INFO_FILE,
   EXOPLANETS_FILE,
   OUTPUT_DIR,
   POSITION_DECIMALS,
@@ -22,6 +24,7 @@ import {
   VELOCITY_DECIMALS,
 } from './config.ts';
 import { beltBytes, type BeltBuild } from './belt/buildBelt.ts';
+import type { CosmicWebOutput } from './cosmicWeb/cosmicWeb.ts';
 import type { LaniakeaOutput } from './laniakea/laniakea.ts';
 import type { CometBuild } from './belt/comets.ts';
 import type { SatelliteBuild } from './satellites/buildSatellites.ts';
@@ -353,4 +356,19 @@ export async function writeLaniakea(output: LaniakeaOutput, outputDir = OUTPUT_D
     await writeFile(join(directory, file), bytes);
   }
   await writeJson(join(directory, LANIAKEA_INFO_FILE), output.info);
+}
+
+/**
+ * The cosmic web, as cosmic-web/: the galaxies' chunks, the filaments, and cosmic-web.json
+ * describing them (CosmicWebInfo), written last so an interrupted write leaves none -- which
+ * the app reads as no cosmic web. Replaces cosmic-web/ and nothing else.
+ */
+export async function writeCosmicWeb(output: CosmicWebOutput, outputDir = OUTPUT_DIR): Promise<void> {
+  const directory = join(outputDir, COSMIC_WEB_DIR);
+  await rm(directory, { recursive: true, force: true });
+  await mkdir(directory, { recursive: true });
+  for (const [file, bytes] of Object.entries(output.files)) {
+    await writeFile(join(directory, file), bytes);
+  }
+  await writeJson(join(directory, COSMIC_WEB_INFO_FILE), output.info);
 }
