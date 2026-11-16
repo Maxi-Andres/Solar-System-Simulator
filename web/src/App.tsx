@@ -1,5 +1,5 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 import type { DistanceMode, EphemerisStore } from './core/ephemerisStore.ts';
 import { addNamedSatellites } from './core/satelliteBodies.ts';
@@ -12,7 +12,6 @@ import { DETAIL_RELEASE_MS } from './scene/detailRelease.ts';
 import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { setFocusFraming, useViewStore } from './state/store.ts';
-import { AboutPanel } from './ui/AboutPanel.tsx';
 import {
   ALPHA_CEN_MEMBERS,
   alphaCenEntries,
@@ -32,6 +31,14 @@ import { archivePlanetId, CURATED_HOSTS } from './core/exoplanetArchive.ts';
 import { addStarBody } from './core/starBodies.ts';
 import { ensureBlackHoles } from './core/blackHoles.ts';
 import { ensureSupernovaRemnants, remnantEarthView, remnantOf, remnantRadiusKm } from './core/supernovaRemnants.ts';
+import { ensureNebulae, nebulaFraming } from './core/nebulae.ts';
+import { ensureMessierObjects, messierFraming } from './core/messier.ts';
+import { ensureNotableStars, notableStarFraming } from './core/notableStars.ts';
+import { MESSIER_MARK_KIND, NOTABLE_STAR_KIND } from './core/deepSky.ts';
+import { regionOf } from './core/regions.ts';
+import { ensureLagrangePoints } from './core/lagrange.ts';
+import { ensureHeliosphereBodies } from './core/heliosphere.ts';
+import { ensureMagnetosphereBodies } from './core/magnetosphere.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -79,6 +86,11 @@ import { SearchPanel } from './ui/SearchPanel.tsx';
 import { TimeControls } from './ui/TimeControls.tsx';
 import { Toolbar } from './ui/Toolbar.tsx';
 
+// The About is a chunk of its own, a fifth of the code and none of it in the first view:
+// fetched once the first view is up (below), or the first time it is opened if that is sooner.
+const loadAboutPanel = () => import('./ui/AboutPanel.tsx');
+const AboutPanel = lazy(() => loadAboutPanel().then((module) => ({ default: module.AboutPanel })));
+
 // A supernova remnant is gone to from Earth's side of it, as its photographs show it, six of its
 // radii out -- all of it in view: whichever way it is focused. A galaxy of the Local Group the
 // same way, as its photographs show it, all of it in view (localGroup.ts).
@@ -95,6 +107,15 @@ setFocusFraming((id) => {
   const remnant = remnantOf(id);
   if (remnant !== null) {
     return { km: 6 * remnantRadiusKm(remnant), view: remnantEarthView(remnant) };
+  }
+  const nebula = nebulaFraming(id) ?? messierFraming(id) ?? notableStarFraming(id);
+  if (nebula !== null) {
+    return nebula;
+  }
+  // A Lagrange point or a boundary's mark, from far enough to see what it is about (regions.ts).
+  const region = regionOf(id);
+  if (region !== null) {
+    return { km: region.framingKm, view: null };
   }
   const galaxy = galaxyOf(id);
   return galaxy === null ? null : { km: galaxyFramingKm(galaxy), view: galaxyEarthView(galaxy) };
@@ -133,6 +154,12 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // The supernova remnants are bodies from the start (supernovaRemnants.ts): their names and
   // rings go with their layer.
   supernovaRemnants: ['supernova-remnant'],
+  // The nebulae, bodies from the start (nebulae.ts), and the Messier objects drawn as nothing
+  // else (messier.ts) and the notable stars (notableStars.ts), marks of their own: 'deep-sky'
+  // for the label pass, and each layer's pseudo-kind (floatingOrigin.ts isShown).
+  nebulae: ['nebula'],
+  messier: ['deep-sky', MESSIER_MARK_KIND],
+  notableStars: ['deep-sky', NOTABLE_STAR_KIND],
   // The four big galaxies are bodies from the start, a dwarf once gone to (localGroup.ts).
   localGroup: ['galaxy'],
   // The named clusters, superclusters, basins, voids and walls, bodies once loaded (laniakea.ts).
@@ -140,6 +167,10 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // The record-holders, structures by kind but this layer's (floatingOrigin.ts isShown); the
   // CMB's sphere is drawn by the same switch.
   observableUniverse: [RECORD_HOLDER_LAYER],
+  // The regions (regions.ts): each layer its pseudo-kind, and 'region' with it for the label pass.
+  lagrangePoints: ['region', 'lagrange-point'],
+  heliosphere: ['region', 'heliosphere'],
+  magnetosphere: ['region', 'magnetosphere'],
 };
 
 export function App() {
@@ -458,14 +489,27 @@ export function App() {
     if (store !== null) {
       ensureBlackHoles(store);
       ensureSupernovaRemnants(store);
+      ensureNebulae(store);
+      ensureMessierObjects(store);
+      ensureNotableStars(store);
       ensureLocalGroupGiants(store);
+      // The Lagrange points, the heliosphere's marks and the magnetosphere's: computed, no data.
+      ensureLagrangePoints(store);
+      ensureHeliosphereBodies(store);
+      ensureMagnetosphereBodies(store);
       renderDemand.request();
       // The record-holders, billions of light years off, are drawn only from far out: placed once
       // the first view is up -- their redshifts' integrals were a tenth of a second before it.
-      return whenIdle(() => {
+      const cancelHolders = whenIdle(() => {
         ensureRecordHolders(store);
         renderDemand.request();
       });
+      // The About's chunk, so that opening it is not a wait: in a later idle moment still.
+      const cancelAbout = whenIdle(() => void loadAboutPanel().catch(() => undefined), 10_000);
+      return () => {
+        cancelHolders();
+        cancelAbout();
+      };
     }
     return undefined;
   }, [store]);
@@ -711,6 +755,14 @@ export function App() {
         cosmicWeb={cosmicWeb}
         showSdssGalaxies={layers.sdssGalaxies}
         showFilaments={layers.filaments}
+        galaxyFeatures={{
+          nebulae: layers.nebulae,
+          stellarStreams: layers.stellarStreams,
+          galacticBubbles: layers.galacticBubbles,
+          localInterstellar: layers.localInterstellar,
+          labels: layers.labels && uiVisible,
+          icons: layers.icons,
+        }}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (
@@ -839,17 +891,19 @@ export function App() {
       )}
 
       <Presence show={openPanel === 'about'}>
-        <AboutPanel
-          store={store}
-          stars={stars}
-          belt={belt}
-          comets={comets}
-          satellites={satellites}
-          stars3d={stars3d}
-          exoplanets={exoplanets}
-          pulsars={pulsars}
-          globularClusters={globularClusters}
-        />
+        <Suspense fallback={null}>
+          <AboutPanel
+            store={store}
+            stars={stars}
+            belt={belt}
+            comets={comets}
+            satellites={satellites}
+            stars3d={stars3d}
+            exoplanets={exoplanets}
+            pulsars={pulsars}
+            globularClusters={globularClusters}
+          />
+        </Suspense>
       </Presence>
 
       {/* The only way back once the interface is switched off. */}

@@ -194,7 +194,9 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
     body.kind === 'structure' ||
     body.kind === 'neutron-star' ||
     body.kind === 'globular-cluster' ||
-    body.kind === 'supernova-remnant'
+    body.kind === 'supernova-remnant' ||
+    body.kind === 'nebula' ||
+    body.kind === 'deep-sky'
   ) {
     return 'none';
   }
@@ -240,7 +242,11 @@ export function BodyPicker({
   // A pulsar or a globular cluster is out in the galaxy, as a black hole is: hundreds of
   // light years off at the least.
   const inGalaxy =
-    focusBody.kind === 'neutron-star' || focusBody.kind === 'globular-cluster' || focusBody.kind === 'supernova-remnant';
+    focusBody.kind === 'neutron-star' ||
+    focusBody.kind === 'globular-cluster' ||
+    focusBody.kind === 'supernova-remnant' ||
+    focusBody.kind === 'nebula' ||
+    focusBody.kind === 'deep-sky';
   // Another galaxy: out of the Milky Way altogether -- and beyond the Local Group, in the
   // Local Volume or in the Virgo Cluster.
   const inOtherGalaxy = focusBody.kind === 'galaxy' || focusBody.kind === 'structure';
@@ -950,7 +956,10 @@ function BodyList({
       body.kind !== 'neutron-star' &&
       body.kind !== 'globular-cluster' &&
       body.kind !== 'supernova-remnant' &&
+      body.kind !== 'nebula' &&
+      body.kind !== 'deep-sky' &&
       body.kind !== 'galaxy' &&
+      body.kind !== 'region' &&
       !isCatalogueStar(body) &&
       visibleKinds.has(body.kind),
   );
@@ -1760,6 +1769,7 @@ function UniverseList({
 
 /** The kinds out in the galaxy listed under Milky Way, in their order, with their headings. */
 const GALAXY_PLACES: readonly { readonly kind: string; readonly label: string }[] = [
+  { kind: 'nebula', label: 'Nebulae' },
   { kind: 'supernova-remnant', label: 'Supernova remnants' },
   { kind: 'neutron-star', label: 'Pulsars' },
   { kind: 'globular-cluster', label: 'Globular clusters' },

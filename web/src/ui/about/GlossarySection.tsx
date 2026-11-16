@@ -1,11 +1,13 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import type { BodyKind } from '@sss/tools/types';
-
+import type { EphemerisStore } from '../../core/ephemerisStore.ts';
+import { useStoreVersion } from '../../core/useStoreVersion.ts';
 import { GLOSSARY_PHOTOS, type GlossaryPhoto } from './glossaryPhotos.ts';
-import { anchorId } from './nav.ts';
-import { Items, MUTED, Prose, RULE, Strong, Sub, TEXT, Xref } from './prose.tsx';
-import type { AboutSection } from './section.ts';
+import { Lightbox, photoButtonId, type LightboxPhoto } from './Lightbox.tsx';
+import { termAnchor } from './terms.ts';
+import { ACCENT, Items, MUTED, Prose, RULE, Strong, Sub, TEXT, Xref } from './prose.tsx';
+import type { AboutData, AboutSection } from './section.ts';
+import { canShow, SHOW_ME, showMe, showMeLabel, type ShowMeSources, type ShowMeTarget } from './showMe.ts';
 
 /**
  * What each kind of thing in the app *is*, in plain words, for someone who is not an
@@ -19,30 +21,25 @@ import type { AboutSection } from './section.ts';
  *
  * Each entry has its own anchor, `termAnchor(id)`, so the body panel's kind line and any
  * other text can jump to it.
+ *
+ * A photo opens large when clicked (Lightbox.tsx); an entry whose kind the scene draws has a
+ * "show me" that closes the About and goes to one of them (showMe.ts).
  */
 
-/** The DOM id of a glossary entry. Kept apart from the subsections' ids by its prefix. */
-export function termAnchor(term: string): string {
-  return anchorId('glossary', `term-${term}`);
+// Its anchors and the kind each body is described under, apart from the text (terms.ts).
+export { KIND_TERM, termAnchor } from './terms.ts';
+
+/** What the entries reach: the open lightbox, and the store and sources "show me" goes with. */
+interface GlossaryReach {
+  readonly openPhoto: (term: string) => void;
+  readonly store: EphemerisStore;
+  readonly sources: ShowMeSources;
 }
 
-/** The entry that says what a body of each kind is: the body panel's "what is this?". */
-export const KIND_TERM: Readonly<Record<BodyKind, string>> = {
-  star: 'star',
-  planet: 'planet',
-  'dwarf-planet': 'dwarf-planet',
-  asteroid: 'asteroid',
-  comet: 'comet',
-  moon: 'moon',
-  spacecraft: 'spacecraft',
-  satellite: 'satellite',
-  'black-hole': 'black-hole',
-  'neutron-star': 'neutron-star',
-  'globular-cluster': 'star-cluster',
-  'supernova-remnant': 'supernova-remnant',
-  galaxy: 'galaxy',
-  structure: 'supercluster',
-};
+const GlossaryContext = createContext<GlossaryReach | null>(null);
+
+/** The photos in the order the entries give them: the lightbox's arrows follow it. */
+const PHOTOS: readonly LightboxPhoto[] = Object.entries(GLOSSARY_PHOTOS).map(([term, photo]) => ({ term, photo }));
 
 /**
  * One entry: its title in bold, a few sentences, and where in the app it is -- and, where an
@@ -63,31 +60,49 @@ function Term({ id, title, app, children }: { id: string; title: string; app?: R
         display: 'flow-root',
       }}
     >
-      {photo !== undefined && <Photo photo={photo} />}
+      {photo !== undefined && <Photo term={id} photo={photo} />}
       <Strong>{title}</Strong>
       {'. '}
       {children}
-      {app !== undefined && <InApp>{app}</InApp>}
+      {app !== undefined && <InApp show={SHOW_ME[id]}>{app}</InApp>}
     </li>
   );
 }
 
 /**
  * A photograph, small, to the right of its entry, its credit under it. Fetched only when the
- * section is open, and then only as it scrolls near (`loading="lazy"`).
+ * section is open, and then only as it scrolls near (`loading="lazy"`). A button: it opens large.
  */
-function Photo({ photo }: { photo: GlossaryPhoto }) {
+function Photo({ term, photo }: { term: string; photo: GlossaryPhoto }) {
+  const reach = useContext(GlossaryContext);
   return (
     <figure style={{ float: 'right', width: 'min(10rem, 38%)', margin: '0.25rem 0 0.5rem 0.9rem' }}>
-      <img
-        src={`${import.meta.env.BASE_URL}glossary/${photo.file}`}
-        alt={photo.alt}
-        width={photo.width}
-        height={photo.height}
-        loading="lazy"
-        decoding="async"
-        style={{ display: 'block', width: '100%', height: 'auto', borderRadius: '0.2rem', background: '#0b0b0e' }}
-      />
+      <button
+        type="button"
+        id={photoButtonId(term)}
+        aria-label={`Enlarge: ${photo.alt}`}
+        title="Enlarge"
+        onClick={() => reach?.openPhoto(term)}
+        style={{
+          display: 'block',
+          width: '100%',
+          padding: 0,
+          border: 'none',
+          background: 'none',
+          cursor: 'zoom-in',
+          borderRadius: '0.2rem',
+        }}
+      >
+        <img
+          src={`${import.meta.env.BASE_URL}glossary/${photo.file}`}
+          alt={photo.alt}
+          width={photo.width}
+          height={photo.height}
+          loading="lazy"
+          decoding="async"
+          style={{ display: 'block', width: '100%', height: 'auto', borderRadius: '0.2rem', background: '#0b0b0e' }}
+        />
+      </button>
       <figcaption style={{ color: MUTED, fontSize: '0.6rem', lineHeight: 1.35, marginTop: '0.25rem' }}>
         {photo.credit}
       </figcaption>
@@ -95,15 +110,49 @@ function Photo({ photo }: { photo: GlossaryPhoto }) {
   );
 }
 
-/** Where to find it: its own line, set as the other sections set a `Why`. */
-function InApp({ children }: { children: ReactNode }) {
+/** Where to find it: its own line, set as the other sections set a `Why`, with its "show me". */
+function InApp({ show, children }: { show: ShowMeTarget | undefined; children: ReactNode }) {
   return (
     <span style={{ display: 'block', marginTop: '0.25rem', paddingLeft: '0.7rem', borderLeft: `2px solid ${RULE}` }}>
       <span style={{ color: MUTED, fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
         In the app{' '}
       </span>
       {children}
+      {show !== undefined && <ShowMe target={show} />}
     </span>
+  );
+}
+
+/** "show me": the About closed and the camera taken to one of the kind, as "go there" does. */
+function ShowMe({ target }: { target: ShowMeTarget }) {
+  const reach = useContext(GlossaryContext);
+  // A star the app places once the star names are in: drawn again when it is.
+  useStoreVersion(reach?.store ?? null);
+  const label = showMeLabel(target);
+  const ready = reach !== null && canShow(target, reach.store, reach.sources);
+  return (
+    <button
+      type="button"
+      className="about-link"
+      disabled={!ready}
+      title={ready ? `Close the About and go to ${label}` : `${label} is not placed yet`}
+      onClick={() => {
+        if (reach !== null) showMe(target, reach.store, reach.sources);
+      }}
+      style={{
+        marginLeft: '0.5rem',
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        font: 'inherit',
+        fontSize: '0.72rem',
+        color: ready ? ACCENT : MUTED,
+        cursor: ready ? 'pointer' : 'default',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      show me
+    </button>
   );
 }
 
@@ -131,7 +180,33 @@ export const glossarySection: AboutSection = {
     { id: 'large-scale', label: 'The largest structures' },
     { id: 'universe', label: 'The observable universe' },
   ],
-  Body: () => (
+  Body: ({ data }) => <GlossaryBody data={data} />,
+};
+
+/** The section's text, with the lightbox over it while a photo is open. */
+function GlossaryBody({ data }: { data: AboutData }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const reach = useMemo<GlossaryReach>(
+    () => ({
+      openPhoto: (term) => setOpen(PHOTOS.findIndex((entry) => entry.term === term)),
+      store: data.store,
+      sources: { pulsars: data.pulsarSource, globularClusters: data.clusterSource },
+    }),
+    [data.store, data.pulsarSource, data.clusterSource],
+  );
+  return (
+    <GlossaryContext.Provider value={reach}>
+      {open !== null && open >= 0 && (
+        <Lightbox photos={PHOTOS} index={open} onClose={() => setOpen(null)} onMove={setOpen} />
+      )}
+      <GlossaryText />
+    </GlossaryContext.Provider>
+  );
+}
+
+/** The entries themselves. */
+function GlossaryText() {
+  return (
     <>
       <Sub section="glossary" id="distances">
         Measuring distance
@@ -226,7 +301,25 @@ export const glossarySection: AboutSection = {
         <Term id="comet" title="Comet" app={<>The <Layer>Comets</Layer> layer: about 4,000, each on its own orbit.</>}>
           A lump of ice and dust a few kilometres across. Near the Sun its ice turns to gas, which streams off in
           a haze and a tail that can stretch millions of kilometres. Long-period comets are thought to come from
-          the Oort cloud, a vast shell of icy bodies out to perhaps 100,000 AU, never seen directly and not drawn.
+          the Oort cloud, a vast shell of icy bodies out to perhaps 100,000 AU, never seen directly.
+        </Term>
+        <Term id="oort-cloud" title="Oort cloud" app={<>The <Layer>Heliosphere</Layer> layer: a faint shell, from about 1,000 AU out.</>}>
+          The comets’ reservoir, inferred from where long-period comets come from: an inner cloud from about
+          2,000 to 20,000 AU and an outer one to about 100,000 AU. No object has been seen in it.
+        </Term>
+        <Term id="heliosphere" title="Heliosphere" app={<>The <Layer>Heliosphere</Layer> layer: both boundaries and the four Voyager crossings, searchable.</>}>
+          The bubble the solar wind blows in the interstellar gas. At the termination shock, about 90 AU out, the
+          wind drops below the speed of sound; at the heliopause, about 120 AU, it meets the interstellar medium.
+          Each has been crossed twice, by the two Voyagers; its shape between is modelled.
+        </Term>
+        <Term id="lagrange-point" title="Lagrange point" app={<>The <Layer>Lagrange Points</Layer> layer: the Sun–Earth and Earth–Moon five.</>}>
+          One of five places where a small body can keep its place against two big ones, going round with them.
+          L1 and L2, 1.5 million km either side of Earth, hold observatories such as SOHO and JWST. A point, not
+          an object.
+        </Term>
+        <Term id="magnetosphere" title="Magnetosphere" app={<>The <Layer>Magnetosphere</Layer> layer, off at first.</>}>
+          The space Earth’s magnetic field holds against the solar wind: the magnetopause about 10 Earth radii
+          sunward, the bow shock ahead of it, the Van Allen belts of trapped particles inside.
         </Term>
         <Term id="interstellar-object" title="Interstellar object" app="2I/Borisov is a body; 3I/ATLAS is in the Comets layer.">
           A visitor from another star, passing through on an open orbit, too fast for the Sun to hold. Three are
@@ -354,7 +447,7 @@ export const glossarySection: AboutSection = {
           <em>globular cluster</em> is a dense ball of hundreds of thousands to millions of stars, most over 10
           billion years old, orbiting in the galaxy’s halo; Omega Centauri has about ten million.
         </Term>
-        <Term id="supernova-remnant" title="Supernova remnant and nebula" app={<>The <Layer>Supernova Remnants</Layer> layer: nine, each a 3D shape of its real size. Other nebulae are not drawn yet.</>}>
+        <Term id="supernova-remnant" title="Supernova remnant and nebula" app={<>The <Layer>Supernova Remnants</Layer> layer: nine, each a 3D shape of its real size; the <Layer>Nebulae</Layer> layer: fourteen star-forming regions and planetary nebulae, each a volume of its measured size.</>}>
           A <em>nebula</em> is a cloud of gas and dust in space. A <em>supernova</em> is a star blowing itself
           apart, for weeks as bright as a whole galaxy; its <em>remnant</em> is the expanding shell of debris, which
           glows for tens of thousands of years. The Crab Nebula is what is left of a star seen to explode in 1054.
@@ -413,7 +506,7 @@ export const glossarySection: AboutSection = {
           years across. Andromeda, 2.5 million light years away, is closing on us at about 110 km/s; the two may
           merge in several billion years, though recent measurements make that far from certain.
         </Term>
-        <Term id="galaxy-cluster" title="Galaxy cluster" app={<>The <Layer>Laniakea</Layer> layer: the named clusters, found by search; the Virgo Cluster is on the breadcrumb.</>}>
+        <Term id="galaxy-cluster" title="Galaxy cluster" app={<>The <Layer>Laniakea</Layer> layer: the named clusters, found by search; the Virgo Cluster is on the breadcrumb. Planck’s 1,088 to z 1 as rings, the <Layer>SZ Clusters</Layer> layer.</>}>
           Hundreds to thousands of galaxies bound together, up to a thousand trillion Suns in all, most of it dark
           matter. The space between the galaxies is filled with gas so hot it shines in X-rays, and it weighs more
           than all their stars. The nearest big one, Virgo, is 54 million light years away.
@@ -485,7 +578,7 @@ export const glossarySection: AboutSection = {
           source is now about 46 billion light years away. Everything past Laniakea is placed here at its comoving
           distance.
         </Term>
-        <Term id="quasar" title="Quasar" app={<>3C 273, TON 618, J0313−1806 and EUCL J1729+6410, in the <Layer>Observable Universe</Layer> layer.</>}>
+        <Term id="quasar" title="Quasar" app={<>SDSS DR16Q’s 750,000, in the SDSS’s wedges, the <Layer>Quasars</Layer> layer; 3C 273, TON 618, J0313−1806 and EUCL J1729+6410 in the <Layer>Observable Universe</Layer> layer.</>}>
           A supermassive black hole swallowing gas so fast that the hot disc around it outshines its whole galaxy,
           often a hundred times over. 3C 273, the first identified (1963), is the brightest in our sky; the
           farthest are seen as they were less than 700 million years after the Big Bang.
@@ -517,5 +610,5 @@ export const glossarySection: AboutSection = {
         What is measured of these: <Xref to="measured" sub="universe">the observable universe</Xref>.
       </More>
     </>
-  ),
-};
+  );
+}

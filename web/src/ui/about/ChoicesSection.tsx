@@ -19,14 +19,18 @@ export const choicesSection: AboutSection = {
     { id: 'colours', label: 'Colours that mean something' },
     { id: 'saturn', label: 'Saturn’s rings' },
     { id: 'earth', label: 'Earth' },
+    { id: 'surroundings', label: 'The Sun’s surroundings' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
+    { id: 'nebulae', label: 'Nebulae' },
+    { id: 'galaxy-features', label: 'Streams, bubbles and the local medium' },
     { id: 'galaxy', label: 'The galaxy’s light' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
     { id: 'cosmic-web', label: 'The cosmic web' },
+    { id: 'quasars', label: 'Quasars, clusters and deep fields' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -215,6 +219,23 @@ export const choicesSection: AboutSection = {
           </Item>
         </Items>
 
+        <Sub section="choices" id="surroundings">
+          The Sun’s surroundings
+        </Sub>
+        <Items>
+          <Item title="Boundaries as veils">
+            Every modelled boundary — the termination shock, the heliopause, the magnetopause, the bow shock,
+            the belts — is a faint surface brightest where seen edge-on, shown only from outside it.
+            <Why>
+              it reads as a shape without hiding what is behind it, and from inside it would only veil the sky.
+            </Why>
+          </Item>
+          <Item title="Marks for what is measured or computed">
+            The Voyager crossings, the Lagrange points and each boundary’s nose are marks of their own, each
+            with a panel saying whether it is measured, computed or modelled.
+          </Item>
+        </Items>
+
         <Sub section="choices" id="black-holes">
           Black holes
         </Sub>
@@ -312,6 +333,44 @@ export const choicesSection: AboutSection = {
             Where no visible-light picture of the whole of a remnant may be used, one in other light gives its
             shape, drawn in the colours of its visible lines.
             <Why>a whole remnant shaped by a measurement, over a part of one or a shape made up.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="nebulae">
+          Nebulae
+        </Sub>
+        <Items>
+          <Item title="As bright as a long exposure">
+            Gone toward, each is scaled so its brightest line of sight is the same brightness, as photographs show
+            them; from the Sun’s side, a twenty-fifth of that, a faint patch of its true size on the sky. To the eye
+            almost none is more than a grey glow. The hues are their lines’: hydrogen’s red with a little of
+            H-beta’s blue, and doubly ionised oxygen’s teal.
+            <Why>the shape is the measurement; at the eye’s brightness there would be nothing to see.</Why>
+          </Item>
+          <Item title="Seen first from Earth’s side">
+            Gone to, a nebula is seen from the Sun’s side, north up, four of its radii out; from far off it is a
+            ring of its size until its gas is a few pixels across.
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="galaxy-features">
+          Streams, bubbles and the local medium
+        </Sub>
+        <Items>
+          <Item title="Faint trails">
+            A stellar stream is tens of magnitudes fainter than the night sky. Drawn as a faint trail in an old
+            star’s colour so it can be found, only from out in the galaxy, past 300 pc from the Sun; named once
+            it is long on the screen, Ibata et al.’s numbered ones only up close.
+          </Item>
+          <Item title="False colours">
+            The Fermi bubbles are gamma rays, the eROSITA bubbles X-rays: drawn violet and blue, as faint shells
+            brightest at their rims, from 1.5 kpc out.
+          </Item>
+          <Item title="Shells, not walls">
+            The Local Bubble and the Local Interstellar Cloud are surfaces brightest where seen edge-on, in muted
+            colours, shown only while they read as a shape on the screen, not once they fill it; the Radcliffe Wave
+            a faint line through its clouds.
+            <Why>they are maps of where the gas is, too thin to see.</Why>
           </Item>
         </Items>
 
@@ -620,6 +679,65 @@ export const choicesSection: AboutSection = {
           </Item>
         </Items>
 
+        <Sub section="choices" id="quasars">
+          Quasars, clusters and deep fields
+        </Sub>
+        <Items>
+          <Item title="The quasars in Planck 2018, not in the cosmic web’s cosmology">
+            Every quasar is at its redshift’s comoving distance in Planck 2018’s cosmology, the record-holders’ and
+            the CMB’s <Cite k="planck2020params" />. Under z 0.95, where they share BOSS’s volume, a quasar is 9–10 %
+            farther than a galaxy of its redshift.
+            <Why>past z 1 no distance is measured but through the expansion’s history, and the measure of it, the
+            baryon acoustic scale, measured in these very quasars, fits Planck’s <Cite k="alam2021" />; and TON 618,
+            in the catalogue, would otherwise be drawn 1.7 billion ly nearer than its own mark.</Why>
+          </Item>
+          <Item title="The clusters in Laniakea’s">
+            Planck’s clusters are at their CMB-frame redshifts’ distances in Laniakea’s cosmology, as the SDSS’s
+            galaxies are.
+            <Why>they are clusters of those galaxies, to z 0.97: so they sit among them.</Why>
+          </Item>
+          <Item title="A dot by its luminosity">
+            A quasar’s faint dot is whole at the catalogue’s most luminous twentieth, M<sub>V</sub> −26.3, and a
+            quarter of that at its least luminous twentieth, −22.0, and under: the map says which are the luminous
+            ones, and that the far ones all are. Its own light is drawn too, which past a billion light years is far
+            under the dot. Coloured by its B−V through the stars’ blackbody.
+            <Why>quasars are a hundred Mpc apart: counting a dot’s neighbours, as a galaxy’s are, would be noise.</Why>
+          </Item>
+          <Item title="Crowding, with numbers of their own">
+            The galaxies’ rules with the quasars’ numbers: a patch of the screen no brighter than its dots a pixel
+            apart, not two; fewer dots under a twenty-fourth, not a twelfth; gone as the catalogue’s nearer half
+            shrinks to 6 pixels in radius, not 12; and whole to 200 billion ly out, fading to nothing at 800, where
+            the galaxies’ maps go from 30 to 60: from the farthest the camera goes, 400, half is left. Dimmer the
+            farther behind what the camera looks at, to a fifth. None from nearer than a billion ly from the Sun,
+            all from 3 billion.
+            <Why>they reach 28 billion ly and are the map of the far universe; under the galaxies’ numbers they were
+            gone by a 5-billion-ly scale bar.</Why>
+          </Item>
+          <Item title="Once each">
+            TON 618 is in DR16Q, 0.05″ from its record-holder’s place: it is drawn as its mark, its dot left out.
+            3C 273 is not in DR16Q; the other three quasar record-holders are past z 7.02 or south of the SDSS’s
+            sky. A cluster the app draws by name is not drawn again as a ring.
+          </Item>
+          <Item title="Clusters as rings, a mark not a light">
+            Each cluster is a faint ring in a pale orange, a quarter of full, 3 pixels in radius at 10<sup>14</sup> M☉ and under, 6 at
+            10<sup>15</sup> and over, fainter as the rings crowd under 12 pixels apart.
+            <Why>what Planck saw of them is the shadow their gas casts on the CMB, not their light.</Why>
+          </Item>
+          <Item title="Groups as rings, fields as beams">
+            With the record-holders, in the Observable Universe layer: each large quasar group a ring of its size
+            about its members’ mean, drawn while 4 pixels or more in radius; each deep field a beam from the Sun to
+            its farthest confirmed galaxy, as wide as the field, a line until it is wider, brightening toward its
+            far end.
+            <Why>the members are not in the app as members, so a group’s shape is not drawn; a field is a direction
+            and a depth.</Why>
+          </Item>
+          <Item title="Fetched in pieces">
+            The quasars in six pieces of 1.2 MB, the most luminous first, and the clusters, 22 kB, past a billion
+            light years or when a layer is switched on; four pieces on a device with 4 GB, two with less or a touch
+            screen. A site built without them has neither layer’s drawing.
+          </Item>
+        </Items>
+
         <Sub section="choices" id="universe">
           The observable universe
         </Sub>
@@ -637,12 +755,14 @@ export const choicesSection: AboutSection = {
             <Why>its spots are a hundred-thousandth of its temperature: true to scale, a blank orange sphere.</Why>
           </Item>
           <Item title="Seen from outside">
-            The sphere is the sky turned inside out: from outside, Planck’s map mirrored. No one can stand there. It is
-            what every direction from here shows at 13.8 billion years’ look-back, centred on us; anyone elsewhere has a
-            sphere of their own. Drawn only from 60 billion ly out, whole from 150; never on a nearer sky.
+            Only its far half is drawn, from inside: a bowl bearing the sky as seen from here. No one can stand there. It
+            is what every direction from here shows at 13.8 billion years’ look-back, centred on us; anyone elsewhere has
+            a sphere of their own. Drawn only from 60 billion ly out, whole from 150; never on a nearer sky, where it is
+            the microwave glow no eye sees.
           </Item>
           <Item title="What it encloses, drawn over it">
-            Its near side is drawn behind Laniakea’s galaxies and the record-holders’ marks.
+            Its near half is not drawn: Laniakea’s galaxies, the quasars and the record-holders’ marks lie in front of
+            its far half.
             <Why>a shell of opaque plasma seen from outside would hide everything in it.</Why>
           </Item>
           <Item title="Faint dots far off: a patch, then gone">

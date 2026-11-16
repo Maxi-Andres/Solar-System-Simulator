@@ -18,11 +18,14 @@ import { BlackHolePanel } from './BlackHoleFacts.tsx';
 import { PulsarPanel } from './PulsarFacts.tsx';
 import { ClusterPanel } from './ClusterFacts.tsx';
 import { RemnantPanel } from './RemnantFacts.tsx';
+import { NebulaPanel } from './NebulaFacts.tsx';
+import { DeepSkyPanel } from './DeepSkyFacts.tsx';
+import { RegionPanel } from './RegionFacts.tsx';
 import { StructurePanel } from './StructureFacts.tsx';
 import { RecordHolderPanel } from './RecordHolderFacts.tsx';
 import { recordHolderOf } from '../core/recordHolders.ts';
 import { GalaxyPanel } from './GalaxyFacts.tsx';
-import { KIND_TERM } from './about/GlossarySection.tsx';
+import { KIND_TERM } from './about/terms.ts';
 import { WhatIs } from './WhatIs.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
@@ -58,6 +61,16 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   // A pulsar gone to: its spin, and where its distance is from (pulsars.ts).
   if (body.kind === 'supernova-remnant') {
     return <RemnantPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
+  if (body.kind === 'nebula') {
+    return <NebulaPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
+  if (body.kind === 'deep-sky') {
+    return <DeepSkyPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
+  }
+  // A Lagrange point, a Voyager crossing, a boundary's nose: what of it is measured (regions.ts).
+  if (body.kind === 'region') {
+    return <RegionPanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
   }
   // A record-holder is a structure by kind (recordHolders.ts), with facts of its own.
   if (body.kind === 'structure' && recordHolderOf(focus) !== null) {

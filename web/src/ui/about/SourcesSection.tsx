@@ -162,6 +162,21 @@ export const sourcesSection: AboutSection = {
           <Item>{"Malavasi et al. 2020, A&A 642, A19. \"This work makes use of the service L3S/COSFIL.\" Built on SDSS-III BOSS DR12: Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science (the full SDSS-III acknowledgement: https://www.sdss3.org/collaboration/boiler-plate.php)."}</Item>
           <Item>{"SDSS-III BOSS DR12. Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science (the full SDSS-III acknowledgement: https://www.sdss3.org/collaboration/boiler-plate.php)."}</Item>
           <Item>
+            {'SDSS DR16Q: Lyke et al. 2020, ApJS 250, 8, via VizieR (CDS, Strasbourg), doi:10.26093/cds/vizier.7289. SDSS-IV’s acknowledgement, as https://www.sdss.org/collaboration/citing-sdss/ asks for it (https://www.sdss4.org/collaboration/#sdss4acknowledgement): '}
+            {
+              'Funding for the Sloan Digital Sky Survey IV has been provided by the Alfred P. Sloan Foundation, the U.S. Department of Energy Office of Science, and the Participating Institutions. SDSS acknowledges support and resources from the Center for High-Performance Computing at the University of Utah. The SDSS web site is www.sdss4.org. '
+            }
+            {
+              'SDSS is managed by the Astrophysical Research Consortium for the Participating Institutions of the SDSS Collaboration including the Brazilian Participation Group, the Carnegie Institution for Science, Carnegie Mellon University, Center for Astrophysics | Harvard & Smithsonian (CfA), the Chilean Participation Group, the French Participation Group, Instituto de Astrofísica de Canarias, The Johns Hopkins University, Kavli Institute for the Physics and Mathematics of the Universe (IPMU) / University of Tokyo, the Korean Participation Group, Lawrence Berkeley National Laboratory, Leibniz Institut für Astrophysik Potsdam (AIP), Max-Planck-Institut für Astronomie (MPIA Heidelberg), Max-Planck-Institut für Astrophysik (MPA Garching), Max-Planck-Institut für Extraterrestrische Physik (MPE), National Astronomical Observatories of China, New Mexico State University, New York University, University of Notre Dame, Observatório Nacional / MCTI, The Ohio State University, Pennsylvania State University, Shanghai Astronomical Observatory, United Kingdom Participation Group, Universidad Nacional Autónoma de México, University of Arizona, University of Colorado Boulder, University of Oxford, University of Portsmouth, University of Utah, University of Virginia, University of Washington, University of Wisconsin, Vanderbilt University, and Yale University.'
+            }
+          </Item>
+          <Item>
+            {'The Planck SZ clusters: Planck Collaboration 2016, A&A 594, A27, via VizieR (CDS, Strasbourg). Based on observations obtained with Planck (http://www.esa.int/Planck), an ESA science mission with instruments and contributions directly funded by ESA Member States, NASA, and Canada.'}
+          </Item>
+          <Item>
+            {'The quasars’ K-corrections: Richards et al. 2006, AJ 131, 2766, via VizieR (CDS, Strasbourg).'}
+          </Item>
+          <Item>
             This research has made use of the NASA/IPAC Extragalactic Database (NED) and the NASA/IPAC Infrared
             Science Archive, which are funded by the National Aeronautics and Space Administration and operated by
             the California Institute of Technology.
@@ -186,6 +201,28 @@ export const sourcesSection: AboutSection = {
             the Oschin Schmidt Telescope on Palomar Mountain (the Palomar Observatory Sky Surveys, made by the
             California Institute of Technology), through NASA’s SkyView. Their stars found with Gaia DR3 and
             Hipparcos.
+          </Item>
+          <Item>
+            Stellar streams from galstreams, Copyright (c) 2017, Cecilia Mateu, BSD 3-Clause
+            (https://github.com/cmateu/galstreams), each track its own paper’s: Antoja et al. 2020 and Ramos et
+            al. 2020 (Sagittarius); Price-Whelan et al. 2019 and Bonaca et al. 2020 (Palomar 5); Koposov et al.
+            2023 (Orphan–Chenab); Ibata et al. 2021 and 2024; Ramos et al. 2021; Martin et al. 2022; Shipp et
+            al. 2018 and 2019; Grillmair 2014, 2017 and 2019; Grillmair et al. 2013; Bonaca et al. 2012 and 2019;
+            Martin et al. 2013; Li et al. 2018 and 2021; Fu et al. 2018; Williams et al. 2011; Yam et al. 2013;
+            Yuan et al. 2020 and 2021; Thomas &amp; Battaglia 2021; Myeong et al. 2017; Harris 1996; Palau &amp;
+            Miralda-Escudé 2019 and 2021; Grillmair &amp; Carlin 2016; Ferguson et al. 2022; Sollima 2020; Jensen
+            et al. 2021; Caldwell et al. 2020; Weiss et al. 2018; Perottoni et al. 2019; Balbinot et al. 2016;
+            Yang et al. 2022 and 2023; Chandra et al. 2022 — as web/public/streams/CREDITS.md details.
+          </Item>
+          <Item>
+            The Local Bubble’s wall: V. Pelgrims, Harvard Dataverse, doi:10.7910/DVN/RHPVNC; the Radcliffe Wave: R.
+            Konietzka, Harvard Dataverse, doi:10.7910/DVN/F98QHY and doi:10.7910/DVN/Q7F4PC; both CC0, adapted as
+            web/public/local-ism/CREDITS.md details.
+          </Item>
+          <Item>
+            Open clusters from the Unified Cluster Catalogue, Perren et al. 2023, zenodo.org/records/20705026, CC BY
+            4.0. H II regions’ sizes from the WISE Catalog of Galactic H II Regions, Anderson et al. 2014. Positions
+            of the notable stars from SIMBAD, CDS, Strasbourg.
           </Item>
           <Item>
             Globular clusters from Holger Baumgardt’s Galactic Globular Cluster Database

@@ -67,11 +67,20 @@ export type LayerId =
   | 'smallMoons'
   | 'asteroids'
   | 'comets'
+  | 'lagrangePoints'
+  | 'heliosphere'
+  | 'magnetosphere'
   | 'starMap'
   | 'exoplanetHosts'
   | 'pulsars'
   | 'globularClusters'
   | 'supernovaRemnants'
+  | 'nebulae'
+  | 'stellarStreams'
+  | 'galacticBubbles'
+  | 'localInterstellar'
+  | 'messier'
+  | 'notableStars'
   | 'milkyWay'
   | 'localGroup'
   | 'laniakea'
@@ -80,6 +89,8 @@ export type LayerId =
   | 'flowLines'
   | 'sdssGalaxies'
   | 'filaments'
+  | 'quasars'
+  | 'szClusters'
   | 'observableUniverse'
   | 'nuclearCluster'
   | 'spacecraft'
@@ -114,6 +125,14 @@ export const LAYERS: readonly LayerDefinition[] = [
   // SBDB's four thousand, each on its own conic -- a third of them open, on parabolas and
   // hyperbolas. Off by default, as the belt is.
   { id: 'comets', label: 'Comets', pending: null },
+  // The Sun-Earth and Earth-Moon Lagrange points, computed at each instant (core/lagrange.ts).
+  { id: 'lagrangePoints', label: 'Lagrange Points', pending: null },
+  // The termination shock and heliopause, the Voyagers' four crossings, the Oort cloud
+  // (core/heliosphere.ts, scene/Heliosphere.tsx): models fitted to what is measured.
+  { id: 'heliosphere', label: 'Heliosphere', pending: null },
+  // Earth's magnetopause, bow shock, Van Allen belts and Kármán line, as the standard models draw
+  // them (core/magnetosphere.ts). Off until asked for: shells about Earth are not a first view.
+  { id: 'magnetosphere', label: 'Magnetosphere', pending: null },
   // Past the Solar System every star in the catalogue drawn at least as a dot, at its real
   // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
   // would see from where the camera is.
@@ -133,6 +152,24 @@ export const LAYERS: readonly LayerDefinition[] = [
   // Nine famous supernova remnants (core/supernovaRemnants.ts), each a ring of its real size
   // at its measured distance. On: nine names.
   { id: 'supernovaRemnants', label: 'Supernova Remnants', pending: null },
+  // Star-forming regions and planetary nebulae (core/nebulae.ts): each a volume of its
+  // measured size at its measured distance, in the colours of its lines.
+  { id: 'nebulae', label: 'Nebulae', pending: null },
+  // The stellar streams of the halo (core/streams.ts): galstreams' tracks, faint trails.
+  { id: 'stellarStreams', label: 'Stellar Streams', pending: null },
+  // The Fermi and eROSITA bubbles (scene/GalacticBubbles.tsx): faint shells above and below
+  // the centre, their outlines on the sky measured, their depth modelled.
+  { id: 'galacticBubbles', label: 'Fermi & eROSITA Bubbles', pending: null },
+  // The Sun's surroundings in the interstellar medium (core/localInterstellar.ts): the Local
+  // Bubble, the Radcliffe Wave, the Local Interstellar Cloud.
+  { id: 'localInterstellar', label: 'Local Interstellar Medium', pending: null },
+  // The Messier objects drawn as nothing else (core/messier.ts): open clusters and the
+  // rest, marked. Off until asked for, as the pulsars are: a catalogue's marks, not a view.
+  { id: 'messier', label: 'Messier Objects', pending: null },
+  // Named stars, stellar black holes and young clusters the star catalogue does not place
+  // (core/notableStars.ts): marks at their measured distances. Off until asked for, as the
+  // Messier marks are; a search for one turns it on.
+  { id: 'notableStars', label: 'Notable Stars', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -158,6 +195,12 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'sdssGalaxies', label: 'SDSS Galaxies', pending: null },
   // The filaments found in them: Tempel et al. 2014's and Malavasi et al. 2020's, thin threads.
   { id: 'filaments', label: 'Filaments', pending: null },
+  // The quasars of SDSS DR16Q (core/quasars.ts): 750 thousand, out to z 7, 28 billion light
+  // years, in the SDSS's wedges; fetched only past a billion light years.
+  { id: 'quasars', label: 'Quasars', pending: null },
+  // The Planck SZ clusters (core/quasars.ts): a thousand clusters over the whole sky to z 1,
+  // small rings.
+  { id: 'szClusters', label: 'SZ Clusters', pending: null },
   // The observable universe (G4, scene/cmb.ts, core/recordHolders.ts): the CMB's
   // last-scattering sphere, drawn only from far outside it, and the record-holders.
   { id: 'observableUniverse', label: 'Observable Universe', pending: null },
@@ -201,11 +244,20 @@ const DEFAULT_LAYERS: LayerState = {
   // are in this layer with it; a search for one turns it on.
   asteroids: false,
   comets: false,
+  lagrangePoints: true,
+  heliosphere: true,
+  magnetosphere: false,
   starMap: true,
   exoplanetHosts: true,
   pulsars: false,
   globularClusters: true,
   supernovaRemnants: true,
+  nebulae: true,
+  stellarStreams: true,
+  galacticBubbles: true,
+  localInterstellar: true,
+  messier: false,
+  notableStars: false,
   milkyWay: true,
   localGroup: true,
   laniakea: true,
@@ -214,6 +266,8 @@ const DEFAULT_LAYERS: LayerState = {
   flowLines: true,
   sdssGalaxies: true,
   filaments: true,
+  quasars: true,
+  szClusters: true,
   observableUniverse: true,
   nuclearCluster: true,
   spacecraft: true,
@@ -278,6 +332,14 @@ export interface ViewState {
    */
   readonly framingView: FramingView | null;
   /**
+   * Counts the times the focus was chosen again while already the focus, with no framing of
+   * its own: the camera rig frames it afresh each time, as it does a new focus. Without it
+   * the breadcrumb's Solar System, the Sun already in focus, did nothing -- and from the
+   * Observable Universe it left the camera 250 billion light years out, the CMB filling the
+   * view under a breadcrumb that read Solar System.
+   */
+  readonly refocus: number;
+  /**
    * How many of the belt's magnitude tiers to load, brightest first: the Asteroids
    * layer's density. One by default -- 84,000 asteroids, 3 MB -- and kept for the viewer
    * between visits, since a choice of fifty-seven megabytes is one to make once. More
@@ -327,6 +389,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   zoomImpulse: 1,
   framingRequestKm: null,
   framingView: null,
+  refocus: 0,
   beltTiers: readStoredInteger(BELT_TIERS_KEY, 1, 1),
   // Masked to the families there are: bits a later version might add are not set by an
   // older stored value, and junk beyond them is dropped.
@@ -335,7 +398,15 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setFocus: (id) => {
     const state = get();
-    const own = state.framingRequestKm === null && id !== state.focus ? (focusFraming?.(id) ?? null) : null;
+    if (id === state.focus) {
+      // Chosen again -- the breadcrumb's Solar System with the Sun in focus from 250 billion
+      // light years out: framed again, as a new focus is, unless a framing already waits.
+      if (state.framingRequestKm !== null) return;
+      const own = focusFraming?.(id) ?? null;
+      set(own === null ? { refocus: state.refocus + 1 } : { framingRequestKm: own.km, framingView: own.view });
+      return;
+    }
+    const own = state.framingRequestKm === null ? (focusFraming?.(id) ?? null) : null;
     set(own === null ? { focus: id } : { focus: id, framingRequestKm: own.km, framingView: own.view });
   },
 

@@ -1,5 +1,5 @@
-import { openAboutAt } from './AboutPanel.tsx';
-import { termAnchor } from './about/GlossarySection.tsx';
+import { openAboutAt } from './about/open.ts';
+import { termAnchor } from './about/terms.ts';
 
 /**
  * "What is this?": beside a panel's kind line, a jump to the About's plain-words entry for

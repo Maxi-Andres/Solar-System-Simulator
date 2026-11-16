@@ -8,6 +8,8 @@ import {
 import { SMALL_MOON_RECORDS } from './moons/smallMoons.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
 import { SMALL_BODIES } from './smallBodies.ts';
+import { FAR_BODIES } from './farBodies.ts';
+import { MINOR_PLANET_MOONS } from './moons/minorPlanetMoons.ts';
 import { FAMOUS_COMETS } from './famousComets.ts';
 import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
 
@@ -1448,9 +1450,16 @@ const MORE_SHAPES = {
  * chasing the few-kilometre seams JPL's trajectory files leave about weekly.
  *
  * Left out for now: SWFO-L1 and the Carruthers Geocorona Observatory, both launched with
- * IMAP in 2025, whose dimensions have not been published; and the Tesla Roadster, whose
- * Horizons object is the Falcon upper stage with the car on it, whose size is not
- * published either.
+ * IMAP in 2025, whose dimensions have not been published (rechecked 2026-11-16 for SWFO-L1:
+ * NOAA, NASA and BAE give its mass, 377 kg, and its ESPA Grande class, no size); and the
+ * Tesla Roadster, whose Horizons object is the Falcon upper stage with the car on it, whose
+ * size is not published either.
+ *
+ * Added 2026-11-16: LISA Pathfinder, STEREO-B, MMX, Herschel and Planck. Not in Horizons at
+ * all, so not here: Queqiao and Queqiao-2, Chang'e 2 and 5, Tianwen-2, Spektr-RG and IKAROS.
+ * WMAP is, but its trajectory ends on 2009-04-07, before the window; WISE is, to its re-entry
+ * on 2024-11-02, but in low Earth orbit from TLEs, eight years of 95-minute orbits a close
+ * orbiter's few months could not hold.
  */
 const MORE_SPACECRAFT: readonly BodyDefinition[] = [
   // Near Earth: the Sun-Earth L1 point.
@@ -1573,6 +1582,55 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
     operator: 'NASA',
     color: '#d8d0a0',
   }),
+  // LISA Pathfinder at L1, from ESA's trajectory of 2016-04-14, a nominal prediction after
+  // it that ends on 2017-06-30 (the Horizons summary): the craft is absent after that,
+  // although it flew to its passivation on 2017-07-18. Launch from the same summary. The
+  // science spacecraft, its propulsion module dropped, is 2.1 m across (ESA, CNES); no
+  // model, and its attitude is not published, so no shape.
+  spacecraft({
+    id: 'lisa-pathfinder',
+    shape: null,
+    name: 'LISA Pathfinder',
+    horizonsId: '-141043',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 2.1,
+    launchUtc: '2015-12-03T04:04:00Z',
+    operator: 'ESA',
+    color: '#c0b0d8',
+  }),
+  // Herschel and Planck, launched together on 2009-05-14 (Horizons summaries), sent from L2
+  // into orbits about the Sun at their ends in 2013 and silent since: ESA's predictions made
+  // then, extending to 2050 -- Herschel's from its drain burn, with no tracking after it.
+  // Herschel 7.5 m high, 4 x 4 m across; Planck 3.8 m high, 4.5 m wide (the summaries). No
+  // shape: both tumble or spin unattended.
+  spacecraft({
+    id: 'herschel',
+    shape: null,
+    name: 'Herschel Space Observatory',
+    horizonsId: '-486',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 7.5,
+    launchUtc: '2009-05-14T13:12:02Z',
+    operator: 'ESA',
+    color: '#c8b8a0',
+  }),
+  spacecraft({
+    id: 'planck',
+    shape: null,
+    name: 'Planck',
+    horizonsId: '-489',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 4.5,
+    launchUtc: '2009-05-14T13:12:02Z',
+    operator: 'ESA',
+    color: '#a8b8c8',
+  }),
   spacecraft({
     id: 'tess',
     shape: MORE_SHAPES.tess,
@@ -1653,6 +1711,25 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
     launchUtc: '2006-10-26T00:52:00Z',
     operator: 'NASA',
     color: '#c8a0a0',
+  }),
+  // STEREO-B, silent since 2016-09-23 and spinning out of control: its path after 2016-09-12
+  // is JPL's long-term prediction, updated in 2023 for a search (Horizons summary). It ends on
+  // 2024-10-26, and where the 2023 prediction takes over, 2020-10-27, the two disagree by
+  // about 1.6 million km (fetched 2026-11-16): a seam, published as one. 6.47 m
+  // deployed, as STEREO-A. No shape: its attitude is unknown, so drawing it Sun-facing as
+  // STEREO-A is drawn would be invented.
+  spacecraft({
+    id: 'stereo-b',
+    shape: null,
+    name: 'STEREO-B',
+    horizonsId: '-235',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 6.47,
+    launchUtc: '2006-10-26T00:52:00Z',
+    operator: 'NASA',
+    color: '#a0a0c8',
   }),
   spacecraft({
     id: 'bepicolombo',
@@ -1746,6 +1823,22 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
     launchUtc: '2025-11-13T20:55:01Z',
     operator: 'NASA',
     color: '#80a8e0',
+  }),
+  // MMX, JAXA's Martian Moons eXploration, launched 2026-10-19 19:41:03 UTC for Phobos in
+  // 2027: JAXA's trajectory, tracked to 2026-11-09 and predicted after, its files ending on
+  // 2026-12-21 for now. 9 m long, 5 m high (Horizons summary); no model, no shape.
+  spacecraft({
+    id: 'mmx',
+    shape: null,
+    name: 'MMX',
+    horizonsId: '-239',
+    parent: null,
+    parentHorizonsId: null,
+    stepDays: 1,
+    spanM: 9,
+    launchUtc: '2026-10-19T19:41:03Z',
+    operator: 'JAXA',
+    color: '#d0a8a0',
   }),
   spacecraft({
     id: 'escapade-gold',
@@ -2885,9 +2978,11 @@ export const CATALOG: readonly BodyDefinition[] = [
     mission: null,
   },
   ...SMALL_BODIES,
+  ...FAR_BODIES,
   ...FAMOUS_COMETS,
   ...MOONS,
   ...SMALL_MOONS,
+  ...MINOR_PLANET_MOONS,
   ...SPACECRAFT,
   ...MORE_SPACECRAFT,
   ...CLOSE_ORBITERS,

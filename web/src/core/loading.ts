@@ -4,26 +4,45 @@
  * a few seconds later should not read as a sky that is empty.
  *
  * Each load says what it is when it starts and is done when it settles, however it ends. The
- * line shows the most recent one still going.
+ * line shows the most recent one still going that someone is waiting for.
+ *
+ * A load can start quiet: fetched ahead of need (core/prefetch.ts), with no one waiting on it,
+ * it is kept off the line -- a line naming what nobody asked for would only nag. It is named
+ * the moment it is wanted (`wantLoading`), if it is still on its way then.
  */
 
 type Listener = () => void;
 
-const active: { readonly id: number; readonly what: string }[] = [];
+interface Entry {
+  readonly id: number;
+  readonly what: string;
+  quiet: boolean;
+}
+
+const active: Entry[] = [];
 const listeners = new Set<Listener>();
 let nextId = 0;
 let snapshot: string | null = null;
 
 function changed(): void {
-  snapshot = active.length === 0 ? null : active[active.length - 1]!.what;
+  snapshot = null;
+  for (let k = active.length - 1; k >= 0; k -= 1) {
+    if (!active[k]!.quiet) {
+      snapshot = active[k]!.what;
+      break;
+    }
+  }
   for (const listener of listeners) listener();
 }
 
-/** Starts a load named `what` ("the Local Group"); returns the function that ends it, safe to call twice. */
-export function beginLoading(what: string): () => void {
+/**
+ * Starts a load named `what` ("the Local Group"), kept off the line while `quiet`; returns the
+ * function that ends it, safe to call twice.
+ */
+export function beginLoading(what: string, quiet = false): () => void {
   const id = nextId;
   nextId += 1;
-  active.push({ id, what });
+  active.push({ id, what, quiet });
   changed();
   let ended = false;
   return () => {
@@ -36,12 +55,29 @@ export function beginLoading(what: string): () => void {
 }
 
 /** Runs `load` as a load named `what`. */
-export function tracked<T>(what: string, load: Promise<T>): Promise<T> {
-  const end = beginLoading(what);
+export function tracked<T>(what: string, load: Promise<T>, quiet = false): Promise<T> {
+  const end = beginLoading(what, quiet);
   return load.finally(end);
 }
 
-/** For useSyncExternalStore: what is loading, the latest first, or null. */
+/** The quiet loads named `what`, wanted now: on the line from here until they settle. */
+export function wantLoading(what: string): void {
+  let any = false;
+  for (const entry of active) {
+    if (entry.what === what && entry.quiet) {
+      entry.quiet = false;
+      any = true;
+    }
+  }
+  if (any) changed();
+}
+
+/** Whether a load named `what` is going, quiet or not. */
+export function isLoading(what: string): boolean {
+  return active.some((entry) => entry.what === what);
+}
+
+/** For useSyncExternalStore: what is loading that someone waits for, the latest first, or null. */
 export function loadingNow(): string | null {
   return snapshot;
 }

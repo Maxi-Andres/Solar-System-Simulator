@@ -41,9 +41,10 @@ describe('the Milky Way model on screen', () => {
     expect(dot(up, GALACTIC_BASIS.x)).toBeCloseTo(0, 12);
   });
 
-  it('names the centre first, then the seven arms', () => {
+  it('names the centre first, then the seven arms, then the bar', () => {
     expect(GALAXY_LABELS[0]).toBe('Galactic Centre');
-    expect(GALAXY_LABELS).toHaveLength(8);
+    expect(GALAXY_LABELS).toHaveLength(9);
+    expect(GALAXY_LABELS[8]).toBe('Galactic Bar');
   });
 });
 

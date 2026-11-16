@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody } from '../catalog.ts';
+import { FAR_BODIES } from '../farBodies.ts';
 import { AU_KM, BELT_TIER_LIMITS, beltTierFile, SBDB_QUERY_API_URL } from '../config.ts';
 import { BELT_CLASSES, BELT_RECORD_FLOATS, type BeltInfo } from '../types.ts';
 import { writeBelt } from '../writeOutput.ts';
@@ -46,7 +47,10 @@ const REFERENCE_JD = 2461332.5;
 const ROWS = parseSbdbResponse(sbdbBelt).rows;
 const row = (designation: string): SbdbRow => ROWS.find((r) => r.designation === designation)!;
 
-const EXCLUDED = catalogDesignations(CATALOG);
+// The fixture's far trans-Neptunians, Sedna and Quaoar, stand for the belt's far end in these
+// tests, so the far bodies the catalog now draws itself (farBodies.ts) are not taken out here.
+const FAR_IDS = new Set(FAR_BODIES.map((body) => body.id));
+const EXCLUDED = catalogDesignations(CATALOG.filter((body) => !FAR_IDS.has(body.id)));
 
 function build(rows: readonly SbdbRow[] = ROWS) {
   return buildBelt({
@@ -120,8 +124,17 @@ describe('what the belt leaves out because the catalog draws it', () => {
   });
 
   it('refuses a small body whose designation it cannot work out, rather than draw it twice', () => {
-    const unknown = { ...getBody('bennu'), id: 'yr4', horizonsId: 'DES=2024 YR4;' };
+    const unknown = { ...getBody('bennu'), id: 'yr4', horizonsId: 'NAME=2024 YR4;' };
     expect(() => catalogDesignations([unknown])).toThrow(/no SBDB designation/);
+  });
+
+  it('reads a provisional designation, as the far bodies are asked for', () => {
+    const byDesignation = { ...getBody('bennu'), id: 'yr4', horizonsId: 'DES=2024 YR4;' };
+    const oumuamua = { ...getBody('bennu'), id: 'oumuamua', horizonsId: 'DES=A/2017 U1;' };
+    expect(catalogDesignations([byDesignation, oumuamua])).toEqual(['2017 U1', '2024 YR4']);
+    const all = catalogDesignations(CATALOG);
+    expect(all).toContain('2012 VP113');
+    expect(all).toContain('90377');
   });
 
   it('leaves them out of the file, and says which it found', () => {

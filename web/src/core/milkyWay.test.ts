@@ -8,6 +8,7 @@ import {
   DUST_DISC,
   sampleDust,
   armLabelPoints,
+  barLabelPoint,
   armRadiusKpc,
   armWidthKpc,
   CENSUS_RADIUS_PC,
@@ -188,6 +189,16 @@ describe('the labels', () => {
     const local = labels.find((label) => label.name === 'Local Arm')!;
     // The Local Arm's middle is a kiloparsec or so from the Sun.
     expect(Math.hypot(...local.position)).toBeLessThan(2500);
+  });
+
+  it('name the bar on its axis, on the near side of the centre, 3 kpc from it', () => {
+    const bar = barLabelPoint();
+    const [cx, cy, cz] = galacticCentrePc();
+    const [x, y, z] = bar.position;
+    expect(Math.hypot(x - cx, y - cy, z - cz)).toBeCloseTo(3000, -1);
+    // Nearer the Sun than the centre, and at positive longitude: the bar's near end.
+    expect(x).toBeLessThan(cx);
+    expect(y).toBeGreaterThan(0);
   });
 });
 

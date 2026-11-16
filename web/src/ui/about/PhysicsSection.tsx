@@ -47,15 +47,18 @@ export const physicsSection: AboutSection = {
     { id: 'earth', label: 'Earth’s air and sea' },
     { id: 'saturn', label: 'Saturn’s shadows' },
     { id: 'satellites', label: 'Satellites: SGP4' },
+    { id: 'lagrange', label: 'Lagrange points' },
     { id: 'black-holes', label: 'Black holes' },
     { id: 'nuclear-cluster', label: 'The nuclear star cluster' },
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
+    { id: 'nebulae', label: 'Nebulae' },
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
     { id: 'cosmic-web', label: 'The cosmic web' },
+    { id: 'quasars', label: 'Quasars, clusters and deep fields' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: () => {
@@ -759,6 +762,25 @@ export const physicsSection: AboutSection = {
           .
         </Equation>
 
+        <Sub section="physics" id="lagrange">
+          Lagrange points
+        </Sub>
+        <Items>
+          <Item title="Computed, not seen">
+            Where a massless body keeps its place against two others in the circular restricted three-body
+            problem
+            <Cite k="szebehely1967" />: L1, L2 and L3 on the line through both, the roots of x − (1 − μ)(x +
+            μ)/|x + μ|³ − μ(x − 1 + μ)/|x − 1 + μ|³ = 0, found by bisection; L4 and L5 60° ahead and behind. μ is
+            from JPL’s masses, the Sun–Earth points taking Earth and the Moon together. Each is placed at every
+            instant on the real separation and orbital plane, so the Earth–Moon points breathe with the Moon’s
+            orbit.
+            <Why>
+              it is the problem missions are designed from. Real craft fly halo orbits about L1 and L2,
+              hundreds of thousands of kilometres wide, and correct them every few weeks to months.
+            </Why>
+          </Item>
+        </Items>
+
         <Sub section="physics" id="black-holes">
           Black holes
         </Sub>
@@ -1152,6 +1174,44 @@ export const physicsSection: AboutSection = {
           holds as much of it as it can.
         </Prose>
 
+        <Sub section="physics" id="nebulae">
+          Nebulae
+        </Sub>
+        <Equation
+          title="Light along a line of sight, dimmed by the dust before it"
+          code="web/src/scene/nebulaVolume.ts"
+          math={math(
+            row(
+              mi('I'),
+              mo('='),
+              mo('∑'),
+              sub(mi('j'), mi('k')),
+              sup(mi('e'), row(mo('−'), sub(mi('τ'), mi('k')))),
+              mi('Δ'),
+              mi('s'),
+              mo(','),
+              gap(),
+              sub(mi('τ'), mi('k')),
+              mo('='),
+              sub(mo('∑'), row(mi('i'), mo('<'), mi('k'))),
+              sub(mi('κ'), mi('i')),
+              mi('Δ'),
+              mi('s'),
+            ),
+          )}
+          symbols={
+            <>
+              I the light reaching the eye; j the light given off at step k; κ the dust’s absorption at step i,
+              summed over the steps before k; Δs a step, 96 to a line of sight.
+            </>
+          }
+        >
+          Each pixel marches its line of sight through the nebula front to back, adding each step’s light dimmed by
+          the dust ahead of it: the Horsehead is a dark pillar against IC 434’s glow because it is in front. A
+          cloud gives off (1 − r²)<sup>1.5</sup> of its peak at r of its radius; a shell a Gaussian of its width
+          about its surface.
+        </Equation>
+
         <Sub section="physics" id="galaxy">
           The galaxy
         </Sub>
@@ -1539,6 +1599,52 @@ export const physicsSection: AboutSection = {
           K-correction of a band moved by exactly 1 + z is the last term.
           <Cite k={['blantonRoweis2007', 'hogg2002']} />
         </Equation>
+
+        <Sub section="physics" id="quasars">
+          Quasars, clusters and deep fields
+        </Sub>
+        <Equation
+          title="A quasar’s luminosity"
+          code="tools/src/quasars/quasars.ts"
+          math={math(
+            lines(
+              row(
+                sub(mi('M'), row(mi('i'), paren(mi('z'), mo('='), mn('2')))),
+                mo('='),
+                mi('i'),
+                mo('−'),
+                sub(mi('A'), mi('i')),
+                mo('−'),
+                mn('5'),
+                sub(fn('log'), mn('10')),
+                frac(sub(mi('d'), mi('L')), mtext('10 pc')),
+                mo('−'),
+                mi('K'),
+                paren(mi('z')),
+              ),
+              row(sub(mi('M'), mi('V')), mo('='), sub(mi('M'), row(mi('i'), paren(mi('z'), mo('='), mn('2')))), mo('+'), mn('0.747')),
+            ),
+          )}
+          symbols={<>i the PSF magnitude; A<sub>i</sub> the Milky Way’s dust; d<sub>L</sub> = (1 + z) d<sub>C</sub> in Planck 2018; K(z) Richards et al.’s, every 0.01 in z; 0.747 to z 0 and from i to V along a power law f<sub>ν</sub> ∝ ν<sup>−0.5</sup>, AB to Vega.</>}
+        >
+          The i band, 7,472 Å, sees a quasar at z 2 at 2,500 Å of its own ultraviolet. K, the composite quasar’s
+          continuum and lines through the band, takes it back to the light at z 2, where it is zero: the
+          catalogue’s own M<sub>i</sub>.
+          <Cite k={['richards2006', 'lyke2020']} />
+        </Equation>
+        <Items>
+          <Item title="Brighter in the scene than in our sky">
+            Each quasar has the luminosity it had, at its distance now, and is lit as everything in the scene is,
+            over the distance squared from the camera: from the Sun, (1 + z)<sup>2</sup> brighter than our sky
+            shows it, the stretching of its light in energy and in time. The scene is the universe now, not the
+            light on its way.
+          </Item>
+          <Item title="Distances from redshifts">
+            A quasar is at the comoving distance of its redshift in Planck 2018, as the record-holders are (below);
+            a cluster at its CMB-frame redshift’s in Laniakea’s cosmology, as the cosmic web’s galaxies. A large
+            quasar group’s ring and a deep field’s beam end where their redshifts put them.
+          </Item>
+        </Items>
 
         <Sub section="physics" id="universe">
           The observable universe

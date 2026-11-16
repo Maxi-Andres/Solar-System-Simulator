@@ -32,12 +32,17 @@ import { Pulsars } from './Pulsars.tsx';
 import { GlowComposite } from './GlowComposite.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
+import { GalaxyFeatures, type GalaxyFeatureLayers } from './GalaxyFeatures.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
 import { Laniakea } from './Laniakea.tsx';
 import { CosmicWeb } from './CosmicWeb.tsx';
+import { Quasars } from './Quasars.tsx';
+import { FarLandmarks } from './FarLandmarks.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
 import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
+import { Heliosphere } from './Heliosphere.tsx';
+import { Magnetosphere } from './Magnetosphere.tsx';
 import { CosmicMicrowaveBackground } from './CosmicMicrowaveBackground.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
@@ -47,6 +52,7 @@ import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
 import { ScaleBarProbe } from './ScaleBarProbe.tsx';
+import { ShaderWarmup } from './ShaderWarmup.tsx';
 import type { ScaleBarElements } from '../ui/ScaleBar.tsx';
 import type { SharedFrame } from './satellites.ts';
 // Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
@@ -172,6 +178,8 @@ export interface SolarSystemCanvasProps {
   readonly cosmicWeb: CosmicWebSource;
   readonly showSdssGalaxies: boolean;
   readonly showFilaments: boolean;
+  /** The nebulae, the stellar streams, the bubbles and the local interstellar medium (GalaxyFeatures). */
+  readonly galaxyFeatures: GalaxyFeatureLayers;
 }
 
 export function SolarSystemCanvas({
@@ -227,6 +235,7 @@ export function SolarSystemCanvas({
   cosmicWeb,
   showSdssGalaxies,
   showFilaments,
+  galaxyFeatures,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -273,6 +282,7 @@ export function SolarSystemCanvas({
     showSdssGalaxies,
     showFilaments,
     showObservableUniverse,
+    galaxyFeatures,
   ]);
 
   return (
@@ -404,6 +414,9 @@ export function SolarSystemCanvas({
         onPick={onPickLaniakeaGalaxy}
       />
       <CosmicWeb source={cosmicWeb} store={store} clock={clock} focus={focus} showGalaxies={showSdssGalaxies} showFilaments={showFilaments} />
+      {/* Its layers read from the store, its data its own (core/quasars.ts): nothing above needs them. */}
+      <Quasars store={store} clock={clock} focus={focus} />
+      <FarLandmarks store={store} clock={clock} focus={focus} />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <GlobularClusters
@@ -416,7 +429,10 @@ export function SolarSystemCanvas({
         showMarks={showIcons}
         onPick={onPickCluster}
       />
+      <GalaxyFeatures store={store} clock={clock} focus={focus} layers={galaxyFeatures} />
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
+      <Heliosphere store={store} clock={clock} focus={focus} />
+      <Magnetosphere store={store} clock={clock} focus={focus} />
       <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
@@ -445,6 +461,8 @@ export function SolarSystemCanvas({
       <ScaleBarProbe elements={scaleBar} />
       {/* Decides whether another frame follows this one. See renderDemand.ts. */}
       <RenderOnDemand store={store} />
+      {/* The first frame's shaders compiled before it is drawn, off the main thread. */}
+      <ShaderWarmup />
     </Canvas>
   );
 }

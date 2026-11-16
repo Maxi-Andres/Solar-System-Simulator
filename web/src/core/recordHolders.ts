@@ -1,6 +1,7 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { redshiftDistances, mpcToKm, type RedshiftDistances } from './cosmology.ts';
+import { FAR_LANDMARKS } from './farLandmarks.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
@@ -32,7 +33,8 @@ import type { StateVector, Vec3 } from './vec3.ts';
  * checked against it.
  */
 
-export type RecordHolderKind = 'galaxy' | 'quasar' | 'star' | 'grb' | 'transient' | 'cluster' | 'supercluster';
+// 'quasar-group' and 'deep-field' are farLandmarks.ts's, made bodies here with the record-holders.
+export type RecordHolderKind = 'galaxy' | 'quasar' | 'star' | 'grb' | 'transient' | 'cluster' | 'supercluster' | 'quasar-group' | 'deep-field';
 
 export interface RecordHolder {
   readonly key: string;
@@ -400,6 +402,10 @@ export function recordHolderKindLabel(kind: RecordHolderKind): string {
       return 'Galaxy cluster';
     case 'supercluster':
       return 'Supercluster';
+    case 'quasar-group':
+      return 'Large quasar group';
+    case 'deep-field':
+      return 'Deep field';
   }
 }
 
@@ -413,7 +419,8 @@ export function recordHolderBodyId(holder: Pick<RecordHolder, 'key'>): BodyId {
   return `far-${holder.key}`;
 }
 
-const byId = new Map<BodyId, RecordHolder>(RECORD_HOLDERS.map((holder) => [recordHolderBodyId(holder), holder]));
+// With them the far landmarks (farLandmarks.ts): the same kind of body, not counted among the record-holders.
+const byId = new Map<BodyId, RecordHolder>([...RECORD_HOLDERS, ...FAR_LANDMARKS].map((holder) => [recordHolderBodyId(holder), holder]));
 
 export function recordHolderOf(id: BodyId | null): RecordHolder | null {
   return id === null ? null : (byId.get(id) ?? null);
@@ -497,7 +504,7 @@ function definition(holder: RecordHolder): BodyDefinition {
 
 /** The record-holders made bodies, from the start (App.tsx): every number is here. */
 export function ensureRecordHolders(store: EphemerisStore): void {
-  const missing = RECORD_HOLDERS.filter((holder) => !store.isPropagatedBody(recordHolderBodyId(holder)));
+  const missing = [...RECORD_HOLDERS, ...FAR_LANDMARKS].filter((holder) => !store.isPropagatedBody(recordHolderBodyId(holder)));
   if (missing.length === 0) return;
   store.addPropagatedBodies(
     missing.map((holder) => {

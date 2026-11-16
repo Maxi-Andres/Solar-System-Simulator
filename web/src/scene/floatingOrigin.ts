@@ -1,7 +1,9 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { deepSkyLayerKind } from '../core/deepSky.ts';
 import { RECORD_HOLDER_LAYER, recordHolderOf } from '../core/recordHolders.ts';
+import { regionOf } from '../core/regions.ts';
 import { satelliteBodyChip, satelliteChipLayer } from '../core/satelliteGroups.ts';
 import type { Vec3 } from '../core/vec3.ts';
 
@@ -133,6 +135,15 @@ export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>)
   // A record-holder is a structure by kind, and the Observable Universe layer's (recordHolders.ts).
   if (body.kind === 'structure' && recordHolderOf(body.id) !== null) {
     return visibleKinds.has(RECORD_HOLDER_LAYER);
+  }
+  // A region -- a Lagrange point, a Voyager crossing, a boundary's nose -- is its layer's (regions.ts).
+  if (body.kind === 'region') {
+    const region = regionOf(body.id);
+    return region !== null && visibleKinds.has(region.layer);
+  }
+  // A Messier mark or a marked star: its own layer's (deepSky.ts).
+  if (body.kind === 'deep-sky') {
+    return visibleKinds.has(deepSkyLayerKind(body.id));
   }
   return (
     visibleKinds.has(body.kind) &&

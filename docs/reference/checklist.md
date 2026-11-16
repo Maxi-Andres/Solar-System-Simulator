@@ -81,33 +81,35 @@ Where things come from:
 ## The Moon and the Lagrange points (to about 1.5 million km)
 
 - [x] Moon: body.
-- [ ] Kordylewski cloud (Earth-Moon L4): disputed (see README). Solar System.
+- [ ] Kordylewski cloud (Earth-Moon L4): disputed (see README); the point itself is marked,
+  `Earth–Moon L4`, its panel naming the cloud as reported and disputed. Solar System.
 - [ ] Kordylewski cloud (Earth-Moon L5): as above. Solar System.
 - [x] LRO: body, in lunar orbit.
 - [x] Chandrayaan-2: body, in lunar orbit.
 - [x] 2015 TB145: belt.
 - [x] 433 Eros: belt.
-- [ ] Queqiao: Solar System.
+- [ ] Queqiao: not in JPL Horizons (checked 2026-11-16), so no trajectory to draw. Solar System.
 - [~] THEMIS: its two outer probes are here as ARTEMIS P1 and P2, about the Moon; THEMIS A,
   D and E, still in Earth orbit, are not.
-- [ ] Earth-Moon L2: not marked, and nothing there is drawn (Queqiao is missing). Solar
-  System.
-- [ ] Chang'e 5 (its orbiter's extended mission): Solar System.
-- [ ] Spektr-RG: Solar System.
-- [~] Sun-Earth L2: the point is not marked; JWST, Gaia and Euclid there are.
+- [x] Earth-Moon L2: marked, `Earth–Moon L2` (Lagrange Points layer, `web/src/core/lagrange.ts`),
+  computed at each instant; Queqiao, there, is missing.
+- [ ] Chang'e 5 (its orbiter's extended mission): not in JPL Horizons. Solar System.
+- [ ] Spektr-RG: not in JPL Horizons (its -557 is Spektr-R, RadioAstron). Solar System.
+- [x] Sun-Earth L2: marked, `Sun–Earth L2`; JWST, Gaia and Euclid are bodies.
 - [x] Gaia: body (Horizons -139479).
 - [x] JWST: body, `James Webb Space Telescope`.
 - [x] WIND: body, `Wind`.
 - [x] SOHO: body.
-- [ ] LISA Pathfinder: Solar System.
-- [~] Sun-Earth L1: the point is not marked; SOHO, ACE, Wind, DSCOVR, Aditya-L1 and IMAP
-  there are.
+- [x] LISA Pathfinder: body, ESA's trajectory to 2017-06-30, where JPL's ends.
+- [x] Sun-Earth L1: marked, `Sun–Earth L1`; SOHO, ACE, Wind, DSCOVR, Aditya-L1 and IMAP
+  are bodies.
 - [x] DSCOVR: body.
 - [x] ACE: body.
 - [x] Itokawa: belt, `25143 Itokawa`.
-- [ ] Herschel Space Observatory: Solar System.
-- [ ] Planck: Solar System.
-- [ ] WMAP: Solar System.
+- [x] Herschel Space Observatory: body, about the Sun since leaving L2 in 2013 (ESA's
+  prediction to 2050, Horizons -486).
+- [x] Planck: body, likewise (Horizons -489).
+- [ ] WMAP: in Horizons, but its trajectory ends on 2009-04-07, before the window. Solar System.
 
 ## Near the Earth's orbit (to about 0.1 AU)
 
@@ -116,14 +118,15 @@ Where things come from:
 - [x] 2010 TK7: belt, `706765 (2010 TK7)`.
 - [x] 2020 XL5: belt, `614689 (2020 XL5)`.
 - [x] STEREO A: body, `STEREO-A`.
-- [ ] STEREO B: contact lost in 2014; not a body. Solar System.
+- [x] STEREO B: body, `STEREO-B`: silent since 2016, JPL's prediction to 2024-10-26, with a
+  1.6 million km seam where the 2023 prediction takes over.
 - [x] Spitzer: body.
 - [x] Kamoʻoalewa: belt, `469219 Kamo`oalewa`.
 - [x] Lucy: body.
-- [ ] Sun-Earth L5: not marked, nothing there. Solar System.
-- [~] Sun-Earth L4 (Earth trojans): the point is not marked; its trojans 2010 TK7 and
+- [x] Sun-Earth L5: marked, `Sun–Earth L5`; nothing known there.
+- [x] Sun-Earth L4 (Earth trojans): marked, `Sun–Earth L4`; its trojans 2010 TK7 and
   2020 XL5 are in the belt.
-- [ ] IKAROS: Solar System.
+- [ ] IKAROS: not in JPL Horizons. Solar System.
 - [x] Parker Solar Probe: body.
 - [x] 1685 Toro: belt.
 
@@ -136,7 +139,7 @@ Where things come from:
 - [x] Mercury: body.
 - [x] Sun: body.
 - [x] Venus: body.
-- [ ] Chang'e 2: Solar System.
+- [ ] Chang'e 2: not in JPL Horizons. Solar System.
 - [x] 2002 VE68: belt, as `524522 Zoozve` (named in 2024); its designation is searchable.
 - [x] Akatsuki: body.
 - [~] Mars trojans: in the belt (5261 Eureka and the rest), but not set apart as trojans.
@@ -186,14 +189,14 @@ Where things come from:
 - [x] Titania: body.
 - [x] Triton: body.
 - [~] Neptune trojans: in the belt (385571 Otrera and the rest, class TNO), not set apart.
-- [ ] ʻOumuamua: on a hyperbola, which the belt drops; not a body either
-  (`famousComets.ts` says so). Solar System.
+- [x] ʻOumuamua: body, `1I/ʻOumuamua (A/2017 U1)`, on its hyperbola (`farBodies.ts`); a marker,
+  its size unmeasured.
 - [x] Neptune: body.
 
 ## The Kuiper belt and the heliosphere (to about 1,000 AU)
 
-- [x] Orcus: belt, `90482 Orcus`.
-- [ ] Vanth (Orcus's moon): Solar System.
+- [x] Orcus: body (`farBodies.ts`).
+- [x] Vanth (Orcus's moon): small moon (`small-moons/orcus.json`, `moons/minorPlanetMoons.ts`).
 - [x] Pluto: body.
 - [x] Charon: body.
 - [x] Nix: small moon (`small-moons/pluto.json`).
@@ -201,29 +204,33 @@ Where things come from:
 - [x] Kuiper belt: about 7,300 trans-Neptunian objects, belt class TNO.
 - [x] Makemake: body.
 - [x] Haumea: body.
-- [ ] Hiʻiaka (Haumea's moon): Solar System.
-- [ ] Namaka (Haumea's moon): Solar System.
-- [ ] Actaea (Salacia's moon): Solar System.
-- [x] Salacia: belt, `120347 Salacia`.
+- [x] Hiʻiaka (Haumea's moon): small moon (`small-moons/haumea.json`).
+- [x] Namaka (Haumea's moon): small moon.
+- [x] Actaea (Salacia's moon): small moon (`small-moons/salacia.json`).
+- [x] Salacia: body.
 - [x] Eris: body.
-- [ ] Dysnomia (Eris's moon): its mass is in Eris's GM, but it is not drawn. Solar System.
+- [x] Dysnomia (Eris's moon): small moon (`small-moons/eris.json`).
 - [x] Arrokoth: body.
 - [x] New Horizons: body.
 - [x] Pioneer 11: body.
 - [x] Pioneer 10: body.
 - [x] Voyager 2: body.
 - [x] Voyager 1: body.
-- [ ] Termination shock: Solar System.
-- [ ] Heliopause: Solar System.
-- [x] Gonggong: belt, `225088 Gonggong`.
-- [x] Sedna: belt, `90377 Sedna`.
+- [x] Termination shock: Heliosphere layer (`web/src/core/heliosphere.ts`): the Voyagers'
+  two crossings, measured, and Parker's sphere through them, modelled.
+- [x] Heliopause: the Voyagers' two crossings, measured, and Parker's surface fitted to them,
+  turned to the interstellar wind, its tail fading where it is not known.
+- [x] Gonggong: body (`farBodies.ts`).
+- [x] Sedna: body.
 
-The big trans-Neptunians in the belt (Orcus, Salacia, Gonggong, Sedna) are points with
-their orbits, not bodies of their size as Eris and Makemake are.
+The big trans-Neptunians (Orcus, Salacia, Quaoar, Varuna, Ixion, Gonggong, Sedna) are bodies
+of their measured size, JPL's integrated paths (`tools/src/farBodies.ts`); the belt leaves
+them out.
 
 ## The Oort cloud (to about 100,000 AU)
 
-- [ ] Oort cloud: Solar System.
+- [x] Oort cloud: Heliosphere layer, `Oort cloud`: inferred, never seen, drawn as an even glow
+  from 2,000 AU (the inner, Hills cloud) to 20,000 and on to 100,000 AU.
 
 ## The nearest stars (to about 10 pc)
 
@@ -231,14 +238,14 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [x] Alpha Centauri A: 3D star, named `Rigil Kentaurus` (its IAU name).
 - [x] Alpha Centauri B: 3D star, named `Toliman`.
 - [x] Barnard's Star: 3D star, named.
-- [ ] Luhman 16: a brown dwarf with no five-parameter solution in Gaia DR3, so not in the
-  catalogue (`nearbySystems.ts` says so). Stars.
+- [x] Luhman 16: a mark, Notable Stars layer (`web/src/core/notableStars.ts`), by Lazorenko &
+  Sahlmann 2018's parallax; Gaia has no five-parameter solution for it.
 - [x] Sirius: 3D star, named, with Sirius B and their orbit (`web/src/core/sirius.ts`).
-- [x] Procyon: 3D star, named (Procyon B, not measured by Gaia, is not drawn).
+- [x] Procyon: 3D star, named; Procyon B a mark at its place (Notable Stars), its orbit not drawn.
 - [x] Luyten 726-8: 3D stars, `Luyten 726-8 A` and `B` (BL Cet and UV Cet).
 - [x] Wolf 359: 3D star, named.
 - [x] Lalande 21185: 3D star, named.
-- [ ] WISE 0855-0714: a brown dwarf, missing from Gaia as Luhman 16 is. Stars.
+- [x] WISE 0855-0714: a mark, Notable Stars, by Kirkpatrick et al. 2021's parallax.
 - [x] 61 Cygni: 3D stars, `61 Cygni A` and `B`.
 - [x] Ran (Epsilon Eridani): 3D star, named.
 - [x] Gacrux: 3D star, named.
@@ -260,15 +267,17 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [~] Pleiades: its bright stars are 3D stars by their Hipparcos parallaxes, Alcyone, Maia,
   Electra and the rest named; the cluster is not an object and has no label.
 - [x] Van Maanen's Star: 3D star, named.
-- [ ] UY Scuti: fainter than the sky's V 8 and far beyond the 3D census. Stars.
-- [ ] Horsehead Nebula: no nebulae yet (they must be 3D volumes, not photos). Milky Way.
-- [ ] Ring Nebula: Milky Way.
-- [ ] Omega Nebula (M17): Milky Way.
-- [ ] Eagle Nebula (M16): Milky Way.
+- [x] UY Scuti: a mark, Notable Stars, by its Gaia DR3 parallax (1.87 kpc).
+- [x] Horsehead Nebula: Nebulae layer (`web/src/core/nebulae.ts`), a volume: IC 434's glow and
+  the dark pillar in front, at σ Orionis's distance; its shape an estimate.
+- [x] Ring Nebula: Nebulae, its published triaxial shell (O'Dell et al. 2013).
+- [x] Omega Nebula (M17): Nebulae, a volume of its WISE size (shape an estimate).
+- [x] Eagle Nebula (M16): Nebulae, a volume of its WISE size; its pillars not drawn as such.
 - [~] Eta Carinae: on the sky only, a V 6.5 Hipparcos star left at infinity (its parallax
   is too poor to place it), unnamed. Stars / Milky Way.
-- [ ] Carina Nebula: Milky Way.
-- [x] Perseus Arm: one of the Milky Way model's arms (Reid et al. 2019), labelled.
+- [x] Carina Nebula: Nebulae, a volume of its WISE size at 2.35 kpc (Göppl & Preibisch 2022).
+- [x] Perseus Arm: one of the Milky Way model's arms (Reid et al. 2019), labelled; the
+  Galactic Bar labelled too.
 
 ## The Milky Way and its satellites (to about 100 kpc)
 
@@ -340,16 +349,18 @@ their orbits, not bodies of their size as Eris and Makemake are.
 ## The far universe
 
 - [ ] Hercules-Corona Borealis Great Wall: a claim. G4.
-- [ ] Clowes-Campusano LQG: G4.
-- [ ] Huge-LQG: a claim. G4.
-- [ ] U1.11 LQG: G4.
+- [x] Clowes-Campusano LQG: a far landmark (`web/src/core/farLandmarks.ts`), `Clowes–Campusano LQG`, at its 34
+  quasars' mean place and redshift (z 1.28), a ring of its size; the Observable Universe layer.
+- [x] Huge-LQG: a far landmark, `Huge-LQG`, z 1.27, a ring of its size, its panel saying it is a claim (Nadathur 2013).
+- [x] U1.11 LQG: a far landmark, `U1.11`, z 1.11, a ring of its size.
 - [x] J0313-1806, most distant known quasar (z = 7.64): a record-holder, z 7.6423; EUCL J1729+6410, z 7.77, the record now, beside it.
 - [x] GRB 090429B, most distant gamma-ray burst: a record-holder at its photometric z 9.4, said so; GRB 090423, z 8.26 spectroscopic, beside it.
 - [x] HD1, "most distant known galaxy": a record-holder at z 4.0, where its JWST spectrum puts it,
   its panel giving the z 13 claim; MoM-z14 (z 14.44) and JADES-GS-z14-0 (z 14.1796) beside it.
 - [x] Tonantzintla 618, "most massive black hole": a record-holder, z 2.219, its mass said to be an estimate.
 - [x] Earendel (the map's "Ereandel"), most distant single star: a record-holder at its galaxy's z 5.926, its panel saying it may be a cluster.
-- [~] Farthest visible galaxies: MoM-z14, JADES-GS-z14-0, GN-z11 and UHZ1 as record-holders; no deep field.
+- [x] Farthest visible galaxies: MoM-z14, JADES-GS-z14-0, GN-z11 and UHZ1 as record-holders; the deep fields they
+  were found in (HUDF, JADES, COSMOS-Web, SMACS 0723) as beams out to their farthest confirmed galaxies.
 - [ ] Unreachable (the cosmic event horizon): stated in the About (16.6 billion ly), not drawn. G4.
 - [x] Cosmic microwave background: the last-scattering sphere, Planck's 2018 map, from far outside (`web/src/scene/cmb.ts`).
 - [ ] Big Bang: G4.
@@ -380,8 +391,8 @@ Researched on 2026-11-12. A claim marked *(unverified)* was not checked against 
 What the map does not show but a realism-first simulator should. These are unchecked against the app until each is worked on.
 
 ### Near Earth
-- [ ] Kármán line (100 km), Armstrong limit (19 km), noctilucent clouds (~83 km), sprites and jets, the ionosphere's layers, altitude records (X-15, SR-71, Eustace's jump)
-- [ ] Van Allen belts, plasmasphere, magnetopause (~10 R⊕), bow shock, magnetotail, geocorona (~630,000 km), Earth's umbra and Hill sphere
+- [~] Kármán line (100 km): Magnetosphere layer. Not yet: Armstrong limit (19 km), noctilucent clouds (~83 km), sprites and jets, the ionosphere's layers, altitude records (X-15, SR-71, Eustace's jump)
+- [~] Van Allen belts, magnetopause (~10 R⊕), bow shock: Magnetosphere layer, standard models (`web/src/core/magnetosphere.ts`). Not yet: plasmasphere, magnetotail, geocorona (~630,000 km), Earth's umbra and Hill sphere
 - [ ] SWFO-L1 at Sun–Earth L1; Roman on its way to L2 (launched 2026-08-30 *(unverified)*). The other L1 and L2 craft are in the app.
 - [ ] Observatories in Earth orbit: Swift, NuSTAR, TESS, IXPE, XRISM, Einstein Probe, SVOM, SPHEREx, PUNCH
 - [ ] Earth's companions: quasi-moon 2025 PN7, mini-moon 2024 PT5
@@ -395,22 +406,22 @@ What the map does not show but a realism-first simulator should. These are unche
 - [ ] Asteroids: Bennu, Ryugu, Didymos–Dimorphos, 2024 YR4, Toutatis, Phaethon, 16 Psyche, Dinkinesh–Selam, Donaldjohanson, Ida–Dactyl, Gaspra, Lutetia, Šteins, Mathilde; the Kirkwood gaps and the Hildas
 - [ ] Lucy's Trojan targets: Eurybates, Polymele, Leucus, Orus, Patroclus–Menoetius
 - [ ] Comets: Tsuchinshan–ATLAS, 12P/Pons–Brooks, 67P, Shoemaker–Levy 9 (historic)
-- [ ] Interstellar objects: 2I/Borisov, 3I/ATLAS (2025)
+- [x] Interstellar objects: 2I/Borisov, 3I/ATLAS (2025): bodies on their hyperbolas (`famousComets.ts`), with 1I/ʻOumuamua
 
 ### Outer Solar System
-- [ ] Kerberos, Styx; Quaoar and its rings; Varuna, Ixion
-- [ ] The farthest objects seen: 2018 VG18 "Farout", 2018 AG37 "FarFarOut"
-- [ ] Sednoids: 2012 VP113, Leleākūhonua, 2023 KQ14; 2017 OF201
+- [~] Kerberos, Styx (small moons); Quaoar, with Weywot; Varuna, Ixion (bodies). Not yet: Quaoar's rings, whose plane has no published pole in the form the app turns rings by
+- [x] The farthest objects seen: 2018 VG18 "Farout", 2018 AG37 "FarFarOut": bodies, markers (size unmeasured)
+- [x] Sednoids: 2012 VP113, Leleākūhonua, 2023 KQ14; 2017 OF201: bodies, markers (size unmeasured)
 - [ ] Planet Nine, as a region where it might be [hypothetical]
-- [ ] The heliosphere: IBEX ribbon, hydrogen wall, heliotail; the Sun's gravitational focus (≥ 550 AU); the Hills cloud
-- [ ] The Local Interstellar Cloud and the G-cloud
+- [~] The heliosphere: the Hills cloud (inner Oort cloud, inferred); the heliotail drawn fading, its extent unknown. Not yet: IBEX ribbon, hydrogen wall; the Sun's gravitational focus (≥ 550 AU)
+- [~] The Local Interstellar Cloud: Local Interstellar Medium layer, Linsky et al. 2019's shape. Not the G-cloud: only its outline on the sky is published
 - [ ] Stellar flybys: Scholz's Star (70,000 years ago), Gliese 710 (in 1.3 Myr)
 
 ### Nearby stars and planets
 - [ ] Barnard's Star's four planets (2025); α Cen A's candidate planet S1 [uncertain]; ε Ind Ab; GJ 251 c; HD 20794 d
 - [ ] Ross 128, 154, 248; Gliese 1061; Teegarden's Star; Kapteyn's Star; YZ Ceti; Gliese 581, Gliese 667C
 - [ ] Bright stars: Polaris, Deneb, Altair, Spica, Regulus, Fomalhaut, Mira, Algol, Castor, Orion's Belt
-- [ ] Compact objects: Procyon B, 40 Eridani B, RX J1856.5-3754, PSR J0437-4715
+- [x] Compact objects: Procyon B, 40 Eridani B (Notable Stars marks); RX J1856.5-3754, PSR J0437-4715 (Pulsars layer)
 - [ ] Planetary systems:
   - firsts: 51 Peg, PSR B1257+12;
   - TRAPPIST-1;
@@ -423,34 +434,34 @@ What the map does not show but a realism-first simulator should. These are unche
 - [ ] The Hyades; the Ursa Major moving group
 
 ### The Milky Way near us
-- [ ] The Local Bubble; the Radcliffe Wave; the Gould Belt (now read as a projection)
+- [~] The Local Bubble (Pelgrims et al. 2020's wall); the Radcliffe Wave (Konietzka et al. 2024's model and clouds): Local Interstellar Medium layer. Not the Gould Belt
 - [ ] Interstellar features: Loop I, the Orion–Eridanus superbubble, Barnard's Loop, the Coalsack, ρ Oph, Taurus, Barnard 68, Cygnus X
-- [ ] Star-forming regions: the Orion Nebula M42 and the Orion molecular clouds; Lagoon, Trifid, Rosette, North America, Heart and Soul, NGC 3603, Westerlund 2
-- [ ] Planetary nebulae: Helix, Dumbbell, Cat's Eye, Southern Ring, Butterfly, Red Rectangle, Boomerang
+- [~] Star-forming regions: the Orion Nebula M42, Lagoon, Trifid, Rosette (Nebulae layer, volumes; also the Eagle, Omega, Carina, Horsehead, Tarantula). Not yet: the Orion molecular clouds, North America, Heart and Soul, NGC 3603, Westerlund 2
+- [~] Planetary nebulae: Helix, Dumbbell, Cat's Eye, Southern Ring (Nebulae layer, their published shapes; the Owl a Messier mark). Not yet: Butterfly, Red Rectangle, Boomerang
 - [ ] Remnants: Crab, Cassiopeia A, Tycho, Kepler, SN 1006, Vela, the Veil, SN 1987A (check which are in the remnant catalogue)
-- [ ] Extreme stars:
+- [~] Extreme stars, Notable Stars marks, all but μ Cep, ρ Cas and WR 104, whose parallaxes give no distance:
   - massive: R136a1, VY CMa, μ Cep, ρ Cas, the Pistol Star, P Cyg, AG Car;
   - Wolf–Rayet: WR 104, WR 140;
   - young clusters: Westerlund 1, Arches, Quintuplet;
   - oldest and most metal-poor: HD 140283, SMSS J0313-6708;
   - odd: Przybylski's Star, Tabby's Star, T CrB
-- [ ] Stellar black holes: Gaia BH1, BH2, BH3, Cygnus X-1, A0620-00, V404 Cyg, GRS 1915+105, SS 433
-- [ ] Magnetars and notable pulsars: SGR 1806-20, SGR 1935+2154, long-period transients, PSR B1919+21, B1913+16, J0737-3039, J1748-2446ad, J0952-0607
+- [x] Stellar black holes: Gaia BH1, BH3, Cygnus X-1 (drawn to scale); Gaia BH2, A0620-00, V404 Cyg, GRS 1915+105, SS 433 (Notable Stars marks)
+- [~] Magnetars and notable pulsars: SGR 1806-20, PSR B1919+21, B1913+16, J0737-3039, J1748-2446ad, J0952-0607 in the Pulsars layer (ATNF, McGill). Not SGR 1935+2154, which the catalogues give no distance; the long-period transients not checked
 
 ### The Milky Way's structure
-- [ ] Sgr A*'s EHT shadow and the star S2; the Central Molecular Zone
-- [ ] The bar and the X-shaped bulge; each spiral arm by name (Norma, Scutum–Centaurus, Sagittarius–Carina, Orion spur, Outer, 3-kpc); the warp and flare
-- [ ] The Fermi and eROSITA bubbles
-- [ ] Halo: Gaia-Enceladus, the Sagittarius dwarf and its stream, Kraken, Sequoia, the Helmi streams, GD-1, Palomar 5's tails, Monoceros, TriAnd
-- [ ] The Magellanic Stream, Bridge and Leading Arm; high-velocity clouds (Smith Cloud, Complex C); hypervelocity stars (S5-HVS1)
+- [~] Sgr A*'s shadow and the star S2 on its GRAVITY orbit (`blackHoles.ts`). Not the Central Molecular Zone
+- [~] The bar, labelled `Galactic Bar`; each spiral arm by name (Norma, Scutum–Centaurus, Sagittarius–Carina, the Local Arm or Orion spur, Perseus, Outer, 3-kpc). Not the X-shaped bulge, the warp or the flare
+- [x] The Fermi and eROSITA bubbles: faint shells, their outlines measured, their depth modelled (`galacticBubbles.ts`)
+- [~] Halo: the Sagittarius stream, GD-1, Palomar 5's tails, the Monoceros Ring and 114 more streams (Stellar Streams layer, galstreams). Not Gaia-Enceladus, Kraken, Sequoia or the Helmi streams (groups in velocity, not tracks), nor TriAnd (no track in galstreams)
+- [ ] The Magellanic Stream, Bridge and Leading Arm (mapped on the sky; no distance along them is measured); high-velocity clouds (Smith Cloud, Complex C); hypervelocity stars (S5-HVS1)
 - [ ] The Sun's galactic orbit; the dark halo's virial radius
-- [ ] Every Messier object (110), and the Caldwell catalogue for the south
-- [ ] ω Cen's intermediate-mass black hole (Häberle et al. 2024)
+- [~] Every Messier object: 108 of 110 drawn and found by number (`messier.ts`); M24 (a star cloud at every distance) and M76 (no distance) not. Not the Caldwell catalogue
+- [x] ω Cen's intermediate-mass black hole (Häberle et al. 2024): a Notable Stars mark at the cluster's centre
 
 ### Local Group
 - [ ] M31's Giant Stellar Stream; Andromeda XXXVI (2026)
 - [ ] The NGC 3109 / Antlia–Sextans group; the zero-velocity surface; the Local Sheet; the "Council of Giants"
-- [ ] The LMC's Tarantula Nebula, R136 and SN 1987A
+- [~] The LMC's Tarantula Nebula (Nebulae layer) and R136a1 (a mark). Not SN 1987A
 
 ### Local Volume (G2)
 - [x] NGC 253, NGC 55, NGC 300, NGC 7793; NGC 3077, the Holmberg galaxies (NGC 55 and NGC 300 from McConnachie's catalogue)
@@ -471,12 +482,17 @@ What the map does not show but a realism-first simulator should. These are unche
 - [x] The walls as their galaxies: the Sloan and CfA2 Great Walls' galaxies tinted, by their papers' spans on the sky and an estimated depth
 
 ### The far universe (G4)
-- [ ] Clusters: Phoenix, Abell 370, MACS J0717, the Musket Ball
+- [~] Clusters: Phoenix (PSZ2 G339.63-69.34) and MACS J0717 (PSZ2 G180.25+21.03) are among the 1,088 Planck SZ
+  clusters drawn as rings (SZ Clusters layer, `quasars/sz-clusters.bin`), not named or searchable; not Abell 370 or the Musket Ball
 - [ ] Protoclusters: Spiderweb, SPT2349-56, Hyperion; the BOSS Great Wall
 - [ ] The Giant Arc, the Big Ring [disputed]
-- [~] Quasars and supermassive black holes: 3C 273 a record-holder; not OJ 287, Phoenix A, Holmberg 15A, the Cosmic Horseshoe
+- [~] Quasars and supermassive black holes: SDSS DR16Q's 749,742 quasars to z 7.02, in the SDSS's wedges, the Quasars
+  layer (`quasars/quasars-*.bin`, `web/src/scene/Quasars.tsx`); 3C 273 a record-holder; not OJ 287, Phoenix A,
+  Holmberg 15A, the Cosmic Horseshoe
 - [~] Transients: GRB 221009A "the BOAT" a record-holder; not GW150914, GW231123, Swift J1644+57, fast radio bursts
-- [ ] Deep fields: Hubble's Deep and Ultra Deep Fields, SMACS 0723, JADES, CEERS, COSMOS-Web
+- [~] Deep fields: the Hubble Ultra Deep Field, SMACS 0723, JADES (GOODS-S) and COSMOS-Web as far landmarks
+  (`web/src/core/farLandmarks.ts`), each a beam as wide as the field out to its farthest galaxy with a spectrum;
+  not the Hubble Deep Field (1995) or CEERS
 - [~] The distance record and its runners-up: MoM-z14 (the record), JADES-GS-z14-0, GN-z11, UHZ1,
   EUCL J1729+6410 (the farthest quasar), GRB 090423 and GRB 250314A are record-holders; not yet:
   - CAPERS-LRD-z9 and the little red dots;
@@ -494,10 +510,10 @@ As of 13 November 2026, 244 labels:
 
 | Status | Count |
 | --- | --- |
-| `[x]` in the app | 176 |
-| `[~]` partly | 13 |
-| `[ ]` missing | 55 |
+| `[x]` in the app | 180 |
+| `[~]` partly | 12 |
+| `[ ]` missing | 52 |
 
-Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 7, G4 8.
+Missing, by phase: Solar System 31, stars 3, Milky Way 6, G2 0, G3 7, G4 5.
 
 The counts are the map's labels only, not "Beyond the map".

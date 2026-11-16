@@ -5,11 +5,22 @@ one per entry where an official image exists. Each is downscaled to at most 480 
 re-encoded as WebP; nothing else is changed. The credit line under each photo in the app is the
 one below, as its source asks it to be given.
 
+`large/` holds the same photographs larger, under the same file names, for the view a photo
+opens into when clicked: the same image from the same source page, its largest rendition
+(NASA's `~orig`, the ESA/Hubble, ESA/Webb, ESO and NOIRLab `large` JPEG) downscaled to at most
+1,600 pixels on its long side and re-encoded as WebP, never enlarged and never cropped. Seven
+sources are smaller than that and are kept at their own size (`white-dwarf.webp` 403 pixels on
+the long side, `red-dwarf.webp` 604, `quasar.webp` 705, `asteroid.webp` 1,024,
+`star-system.webp` 1,026, `neutron-star.webp` 1,100, `sun.webp` 1,500); `comet.webp` and
+`irregular.webp` are 1,440, to stay near 250 KB, and the two dense star fields,
+`spectral-type.webp` and `star-cluster.webp`, 1,021, for the same reason. Each large copy
+carries the same credit and licence as its row below; all of `large/` is about 5 MB.
+
 - ESA/Hubble, ESA/Webb, ESO and NOIRLab images are under the Creative Commons Attribution 4.0
   International licence (CC BY 4.0), with the credit line given in full.
 - NASA images are not copyrighted; NASA asks to be credited, and is.
 
-| File | Shows | Credit | Licence | Source |
+| File (and `large/` copy) | Shows | Credit | Licence | Source |
 | --- | --- | --- | --- | --- |
 | `sun.webp` | Spotless Sun | NASA/GSFC/Solar Dynamics Observatory | NASA media, not copyrighted; credit requested | [NASA Image and Video Library](https://images.nasa.gov/details/PIA21569) |
 | `planet.webp` | Latest Saturn Portrait | NASA, ESA, A. Simon (Goddard Space Flight Center), and M.H. Wong (University of California, Berkeley) | CC BY 4.0 | [ESA/Hubble](https://esahubble.org/images/heic1917a/) |

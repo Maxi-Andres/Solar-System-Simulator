@@ -582,6 +582,14 @@ function barFrame(angleDeg: number, along: number, across: number, up: number): 
   return [x, y, up + planeHeightPc(x)];
 }
 
+/**
+ * Where the long bar's name goes, about the Sun, pc: on its axis, three-fifths of the way from
+ * the centre to its near end -- clear of the Galactic Centre's name, on the bar's own light.
+ */
+export function barLabelPoint(): { readonly name: string; readonly position: [number, number, number] } {
+  return { name: 'Galactic Bar', position: barFrame(LONG_BAR.angleDeg, 0.6 * LONG_BAR.halfLengthPc, 0, 0) };
+}
+
 /** Where each arm's name goes: the middle of its measured stretch, about the Sun, pc. */
 export function armLabelPoints(): { readonly name: string; readonly position: [number, number, number] }[] {
   return SPIRAL_ARMS.map((arm) => {

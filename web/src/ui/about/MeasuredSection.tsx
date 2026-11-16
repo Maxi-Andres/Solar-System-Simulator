@@ -25,6 +25,7 @@ export const measuredSection: AboutSection = {
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'satellites', label: 'Earth satellites' },
+    { id: 'surroundings', label: 'The Sun’s surroundings' },
     { id: 'stars', label: 'Stars' },
     { id: 'alpha-centauri', label: 'Alpha Centauri' },
     { id: 'sirius', label: 'Sirius and its white dwarf' },
@@ -34,11 +35,18 @@ export const measuredSection: AboutSection = {
     { id: 'pulsars', label: 'Pulsars and magnetars' },
     { id: 'globular-clusters', label: 'Globular clusters' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
+    { id: 'nebulae', label: 'Nebulae' },
+    { id: 'messier', label: 'Messier objects' },
+    { id: 'notable-stars', label: 'Notable stars and black holes' },
+    { id: 'streams', label: 'Stellar streams' },
+    { id: 'bubbles', label: 'The Fermi and eROSITA bubbles' },
+    { id: 'local-ism', label: 'The local interstellar medium' },
     { id: 'galaxy', label: 'The Milky Way' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
     { id: 'cosmic-web', label: 'The cosmic web' },
+    { id: 'quasars', label: 'Quasars, clusters and deep fields' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -109,6 +117,13 @@ export const measuredSection: AboutSection = {
             {smallBodySentence(store)}
             <Cite k="sbdb" />
           </Item>
+          <Item>
+            The far ones’ sizes: Quaoar by occultation
+            <Cite k="bragaRibas2013" />, Sedna, Ixion and Gonggong by their heat
+            <Cite k={['pal2012', 'lellouch2013', 'kiss2019']} />, Orcus and Salacia from JPL’s fits of their moons’
+            systems. ʻOumuamua’s path includes the push Micheli et al. found
+            <Cite k="micheli2018" />, measured only over its 80 days of data.
+          </Item>
           {beltInfo !== null && <Item>{beltSentence(beltInfo, beltTiers)}</Item>}
           <Item>
             How far the belt and the comets drift from their real paths, and what their dots mean:{' '}
@@ -162,6 +177,25 @@ export const measuredSection: AboutSection = {
           <Item>
             {satelliteAccuracySentence(satelliteInfo)}
             <Cite k={['celestrak', 'vallado2006']} />
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="surroundings">
+          The Sun’s surroundings
+        </Sub>
+        <Items>
+          <Item title="The heliosphere’s edges, where crossed">
+            Voyager 1 crossed the termination shock on 2004-12-16 at 94.0 AU and the heliopause on 2012-08-25 at
+            121.6 AU; Voyager 2 the shock about 2007-08-31 at 83.7 AU and the heliopause on 2018-11-05 at 119.0
+            AU
+            <Cite k={['stone2005', 'stone2008', 'stone2013', 'stone2019']} />. Each is a mark where the craft was
+            that day, from JPL Horizons
+            <Cite k="horizons" />. Those four points are all that is measured of either surface.
+          </Item>
+          <Item title="The interstellar wind">
+            The heliosphere faces the interstellar gas flowing in from ecliptic longitude 255.7°, latitude
+            5.1°, measured from the neutral helium IBEX sampled
+            <Cite k="mccomas2015" />.
           </Item>
         </Items>
 
@@ -540,6 +574,118 @@ export const measuredSection: AboutSection = {
           </Item>
         </Items>
 
+        <Sub section="measured" id="nebulae">
+          Nebulae
+        </Sub>
+        <Items>
+          <Item title="Where and how far">
+            Nine star-forming regions at their young stars’ Gaia parallaxes: Orion 403 pc, the Lagoon 1,336, the
+            Trifid 1,264, the Eagle 1,740, the Omega 1,680, the Rosette 1,560 <Cite k="kuhn2019" />; Carina 2,350
+            <Cite k="goppl2022" />; the Horsehead at σ Orionis’s 387.5, whose light it is <Cite k="schaefer2016" />;
+            the Tarantula at the Large Magellanic Cloud’s <Cite k="pietrzynski2019" />. Five planetary nebulae at
+            their central stars’ Gaia parallaxes <Cite k="gaiaDr3" />, less its zero-point{' '}
+            <Cite k="lindegren2021" />: the Helix 199 pc, the Dumbbell 387, the Southern Ring 748, the Ring 777,
+            the Cat’s Eye 1,335.
+          </Item>
+          <Item title="How big, and what shape">
+            The star-forming regions’ sizes are the WISE catalogue’s of H II regions <Cite k="anderson2014" />.
+            3D shapes where published: Orion’s blister, open toward us <Cite k="odell2001" />; the Ring’s triaxial
+            shell <Cite k="odell2013" />; the Helix’s disk and the torus nearly square to it{' '}
+            <Cite k="odell2004" />; the Southern Ring’s bipolar shell <Cite k="monteiro2000" />; the Cat’s Eye’s
+            inner bubble <Cite k="reed1999" />; the Dumbbell’s barrel <Cite k="meaburn2005" />. The panel names
+            each.{' '}
+            <Xref to="estimated" sub="nebulae">
+              What is modelled
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="messier">
+          Messier objects
+        </Sub>
+        <Items>
+          <Item>
+            All 110, each found by its number. 29 are globular clusters, 40 galaxies, one the Crab Nebula and
+            seven nebulae above, drawn already. 26 open clusters are marks at their members’ mean Gaia parallax,
+            of their half-member radius, from the Unified Cluster Catalogue <Cite k="perren2023" />, less Gaia’s
+            zero-point <Cite k="lindegren2021" />; M43 and M78 at the VLBA’s distances to Orion’s young stars{' '}
+            <Cite k="kounkel2017" />; the Owl Nebula at its central star’s Gaia parallax; M40 and M73, stars that
+            only look close, each star where Gaia puts it <Cite k="odenkirchen2002" />. Not drawn: M24, a star
+            cloud at every distance along it, and M76, whose central star’s parallax gives no distance. M102 is
+            taken to be NGC 5866, which is disputed.
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="notable-stars">
+          Notable stars and black holes
+        </Sub>
+        <Items>
+          <Item>
+            Twenty-five stars, black holes and young clusters the star catalogue does not place, each a mark at a
+            distance measured for it: Luhman 16 by its ground-based parallax <Cite k="lazorenko2018" />, WISE
+            0855−0714 by Spitzer’s <Cite k="kirkpatrick2021" />; VY Canis Majoris <Cite k="zhang2012" />, V404
+            Cygni <Cite k="millerJones2009" /> and GRS 1915+105 <Cite k="reid2014" /> by radio parallaxes; Gaia BH2
+            by Gaia’s parallax fitted with its orbit <Cite k="elBadry2023b" />; A0620−00 by its star’s brightness{' '}
+            <Cite k="cantrell2010" />; ω Centauri’s black hole <Cite k="haberle2024" /> at the cluster’s distance{' '}
+            <Cite k="baumgardtVasiliev2021" />; R136a1 at the Large Magellanic Cloud’s; the Pistol Star, the
+            Arches and the Quintuplet at the Galactic Centre’s <Cite k="gravity2024" />; Procyon B at Procyon A’s{' '}
+            <Cite k="vanLeeuwen2007" />; Westerlund 1 by its members’ Gaia parallaxes <Cite k="perren2023" />; the
+            rest by their own <Cite k="gaiaDr3" />. Positions SIMBAD’s <Cite k="simbad" />. The fast ones — the
+            brown dwarfs, the white dwarfs, HD 140283 — move along their measured motion. The panel names each
+            source.
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="streams">
+          Stellar streams
+        </Sub>
+        <Items>
+          <Item>
+            118 streams of stars torn from globular clusters and dwarf galaxies, each along the track its own
+            paper fitted to its stars, as galstreams collects them <Cite k="mateu2023" />: Sagittarius, GD-1,
+            Palomar 5, Orphan–Chenab, the Monoceros Ring and the rest, 73 of them from Ibata et al.’s searches of
+            Gaia <Cite k={['ibata2021', 'ibata2024']} />. Where on the sky each runs is measured; how far, along
+            85; for 32 only one distance for the whole stream; for one, roughly. Their widths on the sky where
+            published.{' '}
+            <Xref to="estimated" sub="streams">
+              What is not
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="bubbles">
+          The Fermi and eROSITA bubbles
+        </Sub>
+        <Items>
+          <Item>
+            Their outlines on the sky, and nothing of their depth: the Fermi bubbles in gamma rays, 50° above and
+            below the Galactic Centre and 40° wide <Cite k="su2010" />; the eROSITA bubbles in soft X-rays, about
+            80° across, read as shells some 14 kpc across <Cite k="predehl2020" />.
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="local-ism">
+          The local interstellar medium
+        </Sub>
+        <Items>
+          <Item title="The Local Bubble">
+            The hot, thin cavity the Sun is in, walled by dust: its wall where the dust begins along each line of
+            sight in a 3D dust map from Gaia and 2MASS <Cite k="lallement2019" />, as Pelgrims et al. fitted it{' '}
+            <Cite k="pelgrims2020" />, 88 to 310 pc from the Sun.
+          </Item>
+          <Item title="The Radcliffe Wave">
+            A 2.7-kpc chain of star-forming clouds, Orion to Cygnus, rising and falling across the plane{' '}
+            <Cite k="alves2020" />: its best-fit model and its 79 clouds where they are measured{' '}
+            <Cite k="konietzka2024" />.
+          </Item>
+          <Item title="The Local Interstellar Cloud">
+            The warm cloud the Sun is just inside: its shape as Linsky et al. fitted it to the hydrogen in front
+            of 62 stars <Cite k={['linsky2019', 'redfieldLinsky2000']} />, a few parsecs across.
+          </Item>
+        </Items>
+
         <Sub section="measured" id="galaxy">
           The Milky Way
         </Sub>
@@ -757,6 +903,44 @@ export const measuredSection: AboutSection = {
             density by DisPerSE at 5σ, 4,762 pieces kept between z 0.15 and 0.75, each point with that density{' '}
             <Cite k="malavasi2020" />.{' '}
             <Xref to="estimated" sub="cosmic-web">
+              What is not measured
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="quasars">
+          Quasars, clusters and deep fields
+        </Sub>
+        <Items>
+          <Item>
+            <Strong>749,742 quasars</Strong> of SDSS DR16Q, every one with a spectrum, out to z 7.02: its 750,414
+            but the 665 it marks questionable and the 7 with no redshift{' '}
+            <Cite k={['lyke2020', 'ahumada2020', 'blanton2017', 'dawson2016']} />. Each by its redshift — a person’s
+            reading of the spectrum where there was one, else the pipelines’ — its PSF g and i magnitudes and the
+            Milky Way’s dust in front of it <Cite k="schlafly2011" />. Its luminosity is worked out as the
+            catalogue’s own: on every run within 0.0004 mag of DR16Q’s M<sub>i</sub> over 747,956 quasars.
+          </Item>
+          <Item>
+            <Strong>1,088 galaxy clusters</Strong> Planck found over the whole sky by the shadow their hot gas casts
+            on the CMB, the Sunyaev–Zeldovich effect: the 1,094 of its 1,653 with a redshift, z 0.011 to 0.972,
+            each with its mass from that shadow, 0.8 to 16 × 10<sup>14</sup> M☉ <Cite k="planck2016psz2" />.
+          </Item>
+          <Item>
+            <Strong>Three large quasar groups</Strong>, each at the mean place and redshift of its members as its
+            paper lists them, SDSS DR7 quasars linked within 100 Mpc: the Clowes–Campusano LQG, 34 quasars at z
+            1.19–1.42, first seen in 1991; U1.11, 38 at z 1.00–1.20; and the Huge-LQG, 73 at z 1.17–1.37{' '}
+            <Cite k={['clowesCampusano1991', 'clowes2012', 'clowes2013']} />.
+          </Item>
+          <Item>
+            <Strong>Four deep fields</Strong>, each at its centre and as wide as its area: the Hubble Ultra Deep
+            Field, 11 arcmin² <Cite k="beckwith2006" />; JADES in GOODS-S, 245{' '}
+            <Cite k={['eisenstein2023', 'johnson2026']} />; COSMOS-Web, 0.54 deg² <Cite k="casey2023" />; and
+            Webb’s First Deep Field, SMACS 0723 <Cite k="pontoppidan2022" />. Each as deep as its farthest galaxy
+            confirmed by a spectrum: JADES-GS-z13-0, z 13.2 <Cite k="curtisLake2023" />; JADES-GS-z14-0, 14.1796{' '}
+            <Cite k="carniani2024" />; MoM-z14, 14.44 <Cite k="naidu2026" />; and 4590, 8.498{' '}
+            <Cite k="carnall2023" />.{' '}
+            <Xref to="estimated" sub="quasars">
               What is not measured
             </Xref>
             .

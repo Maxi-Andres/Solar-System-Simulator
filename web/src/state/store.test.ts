@@ -155,4 +155,25 @@ describe('view store', () => {
     useViewStore.getState().setFocus('pluto');
     expect(useViewStore.getState().focus).toBe('pluto');
   });
+
+  // The breadcrumb's Solar System with the Sun already in focus, 250 billion light years out:
+  // it did nothing, and the CMB stayed on screen under a breadcrumb reading Solar System.
+  it('asks for the focus to be framed again when it is chosen again', () => {
+    useViewStore.getState().consumeFramingRequest();
+    const before = useViewStore.getState().refocus;
+    useViewStore.getState().setFocus('sun');
+    expect(useViewStore.getState().focus).toBe('sun');
+    expect(useViewStore.getState().refocus).toBe(before + 1);
+    // A new focus is framed by being new: no count.
+    useViewStore.getState().setFocus('earth');
+    expect(useViewStore.getState().refocus).toBe(before + 1);
+  });
+
+  it('leaves a framing already asked for alone when the focus is chosen again', () => {
+    const before = useViewStore.getState().refocus;
+    useViewStore.getState().requestFraming(1e9);
+    useViewStore.getState().setFocus('sun');
+    expect(useViewStore.getState().refocus).toBe(before);
+    expect(useViewStore.getState().consumeFramingRequest()).toEqual({ km: 1e9, view: null });
+  });
 });

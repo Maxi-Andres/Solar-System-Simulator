@@ -63,6 +63,7 @@ import { systemDisplayName, type StarNameIndex, type Stars3dSource } from '../co
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
+import { messierSynonym } from '../core/messier.ts';
 import { useViewStore } from '../state/store.ts';
 import { craftUnavailability, satelliteUnavailability } from './BodyPicker.tsx';
 import { Panel } from './Panel.tsx';
@@ -392,7 +393,8 @@ export function SearchPanel({
     const fromLaniakea: Result[] =
       laniakeaIndex === null
         ? []
-        : searchNames(laniakeaIndex.search, searched, GALAXY_LIMIT)
+        : // "M102", disputed, is NGC 5866 by its name in the catalogue (messier.ts).
+          searchNames(laniakeaIndex.search, messierSynonym(searched) ?? searched, GALAXY_LIMIT)
             .filter(({ k }) => !bodiesListed.has(`galaxy-lk-${k}`))
             .map(({ k, score }) => scoredResult(scored, { kind: 'laniakea', k }, score));
     // A structure is a body once the catalogue is in, found by its name as one; by its other

@@ -87,6 +87,7 @@ import {
   TrajectoryLine,
 } from './trajectoryLine.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
+import { renderDemand } from '../core/renderDemand.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { labelsShown } from './labelBoard.ts';
 import { headingDirection, surfaceFrame } from '../core/surface.ts';
@@ -463,6 +464,9 @@ function releaseUnusedDetail(handle: BodyHandles, nowMs: number): void {
     }
   }
 }
+
+/** How long a frame may spend building craft trails before leaving the rest to the next, ms. */
+const TRAIL_BUILD_MS = 6;
 
 export function SolarSystem({
   store,
@@ -878,6 +882,9 @@ export function SolarSystem({
     camera.updateMatrixWorld();
     const markerCandidates: MarkerCandidate[] = [];
     const nowMs = performance.now();
+    // Milliseconds spent building craft trails this frame, and whether any was put off.
+    let trailWorkMs = 0;
+    let trailsPutOff = false;
     const markers = new Map<BodyId, THREE.Sprite>();
 
     for (const handle of handles) {
@@ -1221,6 +1228,8 @@ export function SolarSystem({
         !lensState.drawnByLens.has(handle.definition.id) &&
         handle.definition.kind !== 'globular-cluster' &&
         handle.definition.kind !== 'supernova-remnant' &&
+        handle.definition.kind !== 'nebula' &&
+        handle.definition.kind !== 'deep-sky' &&
         handle.definition.kind !== 'galaxy' &&
         handle.definition.kind !== 'structure';
       const meshMaterial = handle.mesh.material as
@@ -1558,9 +1567,15 @@ export function SolarSystem({
             handle.trajectoryGroup.add(handle.trajectory.object);
           } else {
             const path = store.path(id);
-            if (path !== null) {
+            // TRAIL_BUILD_MS a frame, the rest the next: the thirty-odd lines built in one frame
+            // as their paths came in were a task of 130 to 400 ms.
+            if (path !== null && trailWorkMs < TRAIL_BUILD_MS) {
+              const started = performance.now();
               handle.trajectory = new TrajectoryLine(path, TRAIL_COLOR);
               handle.trajectoryGroup.add(handle.trajectory.object);
+              trailWorkMs += performance.now() - started;
+            } else if (path !== null) {
+              trailsPutOff = true;
             }
           }
         }
@@ -1586,6 +1601,10 @@ export function SolarSystem({
           );
         }
       }
+    }
+
+    if (trailsPutOff) {
+      renderDemand.request(1);
     }
 
     // Every body, shown or not: one switched off or out of its coverage was skipped

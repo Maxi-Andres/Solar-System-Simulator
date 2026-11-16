@@ -18,10 +18,13 @@ import { projectToScreen } from './screenProjection.ts';
  * distance about the Sun, drawn once the camera is far outside it (cmb.ts says what is drawn,
  * where and why; the About says it to the reader).
  *
- * Its outer face only: from outside, the sky's mirror image. Drawn first of what is
- * transparent, writing no depth, so what it encloses -- Laniakea's galaxies, the record-holders'
- * marks -- is drawn over it rather than hidden behind its near side: a choice, stated in the
- * About, since from outside a shell of opaque plasma would hide all of it.
+ * Its far half only: the inside of the hemisphere beyond the Sun, a bowl behind everything it
+ * encloses. Its near half, drawn too, was a screen in front of all of it -- the quasars' wedges,
+ * the large quasar groups, the deep fields' beams, the record-holders' marks under an opaque
+ * tan disc -- and from just outside, where the sphere overfills the frame, a mottled brown fog
+ * over the whole view. The far half's inside, seen from outside, is the sky as seen from here,
+ * not its mirror image. Drawn first of what is transparent, writing no depth, so what it
+ * encloses is drawn over it: a choice, stated in the About.
  *
  * Its map is loaded only once it is first wanted: 1 MB no one sees from inside.
  */
@@ -114,7 +117,8 @@ export function CosmicMicrowaveBackground({
       transparent: true,
       depthWrite: false,
       toneMapped: false,
-      side: THREE.FrontSide,
+      // The far hemisphere's inside: behind what the sphere encloses, never in front of it.
+      side: THREE.BackSide,
     });
   }, []);
 

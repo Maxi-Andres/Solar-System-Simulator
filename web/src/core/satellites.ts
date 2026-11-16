@@ -4,7 +4,7 @@ import type { BeltFetchers } from './belt.ts';
 import { normalizeName } from './search.ts';
 import type { Searchable } from './beltNames.ts';
 import { RETRY_AFTER_MS } from './chunkedTable.ts';
-import { tracked } from './loading.ts';
+import { tracked, wantLoading } from './loading.ts';
 import { renderDemand } from './renderDemand.ts';
 import { chipOfFlags, SATELLITE_CHIPS } from './satelliteGroups.ts';
 
@@ -296,6 +296,20 @@ export class LazySource<T> {
 
   /** Asks for it, once; resolves when it has arrived or failed -- this time or before. */
   request(): Promise<void> {
+    // Fetched ahead and still coming: someone waits for it now, so it is named on the line.
+    if (this.#state === 'loading') wantLoading(this.#what);
+    return this.#start(false);
+  }
+
+  /**
+   * Asks for it ahead of need (prefetch.ts): the same load, kept off the loading line unless
+   * `request` comes while it is still on its way.
+   */
+  prefetch(): Promise<void> {
+    return this.#start(true);
+  }
+
+  #start(quiet: boolean): Promise<void> {
     if (this.#state === 'loading') {
       return this.#pending;
     }
@@ -306,8 +320,8 @@ export class LazySource<T> {
       return Promise.resolve();
     }
     this.#state = 'loading';
-    // Named on the loading line while it comes (loading.ts).
-    this.#pending = tracked(this.#what, this.#load())
+    // Named on the loading line while it comes (loading.ts), unless fetched ahead.
+    this.#pending = tracked(this.#what, this.#load(), quiet)
       .then((value) => {
         this.#value = value;
         this.#state = value === null ? 'absent' : 'ready';

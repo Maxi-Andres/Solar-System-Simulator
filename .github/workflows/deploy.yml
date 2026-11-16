@@ -147,6 +147,45 @@ jobs:
         if: steps.cosmic-web.outcome == 'failure'
         run: echo "::warning title=Cosmic web not built::pnpm fetch:cosmic-web failed; this deploy has no SDSS Galaxies or Filaments layers. Its log says why."
 
+      # The quasars and the Planck SZ clusters (tools/src/quasars/): SDSS DR16Q's 750 thousand
+      # quasars, 100 MB of text from VizieR, whose database is not always reachable. As the cosmic
+      # web: it never fails the deploy -- without it the site is built without the Quasars and SZ
+      # Clusters layers (vite.config.ts looks for quasars.json, written last) -- and its downloads
+      # are kept between runs, keyed by what they hold. After the ephemerides' fetch, whose
+      # laniakea.json it reads to leave out the clusters Laniakea names.
+      - name: Restore the quasars' downloads
+        id: quasars-restore
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/quasars
+          key: quasars-none
+          restore-keys: |
+            quasars-
+
+      - name: Fetch the quasars
+        id: quasars
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        continue-on-error: true
+        run: pnpm fetch:quasars --cache "${{ github.workspace }}/tools/.cache/quasars"
+
+      - name: Name the quasars' downloads
+        id: quasars-key
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '')
+        run: echo "key=quasars-${{ hashFiles('tools/.cache/quasars/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Save the quasars' downloads
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '') && hashFiles('tools/.cache/quasars/**') != '' && steps.quasars-key.outputs.key != steps.quasars-restore.outputs.cache-matched-key
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/quasars
+          key: ${{ steps.quasars-key.outputs.key }}
+
+      - name: Say whether the quasars were built
+        if: steps.quasars.outcome == 'failure'
+        run: echo "::warning title=Quasars not built::pnpm fetch:quasars failed; this deploy has no Quasars or SZ Clusters layers. Its log says why."
+
       - name: Save the data for the daily satellite runs
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         uses: actions/cache/save@v6

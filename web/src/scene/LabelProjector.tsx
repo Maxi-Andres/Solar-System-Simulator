@@ -205,8 +205,14 @@ function labelImportance(id: BodyId): number {
 }
 
 export function labelRank(kind: string, parent: BodyId | null): number {
-  if (kind === 'spacecraft' || kind === 'satellite') {
+  // A region (regions.ts) is a place, not a body: never ahead of one in the declutter. Nor a
+  // star or Messier object marked (deepSky.ts): a catalogue's mark.
+  if (kind === 'spacecraft' || kind === 'satellite' || kind === 'region' || kind === 'deep-sky') {
     return 2;
+  }
+  // A nebula (nebulae.ts) never wins a place over a planet or the Sun.
+  if (kind === 'nebula') {
+    return 1;
   }
   return parent === null && kind !== 'asteroid' && kind !== 'comet' ? 0 : 1;
 }
@@ -217,7 +223,15 @@ export function labelRank(kind: string, parent: BodyId | null): number {
  * that would hide a remnant's name, its only way to be clicked, whenever the Sun's planets
  * are small on screen.
  */
-const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set(['neutron-star', 'globular-cluster', 'supernova-remnant', 'galaxy', 'structure']);
+const OUT_IN_THE_GALAXY: ReadonlySet<string> = new Set([
+  'neutron-star',
+  'globular-cluster',
+  'supernova-remnant',
+  'nebula',
+  'deep-sky',
+  'galaxy',
+  'structure',
+]);
 
 export function LabelProjector({
   store,

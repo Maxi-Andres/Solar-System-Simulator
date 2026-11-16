@@ -8,11 +8,16 @@ import {
   SMALL_MOON_WINDOW_MONTHS,
 } from '../config.ts';
 import { majorBodyIds, radiusFromSummary } from './buildMoonList.ts';
+import { MINOR_PLANET_MOONS } from './minorPlanetMoons.ts';
 import { SMALL_MOON_RECORDS } from './smallMoons.ts';
 
 // Sampled adaptively and hung from a planet; the small bodies about the Sun are sampled
-// the same way and are tested in smallBodies.test.ts.
-const small = CATALOG.filter((body) => body.sampling !== undefined && body.parent !== null);
+// the same way and are tested in smallBodies.test.ts, and the moons of the dwarf planets and
+// trans-Neptunians in farBodies.test.ts.
+const minorPlanetMoonIds = new Set(MINOR_PLANET_MOONS.map((body) => body.id));
+const small = CATALOG.filter(
+  (body) => body.sampling !== undefined && body.parent !== null && !minorPlanetMoonIds.has(body.id),
+);
 
 describe('the small moons', () => {
   it('are every one JPL lists, under the planet it lists them under', () => {

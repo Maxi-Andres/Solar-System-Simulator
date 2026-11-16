@@ -20,6 +20,7 @@ import { loadGlobularClusterArchive, type GlobularClusterArchive } from './globu
 import { loadLocalGroupArchive, type LocalGroupArchive } from './localGroup.ts';
 import { loadLocalVolumeArchive, type LocalVolumeArchive } from './localVolume.ts';
 import { loadLaniakeaCatalogue, loadLaniakeaNames, type LaniakeaCatalogue, type LaniakeaNameIndex } from './laniakea.ts';
+import { askMilkyWayAhead, deviceHints, loadSettled, prefetchPlan, startPrefetch, type PrefetchStep } from './prefetch.ts';
 import { renderDemand } from './renderDemand.ts';
 import { Signal } from './signal.ts';
 import { loadStarCatalog } from './starCatalog.ts';
@@ -223,6 +224,27 @@ export function useSimulation(refreshHz = 10): Simulation {
       cancelled = true;
     };
   }, []);
+
+  // The far layers, fetched ahead of the camera once the first view is up and the page is
+  // idle, as much of them as the device can take (prefetch.ts): the Milky Way seen for the
+  // first time with the galaxies behind it that it had on the way back.
+  useEffect(() => {
+    if (store === null) {
+      return undefined;
+    }
+    const run: Record<PrefetchStep, () => Promise<void>> = {
+      'milky-way': () => {
+        askMilkyWayAhead();
+        // Begun by the Milky Way's own next frame (MilkyWay.tsx).
+        renderDemand.request(1);
+        return loadSettled('the Milky Way');
+      },
+      'local-group': () => localGroupRef.current!.prefetch(),
+      'local-volume': () => localVolumeRef.current!.prefetch(),
+      laniakea: () => laniakeaRef.current!.prefetch(),
+    };
+    return startPrefetch(prefetchPlan(deviceHints()).map((step) => ({ step, run: run[step] })));
+  }, [store]);
 
   const stars3d = useMemo(
     () => (stars === null ? null : new Stars3dSource(httpBeltFetchers, stars.count, import.meta.env.BASE_URL)),

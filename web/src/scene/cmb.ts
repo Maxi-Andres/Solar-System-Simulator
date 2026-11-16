@@ -16,9 +16,11 @@ import { LIGHT_YEAR_KM } from './scale.ts';
  * 45.3 billion ly in Planck 2018's cosmology (cosmology.ts). It is not a thing out there but a
  * time: every direction from here, looked along far enough, ends in the plasma that filled the
  * universe until 380,000 years after the Big Bang, and what reaches us from it is its light,
- * last scattered then. Seen from outside, as the camera here can, it is the sky turned inside
- * out -- the map's mirror image -- and it is a view no one could have: the sphere is centred on
- * us, and anyone anywhere else has a sphere of their own.
+ * last scattered then. Seen from outside, as the camera here can, only its far half is drawn,
+ * its inside -- a bowl behind everything it encloses, bearing the sky as seen from here -- and it
+ * is a view no one could have: the sphere is centred on us, and anyone anywhere else has a
+ * sphere of their own. From inside it, anywhere nearer than CMB_FROM_LY, it is not drawn at all:
+ * there it is the sky's microwave glow, which no eye sees.
  *
  * ## The map on it
  *

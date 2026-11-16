@@ -60,17 +60,24 @@ const SBDB_DESIGNATION_OF_MAJOR_BODY: Readonly<Record<string, string>> = {
 const SMALL_BODY_COMMAND = /^(\d+);$/;
 
 /**
+ * An unnumbered one, asked for by its provisional designation -- 'DES=2012 VP113;' -- which
+ * is SBDB's primary designation as it stands; 'DES=A/2017 U1;' for ʻOumuamua, whose prefix
+ * SBDB's designation does not carry (farBodies.ts).
+ */
+const PROVISIONAL_COMMAND = /^DES=(?:[A-Z]\/)?(\d{4} [A-Z]{1,2}\d*);$/;
+
+/**
  * The SBDB designations of every body in `catalog` that SBDB lists as an asteroid --
  * the named small bodies and Pluto -- which the belt therefore leaves out.
  *
  * A dwarf planet or asteroid whose designation cannot be worked out fails here, rather
  * than being drawn twice: a new small body added under a form this does not know
- * ('DES=2024 YR4;') needs this function taught it first.
+ * ('NAME=Bennu;') needs this function taught it first.
  */
 export function catalogDesignations(catalog: readonly BodyDefinition[]): string[] {
   const designations: string[] = [];
   for (const body of catalog) {
-    const command = SMALL_BODY_COMMAND.exec(body.horizonsId);
+    const command = SMALL_BODY_COMMAND.exec(body.horizonsId) ?? PROVISIONAL_COMMAND.exec(body.horizonsId);
     const designation = command?.[1] ?? SBDB_DESIGNATION_OF_MAJOR_BODY[body.horizonsId] ?? null;
     if (designation !== null) {
       designations.push(designation);

@@ -34,12 +34,15 @@ const SATELLITE_JS = fileURLToPath(new URL('./node_modules/satellite.js/dist/', 
  * it is there only if the rest is. Read when the build (or the dev server) starts.
  */
 const COSMIC_WEB_PUBLISHED = existsSync(fileURLToPath(new URL('./public/data/cosmic-web/cosmic-web.json', import.meta.url)));
+/** The same for the quasars (core/quasars.ts QUASARS_PUBLISHED): quasars.json is written last. */
+const QUASARS_PUBLISHED = existsSync(fileURLToPath(new URL('./public/data/quasars/quasars.json', import.meta.url)));
 
 export default defineConfig(({ mode }) => ({
   base: process.env.VITE_BASE ?? (mode === 'production' ? REPO_BASE : '/'),
   plugins: [react()],
   define: {
     'import.meta.env.VITE_COSMIC_WEB': JSON.stringify(COSMIC_WEB_PUBLISHED ? '1' : ''),
+    'import.meta.env.VITE_QUASARS': JSON.stringify(QUASARS_PUBLISHED ? '1' : ''),
   },
   resolve: {
     alias: [

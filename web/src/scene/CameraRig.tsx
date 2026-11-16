@@ -95,6 +95,9 @@ export function CameraRig({
   const initialised = useRef(false);
   /** The focus the camera was last framed for. */
   const framedFocus = useRef<string | null>(null);
+  /** The focus chosen again (the view store's `refocus`): framed afresh, as a new one is. */
+  const refocus = useViewStore((state) => state.refocus);
+  const framedRefocus = useRef(refocus);
 
   /**
    * A framing's own direction, if it brought one: turned to at once, at the distance the
@@ -120,12 +123,14 @@ export function CameraRig({
       initialised.current = true;
     }
     const request = useViewStore.getState().consumeFramingRequest();
+    const chosenAgain = framedRefocus.current !== refocus;
+    framedRefocus.current = refocus;
     // The same focus, only its size or the limits changed -- a star becoming a sphere of
     // its measured radius as it is made a body: keep the distance the camera is at (and
     // any framing asked for with the focus, which the earlier run already took), clamped.
     // Reframing here undid the breadcrumb's framing of Alpha Centauri, whose stars differ
     // in size, the moment the focus moved between them (D3b).
-    if (request === null && framedFocus.current === focusKey) {
+    if (request === null && framedFocus.current === focusKey && !chosenAgain) {
       targetDistance.current = THREE.MathUtils.clamp(targetDistance.current, minDistance, maxDistance);
       renderDemand.request();
       return;
@@ -142,7 +147,7 @@ export function CameraRig({
       applyView(request.view);
     }
     renderDemand.request();
-  }, [focusKey, framingDistance, minDistance, maxDistance]);
+  }, [focusKey, framingDistance, minDistance, maxDistance, refocus]);
 
   useEffect(() => {
     const element = gl.domElement;

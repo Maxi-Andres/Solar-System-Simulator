@@ -2,6 +2,8 @@ import { frac, math, mi, mn, mo, mtext, paren, row, sub, sup, table } from './ma
 import { Cite, Equation, Item, Items, Prose, Sub, Why, Xref } from './prose.tsx';
 import type { AboutSection } from './section.ts';
 import { beltAccuracySentence, cometAccuracySentence, seamSentence } from './sentences.ts';
+import { HELIOPAUSE_NOSE_AU, TERMINATION_SHOCK_AU } from '../../core/heliosphere.ts';
+import { MAGNETOPAUSE_R0 } from '../../core/magnetosphere.ts';
 
 /**
  * Where the data runs out and something else stands in: every estimate and convention,
@@ -23,15 +25,22 @@ export const estimatedSection: AboutSection = {
     { id: 'pulsars', label: 'Pulsars' },
     { id: 'globular-clusters', label: 'Globular clusters' },
     { id: 'supernova-remnants', label: 'Supernova remnants' },
+    { id: 'nebulae', label: 'Nebulae' },
+    { id: 'notable-stars', label: 'Notable stars' },
+    { id: 'streams', label: 'Stellar streams' },
+    { id: 'bubbles', label: 'The Fermi and eROSITA bubbles' },
+    { id: 'local-ism', label: 'The local interstellar medium' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
     { id: 'earth', label: 'Earth' },
+    { id: 'surroundings', label: 'The Sun’s surroundings' },
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
     { id: 'cosmic-web', label: 'The cosmic web' },
+    { id: 'quasars', label: 'Quasars, clusters and deep fields' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -471,6 +480,92 @@ export const estimatedSection: AboutSection = {
           </Item>
         </Items>
 
+        <Sub section="estimated" id="nebulae">
+          Nebulae
+        </Sub>
+        <Items>
+          <Item title="Depth and shape, where unpublished">
+            No 3D shape is published for the Lagoon, the Trifid, the Eagle, the Omega, Carina, the Rosette, the
+            Horsehead or the Tarantula: each is gas filling an ellipsoid of its measured size, as deep as it is
+            wide, densest at its middle; the Rosette a thick shell round its cavity. The Horsehead’s and the
+            Tarantula’s sizes, which no catalogue gives, are read off photographs.
+            <Why>a measured extent, filled, claims no more than is known.</Why>
+          </Item>
+          <Item title="Clumps, pillars and knots: noise">
+            Inside each outline the gas is clumped by the noise the supernova remnants’ gas uses. Where each clump
+            is, is the model’s: the Eagle’s pillars and the Helix’s knots are not drawn as such.
+          </Item>
+          <Item title="How much is oxygen’s">
+            The share of [O III] light, strongest toward a region’s middle and a shell’s inside, is read off
+            narrowband photographs, not measured fluxes. Where a paper does not say which end of an axis is
+            nearer, the panel says it is taken.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="notable-stars">
+          Notable stars
+        </Sub>
+        <Items>
+          <Item title="Marks, not stars">
+            Their sizes and light are not drawn. Procyon B is marked at Procyon A’s place, 5″ off; Gaia BH2’s
+            orbit is not drawn. The Pistol Star, the Arches and the Quintuplet are put at the Galactic Centre’s
+            distance: how far before or behind it they are is not measured.
+          </Item>
+          <Item title="Left out">
+            μ Cephei: Gaia’s parallax is 0.12 ± 0.26 mas, Hipparcos’s no better. ρ Cassiopeiae: Gaia DR3’s
+            −0.06 ± 0.09 mas, DR2’s 0.95 ± 0.20. WR 104: Gaia’s parallax is spoiled by its dust (RUWE 5.5), and
+            the rest assume its luminosity. No distance that holds, so no mark.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="streams">
+          Stellar streams
+        </Sub>
+        <Items>
+          <Item title="Depth across, width where none is given, brightness">
+            How thick a stream is along the line of sight is not measured: drawn as round as it is wide. Where no
+            width is given, 100 pc. galstreams holds no stream’s light, so each is as bright along its length as
+            the next; a wide one is dimmer across.
+          </Item>
+          <Item title="Not drawn">
+            The Helmi streams, Gaia-Enceladus, Sequoia and Kraken are groups of stars in velocity, not paths on
+            the sky; TriAnd has no track in galstreams. The Magellanic Stream, Bridge and Leading Arm are mapped
+            on the sky, but no distance along them is measured.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="bubbles">
+          The Fermi and eROSITA bubbles
+        </Sub>
+        <Items>
+          <Item>
+            Only their outlines are measured. Drawn as two lobes each, standing on the Galactic Centre,
+            symmetric about its pole. The Fermi lobes ellipsoids fitted to their 50° and ±20° as seen from the
+            Sun: 5.6 kpc across, 8.6 tall. The eROSITA lobes Predehl et al.’s spheres, 14 kpc across, which from
+            the Sun reach 81° of latitude and 59° either side in longitude — wider than measured.
+            <Why>the simplest shapes that stand where the outlines say; their real depth is unknown.</Why>
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="local-ism">
+          The local interstellar medium
+        </Sub>
+        <Items>
+          <Item title="The Local Bubble’s wall as a surface">
+            The dust rises over tens of parsecs; drawn is where it starts, Pelgrims et al.’s model of it to
+            multipole 6, read every 3°.
+          </Item>
+          <Item title="The Local Interstellar Cloud’s axes">
+            Linsky et al. do not state their harmonics’ axes; taken as the ones that give back their own edge
+            distances best, to a median 0.06 pc for 62 stars. Their fit assumes an even density; its residuals are
+            large.
+          </Item>
+          <Item title="The G-cloud: not drawn">
+            Only its outline on the sky and its velocity are published <Cite k="redfieldLinsky2008" />, not how
+            far it reaches.
+          </Item>
+        </Items>
+
         <Sub section="estimated" id="spacecraft">
           Spacecraft
         </Sub>
@@ -581,6 +676,41 @@ export const estimatedSection: AboutSection = {
             staircase the 20 km grid makes. It lands at 69.7% water against the true 70.8%, because that map
             draws the shallow continental shelves instead of filling them, so a rim of every coast counts as
             land.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="surroundings">
+          The Sun’s surroundings
+        </Sub>
+        <Items>
+          <Item title="The heliosphere between the crossings">
+            Parker’s picture
+            <Cite k="parker1961" />: the termination shock a sphere at the two shock crossings’ mean,{' '}
+            {TERMINATION_SHOCK_AU.toFixed(1)} AU; the heliopause the surface r = a / cos(ν/2) about the
+            interstellar wind’s axis, a = {HELIOPAUSE_NOSE_AU.toFixed(1)} AU fitted to the two heliopause
+            crossings, which it misses by about 6 AU, one in and one out.
+            <Why>
+              it is the simplest model with both surfaces, and four points ask for no more than one size each.
+              The real heliosphere is pushed south by the interstellar magnetic field
+              <Cite k="opher2015" />, and its tail is not known — long and two-lobed in some models
+              <Cite k="opher2015" />, nearly round in others
+              <Cite k={['dialynas2017', 'opher2020']} /> — so it fades out from 110° off the nose.
+            </Why>
+          </Item>
+          <Item title="The Oort cloud: inferred, never seen">
+            No object has been observed in it. Oort placed it from the long-period comets’ orbits
+            <Cite k="oort1950" />; Hills added the denser inner cloud
+            <Cite k="hills1981" />. Drawn from 2,000 to 20,000 AU and on to 100,000 AU, the models’ round
+            figures
+            <Cite k="dones2004" />, as an even glow: its density is a model too.
+          </Item>
+          <Item title="Earth’s surroundings">
+            Standard models at quiet, typical conditions, each of which moves with the solar wind: the
+            magnetopause Shue et al.’s at 2 nPa and Bz 0, {MAGNETOPAUSE_R0.toFixed(2)} Earth radii at the nose
+            <Cite k="shue1998" />; the bow shock Farris et al.’s paraboloid, 13.7
+            <Cite k="farris1991" />; the Van Allen belts as dipole shells from L 1.2 to 2 and 3 to 7
+            <Cite k="ganushkina2011" />, about IGRF-13’s dipole axis
+            <Cite k="alken2021" />; the Kármán line 100 km up, a convention.
           </Item>
         </Items>
 
@@ -892,6 +1022,58 @@ export const estimatedSection: AboutSection = {
             40,797 galaxies Laniakea’s or the Local Volume’s catalogue already draws, and the 66,002 BOSS galaxies
             the main sample holds. Malavasi et al.’s filaments that end at the survey’s edge, as the paper did; not
             its cut of forks within 200 Mpc of the edge, so a few there are the field carried across it.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="quasars">
+          Quasars, clusters and deep fields
+        </Sub>
+        <Items>
+          <Item title="Why the quasars are wedges">
+            DR16Q is the SDSS’s, and the SDSS looked at about 12,000 square degrees: a third of the sky about the
+            north galactic pole and a strip along the equator in the south. Toward the Milky Way’s plane and over
+            most of the southern sky there is nothing. The dark between the wedges was not observed; it is not
+            empty.
+          </Item>
+          <Item title="A catalogue chosen by brightness and colour">
+            Far out only the most luminous quasars are bright enough to be in it, so the far shells hold only
+            those; it thins past z 3 and ends at 7.02. BOSS and eBOSS chose their quasars by colour for their own
+            surveys, eBOSS’s between z 0.8 and 2.2: where a target class thins, so does the map{' '}
+            <Cite k={['dawson2016', 'lyke2020']} />.
+          </Item>
+          <Item title="A redshift is a distance to a few Mpc">
+            A quasar’s broad lines are shifted from its own rest by the gas that makes them, hundreds of km/s{' '}
+            <Cite k="shen2016" />: at z 2, a few Mpc along the line of sight. Each is placed at its redshift’s
+            distance as it is, and its place kept to 0.3 Mpc.
+          </Item>
+          <Item title="Luminosity through a template">
+            The K-correction is the composite quasar’s, its continuum and its lines through the i band{' '}
+            <Cite k="richards2006" />: a quasar unlike it, reddened or with broad absorption lines, is off by a few
+            tenths of a magnitude. Past z 5.49 the table ends and 410 are carried on along the continuum. Rest-frame
+            V comes from M<sub>i</sub> at z 2 along the same power law. 1,010 with no usable i have a faint dot only.
+          </Item>
+          <Item title="Their colour, mostly the composite’s">
+            Rest-frame B−V lies past the SDSS’s bands for nearly every quasar. Each is the composite quasar’s,
+            0.234, moved by how much redder or bluer its g − i is than its redshift’s median{' '}
+            <Cite k="richards2003" />, where g is still red of Lyman-α, z under 2.2, and both bands better than 0.2
+            mag: 532,806 of them. The rest are the composite’s.
+          </Item>
+          <Item title="The clusters’ masses, a proxy">
+            Each cluster’s mass is read off its SZ signal through an X-ray scaling relation that assumes its gas at
+            rest: low by about a fifth <Cite k="planck2016psz2" />. The 559 with no redshift are not drawn. The 6
+            the app already draws by name, Coma, Abell 3266 and four record-holders, are left out.
+          </Item>
+          <Item title="Large quasar groups: claims">
+            Groupings as large turn up in random catalogues of the same density, and the quasars are homogeneous
+            above 130 h<sup>−1</sup> Mpc <Cite k="nadathur2013" />: the Huge-LQG, 1,240 Mpc long, is a claim, and
+            so, less starkly, are the other two. Each is drawn at its members’ mean, worked out here, as a ring of
+            its characteristic size, the cube root of its volume: not its shape. Their sizes are in their papers’
+            H<sub>0</sub> 70, a few percent larger in Planck’s 67.66.
+          </Item>
+          <Item title="Deep fields: how deep is how far confirmed">
+            A field’s beam ends at its farthest galaxy with a spectrum, not where it could see. Its width is a disc
+            of the field’s area. JADES defines no centre: its mosaic’s is taken; SMACS 0723’s is the released
+            image’s.
           </Item>
         </Items>
 

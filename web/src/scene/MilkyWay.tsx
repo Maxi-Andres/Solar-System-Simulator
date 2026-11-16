@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   armLabelPoints,
+  barLabelPoint,
   galacticCentrePc,
   POPULATIONS,
   type MilkyWaySample,
@@ -17,7 +18,8 @@ import { GALACTIC_BASIS } from './galactic.ts';
 import { homeNames } from './homeName.ts';
 import { boxOf, labelBoard } from './labelBoard.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
-import { beginLoading } from '../core/loading.ts';
+import { beginLoading, wantLoading } from '../core/loading.ts';
+import { milkyWayAhead } from '../core/prefetch.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
 import { projectToScreen } from './screenProjection.ts';
@@ -420,12 +422,16 @@ function buildDustGeometry(dust: Float32Array): THREE.BufferGeometry {
   return geometry;
 }
 
-/** The names on the model: the Galactic Centre first, then the arms in SPIRAL_ARMS order. */
-export const GALAXY_LABELS: readonly string[] = ['Galactic Centre', ...armLabelPoints().map((arm) => arm.name)];
+/** The names on the model: the Galactic Centre first, then the arms in SPIRAL_ARMS order, then the bar. */
+export const GALAXY_LABELS: readonly string[] = [
+  'Galactic Centre',
+  ...armLabelPoints().map((arm) => arm.name),
+  barLabelPoint().name,
+];
 
 const LABEL_POINTS: readonly number[][] = (() => {
   const [cx, cy, cz] = galacticCentrePc();
-  const points = [[cx, cy, cz], ...armLabelPoints().map((arm) => arm.position)];
+  const points = [[cx, cy, cz], ...armLabelPoints().map((arm) => arm.position), barLabelPoint().position];
   return points.map(([x, y, z]) => {
     const out = [0, 0, 0];
     toEcliptic(x!, y!, z!, out, 0);
@@ -581,12 +587,15 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
               camera.position.z * KM_PER_UNIT - sun.position.z,
             )
             .length();
-    // The sample, from the worker, once the camera is on its way out.
-    if (!sampleAsked.current && cameraFromSunKm > GALAXY_SAMPLE_FROM_LY * LIGHT_YEAR_KM) {
+    // The sample, from the worker, once the camera is on its way out -- or before, asked for
+    // ahead of it (core/prefetch.ts), off the loading line until the camera gets there.
+    const sampleWanted = cameraFromSunKm > GALAXY_SAMPLE_FROM_LY * LIGHT_YEAR_KM;
+    if (sampleWanted) wantLoading('the Milky Way');
+    if (!sampleAsked.current && (sampleWanted || (sun !== null && milkyWayAhead()))) {
       sampleAsked.current = true;
       const made = new Worker(new URL('../core/milkyWay.worker.ts', import.meta.url), { type: 'module' });
       worker.current = made;
-      sampleLoading.current = beginLoading('the Milky Way');
+      sampleLoading.current = beginLoading('the Milky Way', !sampleWanted);
       made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; radii: Float32Array; dust: Float32Array }>) => {
         const cloud = new THREE.Points(buildGeometry(event.data.light, event.data.radii), material);
         cloud.frustumCulled = false;

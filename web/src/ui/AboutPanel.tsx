@@ -14,6 +14,7 @@ import { useViewStore } from '../state/store.ts';
 import { AboutNavContext, anchorId, scrollToAnchor, SCROLLER_ID, type AboutNav, type SectionId } from './about/nav.ts';
 import { ACCENT, BRIGHT, MUTED, RULE } from './about/prose.tsx';
 import type { AboutData, AboutSection } from './about/section.ts';
+import { aboutPlace } from './about/open.ts';
 import { ABOUT_SECTIONS } from './about/sections.ts';
 import { useClosing } from './Presence.tsx';
 
@@ -129,6 +130,8 @@ export function AboutPanel({
     exoplanetCatalog,
     pulsarCatalog,
     clusterCatalog,
+    pulsarSource: pulsars,
+    clusterSource: globularClusters,
   };
 
   const closing = useClosing();
@@ -137,13 +140,13 @@ export function AboutPanel({
   // Which section, and where in it to land: `nonce` so a second jump to the same place
   // still scrolls.
   const [place, setPlace] = useState<{ section: SectionId; anchor: string | undefined; nonce: number }>(() => ({
-    section: lastSection,
-    anchor: pendingAnchor,
+    section: aboutPlace.section,
+    anchor: aboutPlace.anchor,
     nonce: 0,
   }));
   // Used by the first render only: a later opening starts at the section's top again.
   useEffect(() => {
-    pendingAnchor = undefined;
+    aboutPlace.anchor = undefined;
   }, []);
   const section = ABOUT_SECTIONS.find((entry) => entry.id === place.section) ?? ABOUT_SECTIONS[0]!;
   const index = ABOUT_SECTIONS.indexOf(section);
@@ -195,7 +198,7 @@ export function AboutPanel({
   const nav: AboutNav = useMemo(
     () => ({
       goTo: (next, anchor) => {
-        lastSection = next;
+        aboutPlace.section = next;
         setPlace((current) => ({ section: next, anchor, nonce: current.nonce + 1 }));
       },
     }),
@@ -301,20 +304,8 @@ export function AboutPanel({
   );
 }
 
-/** The section the panel opens on: the last one read this session, the overview at first. */
-let lastSection: SectionId = 'overview';
-/** Where in it to land when it opens, if something outside asked: see openAboutAt. */
-let pendingAnchor: string | undefined;
-
-/**
- * Open the About at `section`, scrolled to `anchor`: how a panel outside it (the body
- * panel's "what is this?") links into it. It takes the place of whatever panel is open.
- */
-export function openAboutAt(section: SectionId, anchor?: string): void {
-  lastSection = section;
-  pendingAnchor = anchor;
-  useViewStore.setState({ openPanel: 'about' });
-}
+// Where it opens, and openAboutAt, live in about/open.ts: what links in need not load the text.
+export { openAboutAt } from './about/open.ts';
 
 /**
  * The tabs: one per section, the current one marked. Arrow keys move between them, as a

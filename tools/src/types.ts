@@ -16,7 +16,11 @@ export type BodyId = string;
  * globular-clusters.json (web/src/core/globularClusters.ts) -- a place of no surface. And
  * 'galaxy': another galaxy of the Local Group, from web/src/core/localGroup.ts and
  * local-group.json -- a place of no surface too. And 'structure': a cluster, supercluster,
- * basin, void or wall of laniakea/laniakea.json's landmarks (web/src/core/laniakea.ts).
+ * basin, void or wall of laniakea/laniakea.json's landmarks (web/src/core/laniakea.ts). And
+ * 'nebula': a star-forming region or planetary nebula drawn as a volume (web/src/core/nebulae.ts);
+ * 'deep-sky': a Messier object drawn as nothing else, a mark (web/src/core/messier.ts). And
+ * 'region': a computed point or a modelled boundary of the Solar System -- a Lagrange point, the
+ * heliopause, a Voyager crossing, the magnetopause (web/src/core/regions.ts).
  */
 export type BodyKind =
   | 'star'
@@ -32,7 +36,10 @@ export type BodyKind =
   | 'globular-cluster'
   | 'supernova-remnant'
   | 'galaxy'
-  | 'structure';
+  | 'structure'
+  | 'nebula'
+  | 'deep-sky'
+  | 'region';
 
 /**
  * Which surface-map set a body is being drawn with.

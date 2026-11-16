@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { CATALOG, getBody, SSB_CENTER, SUN_CENTER } from './catalog.ts';
+import { FAR_BODIES } from './farBodies.ts';
 import { SMALL_BODIES } from './smallBodies.ts';
 import { CLOSE_ORBIT_WINDOW_MONTHS } from './config.ts';
 import { stepMinutes } from './horizons/queries.ts';
 
 const primaries = CATALOG.filter((body) => body.kind !== 'moon' && body.kind !== 'spacecraft');
-const smallBodyIds = new Set(SMALL_BODIES.map((body) => body.id));
+const smallBodyIds = new Set([...SMALL_BODIES, ...FAR_BODIES].map((body) => body.id));
 // The major moons; the small ones have their own tests in moons/smallMoons.test.ts.
 const moons = CATALOG.filter((body) => body.kind === 'moon' && body.sampling === undefined);
 const craft = CATALOG.filter((body) => body.kind === 'spacecraft');
@@ -302,7 +303,7 @@ describe('the spacecraft', () => {
   it('never list one craft twice, by name or by Horizons id', () => {
     expect(new Set(craft.map((body) => body.id)).size).toBe(craft.length);
     expect(new Set(craft.map((body) => body.horizonsId)).size).toBe(craft.length);
-    expect(craft.length).toBe(54);
+    expect(craft.length).toBe(59);
   });
 
   it('follow the close orbiters for a few months only, and in their planet’s frame', () => {

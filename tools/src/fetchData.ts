@@ -51,6 +51,7 @@ import { BeltAccumulator, catalogDesignations, describeBelt } from './belt/build
 import { buildComets, describeComets, fetchComets } from './belt/comets.ts';
 import { fetchBelt } from './belt/sbdb.ts';
 import { CATALOG, SSB_CENTER } from './catalog.ts';
+import { isInterstellar } from './farBodies.ts';
 import { cometDesignations } from './famousComets.ts';
 import {
   BELT_MAGNITUDE_LIMIT,
@@ -143,7 +144,7 @@ import {
   writeVectors,
 } from './writeOutput.ts';
 
-interface BodyResult {
+export interface BodyResult {
   readonly body: BodyDefinition;
   readonly vectors: VectorTable;
   /** The pieces the table was fetched in; a short-window body ships as these. */
@@ -229,7 +230,7 @@ function logDate(jd: number): string {
   return `${fromJulianDay(jd).toISOString().slice(0, 16).replace('T', ' ')} TDB`;
 }
 
-async function fetchSpacecraft(
+export async function fetchSpacecraft(
   body: BodyDefinition,
   epoch: Date,
   frames: ReferenceFrames,
@@ -384,8 +385,9 @@ export async function fetchAdaptiveBody(
   //
   // Not so a comet: 2I and 3I are on hyperbolas, and a long-period comet near e = 1 can
   // be on either side of it on the day of a run. Its elements are published as they are,
-  // and the app draws no ellipse and propagates nothing from an open orbit.
-  if (!(elements.eccentricity < 1) && body.kind !== 'comet') {
+  // and the app draws no ellipse and propagates nothing from an open orbit. Nor an
+  // interstellar asteroid, 1I/ʻOumuamua, whose designation says it is on one (farBodies.ts).
+  if (!(elements.eccentricity < 1) && body.kind !== 'comet' && !isInterstellar(body)) {
     console.log(
       `[fetch-data] ${body.name}: unbound about ${body.parent} (e = ${elements.eccentricity.toFixed(3)}), ` +
         'not the moon; left out',
@@ -530,7 +532,7 @@ interface ReferenceFrames {
  * craft passing one outside them -- Europa Clipper at Europa from 2031 -- is held to
  * Jupiter's distance instead. The moons themselves are propagated there anyway.
  */
-function referenceFrames(results: readonly BodyResult[]): ReferenceFrames {
+export function referenceFrames(results: readonly BodyResult[]): ReferenceFrames {
   const full = new Map(
     results
       .filter((result) => result.body.vectorWindow === 'full')
@@ -565,7 +567,7 @@ function referenceFrames(results: readonly BodyResult[]): ReferenceFrames {
  * passing one outside them -- Europa Clipper at Europa from 2031 -- is held to Jupiter's
  * distance instead. The moons themselves are propagated there anyway.
  */
-async function writePaths(
+export async function writePaths(
   results: readonly BodyResult[],
   frames: ReferenceFrames,
 ): Promise<Record<BodyId, PathInfo>> {

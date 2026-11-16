@@ -73,6 +73,15 @@ describe('the last-scattering sphere', () => {
     expect(lut[16]).toEqual(cmbColour(0));
   });
 
+  // Its near half drawn was an opaque disc over the quasars, the deep fields and the record-holders,
+  // and from just outside, the sphere overfilling the frame, a brown fog over the whole view.
+  it('draws only its far half, a bowl behind what it encloses', async () => {
+    const source = await readFile(join(import.meta.dirname, 'CosmicMicrowaveBackground.tsx'), 'utf8');
+    expect(source).toContain('side: THREE.BackSide');
+    expect(source).not.toContain('THREE.FrontSide');
+    expect(source).not.toContain('THREE.DoubleSide');
+  });
+
   it('has its map committed, described and credited', async () => {
     const dir = join(import.meta.dirname, '..', '..', 'public', 'cmb');
     const info = JSON.parse(await readFile(join(dir, 'cmb.json'), 'utf8')) as { file: string; width: number; height: number; frame: string };

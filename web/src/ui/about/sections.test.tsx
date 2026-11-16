@@ -11,6 +11,14 @@ import { ESA_MODEL_CREDIT } from '../../scene/craftModels.ts';
 import { AboutPanel } from '../AboutPanel.tsx';
 import { fixtureData, fixtureSources } from './aboutFixture.ts';
 import { CMB_DIPOLE as TOOLS_CMB_DIPOLE } from '../../../../tools/src/laniakea/frames.ts';
+import { CLUSTERS, greatAttractor, SUPERCLUSTERS, voidLandmarks, wallLandmarks } from '../../../../tools/src/laniakea/landmarks.ts';
+import { BASINS } from '../../../../tools/src/laniakea/watersheds.ts';
+import { COMMON_NAMES as CLUSTER_NAMES } from '../../../../tools/src/clusters/globularClusters.ts';
+import { COMMON_NAMES as PULSAR_NAMES } from '../../../../tools/src/pulsars/buildPulsars.ts';
+import { NAMED_SATELLITES } from '../../../../tools/src/satellites/named.ts';
+import { ALPHA_CEN_MEMBERS } from '../../core/alphaCenBodies.ts';
+import { virgoCentre } from '../../core/localVolume.ts';
+import { PLANETARY_SYSTEMS } from '../../core/planetarySystems.ts';
 import {
   CMB_DIPOLE,
   EARTH_ROTATION,
@@ -26,6 +34,7 @@ import { GLOSSARY_PHOTOS } from './glossaryPhotos.ts';
 import { anchorId, SECTION_IDS } from './nav.ts';
 import { REFERENCE_GROUPS, REFERENCES, referenceAnchor } from './references.ts';
 import { ABOUT_SECTIONS } from './sections.ts';
+import { SHOW_ME, SHOW_ME_VIEWS, startBodyIds } from './showMe.ts';
 
 // The panel's catalogues arrive through useSyncExternalStore, which a server render
 // refuses without a server snapshot; the client one serves for both here.
@@ -55,6 +64,19 @@ const textOf = (html: string) =>
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
     .replace(/\s+/g, ' ');
+
+/** A WebP's width and height, from its header: lossy (VP8), lossless (VP8L) or extended (VP8X). */
+function webpSize(file: string): { width: number; height: number } {
+  const b = readFileSync(file);
+  expect(b.toString('ascii', 0, 4) + b.toString('ascii', 8, 12), file).toBe('RIFFWEBP');
+  const chunk = b.toString('ascii', 12, 16);
+  if (chunk === 'VP8X') return { width: 1 + b.readUIntLE(24, 3), height: 1 + b.readUIntLE(27, 3) };
+  if (chunk === 'VP8L') {
+    const bits = b.readUInt32LE(21);
+    return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >> 14) & 0x3fff) };
+  }
+  return { width: b.readUInt16LE(26) & 0x3fff, height: b.readUInt16LE(28) & 0x3fff };
+}
 
 const rendered = ABOUT_SECTIONS.map((section) => ({
   section,
@@ -111,7 +133,7 @@ describe('what’s what', () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it('shows each photo with its credit, lazily, every one a file credited in CREDITS.md', () => {
+  it('shows each photo with its credit, lazily, every one a small file credited in CREDITS.md', () => {
     const dir = join(import.meta.dirname, '../../../public/glossary');
     const credits = readFileSync(join(dir, 'CREDITS.md'), 'utf8');
     const files = readdirSync(dir).filter((name) => name.endsWith('.webp'));
@@ -128,6 +150,88 @@ describe('what’s what', () => {
     expect(bytes).toBeLessThan(1_000_000);
     expect(html.match(/<img /g)?.length).toBe(Object.keys(GLOSSARY_PHOTOS).length);
     expect(html.match(/loading="lazy"/g)?.length).toBe(Object.keys(GLOSSARY_PHOTOS).length);
+    // Each a button that opens it large; the large one is not asked for until then.
+    expect(html.match(/aria-label="Enlarge: /g)?.length).toBe(Object.keys(GLOSSARY_PHOTOS).length);
+    expect(html).not.toContain('glossary/large/');
+  });
+
+  it('has each photo larger too, for the lightbox: the same picture, never smaller, at most 1,600 pixels', () => {
+    const dir = join(import.meta.dirname, '../../../public/glossary/large');
+    const files = readdirSync(dir);
+    expect(files.sort()).toEqual(Object.values(GLOSSARY_PHOTOS).map((photo) => photo.file).sort());
+    let bytes = 0;
+    for (const photo of Object.values(GLOSSARY_PHOTOS)) {
+      const file = join(dir, photo.file);
+      const size = webpSize(file);
+      expect(size, photo.file).toEqual(photo.large);
+      // The same image, uncropped: the thumbnail's shape.
+      expect(size.width / size.height, photo.file).toBeCloseTo(photo.width / photo.height, 1);
+      expect(Math.max(size.width, size.height), photo.file).toBeGreaterThanOrEqual(Math.max(photo.width, photo.height));
+      expect(Math.max(size.width, size.height), photo.file).toBeLessThanOrEqual(1600);
+      expect(statSync(file).size, photo.file).toBeLessThan(300_000);
+      bytes += statSync(file).size;
+    }
+    expect(bytes).toBeLessThan(8_000_000);
+  });
+
+  it('has a "show me" on every entry whose kind the scene draws, each going to something real', () => {
+    const terms = Object.keys(SHOW_ME);
+    expect(terms.length).toBeGreaterThan(35);
+    // Each on an entry that says where it is in the app, and rendered there.
+    for (const term of terms) {
+      const entry = new RegExp(`id="${termAnchor(term)}".*?</li>`).exec(html)?.[0] ?? '';
+      expect(entry, term).toContain('In the app');
+      expect(entry, term).toContain('show me</button>');
+    }
+    expect(html.match(/show me<\/button>/g)?.length).toBe(terms.length);
+
+    const bodies = new Set([...CATALOG.map((body) => body.id), ...startBodyIds()]);
+    const structures = new Set([
+      ...CLUSTERS.map((cluster) => cluster.name),
+      ...SUPERCLUSTERS.map((supercluster) => supercluster.name),
+      ...voidLandmarks().map((landmark) => landmark.name),
+      ...wallLandmarks().map((landmark) => landmark.name),
+      greatAttractor().name,
+      // basinLandmarks names Laniakea's basin so.
+      ...(BASINS.some((basin) => basin.name === 'Laniakea') ? ['Laniakea Supercluster'] : []),
+    ]);
+    for (const [term, target] of Object.entries(SHOW_ME)) {
+      switch (target.kind) {
+        case 'body':
+          expect(bodies.has(target.id), `${term}: ${target.id}`).toBe(true);
+          break;
+        case 'star':
+          expect(
+            target.star === 'Sirius B' || ALPHA_CEN_MEMBERS.some((member) => member.key === target.star),
+            term,
+          ).toBe(true);
+          break;
+        case 'system':
+          expect(PLANETARY_SYSTEMS.some((system) => system.key === target.key), term).toBe(true);
+          break;
+        case 'view':
+          expect(Object.keys(SHOW_ME_VIEWS), term).toContain(target.view);
+          break;
+        case 'structure':
+          expect(structures.has(target.name), `${term}: ${target.name}`).toBe(true);
+          break;
+        case 'volume-galaxy': {
+          // The breadcrumb's Virgo Cluster finds M87 by this name.
+          const one = { catalog: { count: 1, name: [target.name], otherNames: [[]], sample: ['evcc'], vMag: [8.9] } };
+          expect(virgoCentre(one as never), term).toBe(0);
+          break;
+        }
+        case 'satellite':
+          expect(NAMED_SATELLITES.map((satellite) => satellite.id), term).toContain(target.id);
+          break;
+        case 'pulsar':
+          expect(Object.values(PULSAR_NAMES), term).toContain(target.name);
+          break;
+        case 'cluster':
+          expect(Object.keys(CLUSTER_NAMES), term).toContain(target.name);
+          break;
+      }
+    }
   });
 
   it('says what a body of every kind is', () => {
@@ -250,6 +354,14 @@ describe('credits', () => {
     expect(sources).toContain('This work makes use of the service L3S/COSFIL.');
     expect(sources).toContain('Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science');
     expect(sources).toContain('doi:10.26093/cds/vizier.74383465');
+    // The quasars' and the SZ clusters': SDSS-IV's acknowledgement and Planck's, word for word.
+    expect(sources).toContain(
+      'Funding for the Sloan Digital Sky Survey IV has been provided by the Alfred P. Sloan Foundation, the U.S. Department of Energy Office of Science, and the Participating Institutions. SDSS acknowledges support and resources from the Center for High-Performance Computing at the University of Utah. The SDSS web site is www.sdss4.org.',
+    );
+    expect(sources).toContain('Vanderbilt University, and Yale University.');
+    expect(sources).toContain(
+      'Based on observations obtained with Planck (http://www.esa.int/Planck), an ESA science mission with instruments and contributions directly funded by ESA Member States, NASA, and Canada.',
+    );
   });
 });
 

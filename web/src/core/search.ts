@@ -3,7 +3,9 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { isSmallMoon } from '../scene/floatingOrigin.ts';
 import { recordHolderAliases, recordHolderKindLabel, recordHolderOf } from './recordHolders.ts';
 import { satelliteBodyTag } from './satelliteGroups.ts';
+import { deepSkyLayerKind, deepSkyOf, NOTABLE_STAR_KIND } from './deepSky.ts';
 import { structureKindLabel, structureOf } from './structures.ts';
+import { REGION_LAYER_IDS, regionOf } from './regions.ts';
 import type { LayerId } from '../state/store.ts';
 
 /**
@@ -82,6 +84,11 @@ export function describeBody(body: BodyDefinition, parentName: string | null): s
           ? `${recordHolderKindLabel(holder.kind)} · z ${holder.z}`
           : 'Structure';
     }
+    case 'nebula':
+    case 'deep-sky':
+      return deepSkyOf(body.id)?.label ?? (body.kind === 'nebula' ? 'Nebula' : 'Messier object');
+    case 'region':
+      return regionOf(body.id)?.kindLabel ?? 'Region';
   }
 }
 
@@ -125,6 +132,14 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return ['localGroup'];
     case 'structure':
       return recordHolderOf(body.id) !== null ? ['observableUniverse'] : ['laniakea'];
+    case 'nebula':
+      return ['nebulae'];
+    case 'deep-sky':
+      return deepSkyLayerKind(body.id) === NOTABLE_STAR_KIND ? ['notableStars'] : ['messier'];
+    case 'region': {
+      const region = regionOf(body.id);
+      return region === null ? [] : [REGION_LAYER_IDS[region.layer]];
+    }
   }
 }
 
@@ -141,7 +156,10 @@ const KIND_ORDER: Readonly<Record<BodyDefinition['kind'], number>> = {
   'supernova-remnant': 0,
   galaxy: 0,
   structure: 0,
+  nebula: 0,
+  'deep-sky': 0,
   'dwarf-planet': 1,
+  region: 2,
   moon: 2,
   asteroid: 3,
   comet: 3,
@@ -214,7 +232,9 @@ export function searchBodies(
       tag === null
         ? body.kind === 'structure'
           ? normalizeName(recordHolderAliases(body.id))
-          : ''
+          : body.kind === 'nebula' || body.kind === 'deep-sky'
+            ? normalizeName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
+            : ''
         : normalizeName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".

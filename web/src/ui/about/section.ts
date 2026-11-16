@@ -13,6 +13,9 @@ import type {
 
 import type { LoadedTier } from '../../core/belt.ts';
 import type { EphemerisStore } from '../../core/ephemerisStore.ts';
+import type { GlobularClusterArchive } from '../../core/globularClusters.ts';
+import type { PulsarArchive } from '../../core/pulsars.ts';
+import type { LazySource } from '../../core/satellites.ts';
 import type { SectionId } from './nav.ts';
 
 /**
@@ -31,6 +34,9 @@ export interface AboutData {
   readonly exoplanetCatalog: ExoplanetCatalog | null;
   readonly pulsarCatalog: PulsarCatalog | null;
   readonly clusterCatalog: GlobularClusterCatalog | null;
+  /** The pulsars' and the clusters' own sources, for the glossary's "show me" to load one to go to. */
+  readonly pulsarSource?: LazySource<PulsarArchive> | null;
+  readonly clusterSource?: LazySource<GlobularClusterArchive> | null;
 }
 
 /** One section of the About: its tab, its heading, its subsections and its text. */

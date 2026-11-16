@@ -47,7 +47,7 @@ import type {
  */
 
 /** What differs from one small body to the next. */
-interface SmallBodySpec {
+export interface SmallBodySpec {
   readonly id: string;
   readonly name: string;
   /** Horizons COMMAND: the number and a semicolon, which selects the small body. */
@@ -57,9 +57,11 @@ interface SmallBodySpec {
   readonly stepDays: number;
   /**
    * Radii, km: `[a, b, c]` long axis first, or one mean radius for a body whose shape
-   * was never measured -- only its brightness, or a single occultation chord.
+   * was never measured -- only its brightness, or a single occultation chord. Null for a
+   * body whose size nobody has measured (farBodies.ts): drawn as a marker, with a nominal
+   * kilometre that only frames the camera (radiusPublished: false), as a comet is.
    */
-  readonly radiiKm: readonly [number, number, number] | number;
+  readonly radiiKm: readonly [number, number, number] | number | null;
   readonly gmKm3S2: number;
   readonly rotationPeriodHours: number | null;
   readonly rotation: RotationalElements | null;
@@ -101,9 +103,16 @@ function iauRotation(
   };
 }
 
-function smallBody(spec: SmallBodySpec): BodyDefinition {
+/** The radius a body of unmeasured size is framed by, km: a comet's (famousComets.ts). */
+const UNMEASURED_FRAMING_KM = 1;
+
+export function smallBody(spec: SmallBodySpec): BodyDefinition {
   const [a, b, c] =
-    typeof spec.radiiKm === 'number' ? [spec.radiiKm, spec.radiiKm, spec.radiiKm] : spec.radiiKm;
+    spec.radiiKm === null
+      ? [UNMEASURED_FRAMING_KM, UNMEASURED_FRAMING_KM, UNMEASURED_FRAMING_KM]
+      : typeof spec.radiiKm === 'number'
+        ? [spec.radiiKm, spec.radiiKm, spec.radiiKm]
+        : spec.radiiKm;
   return {
     id: spec.id,
     name: spec.name,
@@ -130,6 +139,7 @@ function smallBody(spec: SmallBodySpec): BodyDefinition {
     rings: null,
     mission: null,
     sampling: { toleranceKm: SMALL_BODY_TOLERANCE_KM, windowMonths: null },
+    ...(spec.radiiKm === null ? { radiusPublished: false } : {}),
     ...(spec.shapeDrawn ? {} : { shapeDrawn: false }),
     ...(spec.shape === undefined ? {} : { shapeModel: spec.shape }),
   };
