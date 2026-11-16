@@ -146,6 +146,10 @@ describe('credits', () => {
     expect(sources).toContain('https://doi.org/10.57780/esa-k25x2cv');
     expect(sources).toContain('CC BY 4.0');
     expect(sources).toContain('This project is not affiliated with or endorsed by NASA, JPL or ESA.');
+    // The cosmic web's, as cosmic-web.json records them.
+    expect(sources).toContain('This work makes use of the service L3S/COSFIL.');
+    expect(sources).toContain('Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science');
+    expect(sources).toContain('doi:10.26093/cds/vizier.74383465');
   });
 });
 

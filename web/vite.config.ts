@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
@@ -26,9 +27,20 @@ const REPO_BASE = '/Solar-System-Simulator/';
  */
 const SATELLITE_JS = fileURLToPath(new URL('./node_modules/satellite.js/dist/', import.meta.url));
 
+/**
+ * Whether this build carries the cosmic web (core/cosmicWeb.ts COSMIC_WEB_PUBLISHED): its data
+ * is made by a step of the deploy that may fail without failing the deploy, and a site without
+ * it should not ask for it -- every ask a 404 in the console. cosmic-web.json is written last, so
+ * it is there only if the rest is. Read when the build (or the dev server) starts.
+ */
+const COSMIC_WEB_PUBLISHED = existsSync(fileURLToPath(new URL('./public/data/cosmic-web/cosmic-web.json', import.meta.url)));
+
 export default defineConfig(({ mode }) => ({
   base: process.env.VITE_BASE ?? (mode === 'production' ? REPO_BASE : '/'),
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_COSMIC_WEB': JSON.stringify(COSMIC_WEB_PUBLISHED ? '1' : ''),
+  },
   resolve: {
     alias: [
       { find: /^satellite\.js\/io$/, replacement: `${SATELLITE_JS}io.js` },

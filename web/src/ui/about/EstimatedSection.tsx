@@ -31,6 +31,7 @@ export const estimatedSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'cosmic-web', label: 'The cosmic web' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -846,6 +847,51 @@ export const estimatedSection: AboutSection = {
             other catalogues place: the empty band there is not empty space. And 2MRS is flux-limited, and past 200
             Mpc only the SDSS north and 6dF south go on: the map thins with distance because the surveys do, not
             the universe.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="cosmic-web">
+          The cosmic web
+        </Sub>
+        <Items>
+          <Item title="Why the far map is wedges">
+            The SDSS looked at a third of the sky about the north galactic pole and a strip along the equator in
+            the south, and never at the Milky Way’s plane. The dark between the wedges was not observed; it is not
+            empty. The main sample is flux-limited: dwarfs to z 0.05, by z 0.15 only galaxies brighter than the
+            Milky Way. BOSS chose a few luminous red galaxies in a hundred, so its galaxies are a sparse sample of
+            the most massive and its filaments are coarser. No filament catalogue covers BOSS South, nor past z
+            0.75.
+          </Item>
+          <Item title="Distances from redshift, in Laniakea’s cosmology">
+            Every galaxy and filament is at the comoving distance of its redshift in Laniakea’s cosmology,
+            H<sub>0</sub> 74.6 and Ω<sub>m</sub> 0.3, so a cluster both draw is drawn once, with no seam. In Planck
+            2018’s, which the record-holders are in, each would be 9 % farther: z 0.8 at 2.9 Gpc, not 2.6{' '}
+            <Cite k="planck2020params" />. Each catalogue’s own cosmology was undone first.
+          </Item>
+          <Item title="Fingers of god, not taken out of BOSS">
+            A cluster’s galaxies move at a thousand km/s, so placed by redshift they stand in a line pointing at
+            the Sun, several Mpc long. The main sample is at Tempel et al.’s distances with that taken out; BOSS’s
+            galaxies are at their own redshifts, and Malavasi et al.’s filaments were found on them: in redshift
+            space, some of their lines run toward the Sun because of it <Cite k="malavasi2020" />.
+          </Item>
+          <Item title="Malavasi et al.’s frame, inferred">
+            Their skeleton’s coordinates come with no stated frame: they are taken as equatorial, comoving from
+            heliocentric redshifts in Planck 2015’s cosmology, the paper’s. Each run checks it: 63 % of its points
+            fall in a 10 Mpc cell holding a BOSS galaxy, 8.7 % with right ascension mirrored. Tempel et al.’s is
+            checked too: galaxies near a filament lie a median 0.215 h<sup>−1</sup> Mpc from the point their
+            catalogue names.
+          </Item>
+          <Item title="Their light and colour">
+            Rest-frame V and B−V are read off the five SDSS bands at B and V moved by 1 + z, then moved onto
+            Laniakea’s HyperLEDA scale by the median offset over the galaxies both hold: the main sample’s V by
+            −0.12 mag, scatter 0.21 over 427 galaxies, B−V by −0.07, scatter 0.14; BOSS onto the main sample over
+            66,002, V −0.03 (0.07), B−V −0.09 (0.03). Past z 0.63 rest-frame V lies beyond the z band and is
+            extrapolated <Cite k={['blantonRoweis2007', 'hogg2002']} />.
+          </Item>
+          <Item title="Left out">
+            40,797 galaxies Laniakea’s or the Local Volume’s catalogue already draws, and the 66,002 BOSS galaxies
+            the main sample holds. Malavasi et al.’s filaments that end at the survey’s edge, as the paper did; not
+            its cut of forks within 200 Mpc of the edge, so a few there are the field carried across it.
           </Item>
         </Items>
 

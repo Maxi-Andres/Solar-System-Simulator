@@ -39,7 +39,9 @@ Where things come from:
   `web/src/scene/Laniakea.tsx`; the structures are bodies, found by search.
 - **The observable universe** (G4): the record-holders, bodies with their redshifts and papers
   (`web/src/core/recordHolders.ts`), placed in Planck 2018's cosmology (`web/src/core/cosmology.ts`);
-  the CMB's last-scattering sphere with Planck's map (`tools/src/cmb/`, `web/public/cmb/`).
+  the CMB's last-scattering sphere with Planck's map (`tools/src/cmb/`, `web/public/cmb/`); the cosmic web,
+  the SDSS main sample's and BOSS's galaxies and Tempel et al.'s and Malavasi et al.'s filaments
+  (`cosmic-web/`, `tools/src/cosmicWeb/`), drawn by `web/src/core/cosmicWeb.ts` and `web/src/scene/CosmicWeb.tsx`.
 
 ## Near Earth and the atmosphere (to about 1,000 km)
 
@@ -322,7 +324,7 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [x] Southern Local Supervoid: the `Sculptor Void` (Tully et al. 2019), an outline.
 - [ ] Giant Void: not in G3's landmarks. G3.
 - [x] Leo Supercluster: a structure.
-- [~] Walls and filaments: the CfA2 and Sloan Great Walls as lines, the filaments as the galaxies themselves; no filament catalogue.
+- [x] Walls and filaments: the CfA2 and Sloan Great Walls as lines; the filaments of Tempel et al. 2014 (SDSS main sample, to z 0.155) and Malavasi et al. 2020 (BOSS North, z 0.15-0.75) as threads, the Filaments layer (`cosmic-web/filaments.bin`, `web/src/scene/CosmicWeb.tsx`).
 - [ ] Caelum Supercluster: not in G3's landmarks. G3.
 - [x] Sloan Great Wall: a structure, drawn as a line (Gott et al. 2005).
 - [x] Corona Borealis Supercluster: a structure.
@@ -333,7 +335,7 @@ their orbits, not bodies of their size as Eris and Makemake are.
 - [x] Saraswati Supercluster: a record-holder, z 0.28, marked at Abell 2631, its centre.
 - [ ] Giant GRB Ring: a claim (see README). G4.
 - [x] El Gordo Cluster: a record-holder, z 0.870.
-- [ ] Cosmic web of galaxies: G4.
+- [x] Cosmic web of galaxies: the SDSS main sample's and BOSS DR12's 1.8 million galaxies to z 0.95, in the surveys' wedges, the SDSS Galaxies layer (`cosmic-web/galaxies-*.bin`, `web/src/scene/CosmicWeb.tsx`); their filaments, the Filaments layer.
 
 ## The far universe
 

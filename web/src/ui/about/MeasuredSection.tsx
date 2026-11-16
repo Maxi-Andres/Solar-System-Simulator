@@ -38,6 +38,7 @@ export const measuredSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'cosmic-web', label: 'The cosmic web' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -731,6 +732,31 @@ export const measuredSection: AboutSection = {
             The redshifts in the frame of the cosmic microwave background, by its dipole{' '}
             <Cite k="planck2020" />.{' '}
             <Xref to="estimated" sub="laniakea">
+              What is not measured
+            </Xref>
+            .
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="cosmic-web">
+          The cosmic web
+        </Sub>
+        <Items>
+          <Item>
+            <Strong>1.8 million galaxies</Strong> of the SDSS’s two redshift surveys, each by its own spectrum’s
+            redshift. The DR8 main galaxy sample, 536,633 to z 0.2, with their u g r i z, as Tempel et al.’s group
+            catalogue gives it <Cite k={['tempel2012', 'tempel2014']} />; and BOSS DR12’s luminous galaxies, LOWZ
+            and CMASS, north and south, 1,258,588 to z 0.95{' '}
+            <Cite k={['reid2016', 'alam2015', 'dawson2013', 'eisenstein2011']} />.
+          </Item>
+          <Item>
+            <Strong>The filaments</Strong> found in them. Tempel et al.’s 15,421 in the main sample to z 0.155, by
+            the Bisous model: chains of cylinders half an h<sup>−1</sup> Mpc in radius fitted to the galaxies, each
+            point with its visit map, the share of the model’s realisations with a filament there{' '}
+            <Cite k="tempel2014" />. And Malavasi et al.’s skeleton of BOSS North, the ridges of the galaxies’
+            density by DisPerSE at 5σ, 4,762 pieces kept between z 0.15 and 0.75, each point with that density{' '}
+            <Cite k="malavasi2020" />.{' '}
+            <Xref to="estimated" sub="cosmic-web">
               What is not measured
             </Xref>
             .

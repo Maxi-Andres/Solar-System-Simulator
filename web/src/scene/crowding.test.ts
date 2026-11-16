@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { floorKept, halfCountRadiusPc } from './crowding.ts';
+import { floorKept, halfCountRadiusPc, lineKept, lineSeparationPx } from './crowding.ts';
 
 const LY_PC = 0.30660139378555057;
 /** Pixels per radian of an 864 px tall view at 27 degrees. */
@@ -28,5 +28,26 @@ describe('the faint-galaxy floor as a catalogue crowds', () => {
       expect(kept).toBeLessThanOrEqual(last + 1e-12);
       last = kept;
     }
+  });
+});
+
+describe('the filaments as they crowd', () => {
+  // Malavasi et al.'s as drawn: 584,000 Mpc of them, half within 1.7 Gpc, on 18% of the sky.
+  const kept = (ly: number) => lineKept(1.715e9, 292e9, 0.181, ly * LY_PC, PPR);
+
+  it('keeps every line from inside the half of them nearest the Sun', () => {
+    expect(lineSeparationPx(1.715e9, 292e9, 0.181, 1e9, PPR)).toBe(Infinity);
+    expect(kept(3e9)).toBe(1);
+  });
+
+  it('dims them as they close up, gradually, and drops them once a speck', () => {
+    let last = 1;
+    for (let ly = 6e9; ly < 4e11; ly *= 1.2) {
+      const k = kept(ly);
+      expect(k).toBeLessThanOrEqual(last + 1e-12);
+      last = k;
+    }
+    expect(kept(10e9)).toBeGreaterThan(0.01);
+    expect(kept(400e9)).toBe(0);
   });
 });

@@ -26,6 +26,7 @@ export const choicesSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'cosmic-web', label: 'The cosmic web' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: ({ data }) => {
@@ -577,6 +578,43 @@ export const choicesSection: AboutSection = {
           <Item title="Left out">
             The 813 galaxies the Local Group’s and the Local Volume’s catalogues draw, drawn from those; 239
             HyperLEDA records that are not galaxies.
+          </Item>
+        </Items>
+
+        <Sub section="choices" id="cosmic-web">
+          The cosmic web
+        </Sub>
+        <Items>
+          <Item title="Filaments as threads">
+            Lines of one width from any distance, a soft glow either side, in a muted violet: Tempel et al.’s
+            brighter by their visit map, Malavasi et al.’s fainter by their ridge’s density. Within a few Mpc a
+            Tempel filament widens to its 0.5 h<sup>−1</sup> Mpc radius and dims as much; from inside, it is gone.
+            They do not move. On: one draw, and from Laniakea’s view out to 10 billion ly the web is what they show.
+            <Why>a filament is where galaxies are strung, not a thing of its own; the line says where it was found.</Why>
+          </Item>
+          <Item title="The faint dot, against the survey">
+            Each galaxy’s faint dot is weighed by its neighbours as Laniakea’s is, but within the reach where its
+            own survey would put two at its distance on average, 4 to 32 Mpc: whole at four times the survey’s
+            density, 36 % at it, 15 % alone.
+            <Why>at Laniakea’s fixed 4 Mpc nearly every BOSS galaxy is alone, and the map was an even dust.</Why>
+          </Item>
+          <Item title="Dots that crowd, dimmed where they crowd">
+            Where the dots on a patch of the screen are under 2 pixels apart, each is dimmed so the patch is no
+            brighter than at 2; and all go once the whole survey crowds, as Laniakea’s do.
+            <Why>seen from inside, 9 billion light years of survey behind every direction added up to a grey carpet.</Why>
+          </Item>
+          <Item title="Depth">
+            A filament or a faint dot farther from the camera than twice what it looks at is dimmer, down to an
+            eighth.
+          </Item>
+          <Item title="Once each">
+            No galaxy Laniakea’s catalogue draws is drawn again, so nothing of these is hidden: within 700 Mpc the
+            northern wedge is the fuller map, the rest of the sky Laniakea’s alone.
+          </Item>
+          <Item title="Fetched in pieces">
+            The filaments, 2.5 MB, past 100 Mpc from the Sun; the galaxies past 300 Mpc, in seven pieces of 2.4 MB,
+            the most luminous first, fewer on a device with under 8 GB or a touch screen. A site built without them
+            has neither layer’s drawing.
           </Item>
         </Items>
 

@@ -106,6 +106,47 @@ jobs:
           path: tools/.cache/star-catalogues
           key: star-catalogues-${{ github.run_id }}
 
+      # The cosmic web (tools/src/cosmicWeb/): the SDSS's galaxies and filaments, 400 MB from
+      # VizieR, the IAS and the SDSS's archive -- three more hosts that can turn the runners away.
+      # So it never fails the deploy: without it the site is built without the SDSS Galaxies and
+      # Filaments layers (vite.config.ts looks for cosmic-web.json, written last), and says
+      # nothing about them. It runs before the data is saved for the daily runs, so they carry
+      # what it made. Its downloads are kept between runs, keyed by what they hold: published
+      # catalogues that do not change, saved again only when a download was added.
+      - name: Restore the cosmic web's downloads
+        id: cosmic-web-restore
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/cosmic-web
+          key: cosmic-web-none
+          restore-keys: |
+            cosmic-web-
+
+      - name: Fetch the cosmic web
+        id: cosmic-web
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        continue-on-error: true
+        run: pnpm fetch:cosmic-web --cache "${{ github.workspace }}/tools/.cache/cosmic-web"
+
+      - name: Name the cosmic web's downloads
+        id: cosmic-web-key
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '')
+        run: echo "key=cosmic-web-${{ hashFiles('tools/.cache/cosmic-web/**') }}" >> "$GITHUB_OUTPUT"
+
+      # Kept even when the fetch failed further on, as the star catalogues' are.
+      - name: Save the cosmic web's downloads
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '') && hashFiles('tools/.cache/cosmic-web/**') != '' && steps.cosmic-web-key.outputs.key != steps.cosmic-web-restore.outputs.cache-matched-key
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/cosmic-web
+          key: ${{ steps.cosmic-web-key.outputs.key }}
+
+      - name: Say whether the cosmic web was built
+        if: steps.cosmic-web.outcome == 'failure'
+        run: echo "::warning title=Cosmic web not built::pnpm fetch:cosmic-web failed; this deploy has no SDSS Galaxies or Filaments layers. Its log says why."
+
       - name: Save the data for the daily satellite runs
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         uses: actions/cache/save@v6

@@ -5,6 +5,7 @@ import type { StarCatalog } from '@sss/tools/types';
 import { BeltSource, httpBeltFetchers } from './belt.ts';
 import { loadNameIndex, NameIndexSource } from './beltNames.ts';
 import { CometSource, loadComets } from './comets.ts';
+import { cosmicWebSource, type CosmicWebSource } from './cosmicWeb.ts';
 import {
   LazySource,
   loadSatelliteNames,
@@ -92,6 +93,8 @@ export interface Simulation {
    */
   readonly laniakea: LazySource<LaniakeaCatalogue>;
   readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
+  /** The cosmic web past it (cosmicWeb.ts): the SDSS's galaxies and filaments, fetched as the camera passes 100 and 300 Mpc. */
+  readonly cosmicWeb: CosmicWebSource;
   readonly clock: SimClock;
   readonly error: string | null;
   /**
@@ -182,6 +185,8 @@ export function useSimulation(refreshHz = 10): Simulation {
     () => loadLaniakeaNames(httpBeltFetchers, import.meta.env.BASE_URL),
     'the names of Laniakea’s galaxies',
   );
+  const cosmicWebRef = useRef<CosmicWebSource>(null);
+  cosmicWebRef.current ??= cosmicWebSource(httpBeltFetchers, import.meta.env.BASE_URL);
 
   const [store, setStore] = useState<EphemerisStore | null>(null);
   const [stars, setStars] = useState<StarCatalog | null>(null);
@@ -293,6 +298,7 @@ export function useSimulation(refreshHz = 10): Simulation {
     localVolume: localVolumeRef.current,
     laniakea: laniakeaRef.current,
     laniakeaNames: laniakeaNamesRef.current,
+    cosmicWeb: cosmicWebRef.current,
     clock: clockRef.current,
     error,
     readout: readoutRef.current,

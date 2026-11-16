@@ -158,6 +158,7 @@ export function App() {
     localVolume,
     laniakea,
     laniakeaNames,
+    cosmicWeb,
     clock,
     error,
     readout,
@@ -689,6 +690,9 @@ export function App() {
         showShapleyBasin={layers.shapleyBasin}
         showFlowLines={layers.flowLines}
         onPickLaniakeaGalaxy={goToLaniakeaGalaxy}
+        cosmicWeb={cosmicWeb}
+        showSdssGalaxies={layers.sdssGalaxies}
+        showFilaments={layers.filaments}
       />
 
       {(layers.distanceRings || layers.starMap) && layers.labels && uiVisible && (

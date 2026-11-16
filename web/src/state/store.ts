@@ -78,6 +78,8 @@ export type LayerId =
   | 'laniakeaBasin'
   | 'shapleyBasin'
   | 'flowLines'
+  | 'sdssGalaxies'
+  | 'filaments'
   | 'observableUniverse'
   | 'nuclearCluster'
   | 'spacecraft'
@@ -151,6 +153,11 @@ export const LAYERS: readonly LayerDefinition[] = [
   // galaxies' flow goes: a few dozen, Laniakea's in its gold, a brightening running down each
   // toward its attractor. On: it is what makes a basin of attraction a basin.
   { id: 'flowLines', label: 'Flow Lines', pending: null },
+  // The cosmic web past it (core/cosmicWeb.ts): the 1.8 million galaxies of the SDSS main
+  // sample and BOSS, out to 9 billion light years, in the surveys' wedges of the sky.
+  { id: 'sdssGalaxies', label: 'SDSS Galaxies', pending: null },
+  // The filaments found in them: Tempel et al. 2014's and Malavasi et al. 2020's, thin threads.
+  { id: 'filaments', label: 'Filaments', pending: null },
   // The observable universe (G4, scene/cmb.ts, core/recordHolders.ts): the CMB's
   // last-scattering sphere, drawn only from far outside it, and the record-holders.
   { id: 'observableUniverse', label: 'Observable Universe', pending: null },
@@ -205,6 +212,8 @@ const DEFAULT_LAYERS: LayerState = {
   laniakeaBasin: true,
   shapleyBasin: false,
   flowLines: true,
+  sdssGalaxies: true,
+  filaments: true,
   observableUniverse: true,
   nuclearCluster: true,
   spacecraft: true,

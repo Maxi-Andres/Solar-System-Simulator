@@ -12,6 +12,7 @@ import type { LocalGroupArchive } from '../core/localGroup.ts';
 import type { LocalVolumeArchive } from '../core/localVolume.ts';
 import type { LaniakeaCatalogue, LaniakeaNameIndex } from '../core/laniakea.ts';
 import type { LazySource } from '../core/satellites.ts';
+import type { CosmicWebSource } from '../core/cosmicWeb.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -33,6 +34,7 @@ import { GlobularClusters } from './GlobularClusters.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
 import { Laniakea } from './Laniakea.tsx';
+import { CosmicWeb } from './CosmicWeb.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
 import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
@@ -166,6 +168,10 @@ export interface SolarSystemCanvasProps {
   /** The Flow Lines layer: the velocity field's streamlines. */
   readonly showFlowLines: boolean;
   readonly onPickLaniakeaGalaxy: (k: number) => void;
+  /** The cosmic web past it: the SDSS Galaxies and Filaments layers. */
+  readonly cosmicWeb: CosmicWebSource;
+  readonly showSdssGalaxies: boolean;
+  readonly showFilaments: boolean;
 }
 
 export function SolarSystemCanvas({
@@ -218,6 +224,9 @@ export function SolarSystemCanvas({
   showShapleyBasin,
   showFlowLines,
   onPickLaniakeaGalaxy,
+  cosmicWeb,
+  showSdssGalaxies,
+  showFilaments,
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
@@ -261,6 +270,8 @@ export function SolarSystemCanvas({
     showLaniakeaBasin,
     showShapleyBasin,
     showFlowLines,
+    showSdssGalaxies,
+    showFilaments,
     showObservableUniverse,
   ]);
 
@@ -392,6 +403,7 @@ export function SolarSystemCanvas({
         showFlows={showFlowLines}
         onPick={onPickLaniakeaGalaxy}
       />
+      <CosmicWeb source={cosmicWeb} store={store} clock={clock} focus={focus} showGalaxies={showSdssGalaxies} showFilaments={showFilaments} />
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />
       <GlobularClusters

@@ -44,3 +44,42 @@ export function floorKept(halfRadiusPc: number, count: number, cameraFromSunPc: 
   const t = Math.min(1, Math.max(0, (separationPx - FLOOR_GONE_SEPARATION_PX) / (FLOOR_FULL_SEPARATION_PX - FLOOR_GONE_SEPARATION_PX)));
   return t * t * (3 - 2 * t);
 }
+
+/**
+ * The same for a catalogue of lines (CosmicWeb.tsx's filaments), each a constant few pixels wide
+ * however far: pulled back, they fall on one another, and their light, added, is a slab and not
+ * a web. By how far apart they lie on the screen: the nearer half of the catalogue's length --
+ * within its half-length radius of the Sun -- seen from the camera as a patch of its footprint's
+ * share of the disc (skyShare^(2/3) of it, as a cone of that share of the sphere's volume would
+ * be), crossed by that length foreshortened by pi/4 on average: their separation is the patch's
+ * area over that length, in pixels. Whole while LINE_FULL_SEPARATION_PX apart or more; closer,
+ * each line is (separation / that)^2 of itself, so their light added over the patch falls as
+ * they crowd -- as the separation, not as its inverse -- and the far web is a faint patch of the
+ * survey's shape, its texture the lines', rather than a slab or nothing. Gone once a speck, under
+ * LINE_GONE_SEPARATION_PX.
+ */
+export const LINE_FULL_SEPARATION_PX = 6;
+export const LINE_GONE_SEPARATION_PX = 0.3;
+
+/** The lines' mean separation on the screen, pixels (see above); Infinity from inside the half-length radius. */
+export function lineSeparationPx(
+  halfRadiusPc: number,
+  halfLengthPc: number,
+  skyShare: number,
+  cameraFromSunPc: number,
+  pixelsPerRadian: number,
+): number {
+  if (!(halfRadiusPc > 0) || !(halfLengthPc > 0) || cameraFromSunPc <= halfRadiusPc) return Infinity;
+  const radiusPx = Math.atan(halfRadiusPc / cameraFromSunPc) * pixelsPerRadian;
+  const areaPx = Math.PI * radiusPx * radiusPx * Math.cbrt(skyShare * skyShare);
+  const lengthPx = (halfLengthPc / cameraFromSunPc) * pixelsPerRadian * (Math.PI / 4);
+  return areaPx / lengthPx;
+}
+
+/** How much of the lines is kept, 1 to 0 (see above). */
+export function lineKept(halfRadiusPc: number, halfLengthPc: number, skyShare: number, cameraFromSunPc: number, pixelsPerRadian: number): number {
+  const separationPx = lineSeparationPx(halfRadiusPc, halfLengthPc, skyShare, cameraFromSunPc, pixelsPerRadian);
+  const share = Math.min(1, (separationPx / LINE_FULL_SEPARATION_PX) ** 2);
+  const t = Math.min(1, Math.max(0, (separationPx - LINE_GONE_SEPARATION_PX) / LINE_GONE_SEPARATION_PX));
+  return share * t * t * (3 - 2 * t);
+}

@@ -55,6 +55,7 @@ export const physicsSection: AboutSection = {
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
+    { id: 'cosmic-web', label: 'The cosmic web' },
     { id: 'universe', label: 'The observable universe' },
   ],
   Body: () => {
@@ -1496,6 +1497,47 @@ export const physicsSection: AboutSection = {
           Each line follows the velocity’s direction by fourth-order Runge–Kutta in steps of a quarter voxel,
           slowing under 30 km/s so that it comes to rest where the velocity vanishes: the attractor.
           <Cite k={['courtois2023', 'courtoisCubes']} />
+        </Equation>
+
+        <Sub section="physics" id="cosmic-web">
+          The cosmic web
+        </Sub>
+        <Equation
+          title="A faint dot’s reach"
+          code="web/src/core/cosmicWebFloor.ts"
+          math={math(
+            row(
+              frac(mn('4'), mn('3')),
+              mi('π'),
+              sup(mi('R'), mn('3')),
+              mover('n', '‾'),
+              paren(mi('r')),
+              mo('='),
+              mn('2'),
+              gap(),
+              mi('w'),
+              mo('='),
+              mn('0.15'),
+              mo('+'),
+              mn('0.85'),
+              fn('min'),
+              paren(mn('1'), mo(','), frac(mi('N'), mn('8'))),
+            ),
+          )}
+          symbols={<>n̄(r) the galaxies drawn of its survey per Mpc³ at its distance r, over the survey’s share of the sky; R kept within 4 to 32 Mpc; N its survey’s galaxies within R; w its dot.</>}
+        >
+          A galaxy’s neighbours counted against its survey’s mean there: the web’s contrast, not the survey’s
+          thinning with distance. Counted in a worker on a grid of cells about R, sorted cell by cell.
+        </Equation>
+        <Equation
+          title="A band moved by the redshift"
+          code="tools/src/cosmicWeb/photometry.ts"
+          math={math(row(sub(mi('M'), mi('V')), mo('='), mi('m'), paren(sub(mi('λ'), mi('V')), paren(mn('1'), mo('+'), mi('z'))), mo('−'), mn('5'), sub(fn('log'), mn('10')), frac(sub(mi('d'), mi('L')), mtext('10 pc')), mo('+'), mn('2.5'), sub(fn('log'), mn('10')), paren(mn('1'), mo('+'), mi('z'))))}
+          symbols={<>m(λ) the AB magnitude read between the SDSS bands, linear in log λ; λ<sub>V</sub> 5456 Å; d<sub>L</sub> = (1 + z) d<sub>C</sub>.</>}
+        >
+          Light leaving at λ arrives at λ(1 + z): at z 0.5 a galaxy’s V is seen in the i band. Read there, the
+          K-correction of a band moved by exactly 1 + z is the last term.
+          <Cite k={['blantonRoweis2007', 'hogg2002']} />
         </Equation>
 
         <Sub section="physics" id="universe">
