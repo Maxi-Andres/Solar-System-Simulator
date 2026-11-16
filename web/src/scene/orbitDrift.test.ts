@@ -228,6 +228,13 @@ describeWithData('orbit drawn from the live state', () => {
         const jd = span.startJd + (span.stopJd - span.startJd) * fraction;
         await s.whenLoadedAt(jd, [body.id]);
         const drift = driftInRadii(s, body.id, jd);
+        // 1I/ʻOumuamua, on its hyperbola (farBodies.ts): no ellipse to drift from, and none
+        // drawn -- as for a comet open at the instant, below.
+        const state = s.stateRelativeTo(body.id, 'sun', jd)!;
+        if (stateToOsculatingElements(state, s.body('sun').gmBodyOnlyKm3S2, jd, body.id, '500@10') === null) {
+          expect(drift, `${body.id} at ${fraction}`).toBeNull();
+          continue;
+        }
         expect(drift, `${body.id} at ${fraction}`).not.toBeNull();
         expect(drift!, `${body.id} at ${fraction}`).toBeLessThan(1);
       }

@@ -44,9 +44,12 @@ import type { BodyDefinition, BodyId } from '../types.ts';
  *   Weywot      ~85             120050000
  *   Dimorphos   0.0959 x 0.0739 x 0.0586, the cube root of their product: 0.0746
  *
- * **GM** where JPL gives one with its uncertainty: Hiʻiaka 1.151 +- 0.069 and Namaka 0.036
- * +- 0.026 km^3/s^2, JPL's TNO satellite solution. Dysnomia's is only a range,
- * Vanth's "theory" and Weywot's without an error; zero, meaning unmeasured.
+ * **GM** as JPL's TNO satellite solution gives it: Hiʻiaka 1.151 +- 0.069 and Namaka 0.036
+ * +- 0.026 km^3/s^2; Vanth 3.470366973, its share of the system's mass by a theoretical ratio
+ * (GM_rat 0.0826, "theory"), and Weywot 0.04783, without an error. What the moon's orbit is
+ * drawn from is the pair's sum, the primary's GM (farBodies.ts) and the moon's, which is the
+ * system's mass JPL fitted. Dysnomia's is only a range, and Actaea's is not split from
+ * Salacia's: zero, meaning unmeasured -- Salacia carries the system's whole GM.
  *
  * Not here, for want of an orbit in Horizons: Makemake's MK2, Gonggong's Xiangliu, Varda's
  * Ilmarë, and the asteroid moons Dactyl, Selam and Menoetius.
@@ -72,9 +75,9 @@ const SPECS: readonly MinorMoonSpec[] = [
   { id: 'dysnomia', name: 'Dysnomia', horizonsId: '120136199', parent: 'eris', primaryHorizonsId: '920136199', periodDays: 15.79, radiusKm: 350, gmKm3S2: 0 },
   { id: 'hiiaka', name: 'Hiʻiaka', horizonsId: '120136108', parent: 'haumea', primaryHorizonsId: '920136108', periodDays: 49.1, radiusKm: 160, gmKm3S2: 1.151 },
   { id: 'namaka', name: 'Namaka', horizonsId: '220136108', parent: 'haumea', primaryHorizonsId: '920136108', periodDays: 18.3, radiusKm: 85, gmKm3S2: 0.036 },
-  { id: 'vanth', name: 'Vanth', horizonsId: '120090482', parent: 'orcus', primaryHorizonsId: '920090482', periodDays: 9.54, radiusKm: 221.5, gmKm3S2: 0 },
+  { id: 'vanth', name: 'Vanth', horizonsId: '120090482', parent: 'orcus', primaryHorizonsId: '920090482', periodDays: 9.54, radiusKm: 221.5, gmKm3S2: 3.470366973 },
   { id: 'actaea', name: 'Actaea', horizonsId: '120120347', parent: 'salacia', primaryHorizonsId: '920120347', periodDays: 5.49, radiusKm: 151.5, gmKm3S2: 0 },
-  { id: 'weywot', name: 'Weywot', horizonsId: '120050000', parent: 'quaoar', primaryHorizonsId: '920050000', periodDays: 12.4, radiusKm: 85, gmKm3S2: 0 },
+  { id: 'weywot', name: 'Weywot', horizonsId: '120050000', parent: 'quaoar', primaryHorizonsId: '920050000', periodDays: 12.4, radiusKm: 85, gmKm3S2: 0.04783 },
   // 1.2 km from Didymos's centre: the moons' kilometre floor would be its whole orbit. A
   // hundredth of its radius, 0.75 m, which the one-minute step holds with room to spare.
   {

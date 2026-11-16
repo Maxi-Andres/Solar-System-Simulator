@@ -31,8 +31,13 @@ import { smallBody } from './smallBodies.ts';
  * **Size.** Measured where it has been, cited per body: thermal (Herschel, ALMA) or an
  * occultation. Where only the brightness is known -- every sednoid, the farthest two and
  * ʻOumuamua -- a size would be a guess at the albedo, so none is given: a marker, as for a
- * comet with no measured nucleus (radiusPublished: false). GM: unmeasured for all (zero),
- * as for the named asteroids; the moons' orbits are JPL's and need none of it. Shape drawn
+ * comet with no measured nucleus (radiusPublished: false). GM: measured only where a moon
+ * weighs the system, JPL's TNO satellite solutions -- Orcus 38.55963303 km^3/s^2 (Horizons
+ * 920090482, Vanth taking the rest of the system's 42.03 by a theoretical ratio), Quaoar
+ * 95.6 +- 12.97 (920050000), Salacia the system's whole 32.91 +- 0.70 (its barycentre,
+ * 20120347; the record of its centre gives none). A moon's drawn orbit is its elements about
+ * the primary under the pair's GM, so a zero there left Vanth, Actaea and Weywot with none.
+ * Unmeasured for the rest (zero), as for the named asteroids. Shape drawn
  * round where the measurement is one radius and nothing says otherwise; Varuna's light
  * curve says it is elongated, and no axes are published with an orientation, so it is a
  * marker with its measured size in the panel, as Haumea is.
@@ -54,7 +59,7 @@ export const FAR_BODIES: readonly BodyDefinition[] = [
     kind: 'asteroid',
     stepDays: 32,
     radiiKm: 455,
-    gmKm3S2: 0,
+    gmKm3S2: 38.55963303,
     rotationPeriodHours: 13.188,
     rotation: null,
     shapeDrawn: true,
@@ -69,7 +74,7 @@ export const FAR_BODIES: readonly BodyDefinition[] = [
     kind: 'asteroid',
     stepDays: 32,
     radiiKm: 452.5,
-    gmKm3S2: 0,
+    gmKm3S2: 32.91,
     rotationPeriodHours: 6.09,
     rotation: null,
     shapeDrawn: true,
@@ -88,7 +93,7 @@ export const FAR_BODIES: readonly BodyDefinition[] = [
     kind: 'asteroid',
     stepDays: 32,
     radiiKm: 555,
-    gmKm3S2: 0,
+    gmKm3S2: 95.6,
     rotationPeriodHours: 8.8394,
     rotation: null,
     shapeDrawn: true,
