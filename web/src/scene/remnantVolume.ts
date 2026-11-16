@@ -299,10 +299,20 @@ export function remnantNoise(size = NOISE_SIZE): Uint8Array {
 
 let noiseData: Uint8Array | null = null;
 
-/** The noise, made once: about a second's work. */
+/** The noise, made once: about a second's work -- in remnantMap.worker.ts, which hands it over. */
 export function remnantNoiseData(): Uint8Array {
   noiseData ??= remnantNoise();
   return noiseData;
+}
+
+/** The noise as the worker made it (SupernovaRemnants.tsx), so this thread need not. */
+export function provideRemnantNoise(data: Uint8Array): void {
+  noiseData ??= data;
+}
+
+/** Whether the noise is here: a remnant's gas is made only once it is, the worker having made it. */
+export function hasRemnantNoise(): boolean {
+  return noiseData !== null;
 }
 
 let noiseTexture: THREE.Data3DTexture | null = null;

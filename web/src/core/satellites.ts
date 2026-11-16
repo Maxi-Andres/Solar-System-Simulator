@@ -4,6 +4,7 @@ import type { BeltFetchers } from './belt.ts';
 import { normalizeName } from './search.ts';
 import type { Searchable } from './beltNames.ts';
 import { RETRY_AFTER_MS } from './chunkedTable.ts';
+import { tracked } from './loading.ts';
 import { renderDemand } from './renderDemand.ts';
 import { chipOfFlags, SATELLITE_CHIPS } from './satelliteGroups.ts';
 
@@ -305,7 +306,8 @@ export class LazySource<T> {
       return Promise.resolve();
     }
     this.#state = 'loading';
-    this.#pending = this.#load()
+    // Named on the loading line while it comes (loading.ts).
+    this.#pending = tracked(this.#what, this.#load())
       .then((value) => {
         this.#value = value;
         this.#state = value === null ? 'absent' : 'ready';

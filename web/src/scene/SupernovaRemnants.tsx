@@ -14,9 +14,15 @@ import {
 import type { SimClock } from '../core/time.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
+import { beginLoading } from '../core/loading.ts';
 import { renderDemand } from '../core/renderDemand.ts';
-import { remnantMapMaterial, remnantMapReach } from './remnantMap.ts';
-import { remnantMaterial, VOLUME_RADIUS } from './remnantVolume.ts';
+import {
+  remnantMapMaterial,
+  remnantMapReach,
+  type RemnantWorkerAnswer,
+  type RemnantWorkerRequest,
+} from './remnantMap.ts';
+import { hasRemnantNoise, provideRemnantNoise, remnantMaterial, VOLUME_RADIUS } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
 
 /**
@@ -55,12 +61,12 @@ interface Drawn {
   readonly remnant: SupernovaRemnant;
   readonly ring: THREE.LineLoop;
   readonly radiusKm: number;
-  /** Its gas, made the first time it could show: the noise texture is built then. */
+  /** Its gas, made the first time it could show once the worker has made its noise and depth grid. */
   gas: THREE.Mesh | null;
 }
 
 export function SupernovaRemnants({ store, clock, focus, visible, showRings }: SupernovaRemnantsProps) {
-  const { camera, size } = useThree();
+  const { camera, size, gl, scene } = useThree();
   const group = useMemo(() => new THREE.Group(), []);
   // Made here, added by the effect: a memo may run twice (StrictMode).
   const drawn = useMemo(() => {
@@ -85,9 +91,119 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
     });
     return { entries, ringGeometry, gasGeometry };
   }, []);
+  // The gas's noise and depth grids, made in remnantMap.worker.ts: seconds of work, wanted from
+  // the first view (several remnants are degrees across on the sky), which made in a frame held
+  // that frame back. Until they come the gas is not drawn; a page with no workers makes them here.
+  const made = useMemo(
+    () => ({
+      worker: null as Worker | null,
+      // Its name on the loading line while the worker works (core/loading.ts).
+      loading: null as (() => void) | null,
+      waiting: 0,
+      failed: false,
+      noiseAsked: false,
+      asked: new Set<string>(),
+      depths: new Map<string, Uint16Array>(),
+      // What the shaders are compiled against before the gas is drawn: a render target, as the
+      // glow buffer is -- which of the two is all three's program for them depends on.
+      compileTarget: new THREE.WebGLRenderTarget(1, 1),
+    }),
+    [],
+  );
+  /**
+   * Into the glow once its shaders are compiled, which the browser does beside the page
+   * (KHR_parallel_shader_compile) rather than in the frame that first draws it: two ray-marched
+   * shaders, nearly half a second of a frame where they were compiled on first use.
+   */
+  const show = (entry: Drawn, mesh: THREE.Mesh): void => {
+    const add = (): void => {
+      if (entry.gas !== mesh) return;
+      drawIntoGlow(mesh);
+      group.add(mesh);
+      renderDemand.request();
+    };
+    const previous = gl.getRenderTarget();
+    let compiled: Promise<unknown>;
+    try {
+      gl.setRenderTarget(made.compileTarget);
+      compiled = gl.compileAsync(mesh, camera, scene);
+    } catch {
+      compiled = Promise.resolve();
+    } finally {
+      gl.setRenderTarget(previous);
+    }
+    compiled.then(add, add);
+  };
+  const ask = (request: RemnantWorkerRequest): void => {
+    if (made.worker === null) {
+      try {
+        const worker = new Worker(new URL('./remnantMap.worker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (event: MessageEvent<RemnantWorkerAnswer>) => {
+          const answer = event.data;
+          if (answer.kind === 'noise') {
+            provideRemnantNoise(answer.noise);
+          } else {
+            made.depths.set(answer.key, answer.depth);
+          }
+          made.waiting -= 1;
+          // Nothing more asked: let it go; one remnant come on screen later asks a new one.
+          if (made.waiting <= 0) {
+            worker.terminate();
+            made.worker = null;
+            made.waiting = 0;
+            made.loading?.();
+          }
+          renderDemand.request();
+        };
+        worker.onerror = (error) => {
+          console.error('The supernova remnants’ worker failed; making their gas here', error);
+          worker.terminate();
+          made.worker = null;
+          made.failed = true;
+          made.loading?.();
+          renderDemand.request();
+        };
+        made.worker = worker;
+        made.loading = beginLoading('the supernova remnants');
+      } catch {
+        made.failed = true;
+        return;
+      }
+    }
+    made.waiting += 1;
+    made.worker.postMessage(request);
+  };
+  /** The gas's material, or null while the worker is still making what it needs. */
+  const gasMaterial = (remnant: SupernovaRemnant): THREE.ShaderMaterial | null => {
+    const onLoad = () => renderDemand.request();
+    if (!made.failed) {
+      if (!hasRemnantNoise() && !made.noiseAsked) {
+        made.noiseAsked = true;
+        ask({ kind: 'noise' });
+      }
+      if (remnant.map !== null && !made.depths.has(remnant.key) && !made.asked.has(remnant.key)) {
+        made.asked.add(remnant.key);
+        ask({ kind: 'depth', key: remnant.key, base: import.meta.env.BASE_URL });
+      }
+    }
+    if (!made.failed && (!hasRemnantNoise() || (remnant.map !== null && !made.depths.has(remnant.key)))) {
+      return null;
+    }
+    // From its photograph where it has one; otherwise the model of its kind.
+    return remnant.map === null
+      ? remnantMaterial(remnant)
+      : remnantMapMaterial(remnant, remnant.map, onLoad, made.depths.get(remnant.key) ?? null);
+  };
   useEffect(() => {
     for (const { ring } of drawn.entries) group.add(ring);
     return () => {
+      made.worker?.terminate();
+      made.worker = null;
+      made.waiting = 0;
+      made.loading?.();
+      made.noiseAsked = false;
+      made.asked.clear();
+      made.compileTarget.dispose();
       for (const entry of drawn.entries) {
         group.remove(entry.ring);
         (entry.ring.material as THREE.Material).dispose();
@@ -103,7 +219,7 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
       drawn.ringGeometry.dispose();
       drawn.gasGeometry.dispose();
     };
-  }, [group, drawn]);
+  }, [group, drawn, made]);
 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
@@ -124,17 +240,12 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
 
       // The gas: from a few pixels across, inside it too.
       const gasShown = ramp(px, GAS_HIDDEN_PX, GAS_SHOWN_PX);
-      if (gasShown > 0 && entry.gas === null) {
-        // From its photograph where it has one; otherwise the model of its kind.
-        const material =
-          remnant.map === null
-            ? remnantMaterial(remnant)
-            : remnantMapMaterial(remnant, remnant.map, () => renderDemand.request());
+      const material = gasShown > 0 && entry.gas === null ? gasMaterial(remnant) : null;
+      if (material !== null) {
         entry.gas = new THREE.Mesh(drawn.gasGeometry, material);
         entry.gas.frustumCulled = false;
-        // Into the glow buffer, with every other glow (glowBuffer.ts).
-        drawIntoGlow(entry.gas);
-        group.add(entry.gas);
+        // Into the glow buffer, with every other glow (glowBuffer.ts), once compiled.
+        show(entry, entry.gas);
       }
       if (entry.gas !== null) {
         const gas = entry.gas;

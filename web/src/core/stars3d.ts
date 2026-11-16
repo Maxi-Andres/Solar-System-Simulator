@@ -3,6 +3,7 @@ import type { Star3dTier, Stars3dInfo, Stars3dNames } from '@sss/tools/types';
 import type { BeltFetchers } from './belt.ts';
 import { normalizeName } from './search.ts';
 import type { Searchable } from './beltNames.ts';
+import { tracked } from './loading.ts';
 import { renderDemand } from './renderDemand.ts';
 import { DAYS_PER_JULIAN_YEAR, J2000_JD } from './time.ts';
 import type { StateVector } from './vec3.ts';
@@ -250,7 +251,8 @@ export class Stars3dSource {
     }
     if (!this.#requested) {
       this.#requested = true;
-      this.#tiersPending = this.#pending.then(() => this.#loadTiers());
+      // Named on the loading line while they come (loading.ts): 21 MB, as the camera leaves.
+      this.#tiersPending = tracked('the stars', this.#pending.then(() => this.#loadTiers()));
     }
     return this.#tiersPending ?? this.#pending;
   }

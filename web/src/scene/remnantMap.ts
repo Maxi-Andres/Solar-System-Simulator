@@ -391,9 +391,44 @@ ${GLOW_OUTPUT_GLSL}
   }
 `;
 
-function remnantUrl(file: string): string {
-  return `${import.meta.env.BASE_URL}remnants/${file}`;
+function remnantUrl(file: string, base: string = import.meta.env.BASE_URL): string {
+  return `${base}remnants/${file}`;
 }
+
+/** Half floats: filterable in WebGL2 without an extension, as 32-bit floats are not. */
+function toHalfFloats(from: Float32Array): Uint16Array {
+  const half = new Uint16Array(from.length);
+  for (let i = 0; i < from.length; i += 1) half[i] = THREE.DataUtils.toHalfFloat(from[i]!);
+  return half;
+}
+
+/**
+ * A photographed remnant's depth grid, as the texture takes it: the measured depths where they
+ * are published (Cas A's points), the model's where they are not or could not be fetched.
+ * Made in remnantMap.worker.ts -- seconds of work for the remnants on the sky at once -- with
+ * `base` the site's, as the worker has no page to resolve a path against.
+ */
+export async function remnantDepthHalf(remnant: SupernovaRemnant, map: RemnantMap, base: string): Promise<Uint16Array> {
+  const reach = mapReach(remnant, map);
+  const weights = depthWeights(remnant, remnantFrame(remnant), reach);
+  if (map.points === null) {
+    return toHalfFloats(weights);
+  }
+  try {
+    const response = await fetch(remnantUrl(map.points.file, base));
+    if (!response.ok) throw new Error(response.statusText);
+    const points = pointsInRadii(new Int16Array(await response.arrayBuffer()), remnantRadiusArcmin(remnant));
+    return toHalfFloats(measuredDepth(points, weights, reach));
+  } catch {
+    return toHalfFloats(weights);
+  }
+}
+
+/** What SupernovaRemnants asks remnantMap.worker.ts for: the shared noise, or one remnant's depth grid. */
+export type RemnantWorkerRequest = { readonly kind: 'noise' } | { readonly kind: 'depth'; readonly key: string; readonly base: string };
+export type RemnantWorkerAnswer =
+  | { readonly kind: 'noise'; readonly noise: Uint8Array }
+  | { readonly kind: 'depth'; readonly key: string; readonly depth: Uint16Array };
 
 function loadTexture(file: string, onLoad: () => void): THREE.Texture {
   const texture = new THREE.TextureLoader().load(remnantUrl(file), onLoad);
@@ -410,16 +445,21 @@ export function remnantMapReach(remnant: SupernovaRemnant): number {
   return remnant.map === null ? VOLUME_RADIUS : mapReach(remnant, remnant.map);
 }
 
-export function remnantMapMaterial(remnant: SupernovaRemnant, map: RemnantMap, onLoad: () => void): THREE.ShaderMaterial {
+/**
+ * The material, from the depth grid remnantDepthHalf made (in the worker). Without one it is made
+ * here, and the measured depths fetched after -- seconds of the main thread, for a test or a
+ * browser with no workers.
+ */
+export function remnantMapMaterial(
+  remnant: SupernovaRemnant,
+  map: RemnantMap,
+  onLoad: () => void,
+  made: Uint16Array | null = null,
+): THREE.ShaderMaterial {
   const frame = remnantFrame(remnant);
   const reach = mapReach(remnant, map);
-  const weights = depthWeights(remnant, frame, reach);
-  // Half floats: filterable in WebGL2 without an extension, as 32-bit floats are not.
-  const half = new Uint16Array(weights.length);
-  const toHalf = (from: Float32Array) => {
-    for (let i = 0; i < from.length; i += 1) half[i] = THREE.DataUtils.toHalfFloat(from[i]!);
-  };
-  toHalf(weights);
+  const weights = made === null ? depthWeights(remnant, frame, reach) : null;
+  const half = made ?? toHalfFloats(weights!);
   const depth = new THREE.Data3DTexture(half, DEPTH_SIZE, DEPTH_SIZE, DEPTH_SIZE);
   depth.format = THREE.RGFormat;
   depth.type = THREE.HalfFloatType;
@@ -429,13 +469,13 @@ export function remnantMapMaterial(remnant: SupernovaRemnant, map: RemnantMap, o
   depth.wrapT = THREE.ClampToEdgeWrapping;
   depth.wrapR = THREE.ClampToEdgeWrapping;
   depth.needsUpdate = true;
-  if (map.points !== null) {
+  if (weights !== null && map.points !== null) {
     // The measured depths, once they come: until then the model's.
     void fetch(remnantUrl(map.points.file))
       .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(response.statusText))))
       .then((buffer) => {
         const points = pointsInRadii(new Int16Array(buffer), remnantRadiusArcmin(remnant));
-        toHalf(measuredDepth(points, weights, reach));
+        half.set(toHalfFloats(measuredDepth(points, weights, reach)));
         depth.needsUpdate = true;
         onLoad();
       })

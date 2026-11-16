@@ -79,6 +79,31 @@ export function cieZ(wavelengthNm: number): number {
 export type Rgb = readonly [number, number, number];
 
 /**
+ * The observer's three curves at each wavelength of the integral, worked out once: the same
+ * numbers the functions above give, so every integral below sums exactly what it did, without
+ * seven exponentials a sample -- the sky's few thousand colours were a quarter of a second of
+ * the first frame. Made on first use.
+ */
+let observerTable: { x: Float64Array; y: Float64Array; z: Float64Array } | null = null;
+function observer(): { x: Float64Array; y: Float64Array; z: Float64Array } {
+  if (observerTable === null) {
+    const count = Math.floor((WAVELENGTH_MAX_NM - WAVELENGTH_MIN_NM) / WAVELENGTH_STEP_NM) + 1;
+    const x = new Float64Array(count);
+    const y = new Float64Array(count);
+    const z = new Float64Array(count);
+    let i = 0;
+    for (let wavelength = WAVELENGTH_MIN_NM; wavelength <= WAVELENGTH_MAX_NM; wavelength += WAVELENGTH_STEP_NM) {
+      x[i] = cieX(wavelength);
+      y[i] = cieY(wavelength);
+      z[i] = cieZ(wavelength);
+      i += 1;
+    }
+    observerTable = { x, y, z };
+  }
+  return observerTable;
+}
+
+/**
  * Colour of a blackbody in linear sRGB, scaled so its **luminance is 1**.
  *
  * Luminance rather than peak channel, and the distinction is the whole reason stars can
@@ -97,15 +122,18 @@ export function blackbodyLinearSrgb(kelvin: number): Rgb {
   let y = 0;
   let z = 0;
 
+  const curves = observer();
+  let i = 0;
   for (
     let wavelength = WAVELENGTH_MIN_NM;
     wavelength <= WAVELENGTH_MAX_NM;
     wavelength += WAVELENGTH_STEP_NM
   ) {
     const radiance = planckSpectralRadiance(wavelength, kelvin);
-    x += radiance * cieX(wavelength);
-    y += radiance * cieY(wavelength);
-    z += radiance * cieZ(wavelength);
+    x += radiance * curves.x[i]!;
+    y += radiance * curves.y[i]!;
+    z += radiance * curves.z[i]!;
+    i += 1;
   }
 
   // Y = 1, which makes the result a colour at unit luminance rather than a spectrum.

@@ -51,6 +51,7 @@ import {
   structureOf,
 } from './core/laniakea.ts';
 import { renderDemand } from './core/renderDemand.ts';
+import { whenIdle } from './core/idle.ts';
 import {
   ensureRecordHolders,
   RECORD_HOLDER_FRAMING_KM,
@@ -70,6 +71,7 @@ import { GALAXY_LABELS } from './scene/MilkyWay.tsx';
 import { HORIZON_SCALE_RINGS } from './scene/HorizonScale.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
+import { LoadingLine } from './ui/LoadingLine.tsx';
 import { LightingPanel } from './ui/LightingPanel.tsx';
 import { Presence } from './ui/Presence.tsx';
 import { ReadoutPanel } from './ui/ReadoutPanel.tsx';
@@ -457,9 +459,15 @@ export function App() {
       ensureBlackHoles(store);
       ensureSupernovaRemnants(store);
       ensureLocalGroupGiants(store);
-      ensureRecordHolders(store);
       renderDemand.request();
+      // The record-holders, billions of light years off, are drawn only from far out: placed once
+      // the first view is up -- their redshifts' integrals were a tenth of a second before it.
+      return whenIdle(() => {
+        ensureRecordHolders(store);
+        renderDemand.request();
+      });
     }
+    return undefined;
   }, [store]);
 
   // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
@@ -494,6 +502,16 @@ export function App() {
   const horizonScaleLabels = useRef<(HTMLElement | null)[]>([]);
   const cmbLabel = useRef<HTMLElement | null>(null);
   const scaleBar = useRef<ScaleBarElements | null>(null);
+
+  // The breadcrumb's list names the record-holders from the start, before the idle moment that
+  // makes them bodies (above): one chosen before then is made one first.
+  const focusFromPicker = useCallback(
+    (id: BodyId): void => {
+      if (store !== null) ensureRecordHolders(store);
+      setFocus(id);
+    },
+    [store, setFocus],
+  );
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
   // turn off the Sun separately, and NASA Eyes does not offer that either.
@@ -722,7 +740,7 @@ export function App() {
           <BodyPicker
             store={store}
             focus={focus}
-            onFocus={setFocus}
+            onFocus={focusFromPicker}
             visibleKinds={visibleKinds}
             clock={clock}
             readout={readout}
@@ -753,6 +771,8 @@ export function App() {
 
           {/* Bottom-right: how long a length on screen is, at the focus. */}
           <ScaleBar elements={scaleBar} focusName={store.body(focus).name} />
+          {/* Above it, while a layer further out is still coming. */}
+          <LoadingLine />
 
           {/* Each panel stays mounted for its closing animation; see Presence.tsx. */}
           <Presence show={openPanel === 'body'}>

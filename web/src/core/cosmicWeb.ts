@@ -9,6 +9,7 @@ import {
 } from '@sss/tools/types';
 
 import type { BeltFetchers } from './belt.ts';
+import { beginLoading } from './loading.ts';
 import { renderDemand } from './renderDemand.ts';
 import { LazySource } from './satellites.ts';
 
@@ -390,6 +391,8 @@ export class CosmicWebGalaxies {
     // A failure is tried again after a minute, as a LazySource's is.
     if (this.#loading || Date.now() - this.#failedAt < 60_000) return;
     this.#loading = true;
+    // Named on the loading line while the chunks come (loading.ts).
+    const end = beginLoading('the SDSS galaxies');
     try {
       await this.#info.request();
       const info = this.#info.value;
@@ -407,6 +410,7 @@ export class CosmicWebGalaxies {
       this.#failedAt = Date.now();
       console.error('Could not load the cosmic web’s galaxies', error);
     } finally {
+      end();
       this.#loading = false;
     }
   }

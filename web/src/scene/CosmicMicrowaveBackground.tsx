@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { beginLoading } from '../core/loading.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { SimClock } from '../core/time.ts';
 import { cmbLut, cmbVisibility, LAST_SCATTERING_RADIUS_KM, LUT_SIZE, LUT_STEP } from './cmb.ts';
@@ -138,6 +139,8 @@ export function CosmicMicrowaveBackground({
   const load = (): void => {
     wanted.current = true;
     const base = `${import.meta.env.BASE_URL}cmb/`;
+    // Its name on the loading line until the map is in, or has failed (core/loading.ts).
+    const end = beginLoading('the cosmic microwave background');
     void fetch(`${base}cmb.json`)
       .then((response) => response.json() as Promise<CmbMapInfo>)
       .then((info) => {
@@ -153,10 +156,15 @@ export function CosmicMicrowaveBackground({
           cmbLut(info).forEach(([r, g, b], i) => lut[i]!.set(r, g, b));
           material.uniforms['uCentreTurn']!.value = info.centreLongitudeDeg / 360;
           material.uniforms['uMap']!.value = texture;
+          end();
           renderDemand.request();
+        }, undefined, (error: unknown) => {
+          end();
+          console.error('Could not load the CMB map', error);
         });
       })
       .catch((error: unknown) => {
+        end();
         console.error('Could not load the CMB map', error);
       });
   };

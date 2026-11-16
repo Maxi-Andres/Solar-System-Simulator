@@ -17,6 +17,7 @@ import { GALACTIC_BASIS } from './galactic.ts';
 import { homeNames } from './homeName.ts';
 import { boxOf, labelBoard } from './labelBoard.ts';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
+import { beginLoading } from '../core/loading.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { skyCapture } from './lens.ts';
 import { projectToScreen } from './screenProjection.ts';
@@ -447,6 +448,8 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
   const dustPoints = useRef<THREE.Points | null>(null);
   const sampleAsked = useRef(false);
   const worker = useRef<Worker | null>(null);
+  // The sample's name on the loading line while the worker makes it (core/loading.ts).
+  const sampleLoading = useRef<(() => void) | null>(null);
 
   // The glow's own scene and buffer; see the header.
   const glowScene = useMemo(() => new THREE.Scene(), []);
@@ -512,6 +515,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
   useEffect(
     () => () => {
       worker.current?.terminate();
+      sampleLoading.current?.();
       points.current?.geometry.dispose();
       dustPoints.current?.geometry.dispose();
       material.dispose();
@@ -582,6 +586,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       sampleAsked.current = true;
       const made = new Worker(new URL('../core/milkyWay.worker.ts', import.meta.url), { type: 'module' });
       worker.current = made;
+      sampleLoading.current = beginLoading('the Milky Way');
       made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; radii: Float32Array; dust: Float32Array }>) => {
         const cloud = new THREE.Points(buildGeometry(event.data.light, event.data.radii), material);
         cloud.frustumCulled = false;
@@ -597,6 +602,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         dustPoints.current = dust;
         made.terminate();
         worker.current = null;
+        sampleLoading.current?.();
         skyCapture.revision += 1;
         renderDemand.request();
       };
