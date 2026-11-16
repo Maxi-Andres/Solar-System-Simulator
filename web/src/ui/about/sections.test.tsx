@@ -1,12 +1,28 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { CATALOG } from '@sss/tools/catalog';
+import type { BodyKind } from '@sss/tools/types';
+
 import { ESA_MODEL_CREDIT } from '../../scene/craftModels.ts';
 import { AboutPanel } from '../AboutPanel.tsx';
 import { fixtureData, fixtureSources } from './aboutFixture.ts';
+import { CMB_DIPOLE as TOOLS_CMB_DIPOLE } from '../../../../tools/src/laniakea/frames.ts';
+import {
+  CMB_DIPOLE,
+  EARTH_ROTATION,
+  earthSpin,
+  galacticYear,
+  localArm,
+  sunAboutCentreKmS,
+  sunAgainstCmb,
+  yearlyCmbRange,
+} from './AddressSection.tsx';
+import { KIND_TERM, termAnchor } from './GlossarySection.tsx';
+import { GLOSSARY_PHOTOS } from './glossaryPhotos.ts';
 import { anchorId, SECTION_IDS } from './nav.ts';
 import { REFERENCE_GROUPS, REFERENCES, referenceAnchor } from './references.ts';
 import { ABOUT_SECTIONS } from './sections.ts';
@@ -46,7 +62,7 @@ const rendered = ABOUT_SECTIONS.map((section) => ({
 }));
 
 describe('the About’s sections', () => {
-  it('are the six, in reading order', () => {
+  it('are the eight, in reading order', () => {
     expect(ABOUT_SECTIONS.map((section) => section.id)).toEqual([...SECTION_IDS]);
     expect(new Set(ABOUT_SECTIONS.map((section) => section.tab)).size).toBe(SECTION_IDS.length);
   });
@@ -74,6 +90,90 @@ describe('the About’s sections', () => {
     // It opens on the overview, with the panel's name over it.
     expect(html).toContain('aria-selected="true" aria-controls="about-panel" tabindex="0"');
     expect(textOf(html)).toContain('Max’s Solar System');
+  });
+});
+
+describe('what’s what', () => {
+  const html = rendered.find(({ section }) => section.id === 'glossary')!.html;
+  const ids = (markup: string) => [...markup.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]!);
+
+  it('renders, an entry for each kind the app shows, each with its own anchor', () => {
+    const terms = ids(html).filter((id) => id.startsWith('about-glossary-term-'));
+    expect(terms.length).toBeGreaterThan(50);
+    expect(new Set(terms).size).toBe(terms.length);
+    for (const term of ['sun', 'planet', 'dwarf-planet', 'white-dwarf', 'galaxy', 'local-group', 'cmb', 'parsec']) {
+      expect(terms, term).toContain(termAnchor(term));
+    }
+  });
+
+  it('has no anchor any other section has', () => {
+    const all = rendered.flatMap(({ html: markup }) => ids(markup));
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('shows each photo with its credit, lazily, every one a file credited in CREDITS.md', () => {
+    const dir = join(import.meta.dirname, '../../../public/glossary');
+    const credits = readFileSync(join(dir, 'CREDITS.md'), 'utf8');
+    const files = readdirSync(dir).filter((name) => name.endsWith('.webp'));
+    expect(files.sort()).toEqual(Object.values(GLOSSARY_PHOTOS).map((photo) => photo.file).sort());
+    let bytes = 0;
+    for (const [term, photo] of Object.entries(GLOSSARY_PHOTOS)) {
+      expect(html, term).toContain(`id="${termAnchor(term)}"`);
+      expect(credits, photo.file).toContain(`| \`${photo.file}\` |`);
+      expect(credits, photo.file).toContain(photo.credit);
+      expect(textOf(html), photo.file).toContain(photo.credit);
+      bytes += statSync(join(dir, photo.file)).size;
+      expect(statSync(join(dir, photo.file)).size, photo.file).toBeLessThan(60_000);
+    }
+    expect(bytes).toBeLessThan(1_000_000);
+    expect(html.match(/<img /g)?.length).toBe(Object.keys(GLOSSARY_PHOTOS).length);
+    expect(html.match(/loading="lazy"/g)?.length).toBe(Object.keys(GLOSSARY_PHOTOS).length);
+  });
+
+  it('says what a body of every kind is', () => {
+    for (const [kind, term] of Object.entries(KIND_TERM) as [BodyKind, string][]) {
+      expect(html, kind).toContain(`id="${termAnchor(term)}"`);
+    }
+  });
+});
+
+describe('where we are', () => {
+  const text = textOf(rendered.find(({ section }) => section.id === 'address')!.html);
+
+  it('has the ten shells, Earth to the observable universe', () => {
+    for (const shell of ['Earth', 'The Solar System', 'Local Bubble', 'Local (Orion) Arm', 'The Milky Way', 'The Local Group', 'Local Sheet', 'Virgo (Local) Supercluster', 'Laniakea', 'The observable universe']) {
+      expect(text, shell).toContain(shell);
+    }
+    expect(text).toContain('46.2 billion light years');
+  });
+
+  it('works its speeds out of the app’s own numbers, and they are the published ones', () => {
+    // The tools place the redshifts in the CMB frame with the same dipole.
+    expect(CMB_DIPOLE).toEqual(TOOLS_CMB_DIPOLE);
+    const earth = CATALOG.find((body) => body.id === 'earth')!;
+    expect(EARTH_ROTATION).toEqual({
+      radiusEquatorialKm: earth.radiusEquatorialKm,
+      rotationRateDegPerDay: earth.rotation!.rotationRateDegPerDay,
+    });
+    const spin = earthSpin();
+    expect(spin.equatorMs).toBeCloseTo(465.1, 0);
+    expect(spin.siderealDayS).toBeCloseTo(86_164.09, 1);
+    // Gordon et al. 2023's 6.40 mas/yr at GRAVITY's 8.28 kpc; Reid et al. 2019's 236 +- 7 for the circular speed.
+    expect(sunAboutCentreKmS()).toBeCloseTo(251.1, 0);
+    expect(galacticYear().circularKmS).toBeGreaterThan(229);
+    expect(galacticYear().circularKmS).toBeLessThan(243);
+    expect(galacticYear().lapMyr).toBeCloseTo(213, -1);
+    expect(localArm().lengthLy).toBeCloseTo(19_900, -3);
+  });
+
+  it('puts the CMB dipole 11 degrees south of the ecliptic, and Earth between 340 and 400 km/s against it', () => {
+    const sun = sunAgainstCmb();
+    expect(Math.hypot(sun.x, sun.y, sun.z)).toBeCloseTo(369.82, 6);
+    expect((Math.asin(sun.z / 369.82) * 180) / Math.PI).toBeCloseTo(-11.15, 1);
+    const range = yearlyCmbRange();
+    expect(range.min).toBeCloseTo(340.7, 0);
+    expect(range.max).toBeCloseTo(399.1, 0);
+    expect(text).toMatch(/between 34\d and 399/);
   });
 });
 

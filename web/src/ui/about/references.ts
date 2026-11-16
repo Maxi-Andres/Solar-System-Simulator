@@ -1939,6 +1939,54 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
       },
     ],
   },
+  {
+    id: 'address',
+    label: 'Where we are',
+    refs: [
+      {
+        key: 'stone2013',
+        who: 'Stone et al. 2013',
+        title: 'Voyager 1 Observes Low-Energy Galactic Cosmic Rays in a Region Depleted of Heliospheric Ions',
+        where: 'Science 341, 150',
+        use: 'Voyager 1 leaving the heliosphere, August 2012, at 121.6 AU',
+      },
+      {
+        key: 'zucker2022',
+        who: 'Zucker et al. 2022',
+        title: 'Star formation near the Sun is driven by expansion of the Local Bubble',
+        where: 'Nature 601, 334',
+        use: 'the Local Bubble: about 1,000 light years across, the Sun near its middle',
+      },
+      {
+        key: 'tully2008',
+        who: 'Tully et al. 2008',
+        title: 'Our Peculiar Motion Away from the Local Void',
+        where: 'ApJ 676, 184',
+        use: 'the Local Sheet, and the Local Void’s push on it',
+      },
+      {
+        key: 'vdMarel2012',
+        who: 'van der Marel et al. 2012',
+        title: 'The M31 Velocity Vector. II. Radial Orbit toward the Milky Way and Implied Local Group Mass',
+        where: 'ApJ 753, 8',
+        use: 'Andromeda closing on the Milky Way at 109.3 ± 4.4 km/s',
+      },
+      {
+        key: 'sawala2025',
+        who: 'Sawala et al. 2025',
+        title: 'No certainty of a Milky Way–Andromeda collision',
+        where: 'Nature Astronomy, 2025',
+        use: 'about even odds that the two merge within 10 billion years',
+      },
+      {
+        key: 'kogut1993',
+        who: 'Kogut et al. 1993',
+        title: 'Dipole Anisotropy in the COBE Differential Microwave Radiometers First-Year Sky Maps',
+        where: 'ApJ 419, 1',
+        use: 'the Local Group’s 627 ± 22 km/s against the CMB, toward l 276°, b 30°',
+      },
+    ],
+  },
 ];
 
 /** Every reference, in the order it is numbered. */

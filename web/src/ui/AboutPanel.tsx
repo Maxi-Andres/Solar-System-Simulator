@@ -138,9 +138,13 @@ export function AboutPanel({
   // still scrolls.
   const [place, setPlace] = useState<{ section: SectionId; anchor: string | undefined; nonce: number }>(() => ({
     section: lastSection,
-    anchor: undefined,
+    anchor: pendingAnchor,
     nonce: 0,
   }));
+  // Used by the first render only: a later opening starts at the section's top again.
+  useEffect(() => {
+    pendingAnchor = undefined;
+  }, []);
   const section = ABOUT_SECTIONS.find((entry) => entry.id === place.section) ?? ABOUT_SECTIONS[0]!;
   const index = ABOUT_SECTIONS.indexOf(section);
 
@@ -299,6 +303,18 @@ export function AboutPanel({
 
 /** The section the panel opens on: the last one read this session, the overview at first. */
 let lastSection: SectionId = 'overview';
+/** Where in it to land when it opens, if something outside asked: see openAboutAt. */
+let pendingAnchor: string | undefined;
+
+/**
+ * Open the About at `section`, scrolled to `anchor`: how a panel outside it (the body
+ * panel's "what is this?") links into it. It takes the place of whatever panel is open.
+ */
+export function openAboutAt(section: SectionId, anchor?: string): void {
+  lastSection = section;
+  pendingAnchor = anchor;
+  useViewStore.setState({ openPanel: 'about' });
+}
 
 /**
  * The tabs: one per section, the current one marked. Arrow keys move between them, as a

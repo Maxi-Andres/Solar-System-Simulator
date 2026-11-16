@@ -22,6 +22,8 @@ import { StructurePanel } from './StructureFacts.tsx';
 import { RecordHolderPanel } from './RecordHolderFacts.tsx';
 import { recordHolderOf } from '../core/recordHolders.ts';
 import { GalaxyPanel } from './GalaxyFacts.tsx';
+import { KIND_TERM } from './about/GlossarySection.tsx';
+import { WhatIs } from './WhatIs.tsx';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -83,6 +85,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
           <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>
             star
           </span>
+          <WhatIs term="star" kind="star" />
         </div>
         <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
@@ -121,6 +124,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         >
           {body.kind.replace('-', ' ')}
         </span>
+        <WhatIs term={focus === 'sun' ? 'sun' : KIND_TERM[body.kind]} kind={body.kind.replace('-', ' ')} />
       </div>
 
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />

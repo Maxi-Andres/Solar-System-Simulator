@@ -1,5 +1,7 @@
+import { addressSection } from './AddressSection.tsx';
 import { choicesSection } from './ChoicesSection.tsx';
 import { estimatedSection } from './EstimatedSection.tsx';
+import { glossarySection } from './GlossarySection.tsx';
 import { measuredSection } from './MeasuredSection.tsx';
 import { SECTION_IDS } from './nav.ts';
 import { overviewSection } from './OverviewSection.tsx';
@@ -10,6 +12,8 @@ import { sourcesSection } from './SourcesSection.tsx';
 /** The About's sections in reading order: the order of the tabs, and of SECTION_IDS. */
 export const ABOUT_SECTIONS: readonly AboutSection[] = [
   overviewSection,
+  glossarySection,
+  addressSection,
   measuredSection,
   estimatedSection,
   physicsSection,

@@ -34,6 +34,14 @@ export const overviewSection: AboutSection = {
         How this text is laid out
       </Sub>
       <Items>
+        <Item title={<Xref to="glossary">What’s what</Xref>}>
+          What each kind of thing here is, in plain words — a star, a dwarf planet, a galaxy group, a void —
+          from the Sun out to the edge of the observable universe, and where in the app to find it.
+        </Item>
+        <Item title={<Xref to="address">Where we are</Xref>}>
+          Our address in the universe, shell by shell from Earth outward, and every motion we are carried by, each
+          against what it is measured.
+        </Item>
         <Item title={<Xref to="measured">What is measured</Xref>}>
           The real data, domain by domain — planets and moons, small bodies, spacecraft, satellites, stars,
           Alpha Centauri, planets of other stars, black holes, the galaxy — and how well it is held.
