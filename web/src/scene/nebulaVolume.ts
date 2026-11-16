@@ -325,7 +325,10 @@ export function hasNebulaGain(nebula: Nebula): boolean {
   return gains.has(nebula.key);
 }
 
-/** NEBULA_PEAK over its brightest column: worked out once a nebula, the first time it is drawn. */
+/**
+ * NEBULA_PEAK over its brightest column: worked out once a nebula, in the worker
+ * (nebula.worker.ts) when there is one, here otherwise -- some 60 to 100 ms of a frame each.
+ */
 export function nebulaGain(nebula: Nebula): number {
   let gain = gains.get(nebula.key);
   if (gain === undefined) {
@@ -334,6 +337,18 @@ export function nebulaGain(nebula: Nebula): number {
   }
   return gain;
 }
+
+/** A gain as the worker worked it out: the same function, the same number. */
+export function provideNebulaGain(key: string, gain: number): void {
+  if (!gains.has(key)) gains.set(key, gain);
+}
+
+/** What Nebulae.tsx asks its worker (nebula.worker.ts): the noise, or one nebula's gain. */
+export type NebulaWorkerRequest = { readonly kind: 'noise' } | { readonly kind: 'gain'; readonly key: string };
+
+export type NebulaWorkerAnswer =
+  | { readonly kind: 'noise'; readonly noise: Uint8Array }
+  | { readonly kind: 'gain'; readonly key: string; readonly gain: number };
 
 const vec = (v: Vec3) => new THREE.Vector3(v.x, v.y, v.z);
 const colourOf = (rgb: Rgb) => new THREE.Vector3(...rgb);

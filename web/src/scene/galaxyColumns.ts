@@ -261,6 +261,62 @@ export function sersicTable(n: number, width = SERSIC_TABLE_M, height = SERSIC_T
   return table;
 }
 
+/** What sersicTables.worker.ts is asked: the tables of these indices, at the default size. */
+export interface SersicWorkerRequest {
+  readonly indices: readonly number[];
+}
+
+/** One answer for each index asked: its table, the array transferred. */
+export type SersicWorkerAnswer = SersicTable;
+
+/** Whether an index's table is made already. */
+export function hasSersicTable(n: number): boolean {
+  const table = tables.get(n);
+  return table !== undefined && table.width === SERSIC_TABLE_M && table.height === SERSIC_TABLE_S;
+}
+
+/** A table as the worker made it: the same function, the same numbers. */
+export function provideSersicTable(table: SersicTable): void {
+  if (!hasSersicTable(table.n)) tables.set(table.n, table);
+}
+
+/**
+ * The tables of these indices, made in a worker (sersicTables.worker.ts) so that whoever draws
+ * them next finds them made: each is half a million samples, 60 to 80 ms, and the Local Volume
+ * brings several at once -- a third of a second in the frame it landed in. Resolves once they
+ * are here, or at once if they already are; with no worker, or one that fails, it resolves too,
+ * and sersicAtlas makes them in the frame as before.
+ */
+export function sersicTablesAhead(indices: readonly number[]): Promise<void> {
+  const missing = [...new Set(indices)].filter((n) => !hasSersicTable(n));
+  if (missing.length === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./sersicTables.worker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      resolve();
+      return;
+    }
+    let left = missing.length;
+    const done = (): void => {
+      worker.terminate();
+      resolve();
+    };
+    worker.onmessage = (event: MessageEvent<SersicWorkerAnswer>) => {
+      provideSersicTable(event.data);
+      left -= 1;
+      if (left <= 0) done();
+    };
+    worker.onerror = (error) => {
+      console.error('The Sersic tables’ worker failed; making them here', error);
+      done();
+    };
+    const request: SersicWorkerRequest = { indices: missing };
+    worker.postMessage(request);
+  });
+}
+
 /**
  * T(m, s) from the table, as the GPU reads it: bilinear in ln T between the nodes about
  * (m^(1/4), s^(1/4)), each node rounded to a half float when `half`.

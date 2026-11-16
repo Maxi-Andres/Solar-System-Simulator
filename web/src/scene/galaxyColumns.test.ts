@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { prugnielSimien, SERSIC_REACH, sersicLightWithin, sersicUnitColumn } from '../core/localGroup.ts';
-import { discColumn, sersicAtlas, sersicTable, sersicTableColumn } from './galaxyColumns.ts';
+import { discColumn, hasSersicTable, provideSersicTable, sersicAtlas, sersicTable, sersicTableColumn } from './galaxyColumns.ts';
 
 /**
  * The columns through the galaxies beyond the Local Group (galaxyColumns.ts): that the disc's
@@ -206,5 +206,19 @@ describe('the Prugniel-Simien table', () => {
     }
     expect(sum / unitLuminosity).toBeGreaterThan(0.99);
     expect(sum / unitLuminosity).toBeLessThan(1.005);
+  });
+});
+
+describe('a table made in the worker', () => {
+  it('is kept when none is made yet, and never replaces one made here', () => {
+    expect(hasSersicTable(2.37)).toBe(false);
+    const made = { ...sersicTable(2.37) };
+    // Another index's numbers under this one's name: kept only if nothing was there.
+    provideSersicTable({ ...made, lnColumn: new Float32Array(made.lnColumn.length) });
+    expect(sersicTable(2.37).lnColumn).toBe(made.lnColumn);
+    const fresh = { ...made, n: 2.41 };
+    provideSersicTable(fresh);
+    expect(hasSersicTable(2.41)).toBe(true);
+    expect(sersicTable(2.41)).toBe(fresh);
   });
 });

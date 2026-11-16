@@ -48,6 +48,7 @@ import {
   SERSIC_VOLUME_FRAGMENT,
   SERSIC_VOLUME_VERTEX,
   sersicAtlas,
+  sersicTablesAhead,
 } from './galaxyColumns.ts';
 import { dwarfStarsDrawn } from './DwarfStars.tsx';
 import { skyVolumesDrawn } from '../core/skyMap.ts';
@@ -790,7 +791,25 @@ export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc
 export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick, volume, onPickVolume }: LocalGroupProps) {
   const { gl, camera } = useThree();
   const loaded = useSyncExternalStore(source.subscribe, () => source.value);
-  const volumeLoaded = useSyncExternalStore(volume.subscribe, () => volume.value);
+  const volumeArrived = useSyncExternalStore(volume.subscribe, () => volume.value);
+  // The Local Volume drawn once its Sersic tables are made, in a worker (galaxyColumns.ts
+  // sersicTablesAhead): made here they held the frame it landed in back by a third of a second.
+  const [tablesMadeFor, setTablesMadeFor] = useState<LocalVolumeArchive | null>(null);
+  useEffect(() => {
+    if (volumeArrived === null) return undefined;
+    let cancelled = false;
+    const indices = [BULGE_SERSIC_N];
+    for (const galaxy of volumeArrived.galaxies) {
+      if (galaxy.model?.kind === 'sersic') indices.push(galaxy.model.sersicN);
+    }
+    void sersicTablesAhead(indices).then(() => {
+      if (!cancelled) setTablesMadeFor(volumeArrived);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [volumeArrived]);
+  const volumeLoaded = tablesMadeFor === volumeArrived ? volumeArrived : null;
   // The four are drawn before the catalogue arrives, from their own numbers.
   const archive = useMemo(() => loaded ?? indexLocalGroup(null), [loaded]);
   // And the galaxies beyond after them, once they arrive.

@@ -14,6 +14,7 @@ import {
   laniakeaNames,
   luminosityOf,
   transformPoint,
+  type BasinGrids,
   type FlowLines,
   type LaniakeaCatalogue,
   type LaniakeaNameIndex,
@@ -42,7 +43,7 @@ import { DISC_VOLUME_FRAGMENT, DISC_VOLUME_VERTEX, SERSIC_VOLUME_FRAGMENT, SERSI
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { homeNames } from './homeName.ts';
-import { labelSurface, labelVolume } from './isosurface.ts';
+import { basinPartsAhead, basinPartsGeometry, type BasinParts, type BasinRequest } from './laniakeaBasins.ts';
 import {
   boxMatrix,
   CLICK_SLOP_PX,
@@ -650,27 +651,6 @@ export function floorWeights(records: Float32Array, grid: ReadonlyMap<number, re
   }
 }
 
-/** A basin's surface (isosurface.ts) in parsecs about the Sun, its normals worked out there. */
-export function basinGeometry(
-  labels: Uint8Array,
-  size: readonly [number, number, number],
-  label: number,
-  voxelToScene: readonly number[],
-): THREE.BufferGeometry | null {
-  const mesh = labelSurface(labels, size, label);
-  if (mesh === null) return null;
-  const positions = new Float32Array(mesh.positions.length);
-  for (let v = 0; v < mesh.positions.length; v += 3) {
-    const p = transformPoint(voxelToScene, [mesh.positions[v]!, mesh.positions[v + 1]!, mesh.positions[v + 2]!]);
-    positions.set(p, v);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 /** How many points of a line's spline there are to each of its vertices. */
 export const FLOW_SPLINE = 3;
 
@@ -778,21 +758,27 @@ export interface BasinObjects {
   readonly texture: THREE.Data3DTexture;
 }
 
-/** A basin's outline (basinGeometry) and its fill (FILL_FRAGMENT), in `color`; null where the grid has no such basin. */
-export function basinObjectsFor(
+/** A basin's label in its grid, for laniakeaBasins.ts to net; null where the catalogue has no such basin. */
+export function basinRequest(
   catalogue: LaniakeaCatalogue,
   grid: 'galaxiesAttraction' | 'groupsAttraction',
   name: string,
-  color: string,
-  outlineMaterial: (color: string, rim: number, face: number, nearPc: number) => THREE.ShaderMaterial,
-): BasinObjects | null {
+): BasinRequest | null {
   const basins = catalogue.basins;
   const label = catalogue.info.basins.basins.find((b) => b.grid === grid && b.name === name)?.label;
   if (basins === null || label === undefined) return null;
-  const geometry = basinGeometry(basins.grids[grid], basins.size, label, basins.voxelToScene);
-  const volume = labelVolume(basins.grids[grid], basins.size, label);
-  if (geometry === null || volume === null) return null;
-  const outline = new THREE.Mesh(geometry, outlineMaterial(color, BASIN_RIM, BASIN_FACE, BASIN_NEAR_PC));
+  return { labels: basins.grids[grid], size: basins.size, label, voxelToScene: basins.voxelToScene };
+}
+
+/** A basin's outline (laniakeaBasins.ts basinGeometry) and its fill (FILL_FRAGMENT), in `color`, from its parts. */
+export function basinObjectsFor(
+  basins: BasinGrids,
+  parts: BasinParts,
+  color: string,
+  outlineMaterial: (color: string, rim: number, face: number, nearPc: number) => THREE.ShaderMaterial,
+): BasinObjects {
+  const { volume } = parts;
+  const outline = new THREE.Mesh(basinPartsGeometry(parts), outlineMaterial(color, BASIN_RIM, BASIN_FACE, BASIN_NEAR_PC));
   outline.frustumCulled = false;
   outline.raycast = noRaycast;
   outline.renderOrder = 1;
@@ -1176,27 +1162,34 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       side: THREE.DoubleSide,
       toneMapped: false,
     });
-  // Each basin netted and its field made a texture once, after the frame that first asked for
-  // it: some tens of milliseconds for Laniakea's, half a second for Shapley's, never for a layer
-  // left off.
+  // Each basin netted and its field made once, in a worker (laniakeaBasins.ts), the first time
+  // its layer is on: 100 to 200 ms a basin, which between frames held one back as long.
   const [basinObjects, setBasinObjects] = useState<Partial<Record<'laniakea' | 'shapley', BasinObjects | null>>>({});
+  // The basins asked for, under a token a new catalogue -- or unmounting -- replaces, so an
+  // answer for an old one is dropped.
+  const basinsAsked = useRef({ token: {}, keys: new Set<'laniakea' | 'shapley'>() });
   useEffect(() => {
     if (catalogue === null || catalogue.basins === null) return;
-    const wanted = (['laniakea', 'shapley'] as const).filter((key) => (key === 'laniakea' ? showBasin : showShapley) && !(key in basinObjects));
-    if (wanted.length === 0) return;
-    const handle = window.setTimeout(() => {
-      const made: Partial<Record<'laniakea' | 'shapley', BasinObjects | null>> = {};
-      for (const key of wanted) {
-        made[key] =
-          key === 'laniakea'
-            ? basinObjectsFor(catalogue, 'galaxiesAttraction', 'Laniakea', LANIAKEA_OUTLINE_COLOR, outlineMaterial)
-            : // The groups' reconstruction: the basin the Milky Way's voxel is in there (info.home), Shapley's.
-              basinObjectsFor(catalogue, 'groupsAttraction', 'Shapley', SHAPLEY_OUTLINE_COLOR, outlineMaterial);
-      }
-      setBasinObjects((before) => ({ ...before, ...made }));
-      renderDemand.request();
-    }, 0);
-    return () => window.clearTimeout(handle);
+    const basins = catalogue.basins;
+    const asked = basinsAsked.current;
+    const wanted = (['laniakea', 'shapley'] as const).filter(
+      (key) => (key === 'laniakea' ? showBasin : showShapley) && !(key in basinObjects) && !asked.keys.has(key),
+    );
+    for (const key of wanted) {
+      asked.keys.add(key);
+      const request =
+        key === 'laniakea'
+          ? basinRequest(catalogue, 'galaxiesAttraction', 'Laniakea')
+          : // The groups' reconstruction: the basin the Milky Way's voxel is in there (info.home), Shapley's.
+            basinRequest(catalogue, 'groupsAttraction', 'Shapley');
+      void (request === null ? Promise.resolve(null) : basinPartsAhead(request)).then((parts) => {
+        if (basinsAsked.current.token !== asked.token) return;
+        const color = key === 'laniakea' ? LANIAKEA_OUTLINE_COLOR : SHAPLEY_OUTLINE_COLOR;
+        const made = parts === null ? null : basinObjectsFor(basins, parts, color, outlineMaterial);
+        setBasinObjects((before) => ({ ...before, [key]: made }));
+        renderDemand.request();
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogue, showBasin, showShapley, basinObjects]);
 
@@ -1390,7 +1383,13 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     (here.material as THREE.Material).dispose();
   }, [here]);
   // A catalogue read anew drops the basins made from the old one.
-  useEffect(() => () => setBasinObjects({}), [catalogue]);
+  useEffect(
+    () => () => {
+      basinsAsked.current = { token: {}, keys: new Set() };
+      setBasinObjects({});
+    },
+    [catalogue],
+  );
   useEffect(() => () => {
     for (const basin of Object.values(basinObjects)) {
       if (!basin) continue;

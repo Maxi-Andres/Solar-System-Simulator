@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { NEBULAE, nebulaFrame, partAxes } from '../core/nebulae.ts';
-import { brightestColumn, HYDROGEN_RED, MAX_PARTS, OXYGEN_TEAL, partsAt, prepareParts } from './nebulaVolume.ts';
+import {
+  brightestColumn,
+  hasNebulaGain,
+  HYDROGEN_RED,
+  MAX_PARTS,
+  nebulaGain,
+  OXYGEN_TEAL,
+  partsAt,
+  prepareParts,
+  provideNebulaGain,
+} from './nebulaVolume.ts';
 import { lineColour } from './remnantVolume.ts';
 
 const byKey = (key: string) => NEBULAE.find((nebula) => nebula.key === key)!;
@@ -44,5 +54,18 @@ describe('a nebula’s volume', () => {
 
   it('has a brightest line of sight for every nebula, so each can be scaled to it', () => {
     for (const nebula of NEBULAE) expect(brightestColumn(nebula, undefined, 9, 60)).toBeGreaterThan(0.05);
+  });
+});
+
+describe('a nebula’s gain from the worker', () => {
+  it('is used as given, and never replaces one worked out here', () => {
+    const [first, second] = NEBULAE;
+    expect(hasNebulaGain(first!)).toBe(false);
+    provideNebulaGain(first!.key, 1.25);
+    expect(hasNebulaGain(first!)).toBe(true);
+    expect(nebulaGain(first!)).toBe(1.25);
+    const here = nebulaGain(second!);
+    provideNebulaGain(second!.key, here * 2);
+    expect(nebulaGain(second!)).toBe(here);
   });
 });

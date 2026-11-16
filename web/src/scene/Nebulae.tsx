@@ -8,7 +8,14 @@ import { NEBULA_COLOR, NEBULAE, nebulaBodyId, nebulaRadiusKm, nebulaReach, type 
 import { renderDemand } from '../core/renderDemand.ts';
 import type { FeatureProps } from './GalaxyFeatures.tsx';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
-import { hasNebulaGain, nebulaGain, nebulaMaterial } from './nebulaVolume.ts';
+import {
+  hasNebulaGain,
+  nebulaGain,
+  nebulaMaterial,
+  provideNebulaGain,
+  type NebulaWorkerAnswer,
+  type NebulaWorkerRequest,
+} from './nebulaVolume.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { hasRemnantNoise, provideRemnantNoise } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
@@ -54,7 +61,7 @@ interface Drawn {
   readonly ring: THREE.LineLoop;
   readonly radiusKm: number;
   readonly reach: number;
-  /** Its gas, made the first time it could show once the noise is here. */
+  /** Its gas, made the first time it could show in view, once its gain and the noise are here. */
   gas: THREE.Mesh | null;
 }
 
@@ -84,44 +91,145 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
     });
     return { entries, ringGeometry, gasGeometry };
   }, []);
-  // The noise the gas is clumped by: the remnants' worker's if it has made it, or this layer's own
-  // worker's (nebulaNoise.worker.ts); with no workers, made here when first wanted.
+  // What the gas needs, made in nebula.worker.ts: the noise it is clumped by -- the remnants'
+  // worker's if that has made it first -- and each nebula's gain. Until they come the gas is not
+  // made; a page with no workers makes them here, as it did before there was one.
   const made = useMemo(
     () => ({
       worker: null as Worker | null,
-      loading: null as (() => void) | null,
+      // Answers still to come; the worker is let go at none.
+      waiting: 0,
       failed: false,
+      noiseAsked: false,
+      // The gains to ask for, one at a time, the wanted ones first; and the one being worked out.
+      queue: [] as string[],
+      asking: null as string | null,
+      // The nebulae gone toward, whose gas waits on its gain: on the loading line, as the noise is.
+      urgent: new Set<string>(),
+      loading: null as (() => void) | null,
+      // With no worker: the idle warm-up here instead, its cancel.
+      cancelIdle: null as (() => void) | null,
       compileTarget: new THREE.WebGLRenderTarget(1, 1),
+      frustum: new THREE.Frustum(),
+      viewProjection: new THREE.Matrix4(),
+      centre: new THREE.Vector3(),
     }),
     [],
   );
-  const noiseReady = (): boolean => {
-    if (hasRemnantNoise() || made.failed) return true;
+  /** The loading line names the nebulae while a gas someone looks at waits on the worker -- never for the idle warm-up. */
+  const showLoading = (): void => {
+    const busy = !made.failed && ((made.noiseAsked && !hasRemnantNoise()) || made.urgent.size > 0);
+    if (busy && made.loading === null) made.loading = beginLoading('the nebulae');
+    if (!busy && made.loading !== null) {
+      made.loading();
+      made.loading = null;
+    }
+  };
+  /** The gains still to work out, here, one nebula an idle moment: what a page without workers does. */
+  const warmHere = (): void => {
+    if (made.cancelIdle !== null) return;
+    const next = (): void => {
+      const key = made.queue.shift();
+      const nebula = NEBULAE.find((candidate) => candidate.key === key);
+      if (nebula === undefined) {
+        made.cancelIdle = null;
+        return;
+      }
+      made.cancelIdle = whenIdle(() => {
+        nebulaGain(nebula);
+        next();
+      }, 10_000);
+    };
+    next();
+  };
+  const fail = (): void => {
+    made.worker?.terminate();
+    made.worker = null;
+    made.waiting = 0;
+    made.failed = true;
+    made.asking = null;
+    // The gas gone toward makes its own gain when next drawn (nebulaMaterial); the rest, idly.
+    made.urgent.clear();
+    showLoading();
+    warmHere();
+    renderDemand.request();
+  };
+  const ask = (request: NebulaWorkerRequest): boolean => {
+    if (made.failed) return false;
     if (made.worker === null) {
       try {
-        const worker = new Worker(new URL('./nebulaNoise.worker.ts', import.meta.url), { type: 'module' });
-        worker.onmessage = (event: MessageEvent<Uint8Array>) => {
-          provideRemnantNoise(event.data);
-          worker.terminate();
-          made.worker = null;
-          made.loading?.();
+        const worker = new Worker(new URL('./nebula.worker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (event: MessageEvent<NebulaWorkerAnswer>) => {
+          const answer = event.data;
+          if (answer.kind === 'noise') {
+            provideRemnantNoise(answer.noise);
+          } else {
+            if (Number.isFinite(answer.gain)) provideNebulaGain(answer.key, answer.gain);
+            made.urgent.delete(answer.key);
+            made.asking = null;
+          }
+          made.waiting -= 1;
+          askNextGain();
+          // Nothing more asked: let it go; a nebula gone toward later asks a new one.
+          if (made.waiting <= 0) {
+            worker.terminate();
+            made.worker = null;
+            made.waiting = 0;
+          }
+          showLoading();
           renderDemand.request();
         };
         worker.onerror = (error) => {
-          console.error('The nebulae’s noise worker failed; making it here', error);
-          worker.terminate();
-          made.worker = null;
-          made.failed = true;
-          made.loading?.();
-          renderDemand.request();
+          console.error('The nebulae’s worker failed; making their gas here', error);
+          fail();
         };
         made.worker = worker;
-        made.loading = beginLoading('the nebulae');
-        worker.postMessage(null);
       } catch {
-        made.failed = true;
-        return true;
+        fail();
+        return false;
       }
+    }
+    made.waiting += 1;
+    made.worker.postMessage(request);
+    return true;
+  };
+  /** The next gain from the queue, once the one before it is in. */
+  const askNextGain = (): void => {
+    if (made.failed) return;
+    while (made.asking === null && made.queue.length > 0) {
+      const key = made.queue.shift()!;
+      const nebula = NEBULAE.find((candidate) => candidate.key === key);
+      if (nebula === undefined || hasNebulaGain(nebula)) continue;
+      made.asking = key;
+      ask({ kind: 'gain', key });
+    }
+  };
+  /** A nebula's gain wanted: `urgent` for one gone toward, ahead of the warm-up's. */
+  const wantGain = (nebula: Nebula, urgent: boolean): void => {
+    if (hasNebulaGain(nebula)) return;
+    const at = made.queue.indexOf(nebula.key);
+    if (urgent) {
+      if (!made.urgent.has(nebula.key)) {
+        made.urgent.add(nebula.key);
+        showLoading();
+      }
+      if (at > 0 || (at < 0 && made.asking !== nebula.key)) {
+        if (at > 0) made.queue.splice(at, 1);
+        made.queue.unshift(nebula.key);
+      }
+    } else if (at < 0 && made.asking !== nebula.key) {
+      made.queue.push(nebula.key);
+    }
+    if (made.failed) warmHere();
+    else askNextGain();
+  };
+  /** Whether the noise is here; asks the worker for it if not. With no worker it is made when drawn. */
+  const noiseReady = (): boolean => {
+    if (hasRemnantNoise() || made.failed) return true;
+    if (!made.noiseAsked) {
+      made.noiseAsked = true;
+      if (!ask({ kind: 'noise' })) return true;
+      showLoading();
     }
     return false;
   };
@@ -147,20 +255,14 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
   };
 
   // Each nebula's brightness scale -- a few hundred thousand samples of its parts -- worked out
-  // one nebula at a time while the page is idle, long after the first view, so its gas never
-  // waits on it; one shown sooner works its own out then (nebulaVolume.ts nebulaGain).
+  // in the worker, one nebula after another, once the page is first idle, so the faint patch
+  // seen from home never waits on it; one gone toward sooner is put first in line.
   useEffect(() => {
-    let cancel: () => void = () => {};
-    const warm = (index: number): void => {
-      const nebula = NEBULAE[index];
-      if (nebula === undefined) return;
-      cancel = whenIdle(() => {
-        nebulaGain(nebula);
-        warm(index + 1);
-      }, 10_000);
-    };
-    warm(0);
+    const cancel = whenIdle(() => {
+      for (const nebula of NEBULAE) wantGain(nebula, false);
+    }, 10_000);
     return () => cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -168,7 +270,15 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
     return () => {
       made.worker?.terminate();
       made.worker = null;
+      made.waiting = 0;
+      made.noiseAsked = false;
+      made.queue.length = 0;
+      made.asking = null;
+      made.urgent.clear();
+      made.cancelIdle?.();
+      made.cancelIdle = null;
       made.loading?.();
+      made.loading = null;
       made.compileTarget.dispose();
       for (const entry of drawn.entries) {
         group.remove(entry.ring);
@@ -189,6 +299,16 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
     const jd = clock.tdbJulianDay;
     const fov = (camera as THREE.PerspectiveCamera).fov;
     const sun = visible ? store.stateRelativeTo('sun', focus, jd) : null;
+    // The view as the last frame drew it -- near enough to tell whether a nebula is in it -- by its
+    // four sides only: the far plane is no limit for a volume drawn into the glow buffer.
+    made.frustum.setFromProjectionMatrix(made.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const inView = (x: number, y: number, z: number, radius: number): boolean => {
+      made.centre.set(x, y, z);
+      for (let k = 0; k < 4; k += 1) {
+        if (made.frustum.planes[k]!.distanceToPoint(made.centre) < -radius) return false;
+      }
+      return true;
+    };
     for (const entry of drawn.entries) {
       const { nebula, ring, radiusKm, reach } = entry;
       const state = visible ? store.stateRelativeTo(nebulaBodyId(nebula), focus, jd) : null;
@@ -212,7 +332,15 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
       const share = exposureShare(sunToNebulaKm, fromCameraKm);
       // Seen from home, its faint patch waits for the idle warm-up's gain; gone toward, not.
       const wanted = gasShown > 0 && (share > FROM_HOME || hasNebulaGain(nebula));
-      if (wanted && entry.gas === null && noiseReady()) {
+      // Made only once it is in view -- a nebula behind the camera costs nothing until turned to --
+      // and its gain and the noise are in from the worker.
+      let ready = false;
+      if (wanted && entry.gas === null && inView(x, y, z, (radiusKm / KM_PER_UNIT) * reach)) {
+        const gainReady = made.failed || hasNebulaGain(nebula);
+        if (!gainReady) wantGain(nebula, true);
+        ready = noiseReady() && gainReady;
+      }
+      if (ready) {
         const mesh = new THREE.Mesh(drawn.gasGeometry, nebulaMaterial(nebula));
         mesh.frustumCulled = false;
         // The rays start at the camera that draws it -- the glow pass's, as it is when it draws --
