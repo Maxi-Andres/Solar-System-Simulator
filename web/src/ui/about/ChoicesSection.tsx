@@ -590,6 +590,8 @@ export const choicesSection: AboutSection = {
             brighter by their visit map, Malavasi et al.’s fainter by their ridge’s density. Within a few Mpc a
             Tempel filament widens to its 0.5 h<sup>−1</sup> Mpc radius and dims as much; from inside, it is gone.
             They do not move. On: one draw, and from Laniakea’s view out to 10 billion ly the web is what they show.
+            Under 6 pixels apart on the screen (Malavasi et al.’s, 3) each dims as the square of their spacing, to
+            half that; closer, the patch’s light is held. Gone with the faint dots.
             <Why>a filament is where galaxies are strung, not a thing of its own; the line says where it was found.</Why>
           </Item>
           <Item title="The faint dot, against the survey">
@@ -600,7 +602,7 @@ export const choicesSection: AboutSection = {
           </Item>
           <Item title="Dots that crowd, dimmed where they crowd">
             Where the dots on a patch of the screen are under 2 pixels apart, each is dimmed so the patch is no
-            brighter than at 2; and all go once the whole survey crowds, as Laniakea’s do.
+            brighter than at 2; under a twelfth of itself, fewer dots instead of fainter ones.
             <Why>seen from inside, 9 billion light years of survey behind every direction added up to a grey carpet.</Why>
           </Item>
           <Item title="Depth">
@@ -643,10 +645,13 @@ export const choicesSection: AboutSection = {
             Its near side is drawn behind Laniakea’s galaxies and the record-holders’ marks.
             <Why>a shell of opaque plasma seen from outside would hide everything in it.</Why>
           </Item>
-          <Item title="Faint dots that crowd, gone">
-            A galaxy’s faint dot, drawn whatever its light, fades once the nearer half of its catalogue’s galaxies
-            are under two pixels apart on the screen, and is gone at one: past that the dots only added up to a
-            glare. Each is then its own light, which from tens of billions of light years is nothing.
+          <Item title="Faint dots far off: a patch, then gone">
+            A galaxy’s faint dot, drawn whatever its light, dims once the nearer half of its catalogue’s galaxies
+            are under two pixels apart on the screen, just so the patch stays as bright as at two; under a twelfth
+            of itself, fewer dots instead. A catalogue goes as its nearer half shrinks from 24 pixels in radius to
+            12, and every map of the web from 30 billion ly out, gone at 60, where the CMB starts. Each galaxy is
+            then its own light, which from there is nothing.
+            <Why>added up whole, Laniakea’s dots were a glare over the Sun; taken away at a pixel apart, a catalogue went while still a cloud.</Why>
           </Item>
           <Item title="Record-holders as marks">
             Named from 3 billion ly out, all from 10 billion: not on Laniakea’s sky. Gone to, each is framed from a

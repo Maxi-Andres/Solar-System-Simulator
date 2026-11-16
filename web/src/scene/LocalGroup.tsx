@@ -570,7 +570,7 @@ void main() {
   // Every galaxy at least a faint dot, its own colour at FAINT_GALAXY_FLOOR whatever its
   // light: a choice, not what a photograph shows.
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
-  // And none once the catalogue crowds on the screen (crowding.ts floorKept).
+  // Dimmer as the catalogue crowds on the screen, none once it is a speck (crowding.ts floorKept).
   vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * uFloorKept * aShare * uFade);
   vSigmaPx = sigmaPx;
   // Out to where its light falls below the floor (gaussianSprite.ts): a bright one's wing

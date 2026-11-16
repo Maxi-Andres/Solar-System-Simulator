@@ -3,8 +3,8 @@ import { FLOOR_FULL_SEPARATION_PX } from './crowding.ts';
 /**
  * Where on the screen a catalogue's faint dots crowd (CosmicWeb.tsx's galaxies), cell by cell.
  *
- * crowding.ts takes a catalogue's faint dots away as a whole once the catalogue, seen from the
- * camera, crowds into a speck: Laniakea's, all over the sky, is a ball. The SDSS's are wedges
+ * crowding.ts dims a catalogue's faint dots as a whole by how crowded the nearer half of it is on
+ * the screen: Laniakea's, all over the sky, is a ball. The SDSS's are wedges
  * 9 billion light years deep, seen from inside or beside them: a third of the screen can hold a
  * million dots a pixel or two apart while the rest is empty, and the dots there, added, were a
  * grey haze over the wedge that hid what it held. So, in each cell of a coarse grid on the
@@ -13,11 +13,12 @@ import { FLOOR_FULL_SEPARATION_PX } from './crowding.ts';
  * them. Where they are under CROWDED_SEPARATION_PX apart, each dot is (separation / that)^2
  * of itself -- so the dots of a crowded cell add up to no more than they do at that separation,
  * a faint even glow over the cell, its texture the dots' own weights: the web's contrast and
- * not the depth of the survey behind it. Their light, the sprites of their luminosity, is
- * untouched.
+ * not the depth of the survey behind it -- crowding.ts's rule, cell by cell, in place of its
+ * whole-catalogue one (CosmicWeb.tsx takes only its floorShown). Their light, the sprites of
+ * their luminosity, is untouched.
  */
 
-/** The separation, device pixels, under which the dots of a cell are dimmed: crowding.ts's own, where a dot stops standing for one galaxy. */
+/** The separation, device pixels, under which the dots of a cell are dimmed: crowding.ts's own, so both keep the same patch brightness. */
 export const CROWDED_SEPARATION_PX = FLOOR_FULL_SEPARATION_PX;
 
 /** A cell's side, device pixels at most: the grid is the drawing buffer over this, rounded up. */

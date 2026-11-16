@@ -20,7 +20,7 @@ import { renderDemand } from '../core/renderDemand.ts';
 import { PARSEC_KM } from '../core/stars3d.ts';
 import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
-import { floorKept, lineKept } from './crowding.ts';
+import { FLOOR_THIN_GLSL, floorShown, lineKept } from './crowding.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { FAINT_GALAXY_FLOOR, MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
@@ -39,12 +39,13 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * 1.8 million, drawn as Laniakea's are (Laniakea.tsx POINT_VERTEX): each a Gaussian point
  * holding its luminosity, through the one exposure, into the glow buffer, coloured by its B-V
  * through the stars' blackbody, and at least a faint dot (FAINT_GALAXY_FLOOR) in its colour,
- * weighed by its neighbours (core/cosmicWebFloor.ts) and taken away as the catalogue crowds on
- * the screen (crowding.ts floorKept). None has a size: each is a point at any distance, as
- * Laniakea's galaxies with no D25 are. One instanced draw; 12 bytes a galaxy on the GPU -- its
- * place as four 16-bit integers and its absolute V, B-V, flags and dot as four bytes, read as
- * normalised (formats every GPU reads natively, so nothing is converted on upload) -- 22 MB for
- * all of them. A galaxy's light and colour are looked up in a 256 x 2 table by its bytes.
+ * weighed by its neighbours (core/cosmicWebFloor.ts), dimmed where the dots crowd on the screen
+ * (screenCrowding.ts) and gone as the camera leaves the web (crowding.ts floorShown). None has a
+ * size: each is a point at any distance, as Laniakea's galaxies with no D25 are. One instanced
+ * draw; 12 bytes a galaxy on the GPU -- its place as four 16-bit integers and its absolute V,
+ * B-V, flags and dot as four bytes, read as normalised (formats every GPU reads natively, so
+ * nothing is converted on upload) -- 22 MB for all of them. A galaxy's light and colour are
+ * looked up in a 256 x 2 table by its bytes.
  *
  * Streamed: the chunks come most luminous first (core/cosmicWeb.ts CosmicWebGalaxies); a chunk
  * is drawn once its galaxies' dots are weighed, in a worker, and every dot is weighed again then.
@@ -62,8 +63,9 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * their ridge's density (core/cosmicWeb.ts filamentWeight). Within a few times its radius as
  * catalogued (0.5 h^-1 Mpc, Tempel's) a filament widens to it, as dim per unit length as it was
  * thin, and goes as the camera enters it. Dimmer the farther they are than what the camera looks
- * at (to FILAMENT_DEPTH_LEAST): depth in a web that is otherwise flat. And dimmed as they crowd
- * (crowding.ts lineKept). No animation: a filament does not flow.
+ * at (to FILAMENT_DEPTH_LEAST): depth in a web that is otherwise flat. And dimmed as they crowd,
+ * gone as the camera leaves the web (crowding.ts lineKept). No animation: a filament does not
+ * flow.
  */
 
 /** The filaments' colour: a muted violet, apart from the flow lines' gold, grey-blue and blue. Malavasi et al.'s a cooler shade. */
@@ -72,6 +74,14 @@ export const MALAVASI_COLOR = '#9a94d6';
 /** Their strength at the line's centre, whole weight: Tempel et al.'s, and Malavasi et al.'s fainter. */
 export const TEMPEL_BASE = 1.0;
 export const MALAVASI_BASE = 1.0;
+/**
+ * How far apart on the screen each catalogue's lines are whole (crowding.ts lineKept): Tempel et
+ * al.'s, dense spines over the SDSS's densest volume, a tangle closer than 6 pixels from Laniakea's
+ * own view; Malavasi et al.'s, a coarser skeleton, read as a web to 3, as the BOSS volume is seen
+ * from tens of billions of light years. A choice, by eye.
+ */
+export const TEMPEL_FULL_SEPARATION_PX = 6;
+export const MALAVASI_FULL_SEPARATION_PX = 3;
 /** The line's Gaussian across, pixels, and its halo: HALO_SHARE of the light in one HALO_WIDTH times as wide. */
 export const FILAMENT_SIGMA_PX = 0.6;
 export const HALO_SHARE = 0.3;
@@ -113,6 +123,7 @@ attribute vec4 aBytes;
 varying vec3 vPeak;
 varying float vSigmaPx;
 ${SPRITE_VERTEX_GLSL}
+${FLOOR_THIN_GLSL}
 
 void main() {
   vec3 rel = aPlace.xyz * ${UNIT.toExponential(6)} - uCameraPc;
@@ -128,7 +139,8 @@ void main() {
   vPeak = hue * light * uFade / (6.2831853 * sigmaPc * sigmaPc);
   // Its faint dot dimmer the farther it is than what the camera looks at, as the filaments are.
   float depth = clamp(uDepthPc / distancePc, ${FILAMENT_DEPTH_LEAST.toFixed(2)}, 1.0);
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aBytes.w * uFloorKept * local * depth * uFade);
+  // Fewer dots, not fainter, once each is under FLOOR_THIN of itself (crowding.ts).
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aBytes.w * floorThinned(uFloorKept * local * depth, gl_InstanceID) * uFade);
   vSigmaPx = sigmaPx;
   gl_Position = spriteCorner(centre, spriteRadiusPx(vPeak, sigmaPx));
   #include <logdepthbuf_vertex>
@@ -566,7 +578,7 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
       renderer.getDrawingBufferSize(galaxyUniforms['uViewportPx']!.value as THREE.Vector2);
       galaxyUniforms['uFade']!.value = galaxyFade;
       galaxyUniforms['uDepthPc']!.value = Math.max(FILAMENT_DEPTH_FROM_PC, (2 * camera.position.length() * KM_PER_UNIT) / PARSEC_KM);
-      const kept = floorKept(halfCountPc, drawn.current, fromSunPc, pixelsPerRadian);
+      const kept = floorShown(halfCountPc, fromSunPc, pixelsPerRadian);
       galaxyUniforms['uFloorKept']!.value = kept;
       // Where on the screen the dots crowd (screenCrowding.ts): measured while they are drawn at all.
       const c = crowding.current;
@@ -598,11 +610,11 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
       u['uNearUnits']!.value = (camera as THREE.PerspectiveCamera).near;
       // The scene is about the focus (floatingOrigin.ts): the camera's distance from what it looks at.
       u['uDepthPc']!.value = Math.max(FILAMENT_DEPTH_FROM_PC, (2 * camera.position.length() * KM_PER_UNIT) / PARSEC_KM);
-      const kept = (catalogue: number) =>
-        lineKept(segments.halfLengthRadiusPc[catalogue]!, segments.lengthPc[catalogue]! / 2, filamentSky[catalogue]!, fromSunPc, pixelsPerRadian);
+      const kept = (catalogue: number, fullPx: number) =>
+        lineKept(segments.halfLengthRadiusPc[catalogue]!, segments.lengthPc[catalogue]! / 2, filamentSky[catalogue]!, fromSunPc, pixelsPerRadian, fullPx);
       (u['uOpacity']!.value as THREE.Vector2).set(
-        filamentFade * TEMPEL_BASE * kept(COSMIC_WEB_FILAMENT_CATALOGUES.tempel2014),
-        filamentFade * MALAVASI_BASE * kept(COSMIC_WEB_FILAMENT_CATALOGUES.malavasi2020),
+        filamentFade * TEMPEL_BASE * kept(COSMIC_WEB_FILAMENT_CATALOGUES.tempel2014, TEMPEL_FULL_SEPARATION_PX),
+        filamentFade * MALAVASI_BASE * kept(COSMIC_WEB_FILAMENT_CATALOGUES.malavasi2020, MALAVASI_FULL_SEPARATION_PX),
       );
     }
   });

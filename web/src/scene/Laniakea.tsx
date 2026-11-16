@@ -35,7 +35,7 @@ import { PARSEC_KM } from '../core/stars3d.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
-import { floorKept, halfCountRadiusPc } from './crowding.ts';
+import { FLOOR_THIN_GLSL, floorKept, halfCountRadiusPc } from './crowding.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { galacticDirection } from './galactic.ts';
 import { DISC_VOLUME_FRAGMENT, DISC_VOLUME_VERTEX, SERSIC_VOLUME_FRAGMENT, SERSIC_VOLUME_VERTEX, sersicAtlas } from './galaxyColumns.ts';
@@ -269,11 +269,13 @@ attribute vec3 aLight;
 attribute float aHalfLightPc;
 attribute float aWall;
 attribute float aFloor;
-// The floor kept as the catalogue crowds on the screen (crowding.ts floorKept): none from far off.
+// The floor kept as the catalogue crowds on the screen (crowding.ts floorKept): a patch no brighter
+// as they close up, fewer dots once each is under FLOOR_THIN; none once a speck or from far off.
 uniform float uFloorKept;
 varying vec3 vPeak;
 varying float vSigmaPx;
 ${SPRITE_VERTEX_GLSL}
+${FLOOR_THIN_GLSL}
 
 void main() {
   vec3 rel = aCentre - uCameraPc;
@@ -286,10 +288,11 @@ void main() {
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   vPeak = aLight * share * uFade / (6.2831853 * sigmaPc * sigmaPc);
   vec3 hue = aLight / max(dot(aLight, vec3(0.2126, 0.7152, 0.0722)), 1e-30);
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aFloor * uFloorKept * share * uFade);
+  float kept = floorThinned(uFloorKept, gl_InstanceID);
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aFloor * kept * share * uFade);
   // A wall's galaxy (aWall: 1 the Sloan Great Wall's, 2 the CfA2's): its dot tinted, brighter while the wall is the focus.
   float tint = max(mod(aWall, 2.0) * uWallTint.x, step(1.5, aWall) * uWallTint.y);
-  vPeak += uWallColor * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * tint * uFloorKept * share * uFade;
+  vPeak += uWallColor * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * tint * kept * share * uFade;
   vSigmaPx = sigmaPx;
   gl_Position = spriteCorner(projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0), spriteRadiusPx(vPeak, sigmaPx));
   #include <logdepthbuf_vertex>
