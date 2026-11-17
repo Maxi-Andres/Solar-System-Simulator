@@ -94,6 +94,13 @@ void main() {
  */
 const LABEL_AT = { x: 0.78, y: 0.86 } as const;
 
+/**
+ * How bright the wall is drawn, of its full colours, in either mode: from inside it fills the
+ * whole view, and at full strength the names and the quasars in front of it could not be read
+ * (Maxi, 2026-11-17: "bajalo un poco"). A backdrop, as the sky behind a photograph's subject.
+ */
+export const CMB_WALL_LEVEL = 0.45;
+
 export function CosmicMicrowaveBackground({
   store,
   clock,
@@ -219,7 +226,7 @@ export function CosmicMicrowaveBackground({
     }
     const ready = material.uniforms['uMap']!.value !== null;
     mesh.visible = fade > 0 && ready;
-    material.uniforms['uFade']!.value = fade;
+    material.uniforms['uFade']!.value = fade * CMB_WALL_LEVEL;
     if (element === null) {
       return;
     }

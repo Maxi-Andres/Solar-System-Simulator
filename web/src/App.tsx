@@ -74,7 +74,7 @@ import {
   DISTANCE_RINGS_LY,
   ringLabel,
 } from './scene/distanceRings.ts';
-import { GALAXY_LABELS } from './scene/MilkyWay.tsx';
+import { GALAXY_LABELS, HOME_NAME } from './scene/MilkyWay.tsx';
 import { HORIZON_SCALE_RINGS } from './scene/HorizonScale.tsx';
 import { InfoPanel } from './ui/InfoPanel.tsx';
 import { LayersPanel } from './ui/LayersPanel.tsx';
@@ -1062,6 +1062,15 @@ function GalaxyLabels({ elements }: { elements: RefObject<(HTMLElement | null)[]
             elements.current[index] = element;
           }}
           style={GALAXY_LABEL_STYLE}
+          // The centre's name, when it reads "You are here", takes the camera home (MilkyWay.tsx
+          // HOME_NAME); the layer is not clickable, so only that name ever takes the pointer.
+          onClick={
+            index === 0
+              ? (event) => {
+                  if (event.currentTarget.textContent === HOME_NAME) useViewStore.getState().setFocus('sun');
+                }
+              : undefined
+          }
         >
           {name}
         </span>

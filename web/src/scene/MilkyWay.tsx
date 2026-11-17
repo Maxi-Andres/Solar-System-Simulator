@@ -170,6 +170,15 @@ const FOLDED_NAME_STYLE: Partial<CSSStyleDeclaration> = {
   textTransform: 'uppercase',
 };
 
+/**
+ * "You are here" is a way home: clicked, it takes the camera back to the Solar System, as the
+ * breadcrumb's Solar System does (Maxi, 2026-11-17: "no podés tocar el you are here para
+ * volver"). Every other name of the centre is only a name, as before.
+ */
+export const HOME_NAME = 'You are here';
+const CLICKABLE_STYLE: Partial<CSSStyleDeclaration> = { pointerEvents: 'auto', cursor: 'pointer' };
+const UNCLICKABLE_STYLE: Partial<CSSStyleDeclaration> = { pointerEvents: '', cursor: '' };
+
 /** How far left of its point the folded name stands, pixels. */
 const CENTRE_LABEL_GAP_PX = 8;
 /**
@@ -680,6 +689,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         element.textContent = centreName;
         // Named as a galaxy is, as Andromeda beside it is, not as a part of the model.
         Object.assign(element.style, folded ? FOLDED_NAME_STYLE : MODEL_NAME_STYLE);
+        Object.assign(element.style, centreName === HOME_NAME ? CLICKABLE_STYLE : UNCLICKABLE_STYLE);
       }
       // The Galactic Centre keeps its name from any side; the arms only off the plane.
       if (visibility < 0.5 || (index > 0 && (edgeOn || armsHidden))) {
