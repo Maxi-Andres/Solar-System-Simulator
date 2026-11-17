@@ -354,7 +354,7 @@ export function setFocusFraming(framing: ((id: BodyId) => FramingRequest | null)
 }
 
 /** Which slide-over panel is open, if any. */
-export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'readout';
+export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'readout' | 'description';
 
 export interface ViewState {
   readonly focus: BodyId;

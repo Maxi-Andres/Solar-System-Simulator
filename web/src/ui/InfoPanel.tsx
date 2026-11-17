@@ -27,6 +27,7 @@ import { recordHolderOf } from '../core/recordHolders.ts';
 import { GalaxyPanel } from './GalaxyFacts.tsx';
 import { KIND_TERM } from './about/terms.ts';
 import { WhatIs } from './WhatIs.tsx';
+import { descriptionOf } from '../descriptions/index.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -139,6 +140,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         </span>
         <WhatIs term={focus === 'sun' ? 'sun' : KIND_TERM[body.kind]} kind={body.kind.replace('-', ' ')} />
       </div>
+      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
 
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
 
@@ -589,6 +591,33 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
         {children}
       </dd>
     </>
+  );
+}
+
+/** The way into the body's description (DescriptionView): what it is, its photos, what is measured and what is not. */
+function ReadMore({ name }: { name: string }) {
+  const togglePanel = useViewStore((state) => state.togglePanel);
+  return (
+    <button
+      type="button"
+      onClick={() => togglePanel('description')}
+      style={{
+        display: 'block',
+        width: '100%',
+        marginTop: '0.6rem',
+        padding: '0.4rem 0.6rem',
+        background: 'transparent',
+        border: '1px solid #2a2a2a',
+        borderRadius: '0.3rem',
+        color: '#9fc3e0',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        fontSize: '0.74rem',
+        textAlign: 'left',
+      }}
+    >
+      Read about {name === 'Sun' ? 'the Sun' : name} →
+    </button>
   );
 }
 

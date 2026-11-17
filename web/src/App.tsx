@@ -96,6 +96,8 @@ import { Toolbar } from './ui/Toolbar.tsx';
 // fetched once the first view is up (below), or the first time it is opened if that is sooner.
 const loadAboutPanel = () => import('./ui/AboutPanel.tsx');
 const AboutPanel = lazy(() => loadAboutPanel().then((module) => ({ default: module.AboutPanel })));
+// A body's description (descriptions/), read from its panel: its own chunk, as the About is.
+const DescriptionView = lazy(() => import('./ui/DescriptionView.tsx').then((module) => ({ default: module.DescriptionView })));
 
 // A supernova remnant is gone to from Earth's side of it, as its photographs show it, six of its
 // radii out -- all of it in view: whichever way it is focused. A galaxy of the Local Group the
@@ -950,6 +952,12 @@ export function App() {
           </Presence>
         </>
       )}
+
+      <Presence show={openPanel === 'description'}>
+        <Suspense fallback={null}>
+          <DescriptionView store={store} />
+        </Suspense>
+      </Presence>
 
       <Presence show={openPanel === 'about'}>
         <Suspense fallback={null}>
