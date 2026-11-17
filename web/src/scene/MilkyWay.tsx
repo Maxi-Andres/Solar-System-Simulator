@@ -171,11 +171,16 @@ const FOLDED_NAME_STYLE: Partial<CSSStyleDeclaration> = {
 };
 
 /**
- * "You are here" is a way home: clicked, it takes the camera back to the Solar System, as the
- * breadcrumb's Solar System does (Maxi, 2026-11-17: "no podés tocar el you are here para
- * volver"). Every other name of the centre is only a name, as before.
+ * Home's name from afar -- Milky Way, Local Group, Local Volume, You are here, Nearby Universe:
+ * the name the Sun's point folds into (homeName.ts) -- is a way home: clicked, it takes the
+ * camera back to the Solar System, as the breadcrumb's Solar System does (Maxi, 2026-11-17:
+ * "no podés tocar el you are here para volver"; and from the Nearby Universe, "si toco para
+ * volver no me deja"). The Galactic Centre's, a part of the model seen from inside it, is
+ * only a name.
  */
-export const HOME_NAME = 'You are here';
+export function isHomeName(name: string | null): boolean {
+  return name !== null && name !== '' && name !== 'Galactic Centre';
+}
 const CLICKABLE_STYLE: Partial<CSSStyleDeclaration> = { pointerEvents: 'auto', cursor: 'pointer' };
 const UNCLICKABLE_STYLE: Partial<CSSStyleDeclaration> = { pointerEvents: '', cursor: '' };
 
@@ -689,7 +694,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
         element.textContent = centreName;
         // Named as a galaxy is, as Andromeda beside it is, not as a part of the model.
         Object.assign(element.style, folded ? FOLDED_NAME_STYLE : MODEL_NAME_STYLE);
-        Object.assign(element.style, centreName === HOME_NAME ? CLICKABLE_STYLE : UNCLICKABLE_STYLE);
+        Object.assign(element.style, isHomeName(centreName) ? CLICKABLE_STYLE : UNCLICKABLE_STYLE);
       }
       // The Galactic Centre keeps its name from any side; the arms only off the plane.
       if (visibility < 0.5 || (index > 0 && (edgeOn || armsHidden))) {
