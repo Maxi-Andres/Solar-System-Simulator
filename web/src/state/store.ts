@@ -107,132 +107,144 @@ export interface LayerDefinition {
   readonly label: string;
   /** Null when the layer works today; otherwise the phase that brings it. */
   readonly pending: string | null;
+  /** What it is, a few words, shown on hover in the Layers panel. */
+  readonly hint: string;
   /** Draws a separator above this entry, grouping the list like NASA Eyes does. */
   readonly startsGroup?: boolean;
 }
 
 export const LAYERS: readonly LayerDefinition[] = [
-  { id: 'userInterface', label: 'User Interface', pending: null },
+  { id: 'userInterface', label: 'User Interface', hint: 'Panels, names and controls.', pending: null },
 
-  { id: 'planets', label: 'Planets', pending: null, startsGroup: true },
-  { id: 'dwarfPlanets', label: 'Dwarf Planets', pending: null },
-  { id: 'moons', label: 'Moons', pending: null },
+  { id: 'planets', label: 'Planets', hint: 'The Sun and the eight planets.', pending: null, startsGroup: true },
+  { id: 'dwarfPlanets', label: 'Dwarf Planets', hint: 'Pluto, Eris, Ceres, Haumea, Makemake.', pending: null },
+  { id: 'moons', label: 'Moons', hint: 'The major moons.', pending: null },
   // The 437 beyond the major moons. They need Moons on too: they are moons.
-  { id: 'smallMoons', label: 'Small Moons', pending: null },
+  { id: 'smallMoons', label: 'Small Moons', hint: 'Hundreds of small moons of the giants.', pending: null },
   // The named ones -- mission targets, the largest, and Apophis -- and the belt: every
   // asteroid SBDB knows down to its magnitude limit, drawn as dots (see AsteroidBelt).
-  { id: 'asteroids', label: 'Asteroids', pending: null },
+  { id: 'asteroids', label: 'Asteroids', hint: 'Named asteroids and the belt, from JPL.', pending: null },
   // SBDB's four thousand, each on its own conic -- a third of them open, on parabolas and
   // hyperbolas. Off by default, as the belt is.
-  { id: 'comets', label: 'Comets', pending: null },
+  { id: 'comets', label: 'Comets', hint: 'About four thousand comets, from JPL.', pending: null },
   // The Sun-Earth and Earth-Moon Lagrange points, computed at each instant (core/lagrange.ts).
-  { id: 'lagrangePoints', label: 'Lagrange Points', pending: null },
+  { id: 'lagrangePoints', label: 'Lagrange Points', hint: 'Computed balance points. Nothing is there to see.', pending: null },
   // The termination shock and heliopause, the Voyagers' four crossings, the Oort cloud
   // (core/heliosphere.ts, scene/Heliosphere.tsx): models fitted to what is measured.
-  { id: 'heliosphere', label: 'Heliosphere', pending: null },
+  { id: 'heliosphere', label: 'Heliosphere', hint: 'Where the solar wind ends. A model: invisible in reality.', pending: null },
   // Earth's magnetopause, bow shock, Van Allen belts and Kármán line, as the standard models draw
   // them (core/magnetosphere.ts). Off until asked for: shells about Earth are not a first view.
-  { id: 'magnetosphere', label: 'Magnetosphere', pending: null },
+  { id: 'magnetosphere', label: 'Magnetosphere', hint: "Earth's magnetic shield. A model: invisible in reality.", pending: null },
   // Past the Solar System every star in the catalogue drawn at least as a dot, at its real
   // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
   // would see from where the camera is.
-  { id: 'starMap', label: 'Star Map', pending: null },
+  { id: 'starMap', label: 'Star Map', hint: 'Every catalogue star as a dot, not just what the eye sees.', pending: null },
   // Every star the NASA Exoplanet Archive lists a planet for, ringed on the map with a dot
   // per planet (scene/ExoplanetHosts.tsx); shown where the map is, past the planets.
-  { id: 'exoplanetHosts', label: 'Exoplanet Hosts', pending: null },
+  { id: 'exoplanetHosts', label: 'Exoplanet Hosts', hint: 'Stars with known planets.', pending: null },
   // Every pulsar the ATNF catalogue can place and McGill's magnetars (core/pulsars.ts):
   // marked across the map and the galaxy, as the hosts are on the map. Off until asked for:
   // four thousand dots over the galaxy are a map of one kind of object, not a view. A
   // pulsar found by search turns it on.
-  { id: 'pulsars', label: 'Pulsars', pending: null },
+  { id: 'pulsars', label: 'Pulsars', hint: 'Pulsars and magnetars.', pending: null },
   // The Milky Way's globular clusters (core/globularClusters.ts): marked on the map and the
   // galaxy, and the one the camera is near drawn as stars, a model of its measured light and
   // size. On: a hundred and sixty marks, and what there is to see out of the disc.
-  { id: 'globularClusters', label: 'Globular Clusters', pending: null },
+  { id: 'globularClusters', label: 'Globular Clusters', hint: 'Old balls of stars around the galaxy.', pending: null },
   // Nine famous supernova remnants (core/supernovaRemnants.ts), each a ring of its real size
   // at its measured distance. On: nine names.
-  { id: 'supernovaRemnants', label: 'Supernova Remnants', pending: null },
+  { id: 'supernovaRemnants', label: 'Supernova Remnants', hint: 'Gas left by exploded stars.', pending: null },
   // Star-forming regions and planetary nebulae (core/nebulae.ts): each a volume of its
   // measured size at its measured distance, in the colours of its lines.
-  { id: 'nebulae', label: 'Nebulae', pending: null },
+  { id: 'nebulae', label: 'Nebulae', hint: 'Glowing gas clouds where stars form or die.', pending: null },
   // The stellar streams of the halo (core/streams.ts): galstreams' tracks, faint trails.
-  { id: 'stellarStreams', label: 'Stellar Streams', pending: null },
+  { id: 'stellarStreams', label: 'Stellar Streams', hint: 'Remains of torn-apart star clusters and dwarf galaxies.', pending: null },
   // The Fermi and eROSITA bubbles (scene/GalacticBubbles.tsx): faint shells above and below
   // the centre, their outlines on the sky measured, their depth modelled.
-  { id: 'galacticBubbles', label: 'Fermi & eROSITA Bubbles', pending: null },
+  { id: 'galacticBubbles', label: 'Fermi & eROSITA Bubbles', hint: 'Two huge gas lobes above and below the centre. Depth modelled.', pending: null },
   // The Sun's surroundings in the interstellar medium (core/localInterstellar.ts): the Local
   // Bubble, the Radcliffe Wave, the Local Interstellar Cloud.
-  { id: 'localInterstellar', label: 'Local Interstellar Medium', pending: null },
+  { id: 'localInterstellar', label: 'Local Interstellar Medium', hint: 'The gas around the Sun. Shapes partly modelled.', pending: null },
   // The Messier objects drawn as nothing else (core/messier.ts): open clusters and the
   // rest, marked. Off until asked for, as the pulsars are: a catalogue's marks, not a view.
-  { id: 'messier', label: 'Messier Objects', pending: null },
+  { id: 'messier', label: 'Messier Objects', hint: 'The Messier catalogue, marked.', pending: null },
   // Named stars, stellar black holes and young clusters the star catalogue does not place
   // (core/notableStars.ts): marks at their measured distances. Off until asked for, as the
   // Messier marks are; a search for one turns it on.
-  { id: 'notableStars', label: 'Notable Stars', pending: null },
+  { id: 'notableStars', label: 'Notable Stars', hint: 'Famous and extreme stars, stellar black holes.', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
-  { id: 'milkyWay', label: 'Milky Way Model', pending: null },
+  { id: 'milkyWay', label: 'Milky Way Model', hint: 'The galaxy beyond the measured stars. A model.', pending: null },
   // The Local Group's galaxies (core/localGroup.ts): each a volume of its measured light,
   // size and shape, past the Milky Way; the dwarfs marked as the camera leaves the disc.
-  { id: 'localGroup', label: 'Local Group', pending: null },
+  { id: 'localGroup', label: 'Local Group', hint: 'Andromeda, the Magellanic Clouds and our nearest galaxies.', pending: null },
   // Laniakea and beyond (core/laniakea.ts): 86,899 galaxies out to 700 Mpc, each its light,
   // and the named clusters, superclusters, voids and walls.
-  { id: 'laniakea', label: 'Laniakea', pending: null },
+  { id: 'laniakea', label: 'Laniakea', hint: 'Our supercluster: 87,000 galaxies, clusters and voids.', pending: null },
   // Laniakea's boundary as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois
   // 2023): a faint outline.
-  { id: 'laniakeaBasin', label: 'Laniakea Basin', pending: null },
+  { id: 'laniakeaBasin', label: 'Laniakea Basin', hint: "Laniakea's border, computed from galaxy motions.", pending: null },
   // The groups' reconstruction's answer: the Milky Way's flow ends at Shapley, and Laniakea is
-  // part of Shapley's basin. Off, as the other answer is on; the About says why both.
-  { id: 'shapleyBasin', label: 'Shapley Basin', pending: null },
+  // part of Shapley's basin. Off, as the other answer is; the About says why both.
+  { id: 'shapleyBasin', label: 'Shapley Basin', hint: 'The alternative answer: we belong to Shapley.', pending: null },
   // The Cosmicflows-4 velocity field's streamlines (core/laniakea.ts FlowLines): where the
   // galaxies' flow goes: a few dozen, Laniakea's in its gold, a brightening running down each
-  // toward its attractor. On: it is what makes a basin of attraction a basin.
-  { id: 'flowLines', label: 'Flow Lines', pending: null },
+  // toward its attractor. Off by default: computed, not seen (see DEFAULT_LAYER_STATE).
+  { id: 'flowLines', label: 'Flow Lines', hint: 'Where galaxies flow, computed from their motions.', pending: null },
   // The cosmic web past it (core/cosmicWeb.ts): the 1.8 million galaxies of the SDSS main
   // sample and BOSS, out to 9 billion light years, in the surveys' wedges of the sky.
-  { id: 'sdssGalaxies', label: 'SDSS Galaxies', pending: null },
+  { id: 'sdssGalaxies', label: 'SDSS Galaxies', hint: '1.8 million galaxies mapped by SDSS.', pending: null },
   // The filaments found in them: Tempel et al. 2014's and Malavasi et al. 2020's, thin threads.
-  { id: 'filaments', label: 'Filaments', pending: null },
+  { id: 'filaments', label: 'Filaments', hint: 'The threads of the cosmic web, found in the galaxies.', pending: null },
   // The quasars of SDSS DR16Q (core/quasars.ts): 750 thousand, out to z 7, 28 billion light
   // years, in the SDSS's wedges; fetched only past a billion light years.
-  { id: 'quasars', label: 'Quasars', pending: null },
+  { id: 'quasars', label: 'Quasars', hint: '750,000 quasars: bright black holes far away.', pending: null },
   // The Planck SZ clusters (core/quasars.ts): a thousand clusters over the whole sky to z 1,
   // small rings.
-  { id: 'szClusters', label: 'SZ Clusters', pending: null },
+  { id: 'szClusters', label: 'SZ Clusters', hint: 'Galaxy clusters found by Planck.', pending: null },
   // The observable universe (G4, scene/cmb.ts, core/recordHolders.ts): the CMB's
   // last-scattering sphere, drawn only from far outside it, and the record-holders.
-  { id: 'observableUniverse', label: 'Observable Universe', pending: null },
+  { id: 'observableUniverse', label: 'Observable Universe', hint: 'The cosmic microwave background and the farthest objects.', pending: null },
   // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
   // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
   // none a particular one. A layer of its own, as the galaxy's model is, so the measured
-  // S-stars and young stars can be seen without it. On, so the sky round the black hole
-  // is not taken for empty.
-  { id: 'nuclearCluster', label: 'Nuclear Cluster Model', pending: null },
-  { id: 'constellations', label: 'Constellations', pending: 'Phase D' },
+  // S-stars and young stars can be seen without it. Off by default: its stars are none in
+  // particular (see DEFAULT_LAYER_STATE).
+  { id: 'nuclearCluster', label: 'Nuclear Cluster Model', hint: 'Stars round the central black hole. A model.', pending: null },
+  { id: 'constellations', label: 'Constellations', hint: 'Constellation lines.', pending: 'Phase D' },
 
-  { id: 'spacecraft', label: 'Spacecraft', pending: null, startsGroup: true },
+  { id: 'spacecraft', label: 'Spacecraft', hint: 'Probes and missions, on their real paths.', pending: null, startsGroup: true },
   // Earth's satellites from CelesTrak (Phase C): a hundred named ones as bodies, and tens
   // of thousands more as dots. Off by default: they matter only near Earth, and switched
   // on they download a few megabytes.
-  { id: 'satellites', label: 'Satellites', pending: null },
+  { id: 'satellites', label: 'Satellites', hint: "Earth's satellites.", pending: null },
 
   // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
   // be its orbit drawn twice, so the layer is the craft's alone.
-  { id: 'trails', label: 'Trails', pending: null, startsGroup: true },
-  { id: 'orbits', label: 'Orbits', pending: null },
+  { id: 'trails', label: 'Trails', hint: "Spacecraft's past paths.", pending: null, startsGroup: true },
+  { id: 'orbits', label: 'Orbits', hint: 'Orbit lines.', pending: null },
   // Circles about the Sun at 1, 5, 10, 50 and 100 light years: a ruler, not a thing (see
   // distanceRings.ts). On, because they draw nothing until the camera is out among the
   // stars, where they are most of what says how far away anything is.
-  { id: 'distanceRings', label: 'Distance Rings', pending: null },
-  { id: 'labels', label: 'Labels', pending: null },
-  { id: 'icons', label: 'Icons', pending: null },
+  { id: 'distanceRings', label: 'Distance Rings', hint: 'Circles 1 to 100 light years from the Sun. A ruler.', pending: null },
+  { id: 'labels', label: 'Labels', hint: 'Names.', pending: null },
+  { id: 'icons', label: 'Icons', hint: 'Marks and rings.', pending: null },
 ];
 
 export type LayerState = Record<LayerId, boolean>;
 
-const DEFAULT_LAYERS: LayerState = {
+/**
+ * What is on at first. Off is anything drawn that is a model's shape or a computation rather
+ * than something there to be seen -- the heliosphere's shells, the Lagrange points, the
+ * bubbles' depth, the Local Bubble's walls, the basins and flow lines, the nuclear cluster's
+ * stars that are none in particular -- so a first look is not taken for a photograph of them
+ * (Maxi: "lo que no sea real default no este activado"). Each is a switch away, its hover
+ * saying what it is. Kept on: the Milky Way's model, without which the galaxy past the
+ * measured stars is dark and taken for their edge; and the rings, orbits and marks, which no
+ * one takes for objects.
+ */
+export const DEFAULT_LAYER_STATE: LayerState = {
   userInterface: true,
   planets: true,
   dwarfPlanets: true,
@@ -244,8 +256,8 @@ const DEFAULT_LAYERS: LayerState = {
   // are in this layer with it; a search for one turns it on.
   asteroids: false,
   comets: false,
-  lagrangePoints: true,
-  heliosphere: true,
+  lagrangePoints: false,
+  heliosphere: false,
   magnetosphere: false,
   starMap: true,
   exoplanetHosts: true,
@@ -254,22 +266,22 @@ const DEFAULT_LAYERS: LayerState = {
   supernovaRemnants: true,
   nebulae: true,
   stellarStreams: true,
-  galacticBubbles: true,
-  localInterstellar: true,
+  galacticBubbles: false,
+  localInterstellar: false,
   messier: false,
   notableStars: false,
   milkyWay: true,
   localGroup: true,
   laniakea: true,
-  laniakeaBasin: true,
+  laniakeaBasin: false,
   shapleyBasin: false,
-  flowLines: true,
+  flowLines: false,
   sdssGalaxies: true,
   filaments: true,
   quasars: true,
   szClusters: true,
   observableUniverse: true,
-  nuclearCluster: true,
+  nuclearCluster: false,
   spacecraft: true,
   satellites: false,
   constellations: false,
@@ -356,9 +368,15 @@ export interface ViewState {
    * default, and kept between visits like the belt's families.
    */
   readonly satelliteChips: number;
+  /**
+   * Whether the camera is in the Solar System (scene/inSolarSystem.ts), kept by
+   * SolarSystemWatch: while it is, the nebulae and supernova remnants are not drawn.
+   */
+  readonly inSolarSystem: boolean;
 
   readonly setFocus: (id: BodyId) => void;
   readonly toggleLayer: (id: LayerId) => void;
+  readonly setInSolarSystem: (inside: boolean) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
   readonly setLighting: (mode: LightingMode) => void;
   readonly setBeltTiers: (tiers: number) => void;
@@ -383,7 +401,7 @@ export const SATELLITE_CHIPS_KEY = 'satellite-chips';
 
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
-  layers: DEFAULT_LAYERS,
+  layers: DEFAULT_LAYER_STATE,
   lighting: PHYSICAL_LIGHTING,
   openPanel: null,
   zoomImpulse: 1,
@@ -395,6 +413,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // older stored value, and junk beyond them is dropped.
   beltFamilies: readStoredInteger(BELT_FAMILIES_KEY, ALL_BELT_FAMILIES, 0) & ALL_BELT_FAMILIES,
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
+  inSolarSystem: true,
 
   setFocus: (id) => {
     const state = get();
@@ -412,6 +431,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   toggleLayer: (id) => {
     set((state) => ({ layers: { ...state.layers, [id]: !state.layers[id] } }));
+  },
+
+  setInSolarSystem: (inside) => {
+    set({ inSolarSystem: inside });
   },
 
   setLayer: (id, on) => {

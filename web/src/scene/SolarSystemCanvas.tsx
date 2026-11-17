@@ -31,6 +31,7 @@ import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
 import { GlowComposite } from './GlowComposite.tsx';
 import { GlobularClusters } from './GlobularClusters.tsx';
+import { SolarSystemWatch } from './SolarSystemWatch.tsx';
 import { SupernovaRemnants } from './SupernovaRemnants.tsx';
 import { GalaxyFeatures, type GalaxyFeatureLayers } from './GalaxyFeatures.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
@@ -433,6 +434,7 @@ export function SolarSystemCanvas({
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <Heliosphere store={store} clock={clock} focus={focus} />
       <Magnetosphere store={store} clock={clock} focus={focus} />
+      <SolarSystemWatch store={store} clock={clock} focus={focus} />
       <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />

@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   BELT_FAMILIES,
@@ -25,7 +26,8 @@ import { Panel } from './Panel.tsx';
  * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
  * BeltFamilies. Under Satellites, the same chips for its groups. Nothing else: a layer's
  * explanation and sources are the About's, and here they buried the switches (Maxi: "tiene
- * que ser corto, que solo tengas las check boxes").
+ * que ser corto, que solo tengas las check boxes"). What each is, in a few words, shows beside
+ * its row on hover (LayerHint) -- and says so where the layer is a model rather than a sight.
  */
 export function LayersPanel({
   belt,
@@ -37,9 +39,11 @@ export function LayersPanel({
   const layers = useViewStore((state) => state.layers);
   const toggleLayer = useViewStore((state) => state.toggleLayer);
   const closePanel = useViewStore((state) => state.closePanel);
+  const [hint, setHint] = useState<ShownHint | null>(null);
 
   return (
     <Panel title="Layers" onClose={closePanel}>
+      {hint !== null && <LayerHint hint={hint} />}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {LAYERS.map((layer) => (
           <LayerRow
@@ -47,6 +51,7 @@ export function LayersPanel({
             layer={layer}
             checked={layers[layer.id]}
             onToggle={() => toggleLayer(layer.id)}
+            onHint={setHint}
           >
             {/* Controls only: what each layer is and where it comes from is the About's. */}
             {layer.id === 'asteroids' && layers.asteroids && (
@@ -67,11 +72,13 @@ interface LayerRowProps {
   readonly layer: LayerDefinition;
   readonly checked: boolean;
   readonly onToggle: () => void;
+  /** The row's hint to show beside it, or null once the pointer leaves. */
+  readonly onHint: (hint: ShownHint | null) => void;
   /** Settings of the layer's own, shown under its row. */
   readonly children?: React.ReactNode;
 }
 
-function LayerRow({ layer, checked, onToggle, children }: LayerRowProps) {
+function LayerRow({ layer, checked, onToggle, onHint, children }: LayerRowProps) {
   const disabled = layer.pending !== null;
 
   return (
@@ -84,6 +91,13 @@ function LayerRow({ layer, checked, onToggle, children }: LayerRowProps) {
         // The stylesheet keys the hover and press off this rather than off the input's
         // own disabled attribute, because the row is what the pointer is over.
         aria-disabled={disabled}
+        aria-description={layer.hint}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'mouse') return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          onHint({ text: layer.hint, left: rect.left, middle: rect.top + rect.height / 2 });
+        }}
+        onPointerLeave={() => onHint(null)}
         style={{
           borderRadius: '0.2rem',
           display: 'flex',
@@ -116,6 +130,47 @@ function LayerRow({ layer, checked, onToggle, children }: LayerRowProps) {
       </label>
       {children}
     </>
+  );
+}
+
+/** A hint and where its row is on screen, px. */
+interface ShownHint {
+  readonly text: string;
+  /** The row's left edge. */
+  readonly left: number;
+  /** The row's vertical middle. */
+  readonly middle: number;
+}
+
+/**
+ * A layer's hint, to the left of its row: in the page's body and fixed to the viewport -- the
+ * panel is transformed, which would make it the hint's frame, and its scroll would clip it --
+ * and never in the pointer's way.
+ */
+function LayerHint({ hint }: { readonly hint: ShownHint }) {
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{
+        position: 'fixed',
+        right: `calc(100vw - ${hint.left}px + 1.6rem)`,
+        top: hint.middle,
+        transform: 'translateY(-50%)',
+        maxWidth: '15rem',
+        padding: '0.35rem 0.55rem',
+        background: 'rgba(14, 14, 14, 0.94)',
+        border: '1px solid #2a2a2a',
+        borderRadius: '0.25rem',
+        color: '#bdbdbd',
+        fontSize: '0.72rem',
+        lineHeight: 1.4,
+        pointerEvents: 'none',
+        zIndex: 1000,
+      }}
+    >
+      {hint.text}
+    </div>,
+    document.body,
   );
 }
 

@@ -208,6 +208,7 @@ export function App() {
   const beltTiers = useViewStore((state) => state.beltTiers);
   const beltFamilies = useViewStore((state) => state.beltFamilies);
   const satelliteChips = useViewStore((state) => state.satelliteChips);
+  const inSolarSystem = useViewStore((state) => state.inSolarSystem);
 
   const labelElements = useRef<Map<BodyId, HTMLElement | null>>(new Map());
   const ringLabels = useRef<(HTMLElement | null)[]>([]);
@@ -559,9 +560,14 @@ export function App() {
 
   // The Sun is a 'star' but rides along with the Planets switch: nobody expects to
   // turn off the Sun separately, and NASA Eyes does not offer that either.
+  // From inside the Solar System the nebulae and remnants are not drawn (inSolarSystem.ts),
+  // names and marks with them -- unless one is the focus, flown to from home.
+  const focusKind = store === null ? null : store.body(focus).kind;
+  const galacticHidden = inSolarSystem && focusKind !== 'nebula' && focusKind !== 'supernova-remnant';
   const visibleKinds = useMemo(() => {
     const kinds = new Set<string>();
     for (const [layerId, kindList] of Object.entries(LAYER_KINDS)) {
+      if (galacticHidden && (layerId === 'nebulae' || layerId === 'supernovaRemnants')) continue;
       if (layers[layerId as keyof typeof layers]) {
         for (const kind of kindList) {
           kinds.add(kind);
@@ -576,7 +582,7 @@ export function App() {
       }
     });
     return kinds;
-  }, [layers, satelliteChips]);
+  }, [layers, satelliteChips, galacticHidden]);
 
   // A planet's small moons are fetched when its system is entered -- the planet, one of
   // its moons or a craft about it in focus -- and not a moment before. The labels below
@@ -739,7 +745,7 @@ export function App() {
         globularClusters={globularClusters}
         showGlobularClusters={layers.globularClusters}
         onPickCluster={goToCluster}
-        showSupernovaRemnants={layers.supernovaRemnants}
+        showSupernovaRemnants={layers.supernovaRemnants && !galacticHidden}
         localGroup={localGroup}
         showLocalGroup={layers.localGroup}
         onPickGalaxy={goToGalaxy}
@@ -756,7 +762,7 @@ export function App() {
         showSdssGalaxies={layers.sdssGalaxies}
         showFilaments={layers.filaments}
         galaxyFeatures={{
-          nebulae: layers.nebulae,
+          nebulae: layers.nebulae && !galacticHidden,
           stellarStreams: layers.stellarStreams,
           galacticBubbles: layers.galacticBubbles,
           localInterstellar: layers.localInterstellar,
