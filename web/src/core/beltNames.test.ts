@@ -10,6 +10,7 @@ import { aliasField, indexNames, loadBeltRecord, parseBeltNames, searchable, sea
 import { describeWithData as withData } from './describeWithData.ts';
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { propagate } from './kepler.ts';
+import { normalizeName } from './search.ts';
 import { beltPosition } from '../scene/beltShader.ts';
 
 /**
@@ -111,6 +112,67 @@ describe('the name index', () => {
     const match = searchNames(index, 'a898 pa')[0]!;
     expect(match.k).toBe(1);
     expect(match.score).toBe(0.5);
+  });
+
+  it('finds what reading every name finds, in the same order, whatever it passes over', () => {
+    // The scoring searchNames had before it learned to pass names over (masks, pairs, word
+    // starts, the names typed whole), every name read: the reference it must agree with.
+    const reference = (search: { display: readonly string[]; designation: readonly string[] }, query: string, limit: number) => {
+      const q = normalizeName(query);
+      if (q === '') return [];
+      const squeezed = q.replace(/ /g, '');
+      const score = (field: string): number | null => {
+        if (field === '') return null;
+        if (field === q || field === squeezed || (field.includes(' ') && field.replace(/ /g, '') === squeezed)) return 0;
+        if (!field.includes(q)) return null;
+        if (field.includes(' | ') && ` | ${field} | `.includes(` | ${q} | `)) return 0;
+        if (field.startsWith(q)) return 1;
+        return field.includes(` ${q}`) ? 2 : 3;
+      };
+      const all: { k: number; score: number }[] = [];
+      search.display.forEach((name, k) => {
+        const byName = score(name);
+        const byDesignation = score(search.designation[k]!);
+        const s = byName ?? (byDesignation === null ? null : byDesignation + 0.5);
+        if (s !== null) all.push({ k, score: s });
+      });
+      return all.sort((a, b) => a.score - b.score || a.k - b.k).slice(0, limit);
+    };
+    let seed = 7;
+    const random = (n: number): number => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return (seed >>> 8) % n;
+    };
+    // Words made of pieces, so that some begin others, some hold others, few are names whole.
+    const pieces = ['pa', 'n', 'do', 'ra', 'al', 'ph', 'a', 'ng', 'c', '2m', 'asx', 'j', '12', '34', 'ñan', 'dú', 'e', 'ros', 's', '20', '04', 'ma'];
+    const words = Array.from({ length: 80 }, () =>
+      Array.from({ length: 1 + random(3) }, () => pieces[random(pieces.length)]!).join(''),
+    );
+    const phrase = (): string =>
+      Array.from({ length: 1 + random(3) }, () => words[random(words.length)]!).join(random(5) === 0 ? '' : ' ');
+    const count = 1500;
+    const display: string[] = [];
+    const designation: string[] = [];
+    for (let k = 0; k < count; k += 1) {
+      display.push(normalizeName(phrase()));
+      designation.push(
+        random(3) === 0 ? '' : random(2) === 0 ? normalizeName(phrase()) : aliasField(Array.from({ length: 1 + random(3) }, phrase)),
+      );
+    }
+    const search = { display, designation };
+    const queries = new Set(['p', 'a', 'pan', 'pa n', 's2004s12', 's 2004 s 12', 'cen a', 'ma', '2', '12 eros', 'nandu', 'zz']);
+    for (let n = 0; n < 300; n += 1) {
+      const name = (random(2) === 0 ? display : designation)[random(count)]!.replace(/ \| /g, ' ');
+      const from = random(Math.max(1, name.length));
+      queries.add(name.slice(from, from + 1 + random(8)));
+      queries.add(name.replace(/ /g, ''));
+      queries.add(words[random(words.length)]!);
+    }
+    for (const query of queries) {
+      for (const limit of [1, 2, 5, 20]) {
+        expect(searchNames(search, query, limit), `${query} ${limit}`).toEqual(reference(search, query, limit));
+      }
+    }
   });
 
   it('keeps the index’s order -- brightness -- among equal matches, and stops at the limit', () => {

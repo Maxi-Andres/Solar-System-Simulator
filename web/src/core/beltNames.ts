@@ -133,10 +133,12 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
   const squeezed = q.replace(/ /g, '');
   const first = squeezed.charCodeAt(0);
   const word = ` ${q}`;
-  // 170,000 names twice a keystroke, so nothing is made for a name that cannot match: one
-  // with spaces whose spaces taken out could be the query's starts as it does (names are
-  // trimmed) and is longer, and any other match contains the query.
-  const score = (field: string): number | null => {
+  const prepared = preparedOf(index);
+  // 270,000 names twice a keystroke, so nothing is made for a name that cannot match: one
+  // with spaces whose spaces taken out could be the query's has as many other characters
+  // (`solid`), starts as it does (names are trimmed) and is longer, and any other match
+  // contains the query.
+  const score = (field: string, solid: number): number | null => {
     if (field === '') {
       return null;
     }
@@ -144,6 +146,7 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
       return 0;
     }
     if (
+      solid === squeezed.length &&
       field.charCodeAt(0) === first &&
       field.length > squeezed.length &&
       field.includes(' ') &&
@@ -155,7 +158,7 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
       return null;
     }
     // One of several names, whole (aliasField).
-    if (field.includes(ALIAS_SEPARATOR) && ` | ${field} | `.includes(` | ${q} | `)) {
+    if (field.includes(ALIAS_SEPARATOR) && isOneOf(field, q)) {
       return 0;
     }
     if (field.startsWith(q)) {
@@ -163,17 +166,29 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
     }
     return field.includes(word) ? 2 : 3;
   };
+  // Which entries are scored at all: see Prepared.
+  const wanted = charMask(squeezed);
+  const wantedPairs = pairMask(q);
+  const short = q.length === 1;
+  const wordStart = short ? charMask(q) : pairBit(q.charCodeAt(0), q.charCodeAt(1));
+  const wordStart2 = short ? 0 : pairBit2(q.charCodeAt(0), q.charCodeAt(1));
+  const wordStarts = short ? prepared.wordFirsts : prepared.wordPairs;
   const best: NameMatch[] = [];
-  for (let k = 0; k < index.display.length; k += 1) {
-    const byName = score(index.display[k]!);
-    const byDesignation = score(index.designation[k]!);
-    const s = byName ?? (byDesignation === null ? null : byDesignation + 0.5);
-    if (s === null) {
-      continue;
+  const scoreOf = (k: number): number | null => {
+    const inName = (wanted & ~prepared.displayMask[k]!) === 0;
+    const inDesignation = (wanted & ~prepared.designationMask[k]!) === 0;
+    if (!inName && !inDesignation) {
+      return null;
     }
-    // Kept sorted as it goes and cut at the limit: no 140,000-entry sort a keystroke.
+    const byName = inName ? score(index.display[k]!, prepared.displaySolid[k]!) : null;
+    const byDesignation =
+      byName === null && inDesignation ? score(index.designation[k]!, prepared.designationSolid[k]!) : null;
+    return byName ?? (byDesignation === null ? null : byDesignation + 0.5);
+  };
+  // Kept sorted as it goes and cut at the limit, in index order: no 140,000-entry sort.
+  const add = (k: number, s: number): void => {
     if (best.length === limit && s >= best[best.length - 1]!.score) {
-      continue;
+      return;
     }
     let at = best.length;
     while (at > 0 && best[at - 1]!.score > s) {
@@ -183,8 +198,291 @@ export function searchNames(index: Searchable, query: string, limit = 20): NameM
     if (best.length > limit) {
       best.pop();
     }
+  };
+  // First the entries that are the query whole, scoring 0 or 0.5: all of them are among those
+  // with a name of as many characters besides spaces as the query has (wholeAt).
+  for (const k of prepared.wholeAt.get(squeezed.length) ?? []) {
+    const s = scoreOf(k);
+    if (s !== null && s <= 0.5) {
+      add(k, s);
+    }
+  }
+  // Then the rest, in order, each of which contains the query: so it has every character and
+  // every pair of characters the query has. Once the list is full of names better than any
+  // merely containing it, a name must have the query at the start of one of its words to
+  // come in, and once full of names starting with it, no name can.
+  for (let k = 0; k < prepared.count; k += 1) {
+    if (best.length === limit) {
+      const worst = best[best.length - 1]!.score;
+      if (worst <= 1) {
+        break;
+      }
+      if (worst <= 3 && ((wordStart & wordStarts[k]!) === 0 || (wordStart2 & ~prepared.wordPairs2[k]!) !== 0)) {
+        continue;
+      }
+    }
+    if (
+      (wantedPairs & ~prepared.displayPairs[k]!) !== 0 &&
+      (wantedPairs & ~prepared.designationPairs[k]!) !== 0
+    ) {
+      continue;
+    }
+    const s = scoreOf(k);
+    if (s !== null && s > 0.5) {
+      add(k, s);
+    }
   }
   return best;
+}
+
+/**
+ * Whether `name` is one of the several names of `field` (aliasField): whether ` | field | `
+ * contains ` | name | `, read in place rather than made for every designation that contains
+ * it -- "ma" is in nearly every 2MASX name of Laniakea's.
+ */
+function isOneOf(field: string, name: string): boolean {
+  // `name` is trimmed and has no '|', so it lies inside `field` wherever it is in the padded one.
+  const padded = (i: number): number =>
+    i < 3 ? ALIAS_SEPARATOR.charCodeAt(i) : i < 3 + field.length ? field.charCodeAt(i - 3) : ALIAS_SEPARATOR.charCodeAt(i - 3 - field.length);
+  for (let at = field.indexOf(name); at >= 0; at = field.indexOf(name, at + 1)) {
+    const end = at + 3 + name.length;
+    if (
+      padded(at) === 32 &&
+      padded(at + 1) === 124 &&
+      padded(at + 2) === 32 &&
+      padded(end) === 32 &&
+      padded(end + 1) === 124 &&
+      padded(end + 2) === 32
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Which characters a string holds, as bits: one a letter a to z, four for the digits in
+ * groups, one for a space and one for anything else. A string holding another holds all its
+ * bits, so a name whose mask lacks one of the query's cannot contain it.
+ */
+function charMask(text: string): number {
+  let mask = 0;
+  for (let k = 0; k < text.length; k += 1) {
+    mask |= charBit(text.charCodeAt(k));
+  }
+  return mask;
+}
+
+function charBit(c: number): number {
+  if (c >= 97 && c <= 122) {
+    return 1 << (c - 97);
+  }
+  if (c >= 48 && c <= 57) {
+    return DIGIT_BITS[c - 48]!;
+  }
+  return c === 32 ? SPACE_BIT : OTHER_BIT;
+}
+
+const DIGIT_BITS = [1 << 26, 1 << 26, 1 << 26, 1 << 27, 1 << 27, 1 << 27, 1 << 28, 1 << 28, 1 << 29, 1 << 29];
+const SPACE_BIT = 1 << 30;
+const OTHER_BIT = 1 << 31;
+
+/** Characters other than spaces. */
+function solidLength(text: string): number {
+  let count = 0;
+  for (let k = 0; k < text.length; k += 1) {
+    if (text.charCodeAt(k) !== 32) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/** One of 32 bits for a pair of characters side by side, hashed. */
+function pairBit(first: number, second: number): number {
+  return 1 << (Math.imul((first << 16) | second, 0x9e3779b1) >>> 27);
+}
+
+/** Another, hashed otherwise: a word's pair must have both, so two pairs rarely pass as one. */
+function pairBit2(first: number, second: number): number {
+  return 1 << (Math.imul(((first << 16) | second) ^ 0x5bd1e995, 0x27d4eb2d) >>> 27);
+}
+
+/** The bits of every pair of characters side by side in a string. */
+function pairMask(text: string): number {
+  let mask = 0;
+  for (let k = 0; k + 1 < text.length; k += 1) {
+    mask |= pairBit(text.charCodeAt(k), text.charCodeAt(k + 1));
+  }
+  return mask;
+}
+
+/**
+ * What searchNames keeps of an index, made the first time it is searched, again if it grows:
+ * by entry, which characters each name holds and which pairs of them, and which begin its
+ * words -- a name lacking one of the query's cannot contain it, so it is passed over before
+ * anything is read of it.
+ */
+interface Prepared {
+  readonly count: number;
+  readonly displayMask: Int32Array;
+  readonly designationMask: Int32Array;
+  readonly displayPairs: Int32Array;
+  readonly designationPairs: Int32Array;
+  /** Characters besides spaces, for a name typed without its spaces. */
+  readonly displaySolid: Int32Array;
+  readonly designationSolid: Int32Array;
+  /**
+   * The characters beginning the words of either name (charMask), and those with the one after
+   * each (pairBit, pairBit2): a query of one character is looked for by the first, a longer one
+   * by the pairs.
+   */
+  readonly wordFirsts: Int32Array;
+  readonly wordPairs: Int32Array;
+  readonly wordPairs2: Int32Array;
+  /**
+   * By a length: the entries, in order, with a name or designation -- or one of a designation's
+   * several names -- of that many characters besides spaces, as any match scoring 0 has.
+   */
+  readonly wholeAt: ReadonlyMap<number, Int32Array>;
+}
+
+const preparedIndexes = new WeakMap<Searchable, Prepared>();
+
+/** An index part-way prepared: the entries before `next` are read. */
+interface Preparing extends Omit<Prepared, 'wholeAt'> {
+  readonly lists: Map<number, number[]>;
+  next: number;
+}
+
+const preparingIndexes = new WeakMap<Searchable, Preparing>();
+
+function startPreparing(count: number): Preparing {
+  return {
+    count,
+    displayMask: new Int32Array(count),
+    designationMask: new Int32Array(count),
+    displayPairs: new Int32Array(count),
+    designationPairs: new Int32Array(count),
+    displaySolid: new Int32Array(count),
+    designationSolid: new Int32Array(count),
+    wordFirsts: new Int32Array(count),
+    wordPairs: new Int32Array(count),
+    wordPairs2: new Int32Array(count),
+    lists: new Map(),
+    next: 0,
+  };
+}
+
+/** Lists entry `k` under a length (wholeAt), once. */
+function listUnder(p: Preparing, length: number, k: number): void {
+  let entries = p.lists.get(length);
+  if (entries === undefined) {
+    entries = [];
+    p.lists.set(length, entries);
+  }
+  if (entries[entries.length - 1] !== k) {
+    entries.push(k);
+  }
+}
+
+/** Reads one name of entry `k`, its display or its designation, into `p`. */
+function readName(p: Preparing, field: string, k: number, mask: Int32Array, pairs: Int32Array, solid: Int32Array): void {
+  // One pass: the characters, their pairs, those not spaces, and the words' starts -- each
+  // word beginning the name or following a space.
+  let characters = 0;
+  let pairsHeld = 0;
+  let solidCount = 0;
+  let firsts = 0;
+  let wordPairs = 0;
+  let wordPairs2 = 0;
+  let previous = 32;
+  for (let at = 0; at < field.length; at += 1) {
+    const c = field.charCodeAt(at);
+    characters |= charBit(c);
+    if (c !== 32) {
+      solidCount += 1;
+    }
+    if (at > 0) {
+      pairsHeld |= pairBit(previous, c);
+    }
+    if (at === 0 || previous === 32) {
+      firsts |= charBit(c);
+      if (at + 1 < field.length) {
+        const next = field.charCodeAt(at + 1);
+        wordPairs |= pairBit(c, next);
+        wordPairs2 |= pairBit2(c, next);
+      }
+    }
+    previous = c;
+  }
+  mask[k] = characters;
+  pairs[k] = pairsHeld;
+  solid[k] = solidCount;
+  p.wordFirsts[k]! |= firsts;
+  p.wordPairs[k]! |= wordPairs;
+  p.wordPairs2[k]! |= wordPairs2;
+  listUnder(p, solidCount, k);
+  // One of several names, between its '|'s; its spaces either side are not counted.
+  if (field.includes('|')) {
+    for (const name of field.split('|')) {
+      listUnder(p, solidLength(name), k);
+    }
+  }
+}
+
+/**
+ * Prepares `index` until it is done -- returning it -- or until `deadline`, a performance.now()
+ * time, has passed, returning null to be called again.
+ */
+function prepare(index: Searchable, deadline: number): Prepared | null {
+  const count = Math.min(index.display.length, index.designation.length);
+  const cached = preparedIndexes.get(index);
+  if (cached !== undefined && cached.count === count) {
+    return cached;
+  }
+  let p = preparingIndexes.get(index);
+  if (p === undefined || p.count !== count) {
+    p = startPreparing(count);
+    preparingIndexes.set(index, p);
+  }
+  for (; p.next < count; p.next += 1) {
+    if ((p.next & 1023) === 0 && deadline !== Infinity && performance.now() > deadline) {
+      return null;
+    }
+    const k = p.next;
+    readName(p, index.display[k]!, k, p.displayMask, p.displayPairs, p.displaySolid);
+    readName(p, index.designation[k]!, k, p.designationMask, p.designationPairs, p.designationSolid);
+  }
+  const prepared: Prepared = {
+    count,
+    displayMask: p.displayMask,
+    designationMask: p.designationMask,
+    displayPairs: p.displayPairs,
+    designationPairs: p.designationPairs,
+    displaySolid: p.displaySolid,
+    designationSolid: p.designationSolid,
+    wordFirsts: p.wordFirsts,
+    wordPairs: p.wordPairs,
+    wordPairs2: p.wordPairs2,
+    wholeAt: new Map([...p.lists].map(([length, entries]) => [length, Int32Array.from(entries)])),
+  };
+  preparedIndexes.set(index, prepared);
+  preparingIndexes.delete(index);
+  return prepared;
+}
+
+function preparedOf(index: Searchable): Prepared {
+  return prepare(index, Infinity)!;
+}
+
+/**
+ * Prepares an index for searchNames ahead of it, so that the first search after it arrives does
+ * not: some tens of milliseconds for the largest, done in idle moments a few milliseconds at a
+ * time (SearchPanel.tsx). Goes on until `deadline`, a performance.now() time; true once done.
+ */
+export function prepareSearch(index: Searchable, deadline = Infinity): boolean {
+  return prepare(index, deadline) !== null;
 }
 
 /** Reads belt.json and the names it points at; null where either is not there. */

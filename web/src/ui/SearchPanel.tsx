@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternal
 import { BELT_FAMILIES, httpBeltFetchers, type BeltSource } from '../core/belt.ts';
 import { addBeltBody, beltBodyId } from '../core/beltBodies.ts';
 import {
+  prepareSearch,
   searchable,
   searchNames,
   type NameIndex,
@@ -59,6 +60,7 @@ import {
 } from '../core/laniakea.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { renderDemand } from '../core/renderDemand.ts';
+import { whenIdle } from '../core/idle.ts';
 import { systemDisplayName, type StarNameIndex, type Stars3dSource } from '../core/stars3d.ts';
 import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
@@ -147,6 +149,9 @@ const EXO_LIMIT = 12;
 const PULSAR_LIMIT = 10;
 const CLUSTER_LIMIT = 8;
 const GALAXY_LIMIT = 10;
+
+/** The longest an idle moment spends preparing the indexes for search, ms. */
+const PREPARE_SLICE_MS = 6;
 
 /** The hosts' rings' colour (scene/ExoplanetHosts.tsx). */
 const HOST_COLOR = '#7fc4c0';
@@ -307,6 +312,47 @@ export function SearchPanel({
     void laniakea.request();
     void laniakeaNames.request();
   }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters, localGroup, localVolume, laniakea, laniakeaNames]);
+
+  // Each index prepared for searching as it arrives (beltNames.ts prepareSearch): in idle
+  // moments, a few milliseconds at a time, rather than all at once on the next keystroke.
+  useEffect(() => {
+    const indexes = [
+      nameIndex,
+      cometIndex,
+      sgpIndex,
+      bulkNames,
+      starIndex,
+      archive?.search,
+      pulsarArchive?.search,
+      clusterArchive?.search,
+      galaxyArchive?.search,
+      volumeArchive?.search,
+      laniakeaIndex?.search,
+      structureIndex,
+    ].filter((index): index is Searchable => index != null);
+    let cancel = (): void => {};
+    const step = (): void => {
+      const deadline = performance.now() + PREPARE_SLICE_MS;
+      if (!indexes.every((index) => prepareSearch(index, deadline))) {
+        cancel = whenIdle(step);
+      }
+    };
+    cancel = whenIdle(step);
+    return () => cancel();
+  }, [
+    nameIndex,
+    cometIndex,
+    sgpIndex,
+    bulkNames,
+    starIndex,
+    archive,
+    pulsarArchive,
+    clusterArchive,
+    galaxyArchive,
+    volumeArchive,
+    laniakeaIndex,
+    structureIndex,
+  ]);
 
   const results = useMemo((): Result[] => {
     void version;

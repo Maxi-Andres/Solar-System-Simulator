@@ -27,6 +27,15 @@ import type { LayerId } from '../state/store.ts';
  * as well as "2004 s 12".
  */
 export function normalizeName(text: string): string {
+  // Plain ASCII, as nearly every catalogue name is, has no accents to take apart and no letter
+  // past z: the same result, without the Unicode passes that were most of an index's making.
+  const ascii = asciiForm(text);
+  if (ascii === CLEAN) {
+    return text.toLowerCase();
+  }
+  if (ascii === ASCII) {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
   return text
     .normalize('NFD')
     // Combining marks, and modifier letters such as the ʻokina in Hiʻiaka, which Unicode
@@ -37,9 +46,63 @@ export function normalizeName(text: string): string {
     .trim();
 }
 
+/** Letters and digits with single spaces between, ASCII: lower case is all it needs. */
+const CLEAN = 0;
+/** ASCII with something else in it: a hyphen, a slash, two spaces. */
+const ASCII = 1;
+const UNICODE = 2;
+
+function asciiForm(text: string): typeof CLEAN | typeof ASCII | typeof UNICODE {
+  let form: typeof CLEAN | typeof ASCII = CLEAN;
+  let previousSpace = true;
+  for (let k = 0; k < text.length; k += 1) {
+    const c = text.charCodeAt(k);
+    if (c > 0x7f) {
+      return UNICODE;
+    }
+    if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57)) {
+      previousSpace = false;
+    } else if (c === 32 && !previousSpace) {
+      previousSpace = true;
+    } else {
+      form = ASCII;
+    }
+  }
+  return previousSpace && text.length > 0 ? ASCII : form;
+}
+
 /** The same without its spaces, so "s2004s12" and "s 2004 s 12" meet. */
 function squeezed(text: string): string {
   return text.replace(/ /g, '');
+}
+
+/**
+ * normalizeName and squeezed, remembered: searchBodies reads every body's name, parent,
+ * operator, kind and other names each keystroke, nearly a thousand bodies, and they are the
+ * same strings each time. Emptied if it ever grows past any list of bodies.
+ */
+const normalizedOf = new Map<string, string>();
+const squeezedOf = new Map<string, string>();
+const REMEMBERED = 50_000;
+
+function normalizedName(text: string): string {
+  let value = normalizedOf.get(text);
+  if (value === undefined) {
+    if (normalizedOf.size >= REMEMBERED) normalizedOf.clear();
+    value = normalizeName(text);
+    normalizedOf.set(text, value);
+  }
+  return value;
+}
+
+function squeezedName(text: string): string {
+  let value = squeezedOf.get(text);
+  if (value === undefined) {
+    if (squeezedOf.size >= REMEMBERED) squeezedOf.clear();
+    value = squeezed(text);
+    squeezedOf.set(text, value);
+  }
+  return value;
 }
 
 /** What a result says under its name: its kind, and what it belongs to. */
@@ -179,7 +242,7 @@ function wordScore(word: string, field: string): number | null {
   if (field.includes(` ${word}`)) {
     return 2;
   }
-  if (field.includes(word) || squeezed(field).includes(word)) {
+  if (field.includes(word) || squeezedName(field).includes(word)) {
     return 3;
   }
   return null;
@@ -213,15 +276,16 @@ export function searchBodies(
     return [];
   }
   const nameOf = new Map(bodies.map((body) => [body.id, body.name] as const));
-  const whole = squeezed(words.join(' '));
+  const typed = words.join(' ');
+  const whole = squeezed(typed);
 
   const results: SearchResult[] = [];
   for (const body of bodies) {
-    const name = normalizeName(body.name);
-    const parentName = body.parent === null ? '' : normalizeName(nameOf.get(body.parent) ?? '');
+    const name = normalizedName(body.name);
+    const parentName = body.parent === null ? '' : normalizedName(nameOf.get(body.parent) ?? '');
     const tag = body.kind === 'satellite' ? satelliteBodyTag(body.id) : null;
-    const operator = normalizeName(body.mission?.operator ?? tag?.operator ?? '');
-    const kind = normalizeName(
+    const operator = normalizedName(body.mission?.operator ?? tag?.operator ?? '');
+    const kind = normalizedName(
       `${body.kind} ${body.kind === 'spacecraft' ? 'craft probe' : body.kind === 'satellite' ? 'earth' : ''}`,
     );
     // A satellite is also found by its catalogue name and numbers: "ISS", "HST", "25544",
@@ -231,14 +295,14 @@ export function searchBodies(
     const catalogue =
       tag === null
         ? body.kind === 'structure'
-          ? normalizeName(recordHolderAliases(body.id))
+          ? normalizedName(recordHolderAliases(body.id))
           : body.kind === 'nebula' || body.kind === 'deep-sky'
-            ? normalizeName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
+            ? normalizedName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
             : ''
-        : normalizeName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
+        : normalizedName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
-    const exact = name === words.join(' ') || squeezed(name) === whole;
+    const exact = name === typed || squeezedName(name) === whole;
     let score = exact ? 0 : 0.5;
     let matched = true;
     for (const word of words) {
