@@ -231,8 +231,11 @@ function CraftFacts({
   return (
     <>
       <Row label="Signal time to Earth">{signal === null ? '--' : formatLightTime(signal)}</Row>
-      {/* The largest deployed dimension, which is what the radius stands for. */}
-      <Row label="Span">{`${(body.radiusEquatorialKm * 2000).toFixed(1)} m`}</Row>
+      {/* The largest deployed dimension, which is what the radius stands for -- unless none
+          is published, and the radius only frames the camera (SWFO-L1). */}
+      <Row label="Span">
+        {body.radiusPublished === false ? 'Unpublished' : `${(body.radiusEquatorialKm * 2000).toFixed(1)} m`}
+      </Row>
       {mission !== null && (
         <>
           <Row label="Operator">{mission.operator}</Row>
@@ -320,6 +323,11 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
 
   return (
     <>
+      {(COMPANION_FACTS[body.id] ?? []).map(([label, value]) => (
+        <Row key={label} label={label}>
+          {value}
+        </Row>
+      ))}
       {body.radiusPublished === false ? (
         // Most of the small irregular moons: an orbit and no measured size.
         <Row label="Radius">Not published by JPL</Row>
@@ -405,6 +413,24 @@ function NaturalFacts({ store }: { store: EphemerisStore }) {
     </>
   );
 }
+
+/**
+ * What Earth's companions are (tools/src/earthCompanions.ts, where the papers are cited): an
+ * orbit about the Sun says nothing of how either moves against Earth.
+ */
+const COMPANION_FACTS: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  '2025-pn7': [
+    ['What', 'Quasi-satellite of Earth'],
+    ['Moves', 'Loops round Earth yearly, bound to the Sun'],
+    ['For', 'About 128 years in all (de la Fuente Marcos 2025)'],
+  ],
+  '2024-pt5': [
+    ['What', 'Mini-moon: captured by Earth'],
+    ['Captured', '2024-09-29 to 2024-11-25'],
+    ['Moves', 'Never once round Earth: a horseshoe flyby'],
+    ['Origin', 'Likely lunar ejecta (Kareta et al. 2025)'],
+  ],
+};
 
 /**
  * Why a body has no surface map, for the bodies where the reason is known.

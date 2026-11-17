@@ -3,7 +3,8 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { rebaseFrame, type FrameSnapshot } from './floatingOrigin.ts';
-import { angularRadiusPixels, kmToUnits, satelliteOpacity } from './scale.ts';
+import { isLandingSite, landingSiteVisibility } from '../core/landingSites.ts';
+import { angularRadiusPixels, kmToUnits, satelliteOpacity, unitsToKm } from './scale.ts';
 
 /**
  * How much of a moon to show this frame, 1 to 0. Always 1 for a body with no parent.
@@ -28,6 +29,25 @@ export function satelliteVisibility(
   const parent = snapshot.bodies.get(body.parent);
   if (parent === undefined) {
     return 0;
+  }
+
+  // A landing site has a rule of its own: the ground it stands on large, and that side of it
+  // turned to the camera.
+  if (isLandingSite(body.id)) {
+    const own = snapshot.bodies.get(body.id);
+    if (own === undefined) {
+      return 0;
+    }
+    const host = store.body(body.parent);
+    const cameraKm: Vec3 = { x: unitsToKm(cameraUnits.x), y: unitsToKm(cameraUnits.y), z: unitsToKm(cameraUnits.z) };
+    return landingSiteVisibility(
+      parent.positionKm,
+      own.positionKm,
+      host.radiusEquatorialKm,
+      cameraKm,
+      viewportHeightPx,
+      fovDeg,
+    );
   }
 
   // The osculating semi-major axis is the orbit's size to well under a percent for

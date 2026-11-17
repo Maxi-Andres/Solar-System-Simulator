@@ -341,6 +341,10 @@ describe('the moons are drawn the way their maps are drawn', () => {
     // [moon, feature, latitude, longitude east, bright or dark]
     ['moon', 'Mare Crisium', 16.18, 59.1, 'dark'],
     ['moon', 'Tycho', -43.3, -11.22, 'bright'],
+    // Two landing sites at LROC's coordinates (core/landingSites.ts), which must fall on the
+    // maria they landed on: Apollo 11 in Tranquillitatis, Chang'e 5 in Procellarum, west.
+    ['moon', 'Apollo 11 site', 0.67416, 23.47314, 'dark'],
+    ['moon', 'Chang’e 5 site', 43.0576, 308.0839, 'dark'],
     ['io', 'Loki Patera', 13.01, 360 - 308.79, 'dark'],
     ['ganymede', 'Tros', 11.14, 360 - 27.26, 'bright'],
     ['callisto', 'Valhalla', 14.7, 360 - 56, 'bright'],

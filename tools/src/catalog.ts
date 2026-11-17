@@ -9,6 +9,7 @@ import { SMALL_MOON_RECORDS } from './moons/smallMoons.ts';
 import { MOON_ORIENTATION } from './moonRotation.ts';
 import { SMALL_BODIES } from './smallBodies.ts';
 import { FAR_BODIES } from './farBodies.ts';
+import { EARTH_COMPANIONS } from './earthCompanions.ts';
 import { MINOR_PLANET_MOONS } from './moons/minorPlanetMoons.ts';
 import { FAMOUS_COMETS } from './famousComets.ts';
 import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
@@ -640,8 +641,12 @@ interface SpacecraftSpec {
   readonly parentHorizonsId: string | null;
   /** The coarse step refinement starts from, days. See `SPACECRAFT` below. */
   readonly stepDays: number;
-  /** Largest deployed dimension, metres. */
-  readonly spanM: number;
+  /**
+   * Largest deployed dimension, metres, or null where none is published: the radius is
+   * then UNPUBLISHED_SPAN_M's nominal one, which only frames the camera, and the body says
+   * so (radiusPublished false), as a small moon of unknown size does.
+   */
+  readonly spanM: number | null;
   readonly launchUtc: string;
   readonly operator: string;
   /** See Mission.endUtc: only for a craft that was destroyed. */
@@ -663,7 +668,7 @@ interface SpacecraftSpec {
  */
 function spacecraft(spec: SpacecraftSpec): BodyDefinition {
   const center = spec.parentHorizonsId === null ? SSB_CENTER : `500@${spec.parentHorizonsId}`;
-  const radiusKm = spec.spanM / 2 / 1000;
+  const radiusKm = (spec.spanM ?? UNPUBLISHED_SPAN_M) / 2 / 1000;
   return {
     id: spec.id,
     name: spec.name,
@@ -696,8 +701,16 @@ function spacecraft(spec: SpacecraftSpec): BodyDefinition {
       site: null,
       shape: spec.shape,
     },
+    ...(spec.spanM === null ? { radiusPublished: false } : {}),
   };
 }
+
+/**
+ * The span a craft of no published size is framed by, metres: a nominal metre, as a small
+ * moon of unknown size gets a nominal kilometre. Not a measurement, and nothing is drawn
+ * that size: such a craft has no shape either, and is a marker at any range.
+ */
+const UNPUBLISHED_SPAN_M = 1;
 
 /**
  * What each craft looks like up close, and which way it faces. See CraftShape.
@@ -1279,6 +1292,13 @@ const SPACECRAFT: readonly BodyDefinition[] = [
  *   LICIACube      0.3 x 0.2 x 0.1   a 6U CubeSat (Horizons)
  *   Akatsuki       5.1 x 1.4 x 1.0   5.1 m across the paddles; body 1.5 x 1.0 x 1.4
  *                                    (JAXA ISAS)
+ *   Carruthers     1.72 x 1.08 x 0.97  the craft whole (Horizons); its arrays are fixed,
+ *                                    so its span is the box's length
+ *
+ * **No size** for SWFO-L1: NOAA, NASA and BAE give its mass, 377 kg, and its ESPA Grande
+ * class, nothing more (rechecked 2026-11-17), so it is drawn as a marker with a nominal
+ * span (UNPUBLISHED_SPAN_M) that only frames the camera, and its panel says the size is
+ * unpublished.
  *
  * **No shape** for Aditya-L1: ISRO publishes only its 6 m magnetometer boom, and a box
  * needs three dimensions. Its marker stays at any range. The figures quoted elsewhere --
@@ -1430,6 +1450,7 @@ const MORE_SHAPES = {
     rollAxis: [0, 1, 0],
   },
   akatsuki: { ...BOX, boxM: [5.1, 1.4, 1.0] },
+  carruthers: { ...BOX, boxM: [1.72, 1.08, 0.97] },
 } as const satisfies Record<string, CraftShape>;
 
 /**
@@ -1449,14 +1470,13 @@ const MORE_SHAPES = {
  * away from one. Without that the L1 group alone cost thousands of requests a run,
  * chasing the few-kilometre seams JPL's trajectory files leave about weekly.
  *
- * Left out for now: SWFO-L1 and the Carruthers Geocorona Observatory, both launched with
- * IMAP in 2025, whose dimensions have not been published (rechecked 2026-11-16 for SWFO-L1:
- * NOAA, NASA and BAE give its mass, 377 kg, and its ESPA Grande class, no size); and the
- * Tesla Roadster, whose Horizons object is the Falcon upper stage with the car on it, whose
- * size is not published either.
+ * Left out for now: the Tesla Roadster, whose Horizons object is the Falcon upper stage with
+ * the car on it, whose size is not published.
  *
- * Added 2026-11-16: LISA Pathfinder, STEREO-B, MMX, Herschel and Planck. Not in Horizons at
- * all, so not here: Queqiao and Queqiao-2, Chang'e 2 and 5, Tianwen-2, Spektr-RG and IKAROS.
+ * Added 2026-11-16: LISA Pathfinder, STEREO-B, MMX, Herschel and Planck. Added 2026-11-17:
+ * SWFO-L1 and the Carruthers Geocorona Observatory, launched with IMAP. Not in Horizons at
+ * all, so not here: Queqiao and Queqiao-2, Chang'e 2 and 5, Tianwen-2, Spektr-RG and IKAROS
+ * (rechecked 2026-11-17: Horizons' only Chang'e objects are three spent boosters).
  * WMAP is, but its trajectory ends on 2009-04-07, before the window; WISE is, to its re-entry
  * on 2024-11-02, but in low Earth orbit from TLEs, eight years of 95-minute orbits a close
  * orbiter's few months could not hold.
@@ -1541,6 +1561,36 @@ const MORE_SPACECRAFT: readonly BodyDefinition[] = [
     launchUtc: '2023-09-02T06:20:00Z',
     operator: 'ISRO',
     color: '#e8a878',
+  }),
+  // NOAA's space-weather monitor, renamed SOLAR-1 on reaching L1. Launch and path from the
+  // Horizons summary: 73 files from launch, tracked to 2026-10-27, predicted to 2028-04-21.
+  spacecraft({
+    id: 'swfo-l1',
+    shape: null,
+    name: 'SOLAR-1 (SWFO-L1)',
+    horizonsId: '-231',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: null,
+    launchUtc: '2025-09-24T11:30:00Z',
+    operator: 'NOAA',
+    color: '#d0b8a0',
+  }),
+  // Launch, size and path from the Horizons summary: UC Berkeley SSL's trajectory, tracked to
+  // 2026-10-27, predicted to 2028-03-19.
+  spacecraft({
+    id: 'carruthers',
+    shape: MORE_SHAPES.carruthers,
+    name: 'Carruthers Geocorona Observatory',
+    horizonsId: '-171',
+    parent: 'earth',
+    parentHorizonsId: '399',
+    stepDays: 1,
+    spanM: 1.72,
+    launchUtc: '2025-09-24T11:30:00Z',
+    operator: 'NASA',
+    color: '#b0c0e0',
   }),
   // Near Earth: the Sun-Earth L2 point, and beyond.
   spacecraft({
@@ -2979,6 +3029,7 @@ export const CATALOG: readonly BodyDefinition[] = [
   },
   ...SMALL_BODIES,
   ...FAR_BODIES,
+  ...EARTH_COMPANIONS,
   ...FAMOUS_COMETS,
   ...MOONS,
   ...SMALL_MOONS,

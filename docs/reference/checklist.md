@@ -101,8 +101,8 @@ Where things come from:
 - [x] WIND: body, `Wind`.
 - [x] SOHO: body.
 - [x] LISA Pathfinder: body, ESA's trajectory to 2017-06-30, where JPL's ends.
-- [x] Sun-Earth L1: marked, `Sun–Earth L1`; SOHO, ACE, Wind, DSCOVR, Aditya-L1 and IMAP
-  are bodies.
+- [x] Sun-Earth L1: marked, `Sun–Earth L1`; SOHO, ACE, Wind, DSCOVR, Aditya-L1, IMAP,
+  SWFO-L1 and Carruthers are bodies.
 - [x] DSCOVR: body.
 - [x] ACE: body.
 - [x] Itokawa: belt, `25143 Itokawa`.
@@ -393,16 +393,16 @@ What the map does not show but a realism-first simulator should. These are unche
 ### Near Earth
 - [~] Kármán line (100 km): Magnetosphere layer. Not yet: Armstrong limit (19 km), noctilucent clouds (~83 km), sprites and jets, the ionosphere's layers, altitude records (X-15, SR-71, Eustace's jump)
 - [~] Van Allen belts, magnetopause (~10 R⊕), bow shock: Magnetosphere layer, standard models (`web/src/core/magnetosphere.ts`). Not yet: plasmasphere, magnetotail, geocorona (~630,000 km), Earth's umbra and Hill sphere
-- [ ] SWFO-L1 at Sun–Earth L1; Roman on its way to L2 (launched 2026-08-30 *(unverified)*). The other L1 and L2 craft are in the app.
-- [ ] Observatories in Earth orbit: Swift, NuSTAR, TESS, IXPE, XRISM, Einstein Probe, SVOM, SPHEREx, PUNCH
-- [ ] Earth's companions: quasi-moon 2025 PN7, mini-moon 2024 PT5
-- [ ] Craft at the Moon: the Gateway's orbit, Danuri, Queqiao-2, CAPSTONE; Artemis II's trajectory (April 2026)
-- [ ] Landing sites on the Moon: Apollo, Chang'e 4/5/6, Chandrayaan-3, SLIM, Blue Ghost 1
+- [x] SWFO-L1 at Sun–Earth L1: body, `SOLAR-1 (SWFO-L1)` (Horizons -231, to 2028-04-21), a marker since its size is unpublished; with it the Carruthers Geocorona Observatory (-171, to 2028-03-19), a box of its published size. Roman on its way to L2: body (Horizons -211), launched 2026-08-30 11:26 UTC (its Horizons summary). The other L1 and L2 craft are in the app.
+- [x] Observatories in Earth orbit: Swift, NuSTAR, IXPE named, with model or box; TESS body (Horizons -95); XRISM, Einstein Probe, SVOM, SPHEREx and PUNCH's four CelesTrak points (`XRISM`, `EINSTEIN PROBE`, `SVOM`, `SPHEREX (MIDEX 9)`, `PUNCH-NFI (SMEX 15A)`, `PUNCH-WFI 1-3`)
+- [x] Earth's companions: quasi-moon 2025 PN7, mini-moon 2024 PT5: bodies on JPL's vectors (`earthCompanions.ts`, `DES=2025 PN7;`, `DES=2024 PT5;`), markers (size unmeasured); the panel says what each is
+- [~] Craft at the Moon: Danuri, CAPSTONE (in the near-rectilinear halo orbit planned for the Gateway) and Artemis II's trajectory (April 2026) are bodies. Not yet: the Gateway's own orbit (not launched, nothing in Horizons); Queqiao-2 (not in Horizons, rechecked 2026-11-17)
+- [x] Landing sites on the Moon: Apollo, Chang'e 4/5/6, Chandrayaan-3, SLIM, Blue Ghost 1: Landing Sites layer (`web/src/core/landingSites.ts`), LROC's measured positions, with Surveyor 1, Lunokhod 1 and 2, Chang'e 3; and on Mars Viking 1 and 2, Pathfinder, Spirit, Opportunity, Phoenix, Tianwen-1's lander. Not yet: Luna 9 (not in LROC's table); Zhurong's last stop (unpublished)
 
 ### Inner Solar System
 - [ ] The Sun's layers and its Alfvén surface; the zodiacal dust cloud; the heliospheric current sheet
 - [ ] Mars orbiters and rovers: MRO, MAVEN, Mars Express, Odyssey, TGO, Hope, Tianwen-1, Perseverance, Curiosity, Zhurong, ESCAPADE
-- [ ] Craft on the way: Psyche, Europa Clipper, JUICE, Hera, OSIRIS-APEX, Hayabusa2#, Tianwen-2, BepiColombo (into Mercury orbit 2026-11-21)
+- [~] Craft on the way: Psyche, Europa Clipper, JUICE, Hera, OSIRIS-APEX, Hayabusa2#, BepiColombo (into Mercury orbit 2026-11-21; Horizons' MPO trajectory runs to 2027-04-10) are bodies. Not yet: Tianwen-2 (not in Horizons, rechecked 2026-11-17)
 - [ ] Asteroids: Bennu, Ryugu, Didymos–Dimorphos, 2024 YR4, Toutatis, Phaethon, 16 Psyche, Dinkinesh–Selam, Donaldjohanson, Ida–Dactyl, Gaspra, Lutetia, Šteins, Mathilde; the Kirkwood gaps and the Hildas
 - [ ] Lucy's Trojan targets: Eurybates, Polymele, Leucus, Orus, Patroclus–Menoetius
 - [ ] Comets: Tsuchinshan–ATLAS, 12P/Pons–Brooks, 67P, Shoemaker–Levy 9 (historic)

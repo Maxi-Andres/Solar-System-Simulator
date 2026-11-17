@@ -39,6 +39,7 @@ import { regionOf } from './core/regions.ts';
 import { ensureLagrangePoints } from './core/lagrange.ts';
 import { ensureHeliosphereBodies } from './core/heliosphere.ts';
 import { ensureMagnetosphereBodies } from './core/magnetosphere.ts';
+import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -112,6 +113,11 @@ setFocusFraming((id) => {
   if (nebula !== null) {
     return nebula;
   }
+  // A landing site from straight above it, north up, the ground about it in view (landingSites.ts).
+  const site = landingSiteFraming(id);
+  if (site !== null) {
+    return site;
+  }
   // A Lagrange point or a boundary's mark, from far enough to see what it is about (regions.ts).
   const region = regionOf(id);
   if (region !== null) {
@@ -171,6 +177,7 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   lagrangePoints: ['region', 'lagrange-point'],
   heliosphere: ['region', 'heliosphere'],
   magnetosphere: ['region', 'magnetosphere'],
+  landingSites: ['region', 'landing-site'],
 };
 
 export function App() {
@@ -498,6 +505,8 @@ export function App() {
       ensureLagrangePoints(store);
       ensureHeliosphereBodies(store);
       ensureMagnetosphereBodies(store);
+      // The landing sites on the Moon and Mars: published coordinates, turned with the ground.
+      ensureLandingSites(store, () => clock.tdbJulianDay);
       renderDemand.request();
       // The record-holders, billions of light years off, are drawn only from far out: placed once
       // the first view is up -- their redshifts' integrals were a tenth of a second before it.
@@ -513,7 +522,7 @@ export function App() {
       };
     }
     return undefined;
-  }, [store]);
+  }, [store, clock]);
 
   // Alpha Centauri's three are bodies from the start, pinned: named on the sky from
   // anywhere, and a click on a name goes there, as for the planets (alphaCenBodies.ts).
@@ -662,9 +671,11 @@ export function App() {
       // And a famous comet on an open orbit: with no ellipse to carry it on, it is not placed
       // outside its table either (see the elements in ephemerisStore.ts).
       // And a satellite outside the days its elements are good for (see satelliteBodies.ts).
+      // And a landing site before its landing (landingSites.ts): the only regions with a span.
       const unplaceable =
         body.kind === 'spacecraft' ||
         body.kind === 'satellite' ||
+        (body.kind === 'region' && store.coverage(focus) !== null) ||
         (body.kind === 'comet' && !store.isPropagatedBody(focus) && store.elementsFor(focus) === null);
       if (unplaceable && !store.isCoveredAt(focus, clock.tdbJulianDay)) {
         setFocus(body.parent ?? 'sun');

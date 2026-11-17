@@ -55,8 +55,9 @@ export const estimatedSection: AboutSection = {
         </Sub>
         <Items>
           <Item title="Markers, not spheres">
-            A body with no measured size or shape is drawn as a marker: most of the small moons, and the named
-            small bodies no team has published a shape of.
+            A body with no measured size or shape is drawn as a marker: most of the small moons, the named
+            small bodies no team has published a shape of, and the craft whose size is unpublished, as
+            SWFO-L1’s is.
             <Why>
               a sphere of a size nobody has measured would look exactly like one that was measured. The same
               marker stands in for any body under about three pixels, however well its size is known — see{' '}

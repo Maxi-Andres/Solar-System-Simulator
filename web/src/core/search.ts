@@ -201,7 +201,11 @@ export function layersFor(body: BodyDefinition): LayerId[] {
       return deepSkyLayerKind(body.id) === NOTABLE_STAR_KIND ? ['notableStars'] : ['messier'];
     case 'region': {
       const region = regionOf(body.id);
-      return region === null ? [] : [REGION_LAYER_IDS[region.layer]];
+      if (region === null) return [];
+      // A site on the Moon wants the Moon drawn under it.
+      return region.layer === 'landing-site' && region.parent === 'moon'
+        ? ['moons', REGION_LAYER_IDS[region.layer]]
+        : [REGION_LAYER_IDS[region.layer]];
     }
   }
 }

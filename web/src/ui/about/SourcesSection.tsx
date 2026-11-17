@@ -128,6 +128,12 @@ export const sourcesSection: AboutSection = {
             Perseverance stand, from NASA/JPL-Caltech’s <Strong>Mars mission maps</Strong>.
           </Item>
           <Item>
+            Landing sites on the Moon from the <Strong>Lunar Reconnaissance Orbiter Camera</Strong> team’s
+            measurements: NASA/GSFC/Arizona State University. On Mars, from HiRISE images, NASA/JPL-Caltech/
+            University of Arizona, as Konopliv et al. 2026 list them; Spirit’s and Opportunity’s drives from the
+            MER Analyst’s Notebook, PDS Geosciences Node, Washington University in St. Louis.
+          </Item>
+          <Item>
             This research has made use of the NASA Exoplanet Archive, which is operated by the California
             Institute of Technology, under contract with the National Aeronautics and Space Administration
             under the Exoplanet Exploration Program.

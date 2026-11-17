@@ -71,6 +71,7 @@ export type LayerId =
   | 'lagrangePoints'
   | 'heliosphere'
   | 'magnetosphere'
+  | 'landingSites'
   | 'starMap'
   | 'exoplanetHosts'
   | 'pulsars'
@@ -220,6 +221,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // of thousands more as dots. Off by default: they matter only near Earth, and switched
   // on they download a few megabytes.
   { id: 'satellites', label: 'Satellites', hint: "Earth's satellites.", pending: null },
+  // Where craft landed on the Moon and Mars, as orbiters' cameras found them
+  // (core/landingSites.ts): marks on the ground, turned with it, named only when the body
+  // is large on the screen. On: real places, with real hardware on them.
+  { id: 'landingSites', label: 'Landing Sites', hint: 'Where craft landed on the Moon and Mars.', pending: null },
 
   // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
   // be its orbit drawn twice, so the layer is the craft's alone.
@@ -261,6 +266,8 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   lagrangePoints: false,
   heliosphere: false,
   magnetosphere: false,
+  // Real places, the hardware still on them: on, as the spacecraft are.
+  landingSites: true,
   starMap: true,
   exoplanetHosts: true,
   pulsars: false,

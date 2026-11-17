@@ -124,6 +124,14 @@ export const measuredSection: AboutSection = {
             systems. ʻOumuamua’s path includes the push Micheli et al. found
             <Cite k="micheli2018" />, measured only over its 80 days of data.
           </Item>
+          <Item>
+            Earth’s companions, on JPL’s paths about the Sun: 2025 PN7, a quasi-satellite that loops round
+            Earth once a year while bound only to the Sun
+            <Cite k="delaFuenteMarcos2025" />, and 2024 PT5, Earth’s mini-moon from 29 September to 25
+            November 2024, which never went once round it
+            <Cite k="delaFuenteMarcos2024" /> and whose spectrum is lunar rock
+            <Cite k="kareta2025" />. Only their brightness is measured, so no size is drawn.
+          </Item>
           {beltInfo !== null && <Item>{beltSentence(beltInfo, beltTiers)}</Item>}
           <Item>
             How far the belt and the comets drift from their real paths, and what their dots mean:{' '}
@@ -167,6 +175,15 @@ export const measuredSection: AboutSection = {
             where the craft has been, reaching back one period of the orbit it is on now and fading with age,
             so Parker Solar Probe shows the loop it has just flown — bright at the craft, gone a period ago —
             rather than all of them.
+          </Item>
+          <Item>
+            Landing sites, where the hardware was found in orbiters’ images: on the Moon by LRO’s camera, to a
+            few metres <Cite k={['wagner2017', 'lroc']} />; on Mars by HiRISE, tied to MOLA to 100–300 m
+            <Cite k={['konopliv2026', 'wan2021']} />. Viking 2’s is the NSSDCA’s, which says neither how nor in
+            what frame <Cite k="nssdca" />, and Phoenix’s its mission notebook’s; Spirit’s and Opportunity’s last
+            stops are their HiRISE landing points plus the drives in NASA’s traverse files, summed here
+            <Cite k="merNotebook" />. Each turns with its body by the rotation its map is drawn with, on the
+            smooth ellipsoid, and is named only when that body is large on the screen.
           </Item>
         </Items>
 
