@@ -1,20 +1,34 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 
-import { GALAXY_FRAMING_KM, LANIAKEA_FRAMING_KM, LIGHT_YEAR_KM, LOCAL_GROUP_FRAMING_KM, MAX_VIEW_DISTANCE_KM, OBSERVABLE_UNIVERSE_FRAMING_KM } from './scale.ts';
+import {
+  GALAXY_FRAMING_KM,
+  LANIAKEA_FRAMING_KM,
+  LIGHT_YEAR_KM,
+  LOCAL_GROUP_FRAMING_KM,
+  LOCAL_VOLUME_FRAMING_KM,
+  MAX_VIEW_DISTANCE_KM,
+  NEARBY_UNIVERSE_FRAMING_KM,
+  OBSERVABLE_UNIVERSE_FRAMING_KM,
+} from './scale.ts';
 import {
   CMB_EMITTED_K,
+  CMB_FROM_LY,
   cmbColour,
   cmbLut,
   cmbTexCoord,
   cmbVisibility,
   LAST_SCATTERING_RADIUS_KM,
   LUT_SIZE,
+  PLANCK_RANGE_UK,
+  planckColour,
 } from './cmb.ts';
-import { galacticDirection } from './galactic.ts';
+import { equatorialDirection, galacticDirection } from './galactic.ts';
 import { glowDisplay } from './glowBuffer.ts';
+import { equatorialToEcliptic } from './orientation.ts';
 
 describe('the last-scattering sphere', () => {
   it('is 45.3 billion ly about the Sun, and was 2,973 K when its light left', () => {
@@ -22,14 +36,25 @@ describe('the last-scattering sphere', () => {
     expect(CMB_EMITTED_K).toBeCloseTo(2973, 0);
   });
 
-  it('is never drawn from inside it, nor anywhere near: not on the sky of a galaxy or the Solar System', () => {
-    for (const km of [1, GALAXY_FRAMING_KM, LOCAL_GROUP_FRAMING_KM, LANIAKEA_FRAMING_KM, LAST_SCATTERING_RADIUS_KM, 1.3 * LAST_SCATTERING_RADIUS_KM]) {
+  it('is seen only from inside: the camera never goes past 0.9 of its radius', () => {
+    expect(MAX_VIEW_DISTANCE_KM).toBeLessThan(0.9 * LAST_SCATTERING_RADIUS_KM);
+    expect(OBSERVABLE_UNIVERSE_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
+    // Past the farthest record-holder, MoM-z14, 33.9 billion ly out, with room on its far side.
+    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBeGreaterThan(33.9e9 + 5e9);
+  });
+
+  it('is never on the sky of the Solar System, the galaxy, the Local Group or Laniakea, and whole far out', () => {
+    for (const km of [1, GALAXY_FRAMING_KM, LOCAL_GROUP_FRAMING_KM, LOCAL_VOLUME_FRAMING_KM, NEARBY_UNIVERSE_FRAMING_KM]) {
       expect(cmbVisibility(km)).toBe(0);
     }
+    // Laniakea's view, 1.8 billion ly from its attractor: some 2 billion from the Sun.
+    expect(cmbVisibility(LANIAKEA_FRAMING_KM + 0.4e9 * LIGHT_YEAR_KM)).toBe(0);
+    expect(cmbVisibility(CMB_FROM_LY * LIGHT_YEAR_KM)).toBe(0);
+    expect(cmbVisibility(6e9 * LIGHT_YEAR_KM)).toBeGreaterThan(0);
+    expect(cmbVisibility(6e9 * LIGHT_YEAR_KM)).toBeLessThan(1);
+    expect(cmbVisibility(15e9 * LIGHT_YEAR_KM)).toBe(1);
     expect(cmbVisibility(OBSERVABLE_UNIVERSE_FRAMING_KM)).toBe(1);
     expect(cmbVisibility(MAX_VIEW_DISTANCE_KM)).toBe(1);
-    expect(cmbVisibility(100e9 * LIGHT_YEAR_KM)).toBeGreaterThan(0);
-    expect(cmbVisibility(100e9 * LIGHT_YEAR_KM)).toBeLessThan(1);
   });
 
   it('reads the map at each direction’s Galactic longitude and latitude, l = 0 in the middle, growing left', () => {
@@ -71,11 +96,70 @@ describe('the last-scattering sphere', () => {
     const lut = cmbLut({ zeroLevel: 128, microkelvinPerStep: 4 });
     expect(lut).toHaveLength(LUT_SIZE);
     expect(lut[16]).toEqual(cmbColour(0));
+    const planck = cmbLut({ zeroLevel: 128, microkelvinPerStep: 4 }, 'planck');
+    expect(planck).toHaveLength(LUT_SIZE);
+    expect(planck[16]).toEqual(planckColour(0));
   });
 
-  // Its near half drawn was an opaque disc over the quasars, the deep fields and the record-holders,
-  // and from just outside, the sphere overfilling the frame, a brown fog over the whole view.
-  it('draws only its far half, a bowl behind what it encloses', async () => {
+  it('as Planck’s map, runs blue to cyan to cream to orange to red, over ±300 µK', () => {
+    const byte = (dT: number) => planckColour(dT).map((x) => Math.round(x * 255));
+    expect(byte(-PLANCK_RANGE_UK)).toEqual([0, 0, 255]);
+    expect(byte(-1000)).toEqual([0, 0, 255]);
+    expect(byte(PLANCK_RANGE_UK)).toEqual([100, 0, 0]);
+    expect(byte(1000)).toEqual([100, 0, 0]);
+    // The table's own entries (Planck_Parchment_RGB.txt): 85 cyan, 127 cream, 170 orange, 212 red.
+    const at = (index: number) => (index / 255) * 2 * PLANCK_RANGE_UK - PLANCK_RANGE_UK;
+    expect(byte(at(85))).toEqual([0, 221, 255]);
+    expect(byte(at(127))).toEqual([255, 237, 217]);
+    expect(byte(at(170))).toEqual([255, 180, 0]);
+    expect(byte(at(212))).toEqual([255, 75, 0]);
+    // And between them, as the table's to its rounding: entry 96 is (66, 225, 245), 200 is (255, 105, 0).
+    const near = (got: number[], want: number[]) => got.forEach((x, c) => expect(Math.abs(x - want[c]!)).toBeLessThanOrEqual(1));
+    near(byte(at(96)), [66, 225, 245]);
+    near(byte(at(200)), [255, 105, 0]);
+    // The mean a pale cream; cold blue, warm red.
+    expect(Math.min(...planckColour(0))).toBeGreaterThan(0.8);
+    expect(planckColour(-150)[2]).toBeGreaterThan(planckColour(-150)[0]);
+    expect(planckColour(150)[0]).toBeGreaterThan(planckColour(150)[2]);
+  });
+
+  // Seen from inside, the sky as seen from here and not its mirror: the Cold Spot (Cruz et al.
+  // 2007, RA 03h15m05s, Dec -19 deg 35 arcmin; Galactic l 209, b -57), placed through the scene's
+  // own frame, falls on the map's coldest patch there -- and the patch mirrored in longitude, which
+  // a map flipped east for west would put there, is not cold.
+  it('puts the Cold Spot where it is in the sky', async () => {
+    const dir = join(import.meta.dirname, '..', '..', 'public', 'cmb');
+    const info = JSON.parse(await readFile(join(dir, 'cmb.json'), 'utf8')) as { file: string; zeroLevel: number; microkelvinPerStep: number };
+    const png = PNG.sync.read(await readFile(join(dir, info.file)));
+    const meanAround = (centre: { x: number; y: number; z: number }, radiusDeg: number): number => {
+      let sum = 0;
+      let count = 0;
+      const cosRadius = Math.cos((radiusDeg * Math.PI) / 180);
+      // Directions about the centre, every half degree, read through the shader's own lookup.
+      for (let lat = -90; lat <= 90; lat += 0.5) {
+        const step = 0.5 / Math.max(0.05, Math.cos((lat * Math.PI) / 180));
+        for (let lon = 0; lon < 360; lon += step) {
+          const d = galacticDirection(lon, lat);
+          if (d.x * centre.x + d.y * centre.y + d.z * centre.z < cosRadius) continue;
+          const [u, v] = cmbTexCoord(d);
+          const x = Math.min(png.width - 1, Math.floor(u * png.width));
+          const y = Math.min(png.height - 1, Math.floor((1 - v) * png.height));
+          sum += (png.data[(y * png.width + x) * 4]! - info.zeroLevel) * info.microkelvinPerStep;
+          count += 1;
+        }
+      }
+      return sum / count;
+    };
+    const coldSpot = equatorialToEcliptic(equatorialDirection(48.771, -19.583));
+    const catalogued = galacticDirection(209, -57);
+    expect(coldSpot.x * catalogued.x + coldSpot.y * catalogued.y + coldSpot.z * catalogued.z).toBeGreaterThan(Math.cos(Math.PI / 180));
+    expect(meanAround(coldSpot, 4)).toBeLessThan(-100);
+    expect(meanAround(galacticDirection(151, -57), 4)).toBeGreaterThan(-30);
+  });
+
+  // From inside, its inside faces are all of it; its outside faces were, while the camera could be
+  // outside, an opaque disc over the quasars, the deep fields and the record-holders.
+  it('draws its inside, behind what it encloses', async () => {
     const source = await readFile(join(import.meta.dirname, 'CosmicMicrowaveBackground.tsx'), 'utf8');
     expect(source).toContain('side: THREE.BackSide');
     expect(source).not.toContain('THREE.FrontSide');

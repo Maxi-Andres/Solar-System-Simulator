@@ -80,29 +80,42 @@ export const LIGHT_YEAR_KM = 299_792.458 * 365.25 * 86_400;
 export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
 
 /**
- * The farthest the camera may pull back from its focus, km: **400 billion light years** since
- * the observable universe (G4); 3 billion since Laniakea (G3); 200 million since the Local Volume
- * and the Virgo Cluster (G2); 40 million since the Local Group (G1); 400,000 since the Milky Way
- * model (D2b), 3,000 before it.
+ * The farthest the camera may pull back from its focus, km -- and the farthest it may ever be
+ * from the Sun, wherever it is focused (CameraRig's bound): **40 billion light years** since the
+ * observable universe is seen from inside (G4b); 400 billion when it was seen from outside (G4);
+ * 3 billion since Laniakea (G3); 200 million since the Local Volume and the Virgo Cluster (G2); 40
+ * million since the Local Group (G1); 400,000 since the Milky Way model (D2b), 3,000 before it.
  *
- * Now set by the observable universe, by the same rule as everything before it: the farthest
- * thing worth seeing whole -- and there is nothing farther. Its radius, the comoving distance to
- * the particle horizon, is 14,160 Mpc, 46.2 billion ly, in Planck 2018's cosmology (cosmology.ts
- * OBSERVABLE_RADIUS_MPC); the CMB's last-scattering sphere is just inside it, 45.3 billion. In
- * the inner half of the 27-degree frame's height, an angular radius of 6.75 degrees, the sphere
- * fits from 46.2 / sin(6.75 deg) = 393 billion ly: 400, rounded up, as the 3,000 ly was.
+ * Now set by the CMB's last-scattering sphere, 45.3 billion ly about the Sun (cmb.ts), and by
+ * what it means: every observer is at the centre of a sphere of their own, and no one can stand
+ * outside theirs (Maxi, 2026-11-17: "que estemos adentro, que no se pueda ver desde afuera"). So
+ * the camera stays inside it, 5.3 billion ly short of it at the most, the wall of the sky all
+ * about -- 0.88 of its radius. Past everything drawn in it: the farthest record-holder, MoM-z14,
+ * is 33.9 billion ly out (core/recordHolders.ts), the quasars reach 28; focused on MoM-z14 the
+ * camera still has 6 billion ly of room on its far side. From 40 billion the wall straight ahead,
+ * past the Sun, is 85 billion ly off and the one behind 5.3: the far plane (logDepth.ts) holds
+ * both with room.
  *
  * **The number depends on the cosmology, and mostly on H0.** At a fixed matter density every
  * distance here scales as 1 / H0: in Laniakea's catalogue's cosmology, Cosmicflows-4's H0 74.6
- * and Omega_m 0.3, the radius is 42.6 billion ly, the CMB's sphere 41.7 -- 8 % nearer, about the
- * ratio of the two H0s, 67.66 / 74.6 = 0.907, the rest Omega_m's 0.3111 against 0.3. Planck's is
- * the one used for everything past the catalogue (cosmology.ts says why); 400 billion frames
- * either.
+ * and Omega_m 0.3, the CMB's sphere is 41.7 billion ly -- 8 % nearer, about the ratio of the two
+ * H0s, 67.66 / 74.6 = 0.907, the rest Omega_m's 0.3111 against 0.3. Planck's is the one used for
+ * everything past the catalogue (cosmology.ts says why), and 40 is inside either.
  *
- * float32 at the camera is then 3.8e21 scene units out: a step of 2^48 = 2.8e14 units, 30,000
- * ly, 7.4e-8 of the distance, as at every scale before -- a ten-thousandth of a pixel's angle. The depth buffer's range is logDepth.ts's. Nothing here reaches the GPU as an absolute
- * position: the CMB's sphere is a unit sphere scaled about the Sun, relative to the focus, and
- * the record-holders are bodies, placed as every body is.
+ * float32 at the camera is then 3.8e20 scene units out: a step of 2^45 = 3.5e13 units, 3,700
+ * ly, 9e-8 of the distance, as at every scale before -- a ten-thousandth of a pixel's angle. The
+ * depth buffer's range is logDepth.ts's. Nothing here reaches the GPU as an absolute position:
+ * the CMB's sphere is a unit sphere scaled about the Sun, relative to the focus, and the
+ * record-holders are bodies, placed as every body is.
+ *
+ * What the 400 billion was, kept because its argument held at its own scale, from outside:
+ *
+ * Set by the observable universe, by the same rule as everything before it: the farthest thing
+ * worth seeing whole -- and there is nothing farther. Its radius, the comoving distance to the
+ * particle horizon, is 14,160 Mpc, 46.2 billion ly, in Planck 2018's cosmology (cosmology.ts
+ * OBSERVABLE_RADIUS_MPC). In the inner half of the 27-degree frame's height, an angular radius of
+ * 6.75 degrees, the sphere fit from 46.2 / sin(6.75 deg) = 393 billion ly: 400, rounded up. A view
+ * no one could have, of a ball that is not one.
  *
  * What the 3 billion was, kept because its argument still holds at its own scale:
  *
@@ -180,16 +193,18 @@ export const PARSEC_KM = (AU_KM * 648_000) / Math.PI;
  * 2.1e6 units, 1.4e-8 AU per AU, 7e-8 of the distance, a fraction of a pixel's angle
  * (5e-4 rad) for anything the camera can see from there.
  */
-export const MAX_VIEW_DISTANCE_KM = 400e9 * LIGHT_YEAR_KM;
+export const MAX_VIEW_DISTANCE_KM = 40e9 * LIGHT_YEAR_KM;
 
 /**
- * Where the breadcrumb's Observable Universe puts the camera, km from the Sun: 250 billion ly,
- * over the supergalactic pole turned as Laniakea's (supergalactic.ts OBSERVABLE_UNIVERSE_VIEW),
- * so the zoom out from Laniakea's view goes on along the same line. The observable universe's
- * 46.2 billion ly is asin(46.2 / 250) = 10.6 degrees from here, inside the frame's half-height of
- * 13.5: the CMB's sphere whole, with room about it.
+ * Where the breadcrumb's Observable Universe puts the camera, km from the Sun: 36 billion ly,
+ * inside the last-scattering sphere as the camera always is, over the supergalactic pole turned
+ * as Laniakea's (supergalactic.ts OBSERVABLE_UNIVERSE_VIEW), so the zoom out from Laniakea's view
+ * goes on along the same line -- looking back at the Sun, the CMB's wall behind it 81 billion ly
+ * off, filling the frame about the quasars' and the record-holders' marks. Past where the
+ * catalogue's 700 Mpc folds into the Nearby Universe (homeName.ts), and 4 billion ly short of the
+ * farthest the camera goes, so there is still a little to pull back.
  */
-export const OBSERVABLE_UNIVERSE_FRAMING_KM = 250e9 * LIGHT_YEAR_KM;
+export const OBSERVABLE_UNIVERSE_FRAMING_KM = 36e9 * LIGHT_YEAR_KM;
 
 /**
  * Where the breadcrumb's Local Group puts the camera, km from the Sun: 8 million ly, looking

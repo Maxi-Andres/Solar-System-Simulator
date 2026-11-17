@@ -104,12 +104,11 @@ describe('the logarithmic depth buffer', () => {
   });
 
   it('holds the farthest place the camera can see from the farthest it can stand', () => {
-    // Focused on the farthest record-holder, 34 billion ly out, the camera 400 billion ly off
-    // it, and the observable universe's far side 46.2 billion ly beyond the Sun the other way.
+    // The camera 40 billion ly from the Sun at most, inside the CMB's sphere (scale.ts), and the
+    // observable universe's far side 46.2 billion ly beyond the Sun the other way.
     const LY_KM = 299_792.458 * 365.25 * 86_400;
-    const farthestKm = 400e9 * LY_KM + 34e9 * LY_KM + 46.2e9 * LY_KM;
+    const farthestKm = 40e9 * LY_KM + 46.2e9 * LY_KM;
     expect(kmToUnits(farthestKm)).toBeLessThan(CAMERA_FAR_UNITS);
-    expect(kmToUnits(farthestKm)).toBeGreaterThan(CAMERA_FAR_UNITS / 3);
     // And in float32, the logarithm the fragment writes still steps finer than the buffer.
     const w = kmToUnits(farthestKm) / CAMERA_NEAR_UNITS;
     expect(Number.isFinite(Math.fround(w))).toBe(true);

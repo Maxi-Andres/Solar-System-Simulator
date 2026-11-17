@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { homeNames } from './homeName.ts';
+import { homeNames, NEARBY_UNIVERSE_FOLD_LATEST_KM } from './homeName.ts';
 import {
   FOV_DEG,
   GALAXY_FRAMING_KM,
@@ -13,6 +13,7 @@ import {
   VIRGO_FRAMING_KM,
   LANIAKEA_FRAMING_KM,
   NEARBY_UNIVERSE_FRAMING_KM,
+  OBSERVABLE_UNIVERSE_FRAMING_KM,
 } from './scale.ts';
 import { LANIAKEA_TURN_DEG, LANIAKEA_VIEW, LOCAL_VOLUME_VIEW, M87_DEC_DEG, M87_RA_DEG, SUPERGALACTIC_POLE } from './supergalactic.ts';
 import { equatorialDirection } from './galactic.ts';
@@ -88,6 +89,11 @@ describe('the name of home from afar', () => {
     expect(at(24e9 * LIGHT_YEAR_KM).centre).not.toBe('Nearby Universe');
     expect(at(27e9 * LIGHT_YEAR_KM)).toMatchObject({ centre: 'Nearby Universe', nearbyUniverseFolded: true, localVolumeFolded: true });
     expect(at(MAX_VIEW_DISTANCE_KM).centre).toBe('Nearby Universe');
+    // And from 30 billion ly whatever the screen: on a 2160-pixel one the pixels alone would wait
+    // for 64 billion, past the farthest the camera goes.
+    expect(homeNames(NEARBY_UNIVERSE_FOLD_LATEST_KM * 0.99, 2160, FOV_DEG).centre).toBe('You are here');
+    expect(homeNames(NEARBY_UNIVERSE_FOLD_LATEST_KM, 2160, FOV_DEG).centre).toBe('Nearby Universe');
+    expect(homeNames(OBSERVABLE_UNIVERSE_FRAMING_KM, 2160, FOV_DEG).centre).toBe('Nearby Universe');
   });
 
   it('goes up a level and never back down as the camera goes out', () => {
@@ -137,8 +143,8 @@ describe('the views beyond the Local Group', () => {
     expect(LOCAL_VOLUME_FRAMING_KM).toBeLessThan(NEARBY_UNIVERSE_FRAMING_KM);
     expect(LANIAKEA_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
     expect(NEARBY_UNIVERSE_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
-    // Past the catalogue's 703 Mpc, 2.3 billion ly -- and since G4 past the observable universe.
-    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(400e9);
+    // Past the catalogue's 703 Mpc, 2.3 billion ly -- and since G4b inside the CMB's sphere.
+    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(40e9);
     expect(MAX_VIEW_DISTANCE_KM).toBeGreaterThan(703e6 * PARSEC_KM);
   });
 });

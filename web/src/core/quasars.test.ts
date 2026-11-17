@@ -103,12 +103,9 @@ describe('the quasars drawn', () => {
   it('stay as wedges to the farthest the camera goes, where the galaxies’ maps are gone', () => {
     const half = 4.82e9;
     const ppr = 1000;
-    for (const ly of [10e9, 50e9, 200e9]) expect(quasarFloorShown(half, ly * LIGHT_YEAR_PC, ppr)).toBe(1);
-    // The galaxies' rule has them gone from 60 billion ly; the quasars' keeps half at the scene's 400.
-    expect(floorShown(half, 60e9 * LIGHT_YEAR_PC, ppr)).toBe(0);
-    const atMost = quasarFloorShown(half, 400e9 * LIGHT_YEAR_PC, ppr);
-    expect(atMost).toBeCloseTo(0.5, 6);
-    expect(quasarFloorShown(half, 800e9 * LIGHT_YEAR_PC, ppr)).toBe(0);
+    for (const ly of [10e9, 30e9, 40e9]) expect(quasarFloorShown(half, ly * LIGHT_YEAR_PC, ppr)).toBe(1);
+    // The galaxies' rule has them gone at the farthest the camera goes, 40 billion ly; the quasars' keeps them.
+    expect(floorShown(half, 40e9 * LIGHT_YEAR_PC, ppr)).toBe(0);
     // A speck: gone at 6 pixels in radius.
     expect(quasarFloorShown(half, 100e9 * LIGHT_YEAR_PC, 30)).toBe(0);
   });

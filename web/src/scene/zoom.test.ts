@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LIGHT_YEAR_KM } from './scale.ts';
 import {
   easeDistance,
+  farthestInside,
   MAX_STREAK_GAIN,
   newStreak,
   PIXELS_PER_NOTCH,
@@ -87,5 +88,27 @@ describe('zooming across twenty orders of magnitude', () => {
       frames += 1;
     }
     expect(frames).toBeLessThan(60);
+  });
+});
+
+describe('the bound about the Sun', () => {
+  const R = 40;
+  it('lets the camera out to the radius when the Sun is the focus, whichever way it looks', () => {
+    for (const d of [{ x: 1, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }, { x: 0.6, y: 0.8, z: 0 }]) {
+      expect(farthestInside({ x: 0, y: 0, z: 0 }, d, R)).toBeCloseTo(R, 12);
+    }
+  });
+
+  it('gives a focus far out little room beyond it and much toward the Sun', () => {
+    // A record-holder 33.9 out along +x: the Sun is at -33.9 from it.
+    const sun = { x: -33.9, y: 0, z: 0 };
+    expect(farthestInside(sun, { x: 1, y: 0, z: 0 }, R)).toBeCloseTo(6.1, 12);
+    expect(farthestInside(sun, { x: -1, y: 0, z: 0 }, R)).toBeCloseTo(73.9, 12);
+    // Sideways: the chord's half, sqrt(40^2 - 33.9^2).
+    expect(farthestInside(sun, { x: 0, y: 1, z: 0 }, R)).toBeCloseTo(Math.sqrt(R * R - 33.9 * 33.9), 12);
+  });
+
+  it('sets no bound from outside, where none could hold', () => {
+    expect(farthestInside({ x: -50, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, R)).toBe(Infinity);
   });
 });

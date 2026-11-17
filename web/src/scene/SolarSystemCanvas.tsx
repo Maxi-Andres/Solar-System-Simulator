@@ -250,6 +250,20 @@ export function SolarSystemCanvas({
   // The same way, this frame's rebased positions: worked out once, by the scene, and
   // read by the labels instead of being worked out again. See SharedFrame.
   const sharedFrame = useMemo<SharedFrame>(() => ({ snapshot: null }), []);
+  // The sphere the camera never leaves, about the Sun, whatever it is focused on: inside the
+  // CMB's, as everyone is (scale.ts MAX_VIEW_DISTANCE_KM, CameraRig's bound).
+  const cameraBound = useMemo(
+    () => ({
+      radius: kmToUnits(MAX_VIEW_DISTANCE_KM),
+      centre: (out: { set: (x: number, y: number, z: number) => unknown }): boolean => {
+        const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+        if (sun === null) return false;
+        out.set(kmToUnits(sun.position.x), kmToUnits(sun.position.y), kmToUnits(sun.position.z));
+        return true;
+      },
+    }),
+    [store, clock, focus],
+  );
 
   // Anything the scene is told changes what it draws, and almost none of it reaches a
   // react-three-fiber prop, which would ask for a frame by itself: the scene reads these
@@ -459,6 +473,7 @@ export function SolarSystemCanvas({
         framingDistance={framingUnits}
         minDistance={radiusUnits * 1.05}
         maxDistance={kmToUnits(MAX_VIEW_DISTANCE_KM)}
+        bound={cameraBound}
       />
       <ScaleBarProbe elements={scaleBar} />
       {/* Decides whether another frame follows this one. See renderDemand.ts. */}

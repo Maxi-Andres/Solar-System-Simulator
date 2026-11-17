@@ -1,6 +1,7 @@
 import type { BodyId } from '@sss/tools/types';
 import { create } from 'zustand';
 
+import type { CmbColours } from '../scene/cmb.ts';
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
 import { ALL_BELT_FAMILIES, toggledFamily } from '../core/belt.ts';
 import { ALL_SATELLITE_CHIPS, toggledChip } from '../core/satelliteGroups.ts';
@@ -370,6 +371,12 @@ export interface ViewState {
    */
   readonly satelliteChips: number;
   /**
+   * How the CMB's map is coloured (scene/cmb.ts): true colour, its light as it left, by default
+   * -- realism first -- or Planck's map, false colour. Kept between visits like the belt's
+   * families.
+   */
+  readonly cmbColours: CmbColours;
+  /**
    * Whether the camera is in the Solar System (scene/inSolarSystem.ts), kept by
    * SolarSystemWatch: while it is, the nebulae and supernova remnants are not drawn.
    */
@@ -383,6 +390,7 @@ export interface ViewState {
   readonly setBeltTiers: (tiers: number) => void;
   readonly toggleBeltFamily: (index: number) => void;
   readonly toggleSatelliteChip: (index: number) => void;
+  readonly setCmbColours: (colours: CmbColours) => void;
   readonly togglePanel: (id: PanelId) => void;
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
@@ -400,6 +408,9 @@ export const BELT_FAMILIES_KEY = 'belt-families';
 /** Where the satellites' chips are kept between visits; see `satelliteChips`. */
 export const SATELLITE_CHIPS_KEY = 'satellite-chips';
 
+/** Where the CMB's colours are kept between visits, 0 true colour and 1 Planck's map; see `cmbColours`. */
+export const CMB_COLOURS_KEY = 'cmb-colours';
+
 export const useViewStore = create<ViewState>((set, get) => ({
   focus: 'sun',
   layers: DEFAULT_LAYER_STATE,
@@ -414,12 +425,13 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // older stored value, and junk beyond them is dropped.
   beltFamilies: readStoredInteger(BELT_FAMILIES_KEY, ALL_BELT_FAMILIES, 0) & ALL_BELT_FAMILIES,
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
+  cmbColours: readStoredInteger(CMB_COLOURS_KEY, 0, 0) === 1 ? 'planck' : 'true',
   inSolarSystem: true,
 
   setFocus: (id) => {
     const state = get();
     if (id === state.focus) {
-      // Chosen again -- the breadcrumb's Solar System with the Sun in focus from 250 billion
+      // Chosen again -- the breadcrumb's Solar System with the Sun in focus from 36 billion
       // light years out: framed again, as a new focus is, unless a framing already waits.
       if (state.framingRequestKm !== null) return;
       const own = focusFraming?.(id) ?? null;
@@ -457,6 +469,11 @@ export const useViewStore = create<ViewState>((set, get) => ({
     const satelliteChips = toggledChip(get().satelliteChips, index);
     writeStoredInteger(SATELLITE_CHIPS_KEY, satelliteChips);
     set({ satelliteChips });
+  },
+
+  setCmbColours: (colours) => {
+    writeStoredInteger(CMB_COLOURS_KEY, colours === 'planck' ? 1 : 0);
+    set({ cmbColours: colours });
   },
 
   setLighting: (mode) => {

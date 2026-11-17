@@ -748,39 +748,44 @@ export const choicesSection: AboutSection = {
             the two differ by a tenth.
             <Why>only Planck’s fits the expansion’s whole history: with 74.6 the universe would be younger than its oldest stars.</Why>
           </Item>
-          <Item title="The CMB as it left, a thousand times stronger">
-            Today the CMB is 2.7 K, invisible. It is drawn the orange of 2,973 K, its colour when it left, and each
-            point a blackbody 1,000 times as far from that as Planck measured: hot spots yellower and brighter, cold
-            ones redder and dimmer. Its brightness overall is a display level.
-            <Why>its spots are a hundred-thousandth of its temperature: true to scale, a blank orange sphere.</Why>
+          <Item title="The CMB in two colourings, true colour first">
+            Its light is microwaves, 2.7 K: no eye sees it. Two ways to draw it, chosen under the Observable Universe
+            layer. <em>True colour</em>, the default: the orange of 2,973 K, its colour when it left, each point a
+            blackbody 1,000 times as far from that as Planck measured — hot spots yellower and brighter, cold ones
+            redder and dimmer; its brightness overall a display level. <em>Planck map</em>: false colour, Planck’s own
+            colour scale for its maps <Cite k="planckColours" />, dark blue for 300 millionths of a degree colder than
+            the mean through cream to dark red for 300 warmer. Nothing in it is light: the colours stand for
+            temperature.
+            <Why>true colour is the light as it was, so it comes first; its spots are a hundred-thousandth of its temperature, a blank orange true to scale. Planck’s map is the picture everyone knows.</Why>
           </Item>
-          <Item title="Seen from outside">
-            Only its far half is drawn, from inside: a bowl bearing the sky as seen from here. No one can stand there. It
-            is what every direction from here shows at 13.8 billion years’ look-back, centred on us; anyone elsewhere has
-            a sphere of their own. Drawn only from 60 billion ly out, whole from 150; never on a nearer sky, where it is
-            the microwave glow no eye sees.
+          <Item title="Seen from inside">
+            The camera never leaves it: 40 billion ly from the Sun at most, the sphere 45.3. It is what every
+            direction from here shows at 13.8 billion years’ look-back, centred on us, and anyone elsewhere has a
+            sphere of their own: there is no outside to stand in. So it is the wall of the sky all about, the Cold
+            Spot toward Eridanus as in our sky. Drawn only from 3 billion ly out, whole from 15; never on the sky of the
+            Solar System, the galaxy, the Local Group or Laniakea, where it is the microwave glow no eye sees.
           </Item>
           <Item title="What it encloses, drawn over it">
-            Its near half is not drawn: Laniakea’s galaxies, the quasars and the record-holders’ marks lie in front of
-            its far half.
-            <Why>a shell of opaque plasma seen from outside would hide everything in it.</Why>
+            Laniakea’s galaxies, the quasars and the record-holders’ marks lie in front of the wall.
+            <Why>it is behind everything we see, in every direction.</Why>
           </Item>
           <Item title="Faint dots far off: a patch, then gone">
             A galaxy’s faint dot, drawn whatever its light, dims once the nearer half of its catalogue’s galaxies
             are under two pixels apart on the screen, just so the patch stays as bright as at two; under a twelfth
             of itself, fewer dots instead. A catalogue goes as its nearer half shrinks from 24 pixels in radius to
-            12, and every map of the web from 30 billion ly out, gone at 60, where the CMB starts. Each galaxy is
-            then its own light, which from there is nothing.
+            12, and every map of the web from 30 billion ly out, gone at 40, the farthest the camera goes. Each
+            galaxy is then its own light, which from there is nothing; the quasars stay.
             <Why>added up whole, Laniakea’s dots were a glare over the Sun; taken away at a pixel apart, a catalogue went while still a cloud.</Why>
           </Item>
           <Item title="Record-holders as marks">
             Named from 3 billion ly out, all from 10 billion: not on Laniakea’s sky. Gone to, each is framed from a
             billion ly on our side, looking out along our line of sight.
           </Item>
-          <Item title="As far as 400 billion light years">
-            The camera pulls back that far: the observable universe in the inner half of the frame. The Observable
-            Universe view stands 250 billion ly out, over the supergalactic pole as Laniakea’s. From past about 26
-            to 32 billion ly, by the screen’s height, home is named the Nearby Universe and Laniakea’s structures
+          <Item title="As far as 40 billion light years">
+            The camera pulls back that far from the Sun, whatever it looks at: inside the CMB’s sphere, 5.3 billion
+            ly short of it. The Observable Universe view stands 36 billion ly out, over the supergalactic pole as
+            Laniakea’s, looking back at the Sun with the wall behind it. From about 26 billion ly out, by the
+            screen’s height, and from 30 on any screen, home is named the Nearby Universe and Laniakea’s structures
             fold into it.
           </Item>
         </Items>

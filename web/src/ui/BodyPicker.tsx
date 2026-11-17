@@ -94,8 +94,9 @@ import { Presence, useClosing } from './Presence.tsx';
  * the same way (VIRGO_FRAMING_KM), and its list the cluster's own groups and the way back. At a
  * galaxy of the Local Volume, Local Volume and that galaxy.
  *
- * Above it all, **Observable Universe** (G4): the Sun, the camera 250 billion light years out over
- * the supergalactic pole, the CMB's last-scattering sphere whole (OBSERVABLE_UNIVERSE_FRAMING_KM);
+ * Above it all, **Observable Universe** (G4): the Sun, the camera 36 billion light years out over
+ * the supergalactic pole, inside the CMB's last-scattering sphere, its wall behind the Sun
+ * (OBSERVABLE_UNIVERSE_FRAMING_KM);
  * its list, the record-holders, farthest first (recordHolders.ts). At one of them the breadcrumb
  * is Observable Universe and that record-holder: none is in Laniakea or near it.
  *
@@ -327,7 +328,7 @@ export function BodyPicker({
     onFocus('sun');
     renderDemand.request();
   };
-  // The observable universe: the Sun from 250 billion ly, and the record-holders under its caret.
+  // The observable universe: the Sun from 36 billion ly, and the record-holders under its caret.
   const recordHolder = recordHolderOf(focus);
   const toObservableUniverse = (): void => {
     requestFraming(OBSERVABLE_UNIVERSE_FRAMING_KM, OBSERVABLE_UNIVERSE_VIEW);

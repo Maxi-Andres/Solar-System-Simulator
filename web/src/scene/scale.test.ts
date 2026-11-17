@@ -489,25 +489,25 @@ describe('how far the camera may pull back', () => {
     expect((Math.asin(sphereKm / (1000 * LIGHT_YEAR_KM)) * 180) / Math.PI).toBeGreaterThan(FOV_DEG / 2);
   });
 
-  it('sees the whole observable universe, in the inner half of the frame, inside the far plane', () => {
-    // Its comoving radius in Planck 2018, 14,160 Mpc: 46.2 billion ly (cosmology.ts).
+  it('stays inside the observable universe, as everyone is, and sees its far side inside the far plane', () => {
+    // Its comoving radius in Planck 2018, 14,160 Mpc: 46.2 billion ly (cosmology.ts); the CMB's
+    // sphere 45.3, just inside it -- and the camera 40 at most from the Sun, inside both.
     const radiusKm = mpcToKm(OBSERVABLE_RADIUS_MPC);
     expect(radiusKm / LIGHT_YEAR_KM / 1e9).toBeCloseTo(46.2, 1);
-    expect((Math.asin(radiusKm / MAX_VIEW_DISTANCE_KM) * 180) / Math.PI).toBeLessThan(FOV_DEG / 4);
-    // From 300 billion ly it would not be in the inner half.
-    expect((Math.asin(radiusKm / (300e9 * LIGHT_YEAR_KM)) * 180) / Math.PI).toBeGreaterThan(FOV_DEG / 4);
-    // Its view, 250 billion ly out, holds it whole in the frame's height.
-    expect((Math.asin(radiusKm / OBSERVABLE_UNIVERSE_FRAMING_KM) * 180) / Math.PI).toBeLessThan(FOV_DEG / 2 - 2);
-    // The far side, from the farthest zoom behind a record-holder 34 billion ly out.
-    expect(kmToUnits(MAX_VIEW_DISTANCE_KM + 34e9 * LIGHT_YEAR_KM + radiusKm)).toBeLessThan(CAMERA_FAR_UNITS);
+    expect(MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM).toBe(40e9);
+    expect(MAX_VIEW_DISTANCE_KM).toBeLessThan(0.9 * radiusKm);
+    // Its view, 36 billion ly out, inside the farthest.
+    expect(OBSERVABLE_UNIVERSE_FRAMING_KM).toBeLessThan(MAX_VIEW_DISTANCE_KM);
+    // The far side, past the Sun from the farthest the camera stands.
+    expect(kmToUnits(MAX_VIEW_DISTANCE_KM + radiusKm)).toBeLessThan(CAMERA_FAR_UNITS);
   });
 
   it('keeps float32 a ten-thousandth of a pixel at the farthest zoom', () => {
     const units = kmToUnits(MAX_VIEW_DISTANCE_KM);
     const ulp = 2 ** (Math.floor(Math.log2(units)) - 23);
-    expect(ulp).toBe(2 ** 48);
+    expect(ulp).toBe(2 ** 45);
     expect(ulp / units).toBeLessThan(1e-7);
-    expect((ulp * KM_PER_UNIT) / LIGHT_YEAR_KM).toBeCloseTo(29_752, -1);
+    expect((ulp * KM_PER_UNIT) / LIGHT_YEAR_KM).toBeCloseTo(3_719, 0);
   });
 
   it('defines the light year and the parsec as the IAU does', () => {

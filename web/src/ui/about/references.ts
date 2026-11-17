@@ -2143,6 +2143,14 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         use: 'the CMB’s map: SMICA, inpainted, Nside 2048',
       },
       {
+        key: 'planckColours',
+        who: 'Planck Collaboration',
+        title: 'Planck_Parchment_RGB.txt: the colour table of Planck’s maps',
+        where: 'as distributed by A. Zonca, github.com/zonca/paperplots',
+        link: 'https://github.com/zonca/paperplots/blob/master/data/Planck_Parchment_RGB.txt',
+        use: 'the CMB’s Planck map colouring: blue to cream to red, −300 to +300 µK',
+      },
+      {
         key: 'fixsen2009',
         who: 'Fixsen 2009',
         title: 'The Temperature of the Cosmic Microwave Background',

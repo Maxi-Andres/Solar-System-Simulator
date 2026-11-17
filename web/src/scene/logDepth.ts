@@ -111,6 +111,11 @@ import * as THREE from 'three';
  * as before. And the projection term is still exactly 1 (far / near = 1e28), so nothing is ever
  * far-clipped. The near plane stays at a metre.
  *
+ * Since the observable universe is seen from inside (G4b) the camera stops at 40 billion ly from
+ * the Sun, and the farthest it sees is the CMB's wall past the Sun, 85 billion: a twelfth of the
+ * far plane. It is left where it is -- room costs nothing, and a nearer far plane would gain a few
+ * per cent on a step.
+ *
  * Applied by replacing the two shader chunks that compute it, which every built-in
  * material and every custom shader here that includes them picks up. It must run before
  * the first material compiles; importing this module does it.

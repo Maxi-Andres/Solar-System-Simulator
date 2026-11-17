@@ -109,3 +109,23 @@ export function easeDistance(current: number, target: number, damping = ZOOM_DAM
   }
   return current * Math.pow(target / current, damping);
 }
+
+/**
+ * How far the camera may go from its focus along `direction` (a unit vector) and stay within
+ * `radius` of `centre` -- both relative to the focus, in any one unit: the largest t with
+ * |t direction - centre| <= radius. What keeps the camera inside the CMB's sphere about the Sun
+ * whatever it is focused on (CameraRig, scale.ts MAX_VIEW_DISTANCE_KM). Infinity when the focus
+ * is itself outside, where no distance along the ray could keep it in: nothing focusable is.
+ */
+export function farthestInside(
+  centre: { readonly x: number; readonly y: number; readonly z: number },
+  direction: { readonly x: number; readonly y: number; readonly z: number },
+  radius: number,
+): number {
+  const along = centre.x * direction.x + centre.y * direction.y + centre.z * direction.z;
+  const fromCentreSq = centre.x * centre.x + centre.y * centre.y + centre.z * centre.z;
+  if (fromCentreSq > radius * radius) {
+    return Infinity;
+  }
+  return along + Math.sqrt(Math.max(0, along * along - fromCentreSq + radius * radius));
+}

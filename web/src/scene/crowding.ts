@@ -1,5 +1,4 @@
-import { CMB_FROM_LY } from './cmb.ts';
-import { LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
+import { LIGHT_YEAR_KM, MAX_VIEW_DISTANCE_KM, PARSEC_KM } from './scale.ts';
 
 /**
  * What a catalogue's faint-galaxy floor adds up to as the catalogue crowds on the screen (G4).
@@ -22,9 +21,11 @@ import { LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
  * never a slab. The patch goes as it shrinks to a speck -- its half-count radius from
  * SPECK_FULL_PX to SPECK_GONE_PX on the screen, where it says nothing the Sun's own mark does
  * not -- and, whatever its size, as the camera leaves the web for the observable universe: whole
- * to MAP_FULL_LY from the Sun, gone at CMB_FROM_LY, where the last-scattering sphere starts to be
- * drawn. A survey mapped billions of light years deep is still a few hundred pixels across from
- * there; the map yields to the sphere it sits at the centre of.
+ * to MAP_FULL_LY from the Sun, through the scale bar's billion light years (15 to 30 billion out),
+ * gone at MAP_GONE_LY, the farthest the camera goes (scale.ts MAX_VIEW_DISTANCE_KM, inside the
+ * CMB's sphere). A survey mapped billions of light years deep is still hundreds of pixels across
+ * from there; at the farthest view the quasars and the record-holders are the map, the CMB's wall
+ * behind them. (Gone at 60 billion while the camera could go on to 400, outside the sphere.)
  *
  * From inside the catalogue, or near it, nothing changes: Laniakea's own views keep every dot.
  */
@@ -35,7 +36,7 @@ export const SPECK_FULL_PX = 24;
 export const SPECK_GONE_PX = 12;
 /** The camera's distance from the Sun, light years: the map whole to the first, gone at the second, smoothly in the logarithm between. */
 export const MAP_FULL_LY = 30e9;
-export const MAP_GONE_LY = CMB_FROM_LY;
+export const MAP_GONE_LY = MAX_VIEW_DISTANCE_KM / LIGHT_YEAR_KM;
 
 const LIGHT_YEAR_PC = LIGHT_YEAR_KM / PARSEC_KM;
 

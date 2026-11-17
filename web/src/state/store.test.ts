@@ -156,7 +156,7 @@ describe('view store', () => {
     expect(useViewStore.getState().focus).toBe('pluto');
   });
 
-  // The breadcrumb's Solar System with the Sun already in focus, 250 billion light years out:
+  // The breadcrumb's Solar System with the Sun already in focus, from the Observable Universe's view:
   // it did nothing, and the CMB stayed on screen under a breadcrumb reading Solar System.
   it('asks for the focus to be framed again when it is chosen again', () => {
     useViewStore.getState().consumeFramingRequest();

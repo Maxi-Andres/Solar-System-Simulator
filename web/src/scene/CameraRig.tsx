@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { renderDemand } from '../core/renderDemand.ts';
 import { useViewStore, type FramingView } from '../state/store.ts';
 import { kmToUnits } from './scale.ts';
-import { easeDistance, newStreak, wheelPixels, wheelZoomFactor } from './zoom.ts';
+import { easeDistance, farthestInside, newStreak, wheelPixels, wheelZoomFactor } from './zoom.ts';
 
 /**
  * Free-rotation camera rig.
@@ -33,6 +33,13 @@ export interface CameraRigProps {
   /** Never let the camera closer than this, in scene units. */
   readonly minDistance: number;
   readonly maxDistance: number;
+  /**
+   * A sphere the camera never leaves, whatever its focus: `bound.centre` writes the sphere's
+   * centre relative to the focus, scene units, into `out` and says whether it could; `radius`,
+   * scene units. The CMB's sphere about the Sun (scale.ts MAX_VIEW_DISTANCE_KM): the zoom out
+   * stops at it, and a turn that would carry the camera out draws it in along its line of sight.
+   */
+  readonly bound?: { readonly centre: (out: THREE.Vector3) => boolean; readonly radius: number };
   /** Changing this reframes the camera. */
   readonly focusKey: string;
 }
@@ -51,11 +58,15 @@ const ROTATE_SPEED = 0.005;
  */
 const SETTLED_FRACTION = 1e-5;
 
+const scratchCentre = new THREE.Vector3();
+const scratchDirection = new THREE.Vector3();
+
 export function CameraRig({
   fovDeg,
   framingDistance,
   minDistance,
   maxDistance,
+  bound,
   focusKey,
 }: CameraRigProps) {
   const { camera, gl } = useThree();
@@ -268,10 +279,21 @@ export function CameraRig({
       );
     }
 
+    // The bound, along where the camera looks from now: the target held inside it, and the
+    // camera too -- a turn at the bound draws it in at once, never out past it for a frame.
+    let limit = Infinity;
+    if (bound !== undefined && bound.centre(scratchCentre)) {
+      scratchDirection.copy(offset.current).normalize();
+      limit = Math.max(minDistance, farthestInside(scratchCentre, scratchDirection, bound.radius));
+      if (targetDistance.current > limit) {
+        targetDistance.current = limit;
+      }
+    }
+
     // Ease the distance, in its logarithm (see zoom.ts); direction is applied immediately
     // so dragging stays crisp.
     const current = offset.current.length();
-    const eased = easeDistance(current, targetDistance.current);
+    const eased = Math.min(limit, easeDistance(current, targetDistance.current));
     offset.current.setLength(eased);
     // Still on its way: the next frame is part of the motion, whatever else is idle. The
     // toolbar's impulse needs nothing here -- it changed the view store, which asked.

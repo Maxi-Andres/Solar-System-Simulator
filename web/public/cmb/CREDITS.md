@@ -1,12 +1,14 @@
 # CMB map credits
 
 The map the last-scattering sphere is drawn with (`web/src/scene/cmb.ts`,
-`web/src/scene/CosmicMicrowaveBackground.tsx`). Loaded only once the camera is far outside the
-sphere, 60 billion light years from the Sun or more.
+`web/src/scene/CosmicMicrowaveBackground.tsx`). Loaded only once the camera is far out, 3 billion
+light years from the Sun or more.
 
-It is not shown as a picture of the sky. It is laid on a sphere of the CMB's comoving radius about
-the Sun, seen from outside, and each point is drawn as a blackbody whose departure from the mean
-temperature is made 1,000 times larger (see About, "The observable universe").
+It is laid on a sphere of the CMB's comoving radius about the Sun, seen from inside, as the wall of
+the sky. Each point is drawn either as a blackbody whose departure from the mean temperature is made
+1,000 times larger (true colour, the default), or in the Planck Collaboration's colour scale for its
+maps, Planck_Parchment_RGB.txt, over -300 to +300 uK (false colour). See About, "The observable
+universe".
 
 Every file added here must be recorded below with its source and credit.
 `web/src/scene/cmb.test.ts` enforces that.

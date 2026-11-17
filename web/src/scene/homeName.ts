@@ -34,7 +34,9 @@ import { angularRadiusPixels, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
  *   as small again, the Nearby Universe (`centre`): from the observable universe's view (G4) the
  *   whole of the mapped galaxies is one place among the record-holders, and the names of the
  *   clusters, superclusters, voids and walls fold into it (`nearbyUniverseFolded`; their marks
- *   too, markHosts.ts). On a 1080-pixel screen that is from 32 billion light years out.
+ *   too, markHosts.ts). On a 1080-pixel screen that is from 32 billion light years out; and
+ *   from NEARBY_UNIVERSE_FOLD_LATEST_KM however tall the screen, since the camera stops at 40
+ *   billion (scale.ts MAX_VIEW_DISTANCE_KM) and on a 1440-pixel one the pixels would wait for 43.
  *
  * By the camera's distance from the Sun, for both: from where the galaxy folds, 5 million
  * light years, its centre and the Sun are the same point.
@@ -59,6 +61,11 @@ export const LOCAL_GROUP_EXTENT_KM = 1e6 * PARSEC_KM;
 export const LOCAL_VOLUME_EXTENT_KM = 11e6 * PARSEC_KM;
 /** The Nearby Universe's: Laniakea's catalogue's reach, 700 Mpc (laniakea.json, Cosmicflows-4 and 2MRS). */
 export const NEARBY_UNIVERSE_EXTENT_KM = 700e6 * PARSEC_KM;
+/**
+ * The Nearby Universe is folded from here out whatever the screen: 30 billion light years, short
+ * of the Observable Universe's view (36) and of the farthest the camera goes (40).
+ */
+export const NEARBY_UNIVERSE_FOLD_LATEST_KM = 30e9 * LIGHT_YEAR_KM;
 export const ARM_NAMES_FROM_PX = 320;
 /** The Local Volume's radius on screen, pixels, below which home is named "You are here". */
 export const HERE_FOLD_PX = MILKY_WAY_FOLD_PX / 3;
@@ -84,7 +91,7 @@ export interface HomeNames {
 export function homeNames(cameraFromSunKm: number, viewportHeightPx: number, fovDeg: number): HomeNames {
   const px = (extentKm: number) => angularRadiusPixels(extentKm, cameraFromSunKm, viewportHeightPx, fovDeg);
   const galaxyPx = px(MILKY_WAY_EXTENT_KM);
-  if (px(NEARBY_UNIVERSE_EXTENT_KM) < MILKY_WAY_FOLD_PX) {
+  if (px(NEARBY_UNIVERSE_EXTENT_KM) < MILKY_WAY_FOLD_PX || cameraFromSunKm >= NEARBY_UNIVERSE_FOLD_LATEST_KM) {
     return {
       sun: 'none',
       centre: 'Nearby Universe',

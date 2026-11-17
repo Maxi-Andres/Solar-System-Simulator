@@ -7,26 +7,28 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { beginLoading } from '../core/loading.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { SimClock } from '../core/time.ts';
-import { cmbLut, cmbVisibility, LAST_SCATTERING_RADIUS_KM, LUT_SIZE, LUT_STEP } from './cmb.ts';
+import { useViewStore } from '../state/store.ts';
+import { cmbLut, cmbVisibility, LAST_SCATTERING_RADIUS_KM, LUT_SIZE, LUT_STEP, type CmbColours } from './cmb.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { GLOW_DISPLAY_GLSL } from './glowBuffer.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
-import { projectToScreen } from './screenProjection.ts';
 
 /**
  * The last-scattering sphere (G4): Planck's map of the CMB on a sphere of the CMB's comoving
- * distance about the Sun, drawn once the camera is far outside it (cmb.ts says what is drawn,
- * where and why; the About says it to the reader).
+ * distance about the Sun, the wall of the sky all about once the camera is far out -- seen from
+ * inside, as it only can be: the camera never leaves it (cmb.ts says what is drawn, where and
+ * why; the About says it to the reader).
  *
- * Its far half only: the inside of the hemisphere beyond the Sun, a bowl behind everything it
- * encloses. Its near half, drawn too, was a screen in front of all of it -- the quasars' wedges,
- * the large quasar groups, the deep fields' beams, the record-holders' marks under an opaque
- * tan disc -- and from just outside, where the sphere overfills the frame, a mottled brown fog
- * over the whole view. The far half's inside, seen from outside, is the sky as seen from here,
- * not its mirror image. Drawn first of what is transparent, writing no depth, so what it
- * encloses is drawn over it: a choice, stated in the About.
+ * Its inside faces (BackSide), which from inside are all of it, every way the camera turns.
+ * Drawn first of what is transparent, writing no depth, so everything it encloses -- the
+ * quasars' wedges, the deep fields' beams, the record-holders' marks -- is drawn over it. (Its
+ * outside faces, drawn when the camera could stand outside it, were an opaque screen in front
+ * of all of that.)
  *
- * Its map is loaded only once it is first wanted: 1 MB no one sees from inside.
+ * Its colours are the view store's cmbColours, true colour or Planck's map: a switch swaps the
+ * shader's table and how it is shown, not the map.
+ *
+ * Its map is loaded only once it is first wanted: 1 MB no one sees at nearer scales.
  */
 
 const VERTEX = /* glsl */ `
@@ -52,6 +54,8 @@ uniform mat3 uGalactic;
 uniform vec3 uLut[${LUT_SIZE}];
 uniform float uCentreTurn;
 uniform float uFade;
+// 1: the table is Planck's map's display colours, written as they are; 0: true colour, linear light.
+uniform float uDisplayed;
 
 varying vec3 vDirection;
 
@@ -75,16 +79,20 @@ void main() {
   float level = textureGrad(uMap, vec2(u, v), dx, dy).r * 255.0 / ${LUT_STEP.toFixed(1)};
   float i = clamp(level, 0.0, ${(LUT_SIZE - 1).toFixed(1)} - 0.001);
   int i0 = int(floor(i));
-  // Shown as every other glow is (glowBuffer.ts glowDisplay): its linear light, white columns,
-  // through the one shoulder and the sRGB encode -- not through the renderer's ACES curve,
-  // which no emitter here goes through.
-  gl_FragColor = vec4(glowDisplay(mix(uLut[i0], uLut[i0 + 1], fract(i))), uFade);
+  vec3 colour = mix(uLut[i0], uLut[i0 + 1], fract(i));
+  // True colour is shown as every other glow is (glowBuffer.ts glowDisplay): its linear light,
+  // white columns, through the one shoulder and the sRGB encode -- not through the renderer's
+  // ACES curve, which no emitter here goes through. Planck's colours are display colours already.
+  gl_FragColor = vec4(uDisplayed > 0.5 ? colour : glowDisplay(colour), uFade);
 }
 `;
 
-const LABEL_GAP_PX = 8;
-const scratchRight = new THREE.Vector3();
-const scratchPoint = new THREE.Vector3();
+/**
+ * Where its name is, as a fraction of the view from its left and from its top. From inside, the
+ * wall is behind everything on the screen and has no edge to name it at: the name stands low on
+ * the right, on the wall, clear of the Sun in the middle and of the scale bar at the bottom left.
+ */
+const LABEL_AT = { x: 0.78, y: 0.86 } as const;
 
 export function CosmicMicrowaveBackground({
   store,
@@ -101,6 +109,9 @@ export function CosmicMicrowaveBackground({
 }) {
   const { camera, size } = useThree();
   const wanted = useRef(false);
+  const colours = useViewStore((state) => state.cmbColours);
+  /** The map's description once loaded: what the table is made from, whichever colours. */
+  const info = useRef<CmbMapInfo | null>(null);
 
   const material = useMemo(() => {
     const { x, y, z } = GALACTIC_BASIS;
@@ -113,11 +124,12 @@ export function CosmicMicrowaveBackground({
         uLut: { value: Array.from({ length: LUT_SIZE }, () => new THREE.Vector3()) },
         uCentreTurn: { value: 0 },
         uFade: { value: 0 },
+        uDisplayed: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
       toneMapped: false,
-      // The far hemisphere's inside: behind what the sphere encloses, never in front of it.
+      // Its inside: from inside, all of it, behind what it encloses.
       side: THREE.BackSide,
     });
   }, []);
@@ -139,6 +151,23 @@ export function CosmicMicrowaveBackground({
     [mesh, material],
   );
 
+  /** The table and how it is shown, for the colours chosen: no reload of the map. */
+  const applyColours = (chosen: CmbColours): void => {
+    if (info.current === null) {
+      return;
+    }
+    const lut = material.uniforms['uLut']!.value as THREE.Vector3[];
+    cmbLut(info.current, chosen).forEach(([r, g, b], i) => lut[i]!.set(r, g, b));
+    material.uniforms['uDisplayed']!.value = chosen === 'planck' ? 1 : 0;
+  };
+
+  useEffect(() => {
+    applyColours(colours);
+    renderDemand.request();
+    // applyColours reads only the material and the loaded description, both stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colours, material]);
+
   // The map and its description, once first wanted.
   const load = (): void => {
     wanted.current = true;
@@ -147,8 +176,8 @@ export function CosmicMicrowaveBackground({
     const end = beginLoading('the cosmic microwave background');
     void fetch(`${base}cmb.json`)
       .then((response) => response.json() as Promise<CmbMapInfo>)
-      .then((info) => {
-        new THREE.TextureLoader().load(`${base}${info.file}`, (texture) => {
+      .then((loaded) => {
+        new THREE.TextureLoader().load(`${base}${loaded.file}`, (texture) => {
           texture.wrapS = THREE.RepeatWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -156,9 +185,9 @@ export function CosmicMicrowaveBackground({
           texture.colorSpace = THREE.NoColorSpace;
           texture.anisotropy = 4;
           texture.needsUpdate = true;
-          const lut = material.uniforms['uLut']!.value as THREE.Vector3[];
-          cmbLut(info).forEach(([r, g, b], i) => lut[i]!.set(r, g, b));
-          material.uniforms['uCentreTurn']!.value = info.centreLongitudeDeg / 360;
+          info.current = loaded;
+          applyColours(useViewStore.getState().cmbColours);
+          material.uniforms['uCentreTurn']!.value = loaded.centreLongitudeDeg / 360;
           material.uniforms['uMap']!.value = texture;
           end();
           renderDemand.request();
@@ -198,22 +227,10 @@ export function CosmicMicrowaveBackground({
       hide(element);
       return;
     }
-    // Its name on its right-hand limb, as the camera sees it.
-    camera.updateMatrixWorld();
-    scratchRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
-    scratchPoint.copy(scratchRight).multiplyScalar(radiusUnits).add(mesh.position);
-    const onScreen =
-      projectToScreen(scratchPoint, camera, scratchPoint) && Math.abs(scratchPoint.x) <= 1 && Math.abs(scratchPoint.y) <= 1;
-    if (!onScreen) {
-      hide(element);
-      return;
-    }
     if (element.style.display !== 'block') {
       element.style.display = 'block';
     }
-    const x = (scratchPoint.x * 0.5 + 0.5) * size.width;
-    const y = (-scratchPoint.y * 0.5 + 0.5) * size.height;
-    element.style.transform = `translate(${x + LABEL_GAP_PX}px, ${y}px) translateY(-50%)`;
+    element.style.transform = `translate(${LABEL_AT.x * size.width}px, ${LABEL_AT.y * size.height}px) translate(-50%, -50%)`;
     element.style.opacity = String(fade);
   });
 

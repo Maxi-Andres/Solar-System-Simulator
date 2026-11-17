@@ -52,10 +52,12 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * patch of the screen no brighter than its dots QUASAR_PATCH_SEPARATION_PX apart, measured cell
  * by cell -- a pixel, where the galaxies' is two, so the wedges' summed light stays a visible
  * patch from billions of light years out; fewer dots rather than fainter ones under
- * QUASAR_FLOOR_THIN; gone as the catalogue shrinks to QUASAR_SPECK_GONE_PX and as the camera
- * nears the farthest the scene allows (QUASAR_MAP_FULL_LY to QUASAR_MAP_GONE_LY), not where the
- * galaxies' maps go (crowding.ts MAP_FULL_LY): the quasars reach 28 billion light years, and are
- * the map of the far universe the camera is out there to see. Dimmer the farther they are
+ * QUASAR_FLOOR_THIN; gone as the catalogue shrinks to QUASAR_SPECK_GONE_PX -- but never by the
+ * camera's distance alone, as the galaxies' maps go (crowding.ts MAP_GONE_LY): the quasars reach
+ * 28 billion light years, and are the map of the far universe the camera is out there to see.
+ * The camera never leaves them far behind: it stays inside the CMB's sphere, 40 billion ly from
+ * the Sun at most (scale.ts MAX_VIEW_DISTANCE_KM). (When it could go on to 400 billion, outside
+ * the sphere, they faded from 200 to 800.) Dimmer the farther they are
  * behind what the camera looks at. Gone near the Sun, too: fading in from QUASARS_FROM_LY to
  * QUASARS_FULL_LY, where the nearest of them are.
  *
@@ -85,9 +87,6 @@ export const QUASAR_FLOOR_THIN = 1 / 24;
 /** The catalogue's half-count radius on the screen, device pixels: whole above the first, gone under the second (crowding.ts's: 24 and 12). */
 export const QUASAR_SPECK_FULL_PX = 12;
 export const QUASAR_SPECK_GONE_PX = 6;
-/** The camera's distance from the Sun, light years: the quasars whole to the first, fading to nothing at the second -- past the scene's farthest, 400 billion, where half is left. */
-export const QUASAR_MAP_FULL_LY = 200e9;
-export const QUASAR_MAP_GONE_LY = 800e9;
 
 const LIGHT_YEAR_PC = LIGHT_YEAR_KM / PARSEC_KM;
 
@@ -96,13 +95,11 @@ const smooth = (t: number): number => {
   return c * c * (3 - 2 * c);
 };
 
-/** How much of the quasars' floor is drawn at all, 1 to 0: crowding.ts floorShown with the quasars' numbers. */
+/** How much of the quasars' floor is drawn at all, 1 to 0: crowding.ts floorShown's speck rule with the quasars' numbers, and no distance fade (see above). */
 export function quasarFloorShown(halfCountPc: number, cameraFromSunPc: number, pixelsPerRadian: number): number {
-  const ly = cameraFromSunPc / LIGHT_YEAR_PC;
-  const map = ly <= QUASAR_MAP_FULL_LY ? 1 : 1 - smooth(Math.log(ly / QUASAR_MAP_FULL_LY) / Math.log(QUASAR_MAP_GONE_LY / QUASAR_MAP_FULL_LY));
-  if (!(halfCountPc > 0) || cameraFromSunPc <= halfCountPc) return map;
+  if (!(halfCountPc > 0) || cameraFromSunPc <= halfCountPc) return 1;
   const radiusPx = Math.atan(halfCountPc / cameraFromSunPc) * pixelsPerRadian;
-  return map * smooth((radiusPx - QUASAR_SPECK_GONE_PX) / (QUASAR_SPECK_FULL_PX - QUASAR_SPECK_GONE_PX));
+  return smooth((radiusPx - QUASAR_SPECK_GONE_PX) / (QUASAR_SPECK_FULL_PX - QUASAR_SPECK_GONE_PX));
 }
 
 /**

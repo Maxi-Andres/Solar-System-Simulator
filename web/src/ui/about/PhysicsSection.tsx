@@ -1710,8 +1710,9 @@ export const physicsSection: AboutSection = {
           )}
           symbols={<>T<sub>0</sub> 2.7255 K; z<sub>*</sub> 1089.8; ΔT the map’s difference from the mean; F 1,000, the exaggeration.</>}
         >
-          Each point is drawn as a blackbody of that temperature through the eye’s response: its colour and its
-          brightness relative to the mean, 2,973 K.
+          In true colour, each point is drawn as a blackbody of that temperature through the eye’s response: its
+          colour and its brightness relative to the mean, 2,973 K. As Planck’s map, ΔT itself picks the colour,
+          −300 to +300 µK across Planck’s scale, and nothing is exaggerated.
           <Cite k={['fixsen2009', 'planck2020params']} />
         </Equation>
       </>

@@ -12,6 +12,7 @@ import {
 } from '../core/belt.ts';
 import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import { chipCounts, type SatelliteSource } from '../core/satellites.ts';
+import type { CmbColours } from '../scene/cmb.ts';
 import { LAYERS, useViewStore, type LayerDefinition } from '../state/store.ts';
 import { Panel } from './Panel.tsx';
 
@@ -24,7 +25,8 @@ import { Panel } from './Panel.tsx';
  *
  * Under Asteroids, while it is on, sits the belt's density -- how many of its magnitude
  * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
- * BeltFamilies. Under Satellites, the same chips for its groups. Nothing else: a layer's
+ * BeltFamilies. Under Satellites, the same chips for its groups; under the Observable Universe,
+ * the CMB's two colourings, see CmbColourChips. Nothing else: a layer's
  * explanation and sources are the About's, and here they buried the switches (Maxi: "tiene
  * que ser corto, que solo tengas las check boxes"). What each is, in a few words, shows beside
  * its row on hover (LayerHint) -- and says so where the layer is a model rather than a sight.
@@ -61,6 +63,7 @@ export function LayersPanel({
               </>
             )}
             {layer.id === 'satellites' && layers.satellites && <SatelliteChips satellites={satellites} />}
+            {layer.id === 'observableUniverse' && layers.observableUniverse && <CmbColourChips />}
           </LayerRow>
         ))}
       </div>
@@ -447,6 +450,65 @@ function SatelliteChips({ satellites }: { readonly satellites: SatelliteSource }
           >
             {chip.label}
             {count !== null && <span style={{ color: on ? '#7a8fb8' : '#454545' }}> {compactCount(count)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The CMB's colourings, each with the one line its chip's hover says (scene/cmb.ts says the rest). */
+const CMB_COLOUR_CHIPS: readonly { readonly id: CmbColours; readonly label: string; readonly description: string }[] = [
+  {
+    id: 'true',
+    label: 'True colour',
+    description: 'The colour its light had when it left, 2,973 K; differences stretched a thousandfold so they show.',
+  },
+  {
+    id: 'planck',
+    label: 'Planck map',
+    description: 'False colour, as Planck’s map: blue colder, red warmer, by millionths of a degree.',
+  },
+];
+
+/**
+ * How the cosmic microwave background is coloured: one of two, in the satellites' chip style.
+ * True colour by default; the choice is kept between visits (the view store's cmbColours).
+ */
+function CmbColourChips() {
+  const chosen = useViewStore((store) => store.cmbColours);
+  const choose = useViewStore((store) => store.setCmbColours);
+  return (
+    <div
+      role="radiogroup"
+      aria-label="The CMB’s colours"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', margin: '0 0 0.4rem 1.65rem' }}
+    >
+      {CMB_COLOUR_CHIPS.map((chip) => {
+        const on = chip.id === chosen;
+        return (
+          <button
+            key={chip.id}
+            type="button"
+            role="radio"
+            className="ui-press"
+            aria-checked={on}
+            onClick={() => choose(chip.id)}
+            title={chip.description}
+            style={{
+              background: on ? '#16203a' : 'transparent',
+              border: `1px solid ${on ? '#4a86ff' : '#2a2a2a'}`,
+              borderRadius: '0.6rem',
+              color: on ? '#d6d6d6' : '#5e5e5e',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '0.62rem',
+              lineHeight: 1.3,
+              padding: '0.05rem 0.4rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {chip.label}
           </button>
         );
       })}

@@ -156,7 +156,9 @@ export const sourcesSection: AboutSection = {
           <Item>
             The cosmic microwave background’s map: Credit: ESA, Planck Collaboration. Planck 2018 SMICA map, from the
             Planck Legacy Archive through the NASA/IPAC Infrared Science Archive, adapted — made equirectangular,
-            8-bit — by tools/src/cmb/prepareCmb.ts, credited in web/public/cmb/CREDITS.md; CC BY-NC 3.0 IGO.
+            8-bit — by tools/src/cmb/prepareCmb.ts, credited in web/public/cmb/CREDITS.md; CC BY-NC 3.0 IGO. Its
+            Planck map colouring: the Planck Collaboration’s colour table, Planck_Parchment_RGB.txt, its six knots
+            in web/src/scene/cmb.ts, as distributed by A. Zonca (github.com/zonca/paperplots).
           </Item>
           <Item>{"Tempel et al. 2014, MNRAS 438, 3465, via VizieR (CDS, Strasbourg). Built on SDSS DR8: Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science (the full SDSS-III acknowledgement: https://www.sdss3.org/collaboration/boiler-plate.php)."} doi:10.26093/cds/vizier.74383465.</Item>
           <Item>{"Malavasi et al. 2020, A&A 642, A19. \"This work makes use of the service L3S/COSFIL.\" Built on SDSS-III BOSS DR12: Funding for SDSS-III has been provided by the Alfred P. Sloan Foundation, the Participating Institutions, the National Science Foundation, and the U.S. Department of Energy Office of Science (the full SDSS-III acknowledgement: https://www.sdss3.org/collaboration/boiler-plate.php)."}</Item>
