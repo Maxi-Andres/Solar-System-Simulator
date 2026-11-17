@@ -7,9 +7,11 @@ import type { Description } from './types.ts';
 export const SUN: Description = {
   id: 'sun',
   lead: [
-    'The Sun is a star: a ball of hydrogen and helium 1.39 million kilometres across, held together by its own gravity and kept from collapsing by the heat of nuclear fusion in its core, where every second about 600 million tonnes of hydrogen become helium. It holds 99.86% of the Solar System’s mass; everything else — the planets, their moons, the asteroids and comets — is the remaining seventh of a percent.',
-    'What we see of it is the photosphere, the layer where the gas turns from opaque to transparent, at 5,772 K. It is not a surface: there is nothing to stand on, only gas growing thinner outward. Above it lie the chromosphere and the corona, over a million degrees hot and visible to the eye only when the Moon covers the bright disc in a total eclipse.',
-    'It is 4.57 billion years old, about halfway through the time it will spend fusing hydrogen in its core. From Earth its light takes 8 minutes 19 seconds to arrive; from the centre of the Milky Way, around which it travels once in about 230 million years, it is about 27,000 light years away.',
+    'The Sun is a star — the only one close enough to see as a disc. It is a ball of hot gas, mostly hydrogen and helium, 1.39 million kilometres across: 109 Earths would fit side by side across its face. It holds 99.86% of all the mass in the Solar System, and its gravity keeps everything else in orbit around it, from Jupiter to the smallest grain of dust.',
+    'It shines because of nuclear fusion. In its core, every second, about 600 million tonnes of hydrogen are squeezed into helium, and the mass that goes missing comes out as energy. That energy works its way out for a very long time before it leaves the visible surface, the photosphere, at 5,772 K. The photosphere is not solid: it is just the depth where the gas becomes see-through. Above it lie the chromosphere and the corona, over a million degrees hot, which the eye sees only during a total eclipse.',
+    'The corona never stops blowing outward. That flow, the solar wind, carries the Sun’s magnetic field across the whole Solar System at 400 to 750 kilometres per second, and it fills a bubble around us, the heliosphere, far beyond Pluto. When a gust of it — a flare or a coronal mass ejection — hits Earth’s magnetic field, it lights up the auroras and can disturb satellites and power grids.',
+    'Almost everything on Earth runs on it. Its light warms the planet and drives the weather, the winds and the ocean currents; the tilt of Earth’s axis toward and away from it gives the seasons; plants live on it, and so does everything that eats them.',
+    'It sits in a small arm of the Milky Way, the Local Arm or Orion Spur, about 27,000 light years from the galaxy’s centre. It carries the whole Solar System around that centre at about 250 kilometres per second — nine hundred thousand kilometres an hour — and still takes about 230 million years to go round once. It is 4.57 billion years old, roughly halfway through its life.',
   ],
   photos: [
     {
@@ -68,6 +70,90 @@ export const SUN: Description = {
       date: '2017-03',
       sourceUrl: 'https://images.nasa.gov/details/PIA21569',
     },
+    {
+      file: 'photos/sun/mercury-transit-2019.webp',
+      largeFile: 'photos/sun/mercury-transit-2019-large.webp',
+      width: 640,
+      height: 507,
+      title: 'Mercury crossing the Sun, 11 November 2019',
+      caption:
+        'The small black dot low on the disc is Mercury, a planet 4,880 km across, seen from Washington through a solar filter. The filter tints the Sun orange; the picture is still the best sense of scale there is.',
+      colour: 'tinted',
+      credit: 'NASA/Bill Ingalls',
+      licence: 'NASA media, not copyrighted',
+      date: '2019-11-11',
+      sourceUrl: 'https://images.nasa.gov/details/NHQ201911110001',
+    },
+    {
+      file: 'photos/sun/iss-transit-2020.webp',
+      largeFile: 'photos/sun/iss-transit-2020-large.webp',
+      width: 316,
+      height: 640,
+      title: 'The Space Station crossing the Sun, 24 June 2020',
+      caption:
+        'The International Space Station, 109 metres across with five people aboard, in silhouette as it crosses the disc at about 8 kilometres per second, photographed through a solar filter from Fredericksburg, Virginia.',
+      colour: 'tinted',
+      credit: 'NASA/Joel Kowsky',
+      licence: 'NASA media, not copyrighted',
+      date: '2020-06-24',
+      sourceUrl: 'https://images.nasa.gov/details/NHQ202006240002',
+    },
+    {
+      file: 'photos/sun/sdo-prominence-2012.webp',
+      largeFile: 'photos/sun/sdo-prominence-2012-large.webp',
+      width: 612,
+      height: 802,
+      title: 'A prominence erupting, 16 April 2012',
+      caption:
+        'Gas held up by the magnetic field breaks loose from the Sun’s edge. Seen by the Solar Dynamics Observatory in extreme ultraviolet, light no eye can see, shown in red by convention.',
+      colour: 'false',
+      credit: 'NASA/SDO',
+      licence: 'NASA media, not copyrighted',
+      date: '2012-04-16',
+      sourceUrl: 'https://images.nasa.gov/details/GSFC_20171208_Archive_e001767',
+    },
+    {
+      file: 'photos/sun/sdo-x-flare-2014.webp',
+      largeFile: 'photos/sun/sdo-x-flare-2014-large.webp',
+      width: 640,
+      height: 591,
+      title: 'A flare, 19 October 2014',
+      caption:
+        'The bright burst at the left edge is an X-class flare, the strongest kind, from the same giant sunspot group as the photo above. Extreme ultraviolet at 131 ångströms, shown in teal by convention.',
+      colour: 'false',
+      credit: 'NASA/SDO',
+      licence: 'NASA media, not copyrighted',
+      date: '2014-10-19',
+      sourceUrl: 'https://images.nasa.gov/details/GSFC_20171208_Archive_e000934',
+    },
+    {
+      file: 'photos/sun/soho-cme-2002.webp',
+      largeFile: 'photos/sun/soho-cme-2002-large.webp',
+      width: 640,
+      height: 567,
+      title: 'A coronal mass ejection, 8 January 2002',
+      caption:
+        'More than a billion tonnes of the corona thrown into space. SOHO’s coronagraph hides the bright disc and sees the corona around it; an ultraviolet image of the Sun from another day is laid over the hidden disc. A composite, in false colour.',
+      colour: 'false',
+      credit: 'ESA/NASA SOHO',
+      licence: 'NASA media, not copyrighted',
+      date: '2002-01-08',
+      sourceUrl: 'https://images.nasa.gov/details/GSFC_20171208_Archive_e002109',
+    },
+    {
+      file: 'photos/sun/sdo-two-wavelengths-2015.webp',
+      largeFile: 'photos/sun/sdo-two-wavelengths-2015-large.webp',
+      width: 640,
+      height: 360,
+      title: 'The same Sun in two colours of ultraviolet, December 2015',
+      caption:
+        'Left, 304 ångströms, from the chromosphere; right, 171 ångströms, from the corona, where the gas traces the magnetic field’s loops. Each wavelength shows gas at its own temperature, and each is given a colour so they can be told apart.',
+      colour: 'false',
+      credit: 'NASA/SDO',
+      licence: 'NASA media, not copyrighted',
+      date: '2015-12',
+      sourceUrl: 'https://images.nasa.gov/details/PIA20214',
+    },
   ],
   drawnHere: [
     {
@@ -125,6 +211,16 @@ export const SUN: Description = {
       text: '4.567 billion years: the age of the oldest solids in meteorites, the first things to condense around the young Sun, dated by the decay of uranium into lead.',
       cite: ['connelly2012'],
     },
+    {
+      title: 'Its wind',
+      text: 'Measured where it blows, by spacecraft: a slow wind of about 400 km/s from near the equator and a fast one of about 750 km/s from the poles, which Ulysses found flying over them.',
+      cite: ['mccomas2000'],
+    },
+    {
+      title: 'Its path around the galaxy',
+      text: 'About 250 km/s around the galactic centre, from the apparent drift of Sagittarius A* across our sky as the Sun carries us past it, measured by radio interferometry; 27,000 light years from it, by the stars orbiting the black hole.',
+      cite: ['reid2020', 'gravity2019'],
+    },
   ],
   estimated: [
     {
@@ -168,6 +264,11 @@ export const SUN: Description = {
     },
   ],
   misconceptions: [
+    {
+      title: 'A “yellow dwarf” that is neither',
+      text: 'It is often called a yellow dwarf. Its colour is white, and it is not small: “dwarf” only means it is still fusing hydrogen in its core, as most stars are for most of their lives. Astronomers call it a G-type main-sequence star, G2 V.',
+      cite: ['ramirez2012'],
+    },
     {
       title: 'The Sun is white, not yellow',
       text: 'Outside the atmosphere its light is white: its colour sits near the middle of what our eyes see. It looks yellow from the ground, and red at sunset, because air scatters away the blue — the same scattering that makes the sky blue.',
@@ -263,6 +364,21 @@ export const SUN: Description = {
       key: 'reyle2021',
       text: 'Reylé, C., et al. 2021, The 10 parsec sample in the Gaia era, A&A 650, A201',
       url: 'https://doi.org/10.1051/0004-6361/202140985',
+    },
+    {
+      key: 'mccomas2000',
+      text: 'McComas, D. J., et al. 2000, Solar wind observations over Ulysses’ first full polar orbit, J. Geophys. Res. 105, 10419',
+      url: 'https://doi.org/10.1029/1999JA000383',
+    },
+    {
+      key: 'reid2020',
+      text: 'Reid, M. J., & Brunthaler, A. 2020, The Proper Motion of Sagittarius A*. III. The Case for a Supermassive Black Hole, ApJ 892, 39',
+      url: 'https://doi.org/10.3847/1538-4357/ab76cd',
+    },
+    {
+      key: 'gravity2019',
+      text: 'GRAVITY Collaboration 2019, A geometric distance measurement to the Galactic center black hole with 0.3% uncertainty, A&A 625, L10',
+      url: 'https://doi.org/10.1051/0004-6361/201935656',
     },
   ],
 };

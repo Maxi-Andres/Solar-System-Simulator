@@ -24,6 +24,8 @@ const MUTED = '#6a6a6a';
 const RULE = '#2a2a2a';
 const ACCENT = '#9fc3e0';
 
+const COLOUR_ORDER: Record<DescriptionPhoto['colour'], number> = { true: 0, tinted: 1, false: 2 };
+
 const COLOUR_NOTE: Record<DescriptionPhoto['colour'], string> = {
   true: 'True colour',
   tinted: 'Tinted',
@@ -64,6 +66,11 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
   }, [opened, togglePanel]);
 
   const generated = useMemo(() => drawnFromData(body), [body]);
+  // True colour first, then tinted, then false: what an eye would see before the conventions.
+  const photos = useMemo(
+    () => [...(description?.photos ?? [])].sort((a, b) => COLOUR_ORDER[a.colour] - COLOUR_ORDER[b.colour]),
+    [description],
+  );
   if (description === null) return null;
   const numbers = new Map(description.sources.map((source, index) => [source.key, index + 1]));
 
@@ -99,7 +106,7 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
             </p>
           ))}
 
-          <Photos photos={description.photos} onOpen={setOpened} />
+          <Photos photos={photos} onOpen={setOpened} />
 
           <Section title="How it is drawn here">
             <Points points={[...generated, ...description.drawnHere]} numbers={numbers} onCite={goToSource} />
@@ -123,9 +130,9 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
       </div>
       {opened !== null && (
         <PhotoLarge
-          photo={description.photos[opened]!}
+          photo={photos[opened]!}
           onClose={() => setOpened(null)}
-          onMove={(by) => setOpened((opened + by + description.photos.length) % description.photos.length)}
+          onMove={(by) => setOpened((opened + by + photos.length) % photos.length)}
         />
       )}
     </div>
