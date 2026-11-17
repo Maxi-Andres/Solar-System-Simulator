@@ -209,8 +209,8 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The nuclear star cluster round Sgr A* past the stars measured there, as a model of
   // published structure (core/nuclearCluster.ts): stars, each of its own brightness, but
   // none a particular one. A layer of its own, as the galaxy's model is, so the measured
-  // S-stars and young stars can be seen without it. Off by default: its stars are none in
-  // particular (see DEFAULT_LAYER_STATE).
+  // S-stars and young stars can be seen without it. On, as the galaxy's model is: the light
+  // is real and there to see, only no star of it is a particular one (see DEFAULT_LAYER_STATE).
   { id: 'nuclearCluster', label: 'Nuclear Cluster Model', hint: 'Stars round the central black hole. A model.', pending: null },
   { id: 'constellations', label: 'Constellations', hint: 'Constellation lines.', pending: 'Phase D' },
 
@@ -237,11 +237,12 @@ export type LayerState = Record<LayerId, boolean>;
 /**
  * What is on at first. Off is anything drawn that is a model's shape or a computation rather
  * than something there to be seen -- the heliosphere's shells, the Lagrange points, the
- * bubbles' depth, the Local Bubble's walls, the basins and flow lines, the nuclear cluster's
- * stars that are none in particular -- so a first look is not taken for a photograph of them
+ * bubbles' depth, the Local Bubble's walls, the basins and flow lines -- so a first look is not taken for a photograph of them
  * (Maxi: "lo que no sea real default no este activado"). Each is a switch away, its hover
- * saying what it is. Kept on: the Milky Way's model, without which the galaxy past the
- * measured stars is dark and taken for their edge; and the rings, orbits and marks, which no
+ * saying what it is. Kept on: the models of light that is really there to be seen, only not
+ * star by star -- the Milky Way's, without which the galaxy past the measured stars is dark
+ * and taken for their edge, and the nuclear cluster's, without which the densest place in it
+ * is drawn empty round its black hole; and the rings, orbits and marks, which no
  * one takes for objects.
  */
 export const DEFAULT_LAYER_STATE: LayerState = {
@@ -281,7 +282,7 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   quasars: true,
   szClusters: true,
   observableUniverse: true,
-  nuclearCluster: false,
+  nuclearCluster: true,
   spacecraft: true,
   satellites: false,
   constellations: false,

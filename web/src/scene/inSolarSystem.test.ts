@@ -28,8 +28,11 @@ describe('the layers', () => {
   });
 
   it('start with the modelled and computed ones off', () => {
-    for (const id of ['heliosphere', 'magnetosphere', 'lagrangePoints', 'galacticBubbles', 'localInterstellar', 'laniakeaBasin', 'shapleyBasin', 'flowLines', 'nuclearCluster'] as const) {
+    for (const id of ['heliosphere', 'magnetosphere', 'lagrangePoints', 'galacticBubbles', 'localInterstellar', 'laniakeaBasin', 'shapleyBasin', 'flowLines'] as const) {
       expect(DEFAULT_LAYER_STATE[id], id).toBe(false);
     }
+    // Models of light really there, only not star by star: on.
+    expect(DEFAULT_LAYER_STATE.milkyWay).toBe(true);
+    expect(DEFAULT_LAYER_STATE.nuclearCluster).toBe(true);
   });
 });
