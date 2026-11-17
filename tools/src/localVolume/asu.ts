@@ -1,5 +1,6 @@
 import { VIZIER_ASU_MIRRORS } from '../config.ts';
-import { download } from '../pulsars/fetchPulsars.ts';
+import { cachePath, downloadCacheDirectory, readKept } from '../downloadCache.ts';
+import { cachedDownload } from '../pulsars/fetchPulsars.ts';
 
 /**
  * VizieR tables as its ASU interface serves them: tab-separated text, the whole table in one
@@ -78,6 +79,10 @@ const ROUND_WAIT_MS = 30_000;
  * mirror that answers with part of a table. `log` prefixes the warnings: the pipeline that
  * asks.
  *
+ * A published table does not change, so the answer is kept (downloadCache.ts) and read from
+ * there by the next run, from whichever mirror gave it -- before any mirror is asked, or a
+ * kept answer from the second would wait behind the first's retries whenever it is down.
+ *
  * An answer of HTTP 200 that is VizieR's in-band error ("The database is not currently
  * reachable", which the CfA's mirror gives for a minute or two at a time) is not retried by
  * download(), so when every mirror has failed the round is tried again, MIRROR_ROUNDS times.
@@ -90,16 +95,29 @@ export async function readVizierTable(
   log = '[local-volume]',
   extra = '',
 ): Promise<{ rows: AsuRow[]; url: string }> {
+  const read = (bytes: Uint8Array): AsuRow[] => {
+    const rows = parseAsuTsv(new TextDecoder('latin1').decode(bytes), required);
+    if (rows.length < minimumRows) {
+      throw new Error(`only ${rows.length} rows, where the table has at least ${minimumRows}`);
+    }
+    return rows;
+  };
+  const directory = downloadCacheDirectory();
+  if (directory !== null) {
+    for (const mirror of VIZIER_ASU_MIRRORS) {
+      const url = asuUrl(mirror, table, extra);
+      const kept = await readKept(cachePath(directory, url), read, label, log);
+      if (kept !== null) {
+        return { rows: kept.value, url };
+      }
+    }
+  }
   const failures: string[] = [];
   for (let round = 1; round <= MIRROR_ROUNDS; round += 1) {
     for (const mirror of VIZIER_ASU_MIRRORS) {
       const url = asuUrl(mirror, table, extra);
       try {
-        const rows = parseAsuTsv(new TextDecoder('latin1').decode(await download(url, label)), required);
-        if (rows.length < minimumRows) {
-          throw new Error(`only ${rows.length} rows, where the table has at least ${minimumRows}`);
-        }
-        return { rows, url };
+        return { rows: await cachedDownload(url, label, read, { log }), url };
       } catch (error) {
         failures.push(`${mirror} (round ${round}): ${String(error).slice(0, 300)}`);
         console.warn(`${log} ${label}: ${mirror} failed (${String(error).slice(0, 200)}); trying the next mirror.`);

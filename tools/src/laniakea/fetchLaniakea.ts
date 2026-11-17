@@ -34,7 +34,7 @@ import {
 import { loadLocalGroup } from '../localGroup/fetchLocalGroup.ts';
 import { readVizierTable } from '../localVolume/asu.ts';
 import { loadLocalVolume } from '../localVolume/fetchLocalVolume.ts';
-import { download } from '../pulsars/fetchPulsars.ts';
+import { cachedDownload } from '../pulsars/fetchPulsars.ts';
 import type { LaniakeaInfo, LocalGroupCatalog, LocalVolumeCatalog } from '../types.ts';
 import { writeLaniakea } from '../writeOutput.ts';
 import {
@@ -62,10 +62,14 @@ async function readDensity(): Promise<{ size: number; values: Float64Array; url:
   const failures: string[] = [];
   for (const { url, voxels } of CF4_DENSITY_URLS) {
     try {
-      const cube = readFitsCube(await download(url, 'the CF4 density cube', { 'User-Agent': DATA_USER_AGENT }));
-      if (cube.size !== voxels) {
-        throw new Error(`a cube of ${cube.size}^3, where ${voxels}^3 was expected`);
-      }
+      const read = (bytes: Uint8Array) => {
+        const cube = readFitsCube(bytes);
+        if (cube.size !== voxels) {
+          throw new Error(`a cube of ${cube.size}^3, where ${voxels}^3 was expected`);
+        }
+        return cube;
+      };
+      const cube = await cachedDownload(url, 'the CF4 density cube', read, { headers: { 'User-Agent': DATA_USER_AGENT }, log: LOG });
       return { size: cube.size, values: transposeCube(cube.values, cube.size), url };
     } catch (error) {
       failures.push(`${url}: ${String(error).slice(0, 300)}`);
@@ -80,10 +84,14 @@ async function readVelocity(): Promise<VectorField & { url: string }> {
   const failures: string[] = [];
   for (const { url, voxels } of CF4_VELOCITY_URLS) {
     try {
-      const field = readFitsVectorCube(await download(url, 'the CF4 velocity cube', { 'User-Agent': DATA_USER_AGENT }));
-      if (field.size !== voxels) {
-        throw new Error(`a cube of ${field.size}^3 x 3, where ${voxels}^3 x 3 was expected`);
-      }
+      const read = (bytes: Uint8Array) => {
+        const field = readFitsVectorCube(bytes);
+        if (field.size !== voxels) {
+          throw new Error(`a cube of ${field.size}^3 x 3, where ${voxels}^3 x 3 was expected`);
+        }
+        return field;
+      };
+      const field = await cachedDownload(url, 'the CF4 velocity cube', read, { headers: { 'User-Agent': DATA_USER_AGENT }, log: LOG });
       return { ...field, url };
     } catch (error) {
       failures.push(`${url}: ${String(error).slice(0, 300)}`);
@@ -95,10 +103,27 @@ async function readVelocity(): Promise<VectorField & { url: string }> {
 
 /** The velocity's error cube, 64^3, SGX fastest, km/s. */
 async function readVelocityError(): Promise<{ size: number; values: Float64Array }> {
-  const cube = readFitsCube(await download(CF4_VELOCITY_ERROR_URL, 'the CF4 velocity error cube', { 'User-Agent': DATA_USER_AGENT }));
+  const cube = await cachedDownload(CF4_VELOCITY_ERROR_URL, 'the CF4 velocity error cube', readFitsCube, { headers: { 'User-Agent': DATA_USER_AGENT }, log: LOG });
   const values = transposeCube(cube.values, cube.size);
   for (let at = 0; at < values.length; at += 1) values[at] = values[at]! * VELOCITY_UNIT_KMS;
   return { size: cube.size, values };
+}
+
+/**
+ * The watersheds zip's grids, read; throws on a zip without them -- so a truncated download
+ * is refused before it is kept (downloadCache.ts), not after.
+ */
+function readWatershedZip(bytes: Uint8Array): Record<WatershedGrid, { size: number; values: Float64Array }> {
+  const zip = readZip(bytes);
+  const cubes = {} as Record<WatershedGrid, { size: number; values: Float64Array }>;
+  for (const [grid, file] of Object.entries(WATERSHED_FILES) as [WatershedGrid, string][]) {
+    const entry = zip.get(file);
+    if (entry === undefined) {
+      throw new Error(`The watersheds zip has no ${file} (it has ${[...zip.keys()].join(', ')}).`);
+    }
+    cubes[grid] = readFitsCube(entry);
+  }
+  return cubes;
 }
 
 export interface LaniakeaLoad {
@@ -113,13 +138,13 @@ export async function loadLaniakea(
 ): Promise<LaniakeaLoad> {
   const queriedAt = new Date().toISOString();
   const lg = localGroup ?? loadLocalGroup();
-  const [cf4Rows, groupRows, mrsRows, tullyRows, einastoRows, watershedZip, density, velocity, velocityError, lgCatalog, lvCatalog] = await Promise.all([
+  const [cf4Rows, groupRows, mrsRows, tullyRows, einastoRows, cubes, density, velocity, velocityError, lgCatalog, lvCatalog] = await Promise.all([
     readVizierTable(CF4_GALAXY_TABLE, 'Cosmicflows-4\'s galaxies', ['PGC', '1PGC', 'Vcmb', 'DM', 'e_DM', 'DMtf', 'DMfp', 'DMsnIa', 'RAJ2000', 'DEJ2000'], 55000, LOG),
     readVizierTable(CF4_GROUP_TABLE, 'Cosmicflows-4\'s groups', ['1PGC', 'Ngal', 'DMzp', 'e_DMzp', 'Vcmb', 'RAJ2000', 'DEJ2000'], 38000, LOG),
     readVizierTable(TWO_MRS_TABLE, 'the 2MASS Redshift Survey', ['ID', 'RAJ2000', 'DEJ2000', 'GLON', 'GLAT', 'Ktmag', 'Riso', 'b/a', 'type', 'cz'], 44000, LOG),
     readVizierTable(TULLY_2015_GALAXY_TABLE, 'Tully\'s 2MASS groups', ['PGC', 'MType', 'HV', 'Kmag', 'Nest', 'Nmb', 'PGC1', 'Mvir', 'Mlum', 'R2t', 'sigP', '_RA.icrs', '_DE.icrs'], 42000, LOG),
     readVizierTable(EINASTO_1997_TABLE, 'Einasto et al.\'s superclusters', ['SC', 'Nmembers', 'Dist', 'ID', '_RAJ2000', '_DEJ2000'], 800, LOG, '&-out.add=_RAJ,_DEJ'),
-    download(CF4_WATERSHEDS_URL, 'the CF4 watersheds', { 'User-Agent': DATA_USER_AGENT }),
+    cachedDownload(CF4_WATERSHEDS_URL, 'the CF4 watersheds', readWatershedZip, { headers: { 'User-Agent': DATA_USER_AGENT }, log: LOG }),
     readDensity(),
     readVelocity(),
     readVelocityError(),
@@ -139,15 +164,6 @@ export async function loadLaniakea(
 
   const build = buildLaniakeaGalaxies({ cf4, cf4Groups, mrs, tully, leda, locals: localGalaxies(lgCatalog, lvCatalog) });
 
-  const zip = readZip(watershedZip);
-  const cubes = {} as Record<WatershedGrid, { size: number; values: Float64Array }>;
-  for (const [grid, file] of Object.entries(WATERSHED_FILES) as [WatershedGrid, string][]) {
-    const bytes = zip.get(file);
-    if (bytes === undefined) {
-      throw new Error(`The watersheds zip has no ${file} (it has ${[...zip.keys()].join(', ')}).`);
-    }
-    cubes[grid] = readFitsCube(bytes);
-  }
   const problems = checkAttractors(cubes);
   if (problems.length > 0) {
     throw new Error(`The watershed grids do not read as Dupuy & Courtois describe them:\n  ${problems.join('\n  ')}`);

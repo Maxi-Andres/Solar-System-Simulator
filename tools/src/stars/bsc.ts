@@ -1,6 +1,7 @@
 import { gunzipSync } from 'node:zlib';
 
 import { BSC_CATALOG_URL, MAX_RETRIES, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { throughCache } from '../downloadCache.ts';
 import { retryDelayMs } from '../horizons/client.ts';
 import { parseBscName, type Designation } from './designations.ts';
 
@@ -55,11 +56,30 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+/** The catalogue's gzipped file, parsed and checked; throws on one that is not it. */
+function readBsc(bytes: Uint8Array): BscStar[] {
+  const stars = parseBsc(gunzipSync(bytes).toString('latin1'));
+  if (stars.length < 9000) {
+    throw new Error(`only ${stars.length} entries parsed; the format is not the one expected`);
+  }
+  return stars;
+}
+
 /**
  * Downloads and parses the catalogue, or returns null -- the index then simply has no
- * Bayer and Flamsteed names beyond the IAU list's. Logged, never fatal.
+ * Bayer and Flamsteed names beyond the IAU list's. Logged, never fatal. A final edition,
+ * so kept by the download cache (downloadCache.ts) and read from there by the next run.
  */
 export async function fetchBsc(): Promise<BscStar[] | null> {
+  try {
+    return await throughCache({ key: BSC_CATALOG_URL, label: 'the Bright Star Catalogue', fetch: fetchBscBytes, read: readBsc, log: '[stars]' });
+  } catch (error) {
+    console.error(`[stars] Bright Star Catalogue: FAILED, no Bayer/Flamsteed names (${String(error)})`);
+    return null;
+  }
+}
+
+async function fetchBscBytes(): Promise<Uint8Array> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     try {
@@ -67,12 +87,9 @@ export async function fetchBsc(): Promise<BscStar[] | null> {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      const text = gunzipSync(Buffer.from(await response.arrayBuffer())).toString('latin1');
-      const stars = parseBsc(text);
-      if (stars.length < 9000) {
-        throw new Error(`only ${stars.length} entries parsed; the format is not the one expected`);
-      }
-      return stars;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      readBsc(bytes);
+      return bytes;
     } catch (error) {
       lastError = error;
       if (attempt < MAX_RETRIES) {
@@ -80,6 +97,5 @@ export async function fetchBsc(): Promise<BscStar[] | null> {
       }
     }
   }
-  console.error(`[stars] Bright Star Catalogue: FAILED, no Bayer/Flamsteed names (${String(lastError)})`);
-  return null;
+  throw lastError;
 }

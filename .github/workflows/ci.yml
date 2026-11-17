@@ -55,17 +55,60 @@ jobs:
           restore-keys: |
             ephemerides-${{ hashFiles('tools/src/**') }}-
 
+      # An earlier day's data, when that is what came back, is also the last good data a
+      # catalogue whose host is down falls back on (tools/src/fallback.ts), as in the
+      # deploy. Copied, not moved: if the fetch fails before it writes, the tests still have
+      # it to run against.
+      # (actions/cache says only whether the key matched exactly, so the data is looked for.)
+      - name: Keep the earlier data as the fallback
+        if: steps.ephemerides.outputs.cache-hit != 'true'
+        run: |
+          if [ -f web/public/data/manifest.json ]; then
+            mkdir -p tools/.cache
+            rm -rf tools/.cache/last-data
+            cp -r web/public/data tools/.cache/last-data
+          fi
+
+      # The catalogues that do not change with the date, kept between runs as the deploy
+      # keeps them (tools/src/downloadCache.ts); the deploy's, from main, come back here too.
+      - name: Restore the catalogues' downloads
+        id: downloads-restore
+        if: steps.ephemerides.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/downloads
+          key: catalogue-downloads-none
+          restore-keys: |
+            catalogue-downloads-
+
       # Allowed to fail. JPL Horizons is occasionally busy, and a pull request going
       # red because a third-party service had a bad minute tells you nothing about the
       # change under review. If the fetch fails and no cached data exists, the
       # integration tests skip themselves by design and the rest still runs. The
-      # deploy workflow does NOT do this — there, stale or missing data must stop the
-      # release.
+      # deploy workflow does NOT do this — there, missing data must stop the release,
+      # and only a catalogue with a last good copy to fall back on may be stale.
       - name: Fetch ephemerides from JPL Horizons
         id: fetch
         if: steps.ephemerides.outputs.cache-hit != 'true'
         continue-on-error: true
+        env:
+          DOWNLOAD_CACHE: ${{ github.workspace }}/tools/.cache/downloads
+          DATA_FALLBACK: ${{ github.workspace }}/tools/.cache/last-data
         run: pnpm fetch:data
+
+      - name: Name the catalogues' downloads
+        id: downloads-key
+        if: always() && steps.ephemerides.outputs.cache-hit != 'true'
+        run: echo "key=catalogue-downloads-${{ hashFiles('tools/.cache/downloads/**') }}" >> "$GITHUB_OUTPUT"
+
+      # Kept even when the fetch failed further on: what it did read need not be asked for again.
+      - name: Save the catalogues' downloads
+        if: always() && steps.ephemerides.outputs.cache-hit != 'true' && hashFiles('tools/.cache/downloads/**') != '' && steps.downloads-key.outputs.key != steps.downloads-restore.outputs.cache-matched-key
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/downloads
+          key: ${{ steps.downloads-key.outputs.key }}
 
       - name: Note when ephemerides are unavailable
         if: steps.fetch.outcome == 'failure'

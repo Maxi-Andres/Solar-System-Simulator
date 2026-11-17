@@ -1,8 +1,5 @@
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { MAX_RETRIES, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { type CachePolicy, throughCache } from '../downloadCache.ts';
 import { retryDelayMs } from '../horizons/client.ts';
 
 /**
@@ -164,34 +161,52 @@ let cacheDirectory: string | null = null;
 
 /**
  * Keeps every answer in `directory`, keyed by service and query, and answers from there
- * when the same query is asked again. For iterating on the build without asking the
- * services the same thing twenty times (`pnpm fetch:stars --cache <dir>`); never set by
- * fetch:data, whose answers must be today's.
+ * when the same query is asked again (downloadCache.ts, apart from the other downloads so
+ * the deploy keeps them under their own key). Set by `pnpm fetch:stars --cache <dir>` for
+ * iterating on the build, and by fetch:data from STAR_CATALOGUE_CACHE: Hipparcos, Tycho-2
+ * and Gaia DR3 do not change, and their hosts are the least reachable from GitHub's runners.
  */
 export function useTapCache(directory: string | null): void {
   cacheDirectory = directory;
 }
 
-/** Runs one ADQL query and returns the CSV body. Retries, then throws. */
+/** A TAP answer as queryTapUncached accepts it, for an answer read back from the cache. */
+function checkedCsv(bytes: Uint8Array, label: string): string {
+  const text = new TextDecoder().decode(bytes);
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(`the kept ${label} answer is not CSV: ${text.slice(0, 200)}`);
+  }
+  if (text.split('\n').filter((line) => line.trim().length > 0).length - 1 >= TAP_MAX_ROWS) {
+    throw new Error(`the kept ${label} answer has the requested maximum of rows, so it was truncated`);
+  }
+  return text;
+}
+
+/**
+ * Runs one ADQL query and returns the CSV body. Retries, then throws.
+ *
+ * `policy` as downloadCache.ts's: a star catalogue is `static`, asked once and kept; the
+ * Exoplanet Archive is `living` -- planets are confirmed every week -- and asked every run,
+ * its kept answer the fallback when the archive cannot be read.
+ */
 export async function queryTap(
   service: TapService,
   adql: string,
   label: string,
   attempts = MAX_RETRIES,
+  policy: CachePolicy = 'static',
 ): Promise<string> {
-  if (cacheDirectory !== null) {
-    const key = createHash('sha256').update(`${service.url} ${adql}`).digest('hex').slice(0, 32);
-    const path = join(cacheDirectory, `${key}.csv`);
-    try {
-      return await readFile(path, 'utf8');
-    } catch {
-      const text = await queryTapUncached(service, adql, label, attempts);
-      await mkdir(cacheDirectory, { recursive: true });
-      await writeFile(path, text, 'utf8');
-      return text;
-    }
-  }
-  return queryTapUncached(service, adql, label, attempts);
+  return throughCache({
+    key: `${service.url} ${adql}`,
+    label,
+    fetch: async () => new TextEncoder().encode(await queryTapUncached(service, adql, label, attempts)),
+    read: (bytes) => checkedCsv(bytes, label),
+    policy,
+    directory: cacheDirectory,
+    // The name the answers had before downloadCache.ts, so the deploy's kept ones still match.
+    extension: '.csv',
+    log: '[stars]',
+  });
 }
 
 async function queryTapUncached(

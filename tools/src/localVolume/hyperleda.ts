@@ -1,4 +1,5 @@
 import { HYPERLEDA_SQL_URLS, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { throughCache } from '../downloadCache.ts';
 import { retryDelayMs } from '../horizons/client.ts';
 
 /**
@@ -270,7 +271,24 @@ export function matchLedaByName(probe: LedaProbe, objects: readonly LedaObject[]
   return found === undefined ? null : toMatch(found.object, found.separation);
 }
 
-async function queryOnce(where: string): Promise<LedaObject[]> {
+/**
+ * One query's objects, through the download cache (downloadCache.ts): the same box asks for
+ * the same galaxies every run, and HyperLEDA is among the hosts least often reachable from
+ * GitHub's runners. Keyed by the query as the first mirror is asked it, whichever answered.
+ */
+function queryOnce(where: string): Promise<LedaObject[]> {
+  const read = (bytes: Uint8Array): LedaObject[] => parseLedaCsv(new TextDecoder().decode(bytes));
+  return throughCache({
+    key: ledaUrl(HYPERLEDA_SQL_URLS[0]!, where),
+    label: 'HyperLEDA',
+    fetch: () => queryHost(where, read),
+    read,
+    log: '[local-volume]',
+  });
+}
+
+/** One query's answer from the first mirror that gives one `read` accepts. */
+async function queryHost(where: string, read: (bytes: Uint8Array) => unknown): Promise<Uint8Array> {
   const failures: string[] = [];
   for (const base of HYPERLEDA_SQL_URLS) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -279,7 +297,9 @@ async function queryOnce(where: string): Promise<LedaObject[]> {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return parseLedaCsv(await response.text());
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        read(bytes);
+        return bytes;
       } catch (error) {
         failures.push(`${base} #${attempt}: ${String(error).slice(0, 200)}`);
         if (attempt < MAX_ATTEMPTS) {

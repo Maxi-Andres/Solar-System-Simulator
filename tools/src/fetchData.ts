@@ -47,6 +47,7 @@
 
 import { pathToFileURL } from 'node:url';
 
+import { githubAnnotation } from './annotate.ts';
 import { BeltAccumulator, catalogDesignations, describeBelt } from './belt/buildBelt.ts';
 import { buildComets, describeComets, fetchComets } from './belt/comets.ts';
 import { fetchBelt } from './belt/sbdb.ts';
@@ -73,6 +74,19 @@ import {
   WINDOW_YEARS_BACK,
   WINDOW_YEARS_FORWARD,
 } from './config.ts';
+import { downloadCacheDirectory } from './downloadCache.ts';
+import {
+  DATA_PRODUCTS,
+  dataFallbackDirectory,
+  fatalError,
+  planFallbacks,
+  reasonOf,
+  restoreProduct,
+  settle,
+  type DataProduct,
+  type Outcome,
+  type ProductFailure,
+} from './fallback.ts';
 import { callHorizons } from './horizons/client.ts';
 import { fetchCoverage, horizonsProbe, lastWithData } from './horizons/coverage.ts';
 import {
@@ -621,6 +635,17 @@ async function main(): Promise<void> {
   // run asks them afresh, as before.
   const starCache = process.env.STAR_CATALOGUE_CACHE;
   useTapCache(starCache === undefined || starCache === '' ? null : starCache);
+  // Every other catalogue's answers are kept too (downloadCache.ts), locally as well: in
+  // tools/.cache/downloads unless DOWNLOAD_CACHE names another directory, or is "off".
+  const downloads = downloadCacheDirectory();
+  console.log(`[fetch-data] Catalogue downloads ${downloads === null ? 'not kept (DOWNLOAD_CACHE=off)' : `kept in ${downloads}`}`);
+  // And the last good data to stand in for a product that still cannot be built
+  // (fallback.ts): the deploy restores its last full run's there. Checked before an hour
+  // and a half of Horizons, not after.
+  const fallbackDirectory = dataFallbackDirectory();
+  if (fallbackDirectory !== null) {
+    console.log(`[fetch-data] Fallback for a catalogue that cannot be read: ${fallbackDirectory}`);
+  }
   const epoch = todayUtcMidnight();
   const full = windowFor('full', epoch);
   const short = windowFor('short', epoch);
@@ -647,11 +672,22 @@ async function main(): Promise<void> {
   // 3D stars share the sky's failure policy rather than the satellites': a record names
   // its stars.json row, so the two are one product.
   //
-  // A failure of any of them fails the run, as the stars always have. The deploy publishes a
-  // fresh data directory or nothing (deploy.yml: a half-published site is worse than a
-  // late one), and a release that silently lost its belt would look like a release with
-  // fewer asteroids, not like an outage; the previous deploy stays up instead. SBDB has
-  // its own retries first, so this is a fault that outlasted a minute of backoff.
+  // A catalogue that cannot be read never ships missing: a release that silently lost its
+  // belt would look like a release with fewer asteroids, not like an outage. Each is retried
+  // first, and most are answered from the download cache without asking at all; one that
+  // still fails is copied whole from the last good data (fallback.ts), with a warning on the
+  // run's page, and only where there is none does the run fail -- the previous deploy then
+  // stays up. Each read is settle()d where it starts, so one failing cannot take the
+  // Promise.all, and the run, down with it.
+  //
+  // Not so the ephemerides -- the planets, moons and craft from Horizons. They fail the run
+  // as they always have. A body's files are not a product on their own: its table's span is
+  // in the manifest's window (the intersection of every table's), its chunks in `tables`,
+  // its seams in `paths`, its definition in bodies.json -- all from this commit's catalog.
+  // Splicing in last week's would publish a manifest stitched from two runs and two
+  // catalogs, and a push that changes a body would silently ship the old one. And Horizons
+  // is the host that recovers: six retries with backoff ride out its 503s, and a craft it
+  // keeps failing on is already left out and reported below.
   //
   // Not so the satellites, a fourth service, read alongside. A run that cannot read them
   // publishes without satellites/ -- which the app shows as no satellites, not as fewer --
@@ -664,26 +700,24 @@ async function main(): Promise<void> {
   //
   // The Exoplanet Archive, a fifth, follows the stars' policy and not the satellites':
   // one query, four seconds, with tap.ts's retries, and nothing in its terms that makes a
-  // retry a lottery. A run that cannot read it fails, and the previous deploy -- with its
-  // planets -- stays up. Without it the release would not say "no exoplanets"; it would
-  // just show a neighbourhood with only its few hand-read systems in it, the silent
-  // shrinking the policy above exists to prevent. Read here, matched against the 3D stars
-  // below, once they are built.
+  // retry a lottery. Without it the release would not say "no exoplanets"; it would just
+  // show a neighbourhood with only its few hand-read systems in it, the silent shrinking
+  // the policy above exists to prevent. Read here, matched against the 3D stars below, once
+  // they are built -- so the stars and their planets fall back together (fallback.ts).
   //
   // The pulsars, two more (the ATNF's package and McGill's table), the same way: two
-  // downloads of a few seconds, retried, and a run that cannot read them fails rather than
-  // publish a galaxy that has quietly lost its neutron stars. The globular clusters, three
-  // small files more, likewise, and the Local Group's one. The Local Volume's four VizieR
-  // tables too, each from the CfA's mirror or Strasbourg's; it is handed the Local Group as
-  // it is read, to leave out the galaxies local-group.json already draws. Its HyperLEDA
-  // queries alone are optional: without them the galaxies go out with no position angles.
-  // Laniakea's (G3) five VizieR tables, its HyperLEDA queries and the CF4 grids after them,
-  // handed both, to leave out what local-group.json and local-volume.json draw; it fails the
-  // run like the rest -- HyperLEDA is not optional there, a third of its galaxies having no
-  // other photometry.
+  // downloads of a few seconds, retried, rather than publish a galaxy that has quietly lost
+  // its neutron stars. The globular clusters, three small files more, likewise, and the
+  // Local Group's one. The Local Volume's four VizieR tables too, each from the CfA's mirror
+  // or Strasbourg's; it is handed the Local Group as it is read, to leave out the galaxies
+  // local-group.json already draws. Its HyperLEDA queries alone are optional: without them
+  // the galaxies go out with no position angles. Laniakea's (G3) five VizieR tables, its
+  // HyperLEDA queries and the CF4 grids after them, handed both, to leave out what
+  // local-group.json and local-volume.json draw -- HyperLEDA is not optional there, a third
+  // of its galaxies having no other photometry.
   const localGroupRead = loadLocalGroup();
   const localVolumeRead = loadLocalVolume(localGroupRead);
-  const [natural, starsRead, beltRead, cometRows, satellites, archive, pulsars, globularClusters, localGroup, localVolume, laniakea] = await Promise.all([
+  const [natural, starsOutcome, beltOutcome, cometsOutcome, satellites, archiveOutcome, pulsarsOutcome, clustersOutcome, localGroupOutcome, localVolumeOutcome, laniakeaOutcome] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -693,28 +727,57 @@ async function main(): Promise<void> {
       MAX_CONCURRENT_REQUESTS,
       (body) => fetchBody(body, epoch),
     ),
-    loadSky().then(async (sky) => ({ sky, ...(await loadStars3d(sky)) })),
-    fetchBelt(
-      () =>
-        new BeltAccumulator({
-          referenceJd: toJulianDay(epoch),
-          candidates: catalogDesignations(CATALOG),
-          namesBrighterThan: BELT_TIER_LIMITS[0]!,
-        }),
-      BELT_MAGNITUDE_LIMIT,
+    settle(loadSky().then(async (sky) => ({ sky, ...(await loadStars3d(sky)) }))),
+    settle(
+      fetchBelt(
+        () =>
+          new BeltAccumulator({
+            referenceJd: toJulianDay(epoch),
+            candidates: catalogDesignations(CATALOG),
+            namesBrighterThan: BELT_TIER_LIMITS[0]!,
+          }),
+        BELT_MAGNITUDE_LIMIT,
+      ),
     ),
-    fetchComets(),
+    settle(fetchComets()),
     loadSatellites().catch((error: unknown) => {
       console.error(`[fetch-data] satellites: FAILED, left out of this run (${String(error).slice(0, 300)})`);
       return null;
     }),
-    fetchArchive(),
-    loadPulsars(),
-    loadGlobularClusters(),
-    localGroupRead,
-    localVolumeRead,
-    loadLaniakea(localGroupRead, localVolumeRead),
+    settle(fetchArchive()),
+    settle(loadPulsars()),
+    settle(loadGlobularClusters()),
+    settle(localGroupRead),
+    settle(localVolumeRead),
+    settle(loadLaniakea(localGroupRead, localVolumeRead)),
   ]);
+
+  // Each catalogue's value, or null with its failure noted, to be decided below.
+  const failures: ProductFailure[] = [];
+  const take = <T,>(product: DataProduct, outcome: Outcome<T>): T | null => {
+    if (outcome.ok) {
+      return outcome.value;
+    }
+    console.error(`[fetch-data] ${product.name}: FAILED (${reasonOf(outcome.error, 1500)})`);
+    failures.push({ product, error: outcome.error });
+    return null;
+  };
+  const starsRead = take(DATA_PRODUCTS.stars, starsOutcome);
+  const archive = take(DATA_PRODUCTS.stars, archiveOutcome);
+  const beltRead = take(DATA_PRODUCTS.belt, beltOutcome);
+  const cometRows = take(DATA_PRODUCTS.belt, cometsOutcome);
+  const pulsars = take(DATA_PRODUCTS.pulsars, pulsarsOutcome);
+  const globularClusters = take(DATA_PRODUCTS.globularClusters, clustersOutcome);
+  const localGroup = take(DATA_PRODUCTS.localGroup, localGroupOutcome);
+  const localVolume = take(DATA_PRODUCTS.localVolume, localVolumeOutcome);
+  const laniakea = take(DATA_PRODUCTS.laniakea, laniakeaOutcome);
+  // Decided now, before the small bodies, the craft and the moons below -- most of the run's
+  // time: one that will fail for want of a fallback fails at once. The rest are copied once
+  // the data directory has been emptied, below.
+  const fallbacks = planFallbacks(failures, fallbackDirectory);
+  if (fallbacks.fatal.length > 0) {
+    throw fatalError(fallbacks.fatal, fallbackDirectory);
+  }
 
   // The named small bodies next, before the craft: several craft fly to them, and a
   // craft is held to a kilometre only near a body it is measured against. The famous
@@ -806,47 +869,63 @@ async function main(): Promise<void> {
   );
   const catalog = CATALOG.filter((body) => published.has(body.id));
 
-  const stars = starsRead.sky.catalog;
-  for (const line of describeSky(stars)) {
-    console.log(line.replace('[stars]', '[fetch-data]'));
+  const stars = starsRead?.sky.catalog ?? null;
+  if (stars !== null) {
+    for (const line of describeSky(stars)) {
+      console.log(line.replace('[stars]', '[fetch-data]'));
+    }
   }
 
-  // The planets' hosts found among the 3D stars just built, by Gaia id or HIP number.
-  const exoplanets = buildExoplanets({ ...archive, stars: starIdsFromBuild(starsRead.stars3d) });
-  for (const line of describeExoplanets(exoplanets)) {
-    console.log(line.replace('[exoplanets]', '[fetch-data] exoplanets'));
+  // The planets' hosts found among the 3D stars just built, by Gaia id or HIP number. Only
+  // with both read: the stars and their planets are built, or fall back, together.
+  const exoplanets =
+    starsRead === null || archive === null
+      ? null
+      : buildExoplanets({ ...archive, stars: starIdsFromBuild(starsRead.stars3d) });
+  if (exoplanets !== null) {
+    for (const line of describeExoplanets(exoplanets)) {
+      console.log(line.replace('[exoplanets]', '[fetch-data] exoplanets'));
+    }
   }
-  for (const line of describePulsars(pulsars)) {
+  for (const line of pulsars === null ? [] : describePulsars(pulsars)) {
     console.log(line.replace('[pulsars]', '[fetch-data] pulsars'));
   }
-  for (const line of describeGlobularClusters(globularClusters)) {
+  for (const line of globularClusters === null ? [] : describeGlobularClusters(globularClusters)) {
     console.log(line.replace('[clusters]', '[fetch-data] clusters'));
   }
-  for (const line of describeLocalGroup(localGroup)) {
+  for (const line of localGroup === null ? [] : describeLocalGroup(localGroup)) {
     console.log(line.replace('[local-group]', '[fetch-data] local group'));
   }
-  for (const line of describeLocalVolume(localVolume)) {
+  for (const line of localVolume === null ? [] : describeLocalVolume(localVolume)) {
     console.log(line.replace('[local-volume]', '[fetch-data] local volume'));
   }
-  for (const line of describeLaniakea(laniakea.output, laniakea.build)) {
+  for (const line of laniakea === null ? [] : describeLaniakea(laniakea.output, laniakea.build)) {
     console.log(line.replace('[laniakea]', '[fetch-data] laniakea'));
   }
 
   // Left out of the belt: the asteroids this run publishes as bodies of their own. A
   // small body Horizons failed on is not drawn, so it stays in the belt rather than vanish.
-  const belt = beltRead.sink.finish({
-    queriedAt: beltRead.queriedAt,
-    excluded: catalogDesignations(catalog),
-    tierLimits: BELT_TIER_LIMITS,
-  });
-  // And the famous comets out of the comet cloud, the same way.
-  const comets = buildComets({
-    ...cometRows,
-    referenceJd: toJulianDay(epoch),
-    excluded: cometDesignations(catalog),
-  });
-  for (const line of [...describeBelt(belt), ...describeComets(comets)]) {
-    console.log(line.replace('[belt]', '[fetch-data] belt'));
+  // The belt and the comet cloud are one directory, so both are built or neither.
+  const beltAndComets =
+    beltRead === null || cometRows === null
+      ? null
+      : {
+          belt: beltRead.sink.finish({
+            queriedAt: beltRead.queriedAt,
+            excluded: catalogDesignations(catalog),
+            tierLimits: BELT_TIER_LIMITS,
+          }),
+          // And the famous comets out of the comet cloud, the same way.
+          comets: buildComets({
+            ...cometRows,
+            referenceJd: toJulianDay(epoch),
+            excluded: cometDesignations(catalog),
+          }),
+        };
+  if (beltAndComets !== null) {
+    for (const line of [...describeBelt(beltAndComets.belt), ...describeComets(beltAndComets.comets)]) {
+      console.log(line.replace('[belt]', '[fetch-data] belt'));
+    }
   }
 
   // Nothing is written until every body has come back clean, so a mid-run failure
@@ -914,15 +993,34 @@ async function main(): Promise<void> {
   }
 
   await writeCatalog(startupCatalog);
-  await writeStars(stars);
-  await writeStars3d(starsRead.stars3d, starsRead.names.names);
-  await writeBelt(belt, comets);
-  await writeExoplanets(exoplanets);
-  await writePulsars(pulsars);
-  await writeGlobularClusters(globularClusters);
-  await writeLocalGroup(localGroup);
-  await writeLocalVolume(localVolume);
-  await writeLaniakea(laniakea.output);
+  if (stars !== null && starsRead !== null && exoplanets !== null) {
+    await writeStars(stars);
+    await writeStars3d(starsRead.stars3d, starsRead.names.names);
+    await writeExoplanets(exoplanets);
+  }
+  if (beltAndComets !== null) {
+    await writeBelt(beltAndComets.belt, beltAndComets.comets);
+  }
+  if (pulsars !== null) {
+    await writePulsars(pulsars);
+  }
+  if (globularClusters !== null) {
+    await writeGlobularClusters(globularClusters);
+  }
+  if (localGroup !== null) {
+    await writeLocalGroup(localGroup);
+  }
+  if (localVolume !== null) {
+    await writeLocalVolume(localVolume);
+  }
+  if (laniakea !== null) {
+    await writeLaniakea(laniakea.output);
+  }
+  // Every catalogue that failed, from the last good data, each with a warning. planFallbacks
+  // put one here only when its copy is there, so the directory is not null.
+  for (const failure of fallbacks.restore) {
+    await restoreProduct(failure, fallbackDirectory!);
+  }
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {
@@ -979,9 +1077,19 @@ async function main(): Promise<void> {
   const samples = results.reduce((total, result) => total + result.vectors.count, 0);
   console.log(
     `[fetch-data] Wrote ${results.length} bodies (${samples} samples) and ` +
-      `${stars.count} stars (${starsRead.stars3d.info.count} in 3D), ${belt.info.count} asteroids and ${comets.info.count} comets ` +
-      `to ${OUTPUT_DIR}`,
+      (stars === null || starsRead === null ? 'the last good stars' : `${stars.count} stars (${starsRead.stars3d.info.count} in 3D)`) +
+      ', ' +
+      (beltAndComets === null
+        ? 'the last good belt and comets'
+        : `${beltAndComets.belt.info.count} asteroids and ${beltAndComets.comets.info.count} comets`) +
+      ` to ${OUTPUT_DIR}`,
   );
+  if (fallbacks.restore.length > 0) {
+    console.warn(
+      `[fetch-data] ${fallbacks.restore.length} catalogue${fallbacks.restore.length === 1 ? '' : 's'} from the last good data: ` +
+        `${fallbacks.restore.map(({ product }) => product.name).join(', ')} (see STALE above).`,
+    );
+  }
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log(
     '[fetch-data] Star data from ESA Hipparcos and Tycho-2 and ESA/Gaia/DPAC (Gaia DR3, GCNS); ' +
@@ -1009,10 +1117,7 @@ async function main(): Promise<void> {
  * the run's page and through the API without signing in, where a job's log is not.
  */
 function annotate(message: string): void {
-  if (process.env.GITHUB_ACTIONS === 'true') {
-    const escaped = message.slice(0, 4000).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
-    console.log(`::error title=fetch:data::${escaped}`);
-  }
+  githubAnnotation('error', 'fetch:data', message);
 }
 
 // Run when invoked, not when imported -- a script trying one body imports fetchAdaptiveBody.

@@ -1,4 +1,4 @@
-import { EXOPLANET_ARCHIVE_TABLE, EXOPLANET_ARCHIVE_TAP_URL } from '../config.ts';
+import { EXOPLANET_ARCHIVE_TABLE, EXOPLANET_ARCHIVE_TAP_URL, MAX_RETRIES } from '../config.ts';
 import { optionalNumber, optionalText, parseCsvTable, queryTap, type TapService } from '../stars/tap.ts';
 
 /**
@@ -292,9 +292,13 @@ export function parseArchiveCsv(csv: string): ArchiveRow[] {
   });
 }
 
-/** Reads the whole table: one query, with tap.ts's retries. */
+/**
+ * Reads the whole table: one query, with tap.ts's retries. Asked every run -- planets are
+ * confirmed every week -- with the last answer kept as the fallback when the archive cannot
+ * be read (queryTap's `living` policy), so a kept copy never stands in for a fresh one.
+ */
 export async function fetchArchive(): Promise<{ rows: ArchiveRow[]; queriedAt: string }> {
   const queriedAt = new Date().toISOString();
-  const csv = await queryTap(ARCHIVE_SERVICE, archiveQuery(), 'exoplanets');
+  const csv = await queryTap(ARCHIVE_SERVICE, archiveQuery(), 'exoplanets', MAX_RETRIES, 'living');
   return { rows: parseArchiveCsv(csv), queriedAt };
 }

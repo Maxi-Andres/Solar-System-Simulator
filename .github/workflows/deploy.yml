@@ -65,15 +65,27 @@ jobs:
 
       # The daily run: everything but the satellites from the last full run. Its data is
       # saved below under a key per run; the newest one matching the prefix comes back.
+      # A full run restores it too, as the last good data to fall back on (next step).
       - name: Restore the last full run's data
         id: restore
-        if: steps.mode.outputs.satellites_only == 'true'
         uses: actions/cache/restore@v6
         with:
           path: web/public/data
           key: deploy-data-none
           restore-keys: |
             deploy-data-
+
+      # A full run fetches everything afresh, but a catalogue whose host is down on the day
+      # (VizieR, HyperLEDA, CDS, the Gaia archive, the CosmicFlows page -- one of them, most
+      # pushes) is copied from the last full run's data instead of failing the deploy, with a
+      # warning naming it (tools/src/fallback.ts). Moved out of the way, as the fetch empties
+      # web/public/data; a cache restores only to the path it was saved from.
+      - name: Keep the last full run's data as the fallback
+        if: steps.mode.outputs.satellites_only != 'true' && steps.restore.outputs.cache-matched-key != ''
+        run: |
+          mkdir -p tools/.cache
+          rm -rf tools/.cache/last-data
+          mv web/public/data tools/.cache/last-data
 
       # The star catalogues (Hipparcos, Tycho-2, Gaia DR3) are the same every run, and their
       # hosts the least reachable from here: CDS's TAP refuses GitHub's runners and the Gaia
@@ -88,13 +100,33 @@ jobs:
           restore-keys: |
             star-catalogues-
 
-      # A full run: always fetched fresh, never from cache -- the whole point of it is to
-      # publish a window centred on today. Also the daily run's fallback when no saved
-      # data came back (the cache is evicted after a week unused).
+      # Every other catalogue that does not change with the date -- VizieR's tables, HyperLEDA,
+      # the CF4 cubes and watersheds, the Bright Star Catalogue (tools/src/downloadCache.ts) --
+      # is kept the same way, so a host down on the day is not asked at all. The ones their
+      # authors keep adding to (the ATNF's pulsars, Baumgardt's clusters, a rover's traverse)
+      # are still asked every run, their last answer kept for when the host is down. Keyed
+      # by what they hold, saved again only when that changed, as the cosmic web's.
+      - name: Restore the catalogues' downloads
+        id: downloads-restore
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/downloads
+          key: catalogue-downloads-none
+          restore-keys: |
+            catalogue-downloads-
+
+      # A full run: the ephemerides always fetched fresh, never from cache -- the whole point
+      # of it is to publish a window centred on today -- and a Horizons failure still fails
+      # it (fetchData.ts says why). Also the daily run's fallback when no saved data came
+      # back (the cache is evicted after a week unused); it has no last good data to fall
+      # back on then, so there a catalogue that cannot be read fails it as before.
       - name: Fetch ephemerides from JPL Horizons
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         env:
           STAR_CATALOGUE_CACHE: ${{ github.workspace }}/tools/.cache/star-catalogues
+          DOWNLOAD_CACHE: ${{ github.workspace }}/tools/.cache/downloads
+          DATA_FALLBACK: ${{ github.workspace }}/tools/.cache/last-data
         run: pnpm fetch:data
 
       # Kept even when the fetch failed further on: the stars it did read need not be asked
@@ -105,6 +137,20 @@ jobs:
         with:
           path: tools/.cache/star-catalogues
           key: star-catalogues-${{ github.run_id }}
+
+      - name: Name the catalogues' downloads
+        id: downloads-key
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '')
+        run: echo "key=catalogue-downloads-${{ hashFiles('tools/.cache/downloads/**') }}" >> "$GITHUB_OUTPUT"
+
+      # Kept even when the fetch failed further on, as the star catalogues' are.
+      - name: Save the catalogues' downloads
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '') && hashFiles('tools/.cache/downloads/**') != '' && steps.downloads-key.outputs.key != steps.downloads-restore.outputs.cache-matched-key
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/downloads
+          key: ${{ steps.downloads-key.outputs.key }}
 
       # The cosmic web (tools/src/cosmicWeb/): the SDSS's galaxies and filaments, 400 MB from
       # VizieR, the IAS and the SDSS's archive -- three more hosts that can turn the runners away.

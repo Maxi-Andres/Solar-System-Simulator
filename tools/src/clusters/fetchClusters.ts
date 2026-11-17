@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { BAUMGARDT_ORBITS_URL, BAUMGARDT_STRUCTURE_URL, HARRIS_URL, OUTPUT_DIR } from '../config.ts';
-import { download } from '../pulsars/fetchPulsars.ts';
+import { cachedDownload } from '../pulsars/fetchPulsars.ts';
 import type { GlobularClusterCatalog } from '../types.ts';
 import { writeGlobularClusters } from '../writeOutput.ts';
 import {
@@ -24,21 +24,21 @@ import {
   parseHarris,
 } from './globularClusters.ts';
 
-/** The three files, read and built into globular-clusters.json's contents. */
+/**
+ * The three files, read and built into globular-clusters.json's contents, through the
+ * download cache (downloadCache.ts). Baumgardt's database is revised as new measurements
+ * come in, so it is asked every run; Harris's 2010 edition is final, and read once.
+ */
 export async function loadGlobularClusters(): Promise<GlobularClusterCatalog> {
   const queriedAt = new Date().toISOString();
   const text = (bytes: Uint8Array): string => new TextDecoder('latin1').decode(bytes);
+  const log = '[clusters]';
   const [orbits, structure, harris] = await Promise.all([
-    download(BAUMGARDT_ORBITS_URL, "Baumgardt's cluster motions"),
-    download(BAUMGARDT_STRUCTURE_URL, "Baumgardt's cluster structure"),
-    download(HARRIS_URL, 'the Harris catalogue'),
+    cachedDownload(BAUMGARDT_ORBITS_URL, "Baumgardt's cluster motions", (bytes) => parseBaumgardtOrbits(text(bytes)), { policy: 'living', log }),
+    cachedDownload(BAUMGARDT_STRUCTURE_URL, "Baumgardt's cluster structure", (bytes) => parseBaumgardtStructure(text(bytes)), { policy: 'living', log }),
+    cachedDownload(HARRIS_URL, 'the Harris catalogue', (bytes) => parseHarris(text(bytes)), { log }),
   ]);
-  return buildGlobularClusters({
-    orbits: parseBaumgardtOrbits(text(orbits)),
-    structure: parseBaumgardtStructure(text(structure)),
-    harris: parseHarris(text(harris)),
-    queriedAt,
-  });
+  return buildGlobularClusters({ orbits, structure, harris, queriedAt });
 }
 
 async function main(): Promise<void> {

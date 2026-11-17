@@ -1,4 +1,5 @@
 import { MAX_RETRIES, REQUEST_TIMEOUT_MS } from './config.ts';
+import { throughCache } from './downloadCache.ts';
 import { retryDelayMs } from './horizons/client.ts';
 import type { BodyId, SurfaceSite, SurfaceTrack } from './types.ts';
 
@@ -180,8 +181,23 @@ export function fixedTrack(id: BodyId, site: Extract<SurfaceSite, { kind: 'fixed
  *
  * Network faults and 5xx answers are retried; a 4xx is not -- the file has moved, and
  * waiting will not bring it back.
+ *
+ * Asked every run, as the rover drives on; the last answer is kept (downloadCache.ts's
+ * `living` policy) and stands in, with a warning saying how old it is, when NASA's site
+ * cannot be read -- a rover a few sols behind rather than a deploy lost.
  */
-export async function fetchTraverse(url: string, label: string): Promise<unknown> {
+export function fetchTraverse(url: string, label: string): Promise<unknown> {
+  return throughCache({
+    key: url,
+    label: `${label}'s traverse`,
+    fetch: () => fetchTraverseBytes(url, label),
+    read: (bytes) => JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+    policy: 'living',
+    log: '[surface]',
+  });
+}
+
+async function fetchTraverseBytes(url: string, label: string): Promise<Uint8Array> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     try {
@@ -194,7 +210,9 @@ export async function fetchTraverse(url: string, label: string): Promise<unknown
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      return (await response.json()) as unknown;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      JSON.parse(new TextDecoder().decode(bytes));
+      return bytes;
     } catch (error) {
       lastError = error;
       if ((error as Error).cause === 'permanent' || attempt === MAX_RETRIES) {

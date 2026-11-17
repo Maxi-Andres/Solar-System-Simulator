@@ -1,6 +1,7 @@
 import { gunzipSync } from 'node:zlib';
 
 import { PULKOVO_RV_URLS, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { cachePath, downloadCacheDirectory, keep, readKept } from '../downloadCache.ts';
 import { retryDelayMs } from '../horizons/client.ts';
 
 /**
@@ -57,12 +58,33 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+/** The compilation's gzipped table, parsed and checked; throws on one that is not it. */
+function readPulkovo(bytes: Uint8Array): PulkovoRow[] {
+  const rows = parsePulkovo(gunzipSync(bytes).toString('latin1'));
+  if (rows.length < 35_000) {
+    throw new Error(`only ${rows.length} rows parsed; the format is not the one expected`);
+  }
+  return rows;
+}
+
 /**
  * Downloads and parses the compilation from CDS's archive, or its mirror at the CfA when
  * Strasbourg does not answer; or returns null, and the stars Gaia gave no radial velocity
  * keep moving across the sky only. Logged, never fatal.
+ *
+ * A published table, so kept by the download cache (downloadCache.ts), from whichever
+ * address gave it, and read from there by the next run before any address is asked.
  */
 export async function fetchPulkovo(): Promise<{ rows: PulkovoRow[]; url: string } | null> {
+  const directory = downloadCacheDirectory();
+  if (directory !== null) {
+    for (const url of PULKOVO_RV_URLS) {
+      const kept = await readKept(cachePath(directory, url), readPulkovo, 'Pulkovo radial velocities', '[stars]');
+      if (kept !== null) {
+        return { rows: kept.value, url };
+      }
+    }
+  }
   let lastError: unknown;
   for (const url of PULKOVO_RV_URLS) {
     for (let attempt = 1; attempt <= ATTEMPTS_PER_URL; attempt += 1) {
@@ -71,9 +93,10 @@ export async function fetchPulkovo(): Promise<{ rows: PulkovoRow[]; url: string 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        const rows = parsePulkovo(gunzipSync(Buffer.from(await response.arrayBuffer())).toString('latin1'));
-        if (rows.length < 35_000) {
-          throw new Error(`only ${rows.length} rows parsed; the format is not the one expected`);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const rows = readPulkovo(bytes);
+        if (directory !== null) {
+          await keep(cachePath(directory, url), bytes);
         }
         return { rows, url };
       } catch (error) {

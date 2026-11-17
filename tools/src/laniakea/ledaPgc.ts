@@ -1,4 +1,5 @@
 import { HYPERLEDA_PGC_BATCH, HYPERLEDA_SQL_URLS, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { throughCache } from '../downloadCache.ts';
 
 /**
  * HyperLEDA (Makarov et al. 2014, A&A 570, A13) for every galaxy G3 holds, by its PGC
@@ -112,7 +113,24 @@ export function pgcClause(pgcs: readonly number[]): string {
   return `pgc in (${pgcs.join(',')})`;
 }
 
-async function queryOnce(where: string): Promise<LedaRecord[]> {
+/**
+ * One batch's records, through the download cache (downloadCache.ts): the same PGC numbers
+ * every run, and HyperLEDA among the hosts least often reachable from GitHub's runners.
+ * Keyed by the form as the first mirror is posted it, whichever answered.
+ */
+function queryOnce(where: string): Promise<LedaRecord[]> {
+  const read = (bytes: Uint8Array): LedaRecord[] => parseLedaPgcCsv(new TextDecoder().decode(bytes));
+  return throughCache({
+    key: `POST ${HYPERLEDA_SQL_URLS[0]!} ${ledaForm(where).toString()}`,
+    label: 'HyperLEDA',
+    fetch: () => queryHost(where, read),
+    read,
+    log: '[laniakea]',
+  });
+}
+
+/** One batch's answer from the first mirror that gives one `read` accepts. */
+async function queryHost(where: string, read: (bytes: Uint8Array) => unknown): Promise<Uint8Array> {
   const failures: string[] = [];
   for (let round = 1; round <= ROUNDS; round += 1) {
     for (const base of HYPERLEDA_SQL_URLS) {
@@ -121,7 +139,9 @@ async function queryOnce(where: string): Promise<LedaRecord[]> {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return parseLedaPgcCsv(await response.text());
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        read(bytes);
+        return bytes;
       } catch (error) {
         failures.push(`${base} #${round}: ${String(error).slice(0, 200)}`);
       }

@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { ATNF_PACKAGE_URL, MAX_RETRIES, MCGILL_MAGNETARS_URL, OUTPUT_DIR, REQUEST_TIMEOUT_MS } from '../config.ts';
+import { type CachePolicy, throughCache } from '../downloadCache.ts';
 import { retryDelayMs } from '../horizons/client.ts';
 import type { PulsarCatalog } from '../types.ts';
 import { writePulsars } from '../writeOutput.ts';
@@ -47,20 +48,55 @@ export async function download(url: string, label: string, headers?: Record<stri
   throw new Error(`Could not read ${label} from ${url}: ${String(lastError)}`);
 }
 
-/** Both catalogues, read and built into pulsars.json's contents. */
+/**
+ * One file, through the download cache (downloadCache.ts): parsed and checked by `read`,
+ * which runs on a kept copy too, and kept by the URL. `policy` says whether the host is
+ * asked first (a `living` catalogue) or only when nothing is kept (`static`, the default).
+ *
+ * download() itself keeps nothing: the cosmic web keeps its own downloads apart (its
+ * `--cache`), and calls it directly.
+ */
+export function cachedDownload<T>(
+  url: string,
+  label: string,
+  read: (bytes: Uint8Array) => T,
+  options: { readonly policy?: CachePolicy; readonly headers?: Record<string, string>; readonly log?: string } = {},
+): Promise<T> {
+  return throughCache({
+    key: url,
+    label,
+    fetch: () => download(url, label, options.headers),
+    read,
+    ...(options.policy === undefined ? {} : { policy: options.policy }),
+    ...(options.log === undefined ? {} : { log: options.log }),
+  });
+}
+
+/**
+ * Both catalogues, read and built into pulsars.json's contents. Both are living catalogues,
+ * added to as pulsars are found, so both are asked every run; the last answers kept are the
+ * fallback when a host cannot be read (downloadCache.ts).
+ */
 export async function loadPulsars(): Promise<PulsarCatalog> {
   const queriedAt = new Date().toISOString();
-  const [atnfPackage, mcgillCsv] = await Promise.all([
-    download(ATNF_PACKAGE_URL, 'the ATNF Pulsar Catalogue'),
-    download(MCGILL_MAGNETARS_URL, 'the McGill magnetar catalogue'),
+  const [atnf, magnetars] = await Promise.all([
+    cachedDownload(
+      ATNF_PACKAGE_URL,
+      'the ATNF Pulsar Catalogue',
+      (bytes) => {
+        const { database, references } = unpackAtnf(bytes);
+        return { atnf: parseAtnfDatabase(database), atnfReferences: parseAtnfReferences(references) };
+      },
+      { policy: 'living', log: '[pulsars]' },
+    ),
+    cachedDownload(
+      MCGILL_MAGNETARS_URL,
+      'the McGill magnetar catalogue',
+      (bytes) => parseMcgillCsv(new TextDecoder().decode(bytes)),
+      { policy: 'living', log: '[pulsars]' },
+    ),
   ]);
-  const { database, references } = unpackAtnf(atnfPackage);
-  return buildPulsars({
-    atnf: parseAtnfDatabase(database),
-    atnfReferences: parseAtnfReferences(references),
-    magnetars: parseMcgillCsv(new TextDecoder().decode(mcgillCsv)),
-    queriedAt,
-  });
+  return buildPulsars({ ...atnf, magnetars, queriedAt });
 }
 
 async function main(): Promise<void> {

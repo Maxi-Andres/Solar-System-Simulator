@@ -13,16 +13,23 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { NEARBY_GALAXIES_URL, OUTPUT_DIR } from '../config.ts';
-import { download } from '../pulsars/fetchPulsars.ts';
+import { cachedDownload } from '../pulsars/fetchPulsars.ts';
 import type { LocalGroupCatalog } from '../types.ts';
 import { writeLocalGroup } from '../writeOutput.ts';
 import { buildLocalGroup, describeLocalGroup, readFitsTable } from './nearbyGalaxies.ts';
 
-/** The catalogue, read and built into local-group.json's contents. */
+/**
+ * The catalogue, read and built into local-group.json's contents. McConnachie updates it
+ * as dwarfs are found, so it is asked every run, the last copy kept as the fallback
+ * (downloadCache.ts).
+ */
 export async function loadLocalGroup(): Promise<LocalGroupCatalog> {
   const queriedAt = new Date().toISOString();
-  const bytes = await download(NEARBY_GALAXIES_URL, "McConnachie's catalogue of nearby galaxies");
-  return buildLocalGroup(readFitsTable(bytes), queriedAt);
+  const table = await cachedDownload(NEARBY_GALAXIES_URL, "McConnachie's catalogue of nearby galaxies", readFitsTable, {
+    policy: 'living',
+    log: '[local-group]',
+  });
+  return buildLocalGroup(table, queriedAt);
 }
 
 async function main(): Promise<void> {
