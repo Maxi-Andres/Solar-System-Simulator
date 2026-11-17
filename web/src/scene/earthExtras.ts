@@ -46,7 +46,7 @@ export const EARTH_CLOUD_MAP = 'earth-clouds.jpg';
  * source's own antialiasing already blended its flat ocean colour with the land beside
  * it, so how far a coastal texel sits from that colour *is* how much of it is sea. See
  * CREDITS.md for the numbers -- it also moved the global water fraction from 68.6% to
- * 69.7% against the true 70.8%, so the softer mask is the more accurate one as well.
+ * 69.7% against the true 70.9%, so the softer mask is the more accurate one as well.
  */
 export const EARTH_WATER_MASK = 'earth-water.png';
 

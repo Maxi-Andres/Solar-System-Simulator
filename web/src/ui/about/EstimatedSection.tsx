@@ -668,8 +668,8 @@ export const estimatedSection: AboutSection = {
           <Item title="Composites">
             Surface maps are composites, not registered cartographic products — NASA imagery with colour and
             contrast added by its authors, so they read more vividly than a camera would. On the flattened
-            bodies a feature can sit about 1.5° from its true latitude; Saturn is the worst, Earth and Mars
-            are under 0.1°.
+            bodies a feature can sit about 3° from its true latitude on Saturn, the worst, and 2° on Jupiter;
+            on Mars it is 0.2° and on Earth 0.1°.
           </Item>
           <Item title="Grey moons">
             The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager
@@ -715,7 +715,7 @@ export const estimatedSection: AboutSection = {
           <Item title="Land and water">
             Earth’s land/water mask is derived rather than published — from the flat colour NASA fills deep
             water with in one of its maps, read as a coverage fraction so the shoreline is not drawn as the
-            staircase the 20 km grid makes. It lands at 69.7% water against the true 70.8%, because that map
+            staircase the 20 km grid makes. It lands at 69.7% water against the true 70.9%, because that map
             draws the shallow continental shelves instead of filling them, so a rim of every coast counts as
             land.
           </Item>

@@ -231,8 +231,8 @@ filled cap, not a gap. Saved as single-channel JPEG at quality 85: Ceres 754 KB,
 - **Latitude on the flattened bodies is approximate.** The maps are wrapped by the
   sphere's own parametrisation and the sphere is then scaled to the real polar
   flattening, which places a feature between where planetocentric and planetographic
-  latitude would each put it. On Saturn, the most oblate body here, that is about 1.5
-  degrees at mid-latitudes; on Earth and Mars it is under 0.1. Since these are artist's
+  latitude would each put it. On Saturn, the most oblate body here, that is up to about 3
+  degrees from either at mid-latitudes, and 2 on Jupiter; on Mars 0.2, on Earth 0.1. Since these are artist's
   composites rather than registered cartographic products, committing to either
   convention would be a false precision.
 

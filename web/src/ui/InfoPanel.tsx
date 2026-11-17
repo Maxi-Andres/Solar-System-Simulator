@@ -616,7 +616,7 @@ function ReadMore({ name }: { name: string }) {
         textAlign: 'left',
       }}
     >
-      Read about {name === 'Sun' ? 'the Sun' : name} →
+      Read about {name === 'Sun' || name === 'Moon' ? `the ${name}` : name} →
     </button>
   );
 }

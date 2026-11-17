@@ -53,7 +53,7 @@ export const SUN: Description = {
       colour: 'tinted',
       credit: 'NASA/SDO',
       licence: 'NASA media, not copyrighted',
-      date: '2014-10',
+      date: '2014-10-23',
       sourceUrl: 'https://images.nasa.gov/details/GSFC_20171208_Archive_e000923',
     },
     {
@@ -63,7 +63,7 @@ export const SUN: Description = {
       height: 400,
       title: 'A spotless Sun, March 2017',
       caption:
-        'Near solar minimum, eleven days with no sunspots at all. The picture blends the filtered visible disc with an extreme-ultraviolet image, so its colours are a convention, not what an eye would see.',
+        'On the way to solar minimum, eleven days with no sunspots at all. The picture blends the filtered visible disc with an extreme-ultraviolet image, so its colours are a convention, not what an eye would see.',
       colour: 'false',
       credit: 'NASA/GSFC/Solar Dynamics Observatory',
       licence: 'NASA media, not copyrighted',
@@ -133,10 +133,10 @@ export const SUN: Description = {
       height: 567,
       title: 'A coronal mass ejection, 8 January 2002',
       caption:
-        'More than a billion tonnes of the corona thrown into space. SOHO’s coronagraph hides the bright disc and sees the corona around it; an ultraviolet image of the Sun from another day is laid over the hidden disc. A composite, in false colour.',
+        'Around a billion tonnes of the corona thrown into space. SOHO’s coronagraph hides the bright disc and sees the corona around it; an ultraviolet image of the Sun from another day is laid over the hidden disc. A composite, in false colour.',
       colour: 'false',
-      credit: 'ESA/NASA SOHO',
-      licence: 'NASA media, not copyrighted',
+      credit: 'SOHO (ESA & NASA), LASCO and EIT',
+      licence: 'SOHO data, free to use with credit',
       date: '2002-01-08',
       sourceUrl: 'https://images.nasa.gov/details/GSFC_20171208_Archive_e002109',
     },
@@ -178,7 +178,7 @@ export const SUN: Description = {
   measured: [
     {
       title: 'Size',
-      text: 'Radius 695,700 km, the IAU’s nominal value, from the photosphere’s measured edge. Almost perfectly round: its equator is only about 6 km wider than its poles.',
+      text: 'Radius 695,700 km, the IAU’s nominal value, from the photosphere’s measured edge. Almost perfectly round: its equatorial radius is only about 6 km longer than its polar one.',
       cite: ['iau2015', 'kuhn2012'],
     },
     {
@@ -203,7 +203,7 @@ export const SUN: Description = {
     },
     {
       title: 'What it is made of',
-      text: 'By mass, 73.8% hydrogen, 24.9% helium and 1.3% everything else, from the dark lines in its spectrum and the stony meteorites that formed from the same cloud.',
+      text: 'By mass, 73.8% hydrogen, 24.9% helium and 1.3% everything else, from the dark lines in its spectrum and the most primitive meteorites, which formed from the same cloud; the helium, which leaves no lines in the photosphere, from the Sun’s vibrations.',
       cite: ['asplund2009'],
     },
     {

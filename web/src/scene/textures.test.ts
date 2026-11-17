@@ -330,7 +330,7 @@ describe("Earth's extras", () => {
 
   it('covers the fraction of Earth that is actually water, within about a point', () => {
     // The number this is really testing, and the one that says the derivation worked:
-    // 70.8% of Earth's surface is water. Summed as coverage rather than counted as
+    // 70.9% of Earth's surface is water. Summed as coverage rather than counted as
     // pixels, because the mask carries fractions now -- and area-weighted by
     // cos(latitude), since an equirectangular row near the pole is a few hundred km of
     // ground, not a few thousand.
