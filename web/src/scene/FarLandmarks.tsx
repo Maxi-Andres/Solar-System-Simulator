@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { FAR_LANDMARKS, fieldHalfAngle, GROUP_SIZE_TO_PLANCK, type FarLandmark } from '../core/farLandmarks.ts';
+import { FAR_LANDMARKS, farRingRadiusPc, fieldHalfAngle, isBeam, type FarLandmark } from '../core/farLandmarks.ts';
 import { RECORD_HOLDER_COLOR, recordHolderPositionKm, recordHoldersFade } from '../core/recordHolders.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { SimClock } from '../core/time.ts';
@@ -16,8 +16,10 @@ import { UNITS_PER_PC } from './stars3dShader.ts';
  * What a far landmark's mark cannot say (core/farLandmarks.ts): a deep field's beam, from the
  * Sun out to the farthest galaxy confirmed in it, as wide as the field on the sky -- a line of
  * BEAM_SIGMA_PX until its true width is wider -- brightening toward its end, the depth it
- * reaches; and a large quasar group's extent, a ring of its characteristic size about its mean
- * place, drawn while it is RING_LEAST_PX or more across. Their marks and names are the
+ * reaches, and the CMB dipole's, a line from the Sun to its hot pole on the wall, the way the
+ * Sun moves; and a large quasar group's extent, a ring of its characteristic size about its
+ * mean place -- a structure's of its diameter, the Cold Spot's of its core on the wall --
+ * drawn while it is RING_LEAST_PX or more across. Their marks and names are the
  * record-holders' (recordHolders.ts); these go with them: the Observable Universe layer, and
  * recordHoldersFade.
  */
@@ -146,8 +148,8 @@ void main() {
 }
 `;
 
-const beams = FAR_LANDMARKS.filter((l) => l.extent.kind === 'field');
-const groups = FAR_LANDMARKS.filter((l) => l.extent.kind === 'group');
+const beams = FAR_LANDMARKS.filter(isBeam);
+const groups = FAR_LANDMARKS.filter((l) => farRingRadiusPc(l, 1) !== null);
 
 /** Each landmark's place, pc from the Sun, scene frame. */
 function placePc(landmark: FarLandmark): [number, number, number] {
@@ -257,8 +259,7 @@ export function FarLandmarks({ store, clock, focus }: FarLandmarksProps) {
     const ringStrength = built.ringGeometry.getAttribute('aStrength').array as Float32Array;
     groups.forEach((landmark, i) => {
       const at = built.centres[i]!;
-      const extent = landmark.extent;
-      const radiusPc = extent.kind === 'group' ? 0.5e6 * extent.characteristicMpc * GROUP_SIZE_TO_PLANCK : 0;
+      const radiusPc = farRingRadiusPc(landmark, Math.hypot(at[0], at[1], at[2])) ?? 0;
       c.set([sx + at[0], sy + at[1], sz + at[2], radiusPc], i * 4);
       ringStrength[i] = fade * RING_OPACITY;
     });

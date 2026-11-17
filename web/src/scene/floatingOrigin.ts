@@ -132,9 +132,10 @@ export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>)
   if ((body.kind === 'star' && body.id !== 'sun') || body.kind === 'black-hole' || body.kind === 'neutron-star' || body.kind === 'globular-cluster') {
     return true;
   }
-  // A record-holder is a structure by kind, and the Observable Universe layer's (recordHolders.ts).
+  // A record-holder is a structure by kind, and the Observable Universe layer's (recordHolders.ts);
+  // a famous galaxy within Laniakea's reach (famousGalaxies.ts) Laniakea's, as its structures are.
   if (body.kind === 'structure' && recordHolderOf(body.id) !== null) {
-    return visibleKinds.has(RECORD_HOLDER_LAYER);
+    return visibleKinds.has(recordHolderOf(body.id)!.nearby === true ? 'structure' : RECORD_HOLDER_LAYER);
   }
   // A region -- a Lagrange point, a Voyager crossing, a boundary's nose -- is its layer's (regions.ts).
   if (body.kind === 'region') {

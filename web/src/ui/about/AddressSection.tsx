@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { BodyId } from '@sss/tools/types';
 
 import { SGR_A_ASTROMETRY, SGR_A_DISTANCE_PC } from '../../core/blackHoles.ts';
+import { CMB_DIPOLE } from '../../core/cmbFrame.ts';
 import { CF4_COSMOLOGY, hubbleDistanceMpc, mpcToLy, OBSERVABLE_RADIUS_MPC, PLANCK18 } from '../../core/cosmology.ts';
 import type { EphemerisStore } from '../../core/ephemerisStore.ts';
 import { GIANTS } from '../../core/localGroup.ts';
@@ -45,8 +46,8 @@ const SECONDS_PER_MYR = 365.25 * 86_400 * 1e6;
 const PARSEC_KM = (149_597_870.7 * 648_000) / Math.PI;
 const DEG = Math.PI / 180;
 
-/** The Sun's velocity against the CMB (Planck Collaboration 2020, A&A 641, A1): the dipole. */
-export const CMB_DIPOLE = { speedKmS: 369.82, lDeg: 264.021, bDeg: 48.253 } as const;
+/** The Sun's velocity against the CMB (Planck Collaboration 2020, A&A 641, A1): the dipole, core/cmbFrame.ts's. */
+export { CMB_DIPOLE };
 
 /** The Sun's motion against the local standard of rest, U V W, km/s (Schönrich, Binney & Dehnen 2010). */
 export const SOLAR_MOTION_KMS = { u: 11.1, v: 12.24, w: 7.25 } as const;

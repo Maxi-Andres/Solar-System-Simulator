@@ -1,4 +1,5 @@
 import { tracked } from './loading.ts';
+import { m31StreamTrack } from './m31Stream.ts';
 import { equatorialToEcliptic } from '../scene/orientation.ts';
 import { vec3 } from './vec3.ts';
 
@@ -60,9 +61,22 @@ export function loadStreams(): Promise<StreamsFile | null> {
     'the stellar streams',
     fetch(streamsUrl())
       .then((response) => (response.ok ? (response.json() as Promise<StreamsFile>) : null))
-      .catch(() => null),
+      .catch(() => null)
+      .then(withAndromedas),
   );
   return loading;
+}
+
+/**
+ * The file with Andromeda's Giant Stellar Stream after galstreams' (m31Stream.ts): galstreams
+ * holds the Milky Way's alone. Without the file, the stream alone.
+ */
+export function withAndromedas(file: StreamsFile | null): StreamsFile {
+  const andromedas = m31StreamTrack();
+  if (file === null) {
+    return { source: 'Conn et al. 2016', licence: '', stepDeg: 0, streams: [andromedas] };
+  }
+  return { ...file, streams: [...file.streams, andromedas] };
 }
 
 /** A point of a track, equatorial pc, in the scene's ecliptic frame, pc. */

@@ -281,9 +281,13 @@ export function bodyFoldStrength(
     return 1;
   }
   if (body.kind === 'structure') {
-    if (recordHolderOf(body.id) !== null) {
-      return structures.recordHolders;
+    const holder = recordHolderOf(body.id);
+    if (holder !== null) {
+      // A famous galaxy within Laniakea's reach (famousGalaxies.ts) fades as its structures do.
+      return holder.nearby === true ? Math.min(structuresStrength(), structures.nearbyUniverse) : structures.recordHolders;
     }
+    // A disputed one (the KBC Void, about us) marked only while chosen, as its shell is drawn (Laniakea.tsx).
+    if (structureOf(body.id)?.status?.label === 'disputed') return 0;
     // Its own host's strength: what it folds into above it, and the structures' fade.
     const host = MARK_HOSTS.indexOf(`structure:${body.id}`);
     return Math.min(

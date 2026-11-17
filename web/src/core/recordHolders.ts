@@ -1,6 +1,8 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
-import { redshiftDistances, mpcToKm, type RedshiftDistances } from './cosmology.ts';
+import { cmbFrameRedshift } from './cmbFrame.ts';
+import { CF4_COSMOLOGY, PLANCK18, redshiftDistances, mpcToKm, type Cosmology, type RedshiftDistances } from './cosmology.ts';
+import { FAMOUS_GALAXIES } from './famousGalaxies.ts';
 import { FAR_LANDMARKS } from './farLandmarks.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
@@ -33,8 +35,21 @@ import type { StateVector, Vec3 } from './vec3.ts';
  * checked against it.
  */
 
-// 'quasar-group' and 'deep-field' are farLandmarks.ts's, made bodies here with the record-holders.
-export type RecordHolderKind = 'galaxy' | 'quasar' | 'star' | 'grb' | 'transient' | 'cluster' | 'supercluster' | 'quasar-group' | 'deep-field';
+// 'quasar-group' to 'cmb-feature' are farLandmarks.ts's, made bodies here with the record-holders.
+export type RecordHolderKind =
+  | 'galaxy'
+  | 'quasar'
+  | 'star'
+  | 'grb'
+  | 'transient'
+  | 'cluster'
+  | 'supercluster'
+  | 'quasar-group'
+  | 'deep-field'
+  | 'protocluster'
+  | 'large-structure'
+  | 'void'
+  | 'cmb-feature';
 
 export interface RecordHolder {
   readonly key: string;
@@ -57,6 +72,12 @@ export interface RecordHolder {
   readonly reference: string;
   /** Anything disputed, or what the number is not. */
   readonly note: string | null;
+  /**
+   * Within Laniakea's reach (famousGalaxies.ts): its redshift NED's heliocentric one, placed in
+   * the CMB's frame and Cosmicflows-4's cosmology as Laniakea's galaxies are, and drawn with
+   * Laniakea's structures, not from the edge of the observable universe.
+   */
+  readonly nearby?: true;
 }
 
 export const RECORD_HOLDERS: readonly RecordHolder[] = [
@@ -406,6 +427,14 @@ export function recordHolderKindLabel(kind: RecordHolderKind): string {
       return 'Large quasar group';
     case 'deep-field':
       return 'Deep field';
+    case 'protocluster':
+      return 'Protocluster';
+    case 'large-structure':
+      return 'Large structure';
+    case 'void':
+      return 'Void';
+    case 'cmb-feature':
+      return 'CMB feature';
   }
 }
 
@@ -419,8 +448,9 @@ export function recordHolderBodyId(holder: Pick<RecordHolder, 'key'>): BodyId {
   return `far-${holder.key}`;
 }
 
-// With them the far landmarks (farLandmarks.ts): the same kind of body, not counted among the record-holders.
-const byId = new Map<BodyId, RecordHolder>([...RECORD_HOLDERS, ...FAR_LANDMARKS].map((holder) => [recordHolderBodyId(holder), holder]));
+// With them the far landmarks (farLandmarks.ts) and the famous galaxies (famousGalaxies.ts): the same kind of body, not counted among the record-holders.
+const ALL_HOLDERS: readonly RecordHolder[] = [...RECORD_HOLDERS, ...FAR_LANDMARKS, ...FAMOUS_GALAXIES];
+const byId = new Map<BodyId, RecordHolder>(ALL_HOLDERS.map((holder) => [recordHolderBodyId(holder), holder]));
 
 export function recordHolderOf(id: BodyId | null): RecordHolder | null {
   return id === null ? null : (byId.get(id) ?? null);
@@ -428,11 +458,21 @@ export function recordHolderOf(id: BodyId | null): RecordHolder | null {
 
 const distances = new Map<string, RedshiftDistances>();
 
-/** Its distances and times, Planck 2018 (cosmology.ts). */
+/** The cosmology its distances are in: Planck 2018's, or a nearby one's Cosmicflows-4's (cosmology.ts). */
+export function recordHolderCosmology(holder: Pick<RecordHolder, 'nearby'>): Cosmology {
+  return holder.nearby === true ? CF4_COSMOLOGY : PLANCK18;
+}
+
+/** The redshift its distances are from: its own, or a nearby one's in the CMB's frame (cmbFrame.ts). */
+export function recordHolderDistanceRedshift(holder: RecordHolder): number {
+  return holder.nearby === true ? cmbFrameRedshift(holder.raDeg, holder.decDeg, holder.z) : holder.z;
+}
+
+/** Its distances and times, Planck 2018 -- or, a nearby one, Cosmicflows-4 (cosmology.ts). */
 export function recordHolderDistances(holder: RecordHolder): RedshiftDistances {
   const known = distances.get(holder.key);
   if (known !== undefined) return known;
-  const computed = redshiftDistances(holder.z);
+  const computed = redshiftDistances(recordHolderDistanceRedshift(holder), recordHolderCosmology(holder));
   distances.set(holder.key, computed);
   return computed;
 }
@@ -466,6 +506,13 @@ export function recordHolderPositionKm(holder: RecordHolder): Vec3 {
  * Each is a mark: a galaxy at z 14 is a few hundred parsecs across, nothing to frame.
  */
 export const RECORD_HOLDER_FRAMING_KM = 1e9 * 299_792.458 * 365.25 * 86_400;
+
+/** A nearby one (famousGalaxies.ts) from 3 Mpc, a galaxy group's reach: its neighbours about it. */
+export const NEARBY_HOLDER_FRAMING_KM = 3e6 * ((149_597_870.7 * 648_000) / Math.PI);
+
+export function recordHolderFramingKm(holder: Pick<RecordHolder, 'nearby'>): number {
+  return holder.nearby === true ? NEARBY_HOLDER_FRAMING_KM : RECORD_HOLDER_FRAMING_KM;
+}
 
 /** Earth's view of it: the camera on the Sun's side, looking out, north up (as structureEarthView). */
 export function recordHolderEarthView(holder: RecordHolder): { direction: [number, number, number]; up: [number, number, number] } {
@@ -504,7 +551,7 @@ function definition(holder: RecordHolder): BodyDefinition {
 
 /** The record-holders made bodies, from the start (App.tsx): every number is here. */
 export function ensureRecordHolders(store: EphemerisStore): void {
-  const missing = [...RECORD_HOLDERS, ...FAR_LANDMARKS].filter((holder) => !store.isPropagatedBody(recordHolderBodyId(holder)));
+  const missing = ALL_HOLDERS.filter((holder) => !store.isPropagatedBody(recordHolderBodyId(holder)));
   if (missing.length === 0) return;
   store.addPropagatedBodies(
     missing.map((holder) => {

@@ -728,6 +728,8 @@ export function basinNamesAt(c: LaniakeaCatalogue, scenePc: readonly [number, nu
 /** Earth's view of a structure: the camera on the Sun's side of it, looking out, north up (as galaxyEarthView). */
 export function structureEarthView(landmark: Pick<LaniakeaLandmark, 'x' | 'y' | 'z'>): { direction: [number, number, number]; up: [number, number, number] } {
   const n = Math.hypot(landmark.x, landmark.y, landmark.z);
+  // One about us (the KBC Void) has no side of ours: seen from the ecliptic's north, as the Solar System is.
+  if (!(n > 1)) return { direction: [0, 0, 1], up: [0, 1, 0] };
   const { north, away } = skyAxes({ x: landmark.x / n, y: landmark.y / n, z: landmark.z / n });
   return { direction: [-away.x, -away.y, -away.z], up: [north.x, north.y, north.z] };
 }

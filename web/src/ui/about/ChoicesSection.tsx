@@ -516,6 +516,14 @@ export const choicesSection: AboutSection = {
           Beyond the Local Group
         </Sub>
         <Items>
+          <Item title="Supernovae marked whatever the clock">
+            SN 2023ixf, SN 2011fe and SN 2014J are marked at every date, with the date each was found in its
+            panel, not only while its light was reaching Earth.
+            <Why>
+              a mark says where a star died; its light came and went in months, and drawn only then the marks would
+              be gone at almost any date the clock is set to.
+            </Why>
+          </Item>
           <Item title="Three profiles">
             A dwarf — a spheroidal, a dwarf elliptical, an irregular, a blue compact dwarf, a Magellanic spiral, an
             elliptical fainter than M<sub>V</sub> −17 — is drawn as the Local Group’s dwarfs are; a giant elliptical

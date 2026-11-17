@@ -65,6 +65,13 @@ import { BASINS, basinGrid, CF4_BOX_MPC_H, type WatershedGrid } from './watershe
  *   Cosmicflows-3 Wiener-filter density): each at its deepest density minimum, with the
  *   rough extents of its -0.7 isodensity surface along SGX, SGY, SGZ. Their numbers are in
  *   km/s; turned into Mpc here at H0 74.6.
+ * - Two from papers of their own (PAPER_VOIDS), each a sphere of the size its paper gives, no
+ *   shape being given: the Giant Void in Canes Venatici (Kopylov & Kopylova 2002, A&A 382,
+ *   389: about 13h, +40 deg, z about 0.11, about 300 Mpc across), at its redshift's distance;
+ *   and the KBC Void (Keenan, Barger & Cowie 2013, ApJ 775, 62), about us: the K-band light
+ *   per volume a third lower within z 0.07 than beyond z 0.1 -- disputed, as supernova
+ *   distances find no such void (Kenworthy et al. 2019, ApJ 875, 145); its status says so, and
+ *   the app draws its shell only while it is chosen.
  * - The Sloan Great Wall (Gott et al. 2005, ApJ 624, 463): from 8.7h to 13.7h of right
  *   ascension in the SDSS's equatorial slice (|Dec| < 2 deg), at z 0.073, 450 Mpc long
  *   comoving at their H0 71 -- drawn as a line at that redshift's distance across that span.
@@ -117,7 +124,12 @@ export const CLUSTERS: readonly ClusterDefinition[] = [
 ];
 
 /** Einasto et al. 1997 supercluster numbers kept, with the names given here. */
-export const SUPERCLUSTERS: readonly { readonly sc: number; readonly name: string; readonly otherNames: readonly string[] }[] = [
+export const SUPERCLUSTERS: readonly {
+  readonly sc: number;
+  readonly name: string;
+  readonly otherNames: readonly string[];
+  readonly status?: NonNullable<LaniakeaLandmark['status']>;
+}[] = [
   { sc: 124, name: 'Shapley Supercluster', otherNames: ['Shapley Concentration'] },
   { sc: 48, name: 'Horologium-Reticulum Supercluster', otherNames: ['Horologium Supercluster'] },
   { sc: 160, name: 'Hercules Supercluster', otherNames: [] },
@@ -131,6 +143,16 @@ export const SUPERCLUSTERS: readonly { readonly sc: number; readonly name: strin
   { sc: 158, name: 'Corona Borealis Supercluster', otherNames: [] },
   { sc: 9, name: 'Sculptor Supercluster', otherNames: [] },
   { sc: 67, name: 'Lepus Supercluster', otherNames: [] },
+  // A candidate in Einasto et al.'s table ("c"): 9 of its 11 Abell clusters' redshifts estimated.
+  {
+    sc: 59,
+    name: 'Caelum Supercluster',
+    otherNames: [],
+    status: {
+      label: 'candidate',
+      why: 'A candidate in Einasto et al. 1997: 9 of its 11 Abell clusters have redshifts estimated from their brightness, not measured.',
+    },
+  },
 ];
 
 /** Tully et al. 2019: each void's deepest minimum, km/s, SGX SGY SGZ; its extents at -0.7, km/s. */
@@ -306,6 +328,7 @@ export function superclusterLandmarks(rows: readonly AsuRow[]): { landmarks: Lan
         distanceEstimated: true,
         members: asuNumber(row, 'Nmembers'),
         source: `Einasto et al. 1997, A&AS 123, 119, Table A2: supercluster ${sc.sc} ("${einastoName}"), a concentration of Abell clusters; members counts Abell clusters.`,
+        ...(sc.status === undefined ? {} : { status: sc.status }),
       }),
     );
   }
@@ -378,7 +401,54 @@ export function greatAttractor(): LaniakeaLandmark {
   });
 }
 
+/** The KBC Void's edge: z 0.07, where Keenan et al. 2013 find the light per volume starting to rise. */
+export const KBC_VOID_Z = 0.07;
+
+/** Voids from papers of their own (see the header): spheres about their centres, of their papers' sizes. */
+export function paperVoids(): LaniakeaLandmark[] {
+  const giantPc = 300e6;
+  const kbcPc = 2 * comovingDistanceMpc(KBC_VOID_Z) * 1e6;
+  return [
+    landmark({
+      name: 'Giant Void',
+      otherNames: ['AR-Lp 36', 'Canes Venatici Void', 'Giant Void in Canes Venatici'],
+      kind: 'void',
+      raDeg: 13 * 15,
+      decDeg: 40,
+      distancePc: comovingDistanceMpc(0.11) * 1e6,
+      distanceMethod: 'redshift (Kopylov & Kopylova 2002), rough',
+      distanceEstimated: true,
+      extentPc: [giantPc, giantPc, giantPc],
+      sizeNote: 'About 300 Mpc across, as Kopylov & Kopylova 2002 give it; drawn as a sphere, its shape not given.',
+      source: 'Kopylov & Kopylova 2002, A&A 382, 389: centre about 13h, +40 deg, z about 0.11, about 300 Mpc across; found by Kopylov et al. 1988.',
+      note: 'The 17 clusters about it show no outflow from it (Kopylov & Kopylova 2002).',
+    }),
+    landmark({
+      name: 'KBC Void',
+      otherNames: ['Local Hole', 'Keenan-Barger-Cowie Void', 'KBC void'],
+      kind: 'void',
+      raDeg: 0,
+      decDeg: 0,
+      distancePc: 0,
+      distanceMethod: 'about us',
+      distanceEstimated: true,
+      extentPc: [kbcPc, kbcPc, kbcPc],
+      sizeNote: `Out to z ${KBC_VOID_Z} (about 300 Mpc at H0 70, Keenan et al. 2013), at H0 74.6; beyond, the light per volume rises about 1.5 times.`,
+      status: {
+        label: 'disputed',
+        why: 'Keenan et al. 2013 find the K-band light per volume about a third lower within z 0.07; supernova distances find no such void (Kenworthy et al. 2019).',
+      },
+      source: 'Keenan, Barger & Cowie 2013, ApJ 775, 62; Kenworthy, Scolnic & Riess 2019, ApJ 875, 145.',
+      note: 'Centred on us: the underdensity is measured as a function of distance from here.',
+    }),
+  ];
+}
+
 export function voidLandmarks(): LaniakeaLandmark[] {
+  return [...tullyVoids(), ...paperVoids()];
+}
+
+function tullyVoids(): LaniakeaLandmark[] {
   return VOIDS.map((v) => {
     const sgMpc: Vec3 = [v.sgKmS[0] / 74.6, v.sgKmS[1] / 74.6, v.sgKmS[2] / 74.6];
     const icrs = supergalacticToIcrs(sgMpc);

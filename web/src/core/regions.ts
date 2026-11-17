@@ -22,7 +22,8 @@ export type RegionLayer =
   | 'magnetosphere'
   | 'landing-site'
   | 'aurora'
-  | 'meteor-shower';
+  | 'meteor-shower'
+  | 'interstellar-cloud';
 
 export interface RegionFact {
   readonly label: string;
@@ -54,6 +55,8 @@ export interface Region {
    * forecast time (aurora.ts), whether a meteor shower is active (meteorShowers.ts).
    */
   readonly liveFacts?: (jd: number) => readonly RegionFact[];
+  /** Its other names, found by the search: "North Polar Spur", "L1688" (interstellarClouds.ts). */
+  readonly aliases?: readonly string[];
 }
 
 const regions = new Map<BodyId, Region>();
@@ -75,6 +78,7 @@ export const REGION_LAYER_IDS = {
   'landing-site': 'landingSites',
   aurora: 'aurora',
   'meteor-shower': 'meteorShowers',
+  'interstellar-cloud': 'interstellarClouds',
 } as const satisfies Record<RegionLayer, string>;
 
 /**

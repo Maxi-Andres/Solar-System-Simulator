@@ -11,8 +11,17 @@ import { Panel } from './Panel.tsx';
  */
 
 const AU_KM = 149_597_870.7;
+const PARSEC_KM = 3.0856775814913673e13;
+const LIGHT_YEAR_KM = 9.4607304725808e12;
 
 function formatKm(km: number): string {
+  // Out among the stars (an interstellar cloud's, interstellarClouds.ts): light years and parsecs.
+  if (km >= 0.1 * PARSEC_KM) {
+    const ly = km / LIGHT_YEAR_KM;
+    const pc = km / PARSEC_KM;
+    const round = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: value < 100 ? 1 : 0 });
+    return `${round(ly)} ly · ${round(pc)} pc`;
+  }
   return km >= 0.1 * AU_KM ? `${(km / AU_KM).toFixed(km >= 10 * AU_KM ? 1 : 4)} AU` : `${Math.round(km).toLocaleString('en-US')} km`;
 }
 

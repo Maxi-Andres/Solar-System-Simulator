@@ -4,6 +4,7 @@ import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { messierMarkOf, messierRadiusKm } from '../core/messier.ts';
 import { notableStarOf } from '../core/notableStars.ts';
 import { flybyOfNotable } from '../core/stellarFlybys.ts';
+import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { PARSEC_KM } from '../scene/scale.ts';
 import { FlybyFacts } from './FlybyFacts.tsx';
 import { Panel } from './Panel.tsx';
@@ -84,13 +85,15 @@ function NotableStarPanel({
   const body = store.body(focus);
   const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
   const flyby = flybyOfNotable(star.key);
-  const pc = (value: number) => (value < 10 ? value.toFixed(2) : String(Math.round(value)));
+  // A supernova in another galaxy is megaparsecs off: its distance as a galaxy's is written.
+  const galactic = star.distancePc > 100_000;
+  const pc = (value: number) => (galactic ? formatGalaxyDistance(value) : `${value < 10 ? value.toFixed(2) : String(Math.round(value))} pc`);
   const error =
     star.distanceUpPc === null || star.distanceDownPc === null
       ? null
       : Math.abs(star.distanceUpPc - star.distanceDownPc) < 0.05 * star.distanceUpPc
-        ? `± ${pc(star.distanceUpPc)} pc`
-        : `+${pc(star.distanceUpPc)} −${pc(star.distanceDownPc)} pc`;
+        ? `± ${pc(star.distanceUpPc)}`
+        : `+${pc(star.distanceUpPc)} −${pc(star.distanceDownPc)}`;
   return (
     <Panel title={body.name} onClose={onClose} width="17.5rem">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -102,7 +105,9 @@ function NotableStarPanel({
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {star.aliases.length > 0 && <Row label="Also">{star.aliases.join(' · ')}</Row>}
-        <Row label="Distance">{fromSun === null ? '--' : formatStarDistance(fromSun / PARSEC_KM)}</Row>
+        <Row label="Distance">
+          {fromSun === null ? '--' : galactic ? formatGalaxyDistance(fromSun / PARSEC_KM) : formatStarDistance(fromSun / PARSEC_KM)}
+        </Row>
         {error !== null && <Row label="">{error}</Row>}
         {star.parallaxMas !== null && <Row label="Parallax">{`${star.parallaxMas} mas`}</Row>}
         <Row label="From">{star.distanceMethod}</Row>

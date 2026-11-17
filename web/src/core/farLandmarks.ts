@@ -1,3 +1,5 @@
+import { CMB_DIPOLE, CMB_DIPOLE_AMPLITUDE_UK, CMB_DIPOLE_APEX, COLD_SPOT, galacticToEquatorial } from './cmbFrame.ts';
+import { comovingDistanceMpc, PLANCK18, Z_LAST_SCATTERING } from './cosmology.ts';
 import type { RecordHolder } from './recordHolders.ts';
 
 /**
@@ -25,6 +27,25 @@ import type { RecordHolder } from './recordHolders.ts';
  *
  * Checked against each paper's text and tables (and the ESA/Hubble and ESA/Webb image pages)
  * on 2026-11-16.
+ *
+ * ## The protoclusters, the large structures, a supervoid, and the CMB's features
+ *
+ * Added 2026-11-17, each checked against its paper's text, tables or figures (and NED):
+ *
+ * - **Protoclusters**, clusters still forming, each at its paper's place and redshift: the
+ *   Spiderweb about its radio galaxy, SPT2349-56 at its millimetre source, Hyperion at its most
+ *   massive peak. A mark each; Hyperion, 60 x 60 x 150 comoving Mpc, a ring too.
+ * - **Large structures**: the BOSS Great Wall, measured in galaxies' spectra; and four patterns
+ *   whose reality is argued -- the Hercules-Corona Borealis Great Wall and the Giant GRB Ring in
+ *   gamma-ray bursts, the Giant Arc and the Big Ring in Mg II absorbers. Each one's `record`
+ *   says "[claim]" or "[disputed]", and its note who argues. A ring of the size its paper gives,
+ *   rescaled to Planck's H0, where the paper gives a diameter; the Giant Arc and the HCB Great
+ *   Wall, an arc and a patch of sky, a mark only.
+ * - **The Eridanus Supervoid**, in front of the Cold Spot: a ring of its diameter. That it makes
+ *   the Cold Spot is disputed, and its record says so.
+ * - **The CMB's features**, on its wall, at the last-scattering distance: the Cold Spot a circle
+ *   of its core about where the map is coldest (cmbFrame.ts COLD_SPOT, farLandmarks.test.ts);
+ *   the dipole's hot pole, the way the Sun moves against the CMB, a beam from the Sun to it.
  */
 
 export type FarExtent =
@@ -39,6 +60,24 @@ export type FarExtent =
       readonly kind: 'field';
       /** Its area on the sky, square arcminutes. */
       readonly areaArcmin2: number;
+    }
+  | {
+      readonly kind: 'span';
+      /** The diameter drawn, Mpc comoving at Planck 2018's H0: its paper's, rescaled (each entry says from what). */
+      readonly diameterMpc: number;
+    }
+  | {
+      /** A region on the CMB's wall: a circle of this radius on the sky. */
+      readonly kind: 'sky-disc';
+      readonly radiusDeg: number;
+    }
+  | {
+      /** A way to go: a beam from the Sun out to it. */
+      readonly kind: 'direction';
+    }
+  | {
+      /** Nothing past its mark: too small to see from here, or its shape not given. */
+      readonly kind: 'mark';
     };
 
 export interface FarLandmark extends RecordHolder {
@@ -49,6 +88,52 @@ const CLOWES_2012 = 'Clowes et al. 2012, MNRAS 419, 556';
 const CLOWES_2013 = 'Clowes et al. 2013, MNRAS 429, 2910';
 const NADATHUR =
   'Nadathur 2013 (MNRAS 434, 398) finds groupings as large in random catalogues of the same density, and the quasars homogeneous above 130 h⁻¹ Mpc: a claim, not a structure.';
+
+/** Lengths in h^-1 Mpc, and in Mpc at H0 70, at Planck 2018's H0. */
+const PER_LITTLE_H = 100 / PLANCK18.h0;
+const H70 = 70 / PLANCK18.h0;
+
+/**
+ * The Giant GRB Ring's nine bursts, galactic l and b (Balazs et al. 2015, Table 3): marked at
+ * their mean direction, as a large quasar group is at its members' mean.
+ */
+export const GRB_RING_BURSTS: readonly (readonly [number, number])[] = [
+  [149.05, -42.52],
+  [114.45, -17.2],
+  [118.43, -42.96],
+  [123.46, -39.99],
+  [150.37, -28.43],
+  [106.53, -41.28],
+  [101.39, -32.53],
+  [123.85, -12.65],
+  [142.92, -20.54],
+];
+
+function meanGalactic(points: readonly (readonly [number, number])[]): { raDeg: number; decDeg: number } {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const [l, b] of points) {
+    const { raDeg, decDeg } = galacticToEquatorial(l, b);
+    const ra = (raDeg * Math.PI) / 180;
+    const dec = (decDeg * Math.PI) / 180;
+    x += Math.cos(dec) * Math.cos(ra);
+    y += Math.cos(dec) * Math.sin(ra);
+    z += Math.sin(dec);
+  }
+  const ra = (Math.atan2(y, x) * 180) / Math.PI;
+  return { raDeg: (ra + 360) % 360, decDeg: (Math.atan2(z, Math.hypot(x, y)) * 180) / Math.PI };
+}
+
+const GRB_RING_CENTRE = meanGalactic(GRB_RING_BURSTS);
+
+/** The ring's 1,720 Mpc is comoving at the paper's distance to it, 2,770 Mpc: rescaled to Planck's distance at its z. */
+const GRB_RING_TO_PLANCK = comovingDistanceMpc(0.822) / 2770;
+
+/** Hyperion's 60 x 60 x 150 comoving Mpc at H0 70: the cube root of its volume. */
+const HYPERION_SIZE_MPC = Math.cbrt(60 * 60 * 150);
+
+const BY_CHANCE = 'Such patterns arise by chance in random catalogues of the same density';
 
 export const FAR_LANDMARKS: readonly FarLandmark[] = [
   {
@@ -177,7 +262,229 @@ export const FAR_LANDMARKS: readonly FarLandmark[] = [
     note: 'Through the cluster SMACS J0723.3-7327 at z 0.39, whose mass magnifies what is behind it. The released image 2.3′ across; 12.5 hours of NIRCam, 7 June 2022.',
     extent: { kind: 'field', areaArcmin2: 5.2 },
   },
+  {
+    key: 'spiderweb',
+    name: 'Spiderweb Protocluster',
+    otherNames: ['Spiderweb', 'Spiderweb Galaxy', 'MRC 1138-262', 'PKS 1138-262'],
+    kind: 'protocluster',
+    record: 'A cluster forming about a radio galaxy',
+    z: 2.1585,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'Its radio galaxy’s emission lines (NED)',
+    raDeg: 175.20145,
+    decDeg: -26.48573,
+    position: 'NED, the radio galaxy’s',
+    reference: 'Miley et al. 2006, ApJL 650, L29; NED',
+    note: 'The Spiderweb Galaxy at its heart is a dozen galaxies merging in a halo of glowing gas: a cluster’s central galaxy being built. A mark: its few Mpc are under a pixel from here.',
+    extent: { kind: 'mark' },
+  },
+  {
+    key: 'spt2349-56',
+    name: 'SPT2349-56',
+    otherNames: ['SPT2349−56', 'SPT 2349-56'],
+    kind: 'protocluster',
+    record: 'Fourteen starburst galaxies within 130 kpc, merging',
+    z: 4.304,
+    zPlus: 0.002,
+    zMinus: 0.0019,
+    spectroscopic: true,
+    how: 'ALMA, its galaxies’ [C II] 158 µm and CO lines: their mean',
+    raDeg: 357.427917,
+    decDeg: -56.639833,
+    position: 'Miller et al. 2018, its brighter millimetre source',
+    reference: 'Miller et al. 2018, Nature 556, 469',
+    note: 'Found by the South Pole Telescope as one bright millimetre source; ALMA split it into at least 14 gas-rich galaxies about to merge. A mark.',
+    extent: { kind: 'mark' },
+  },
+  {
+    key: 'hyperion',
+    name: 'Hyperion',
+    otherNames: ['Hyperion proto-supercluster', 'Hyperion protocluster'],
+    kind: 'protocluster',
+    record: 'A proto-supercluster: seven clusters forming',
+    z: 2.45,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'VUDS and zCOSMOS spectra: its seven peaks at z 2.423–2.507',
+    raDeg: 150.0937,
+    decDeg: 2.4049,
+    position: 'its most massive peak’s barycentre (Cucciati et al. 2018, Table 1)',
+    reference: 'Cucciati et al. 2018, A&A 619, A49',
+    note: 'About 60 × 60 × 150 comoving Mpc at H0 70, 4.8 × 10¹⁵ M☉ in all, its peaks joined by filaments, in the COSMOS field. A ring of the cube root of its volume.',
+    extent: { kind: 'span', diameterMpc: HYPERION_SIZE_MPC * H70 },
+  },
+  {
+    key: 'boss-great-wall',
+    name: 'BOSS Great Wall',
+    otherNames: ['BGW'],
+    kind: 'large-structure',
+    record: 'Among the largest supercluster systems known',
+    z: 0.47,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'BOSS DR12 spectra: its 830 galaxies’ mean',
+    raDeg: 162,
+    decDeg: 50,
+    position: 'the middle of its galaxies on the sky, read off Lietzen et al. 2016, Fig. 3: about',
+    reference: 'Lietzen et al. 2016, A&A 588, L4',
+    note: '271 h⁻¹ Mpc across (400 Mpc at Planck’s H0): two walls, 186 and 173 h⁻¹ Mpc, and two superclusters; about 2.4 × 10¹⁷ h⁻¹ M☉. A ring of its diameter.',
+    extent: { kind: 'span', diameterMpc: 271 * PER_LITTLE_H },
+  },
+  {
+    key: 'hercules-corona-borealis-great-wall',
+    name: 'Hercules–Corona Borealis Great Wall',
+    otherNames: ['Hercules-Corona Borealis Great Wall', 'HCB Great Wall', 'Her–CrB GW', 'HCB'],
+    kind: 'large-structure',
+    record: 'Largest structure claimed: a clump of gamma-ray bursts [claim]',
+    z: 1.85,
+    zPlus: 0.25,
+    zMinus: 0.25,
+    spectroscopic: true,
+    how: 'Its bursts’ redshifts: 14 of the 31 with z 1.6–2.1 in an eighth of the sky',
+    raDeg: 255,
+    decDeg: 28,
+    position: 'not given by its papers, which name Hercules and Corona Borealis: marked there, roughly',
+    reference: 'Horváth et al. 2014, A&A 561, L12; 2015, A&A 584, A48; Christian 2020, MNRAS 495, 4291',
+    note: '2,000–3,000 Mpc across, if real. Christian 2020 finds isotropic skies make such clumps easily, and an updated sample less significant: doubtful at best. A mark: a patch of sky, its shape not given.',
+    extent: { kind: 'mark' },
+  },
+  {
+    key: 'giant-grb-ring',
+    name: 'Giant GRB Ring',
+    otherNames: ['GRB Ring', 'Giant Gamma-Ray Burst Ring'],
+    kind: 'large-structure',
+    record: 'A ring of nine gamma-ray bursts, 1,720 Mpc across [claim]',
+    z: 0.822,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'The mean of its nine bursts’ redshifts (0.785–0.859)',
+    raDeg: GRB_RING_CENTRE.raDeg,
+    decDeg: GRB_RING_CENTRE.decDeg,
+    position: 'the mean of its nine bursts’ (Balázs et al. 2015, Table 3)',
+    reference: 'Balázs et al. 2015, MNRAS 452, 2236',
+    note: `A chance of 2 × 10⁻⁶ of being a fluctuation, by its authors’ test; nine points are few, and nothing else is known to trace it. ${BY_CHANCE} is the question for every such pattern. A ring of its diameter.`,
+    extent: { kind: 'span', diameterMpc: 1720 * GRB_RING_TO_PLANCK },
+  },
+  {
+    key: 'giant-arc',
+    name: 'Giant Arc',
+    otherNames: ['Giant Arc on the Sky'],
+    kind: 'large-structure',
+    record: 'An arc of Mg II absorbers 1 Gpc long [disputed]',
+    z: 0.802,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'Mg II absorption lines in background quasars’ spectra: the slice 0.802 ± 0.060',
+    raDeg: 215.40778,
+    decDeg: 38.36376,
+    position: 'the SZ cluster at its middle, PSZ2 G069.39+68.05 (NED: WHL J142137.9+382150)',
+    reference: 'Lopez, Clowes & Williger 2022, MNRAS 516, 1557; Sawala & Teeriaho 2025, Open J. Astrophys. (arXiv 2505.11072)',
+    note: `About 1 Gpc long (comoving at H0 70) and 340 Mpc deep. ${BY_CHANCE}, found with the same algorithm (Sawala & Teeriaho 2025): disputed. A mark: an arc, not a ring.`,
+    extent: { kind: 'mark' },
+  },
+  {
+    key: 'big-ring',
+    name: 'Big Ring',
+    otherNames: ['Big Ring on the Sky'],
+    kind: 'large-structure',
+    record: 'A ring of Mg II absorbers 400 Mpc across [disputed]',
+    z: 0.802,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'Mg II absorption lines in background quasars’ spectra: the slice 0.802 ± 0.060',
+    raDeg: 215,
+    decDeg: 50,
+    position: 'the middle of its absorbers on the sky, read off Lopez et al. 2024, Fig. 2: about',
+    reference: 'Lopez, Clowes & Williger 2024, JCAP 07, 055',
+    note: '300–400 Mpc across (comoving at H0 70), 12° north of the Giant Arc at the same redshift, found by the same method -- which is disputed (Sawala & Teeriaho 2025). A ring of 400 Mpc.',
+    extent: { kind: 'span', diameterMpc: 400 * H70 },
+  },
+  {
+    key: 'eridanus-supervoid',
+    name: 'Eridanus Supervoid',
+    otherNames: ['Cold Spot Supervoid', 'Eridanus Void'],
+    kind: 'void',
+    record: 'A supervoid toward the CMB Cold Spot; that it makes it is [disputed]',
+    z: 0.22,
+    zPlus: 0.03,
+    zMinus: 0.03,
+    spectroscopic: false,
+    how: 'Photometric: Pan-STARRS1 colours of WISE–2MASS galaxies',
+    raDeg: COLD_SPOT.raDeg,
+    decDeg: COLD_SPOT.decDeg,
+    position: 'the Cold Spot’s centre, as fitted (Szapudi et al. 2015)',
+    reference: 'Szapudi et al. 2015, MNRAS 450, 288; Mackenzie et al. 2017, MNRAS 470, 2328',
+    note: 'A radius of 220 ± 50 h⁻¹ Mpc (325 Mpc at Planck’s H0), 14 % emptier than average. Spectra (Mackenzie et al. 2017) find smaller voids at z 0.14, 0.26 and 0.30 instead, too shallow to make the Cold Spot. A ring of its diameter.',
+    extent: { kind: 'span', diameterMpc: 2 * 220 * PER_LITTLE_H },
+  },
+  {
+    key: 'cmb-cold-spot',
+    name: 'CMB Cold Spot',
+    otherNames: ['Cold Spot', 'WMAP Cold Spot'],
+    kind: 'cmb-feature',
+    record: 'The CMB’s most unusual cold patch',
+    z: Z_LAST_SCATTERING,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: 'Planck’s 2018 map; found in WMAP’s with wavelets (Vielva et al. 2004)',
+    raDeg: COLD_SPOT.raDeg,
+    decDeg: COLD_SPOT.decDeg,
+    position: 'Cruz et al. 2007: galactic l 209°, b −57°',
+    reference: 'Vielva et al. 2004, ApJ 609, 22; Cruz et al. 2007, ApJ 655, 11; Mackenzie et al. 2017, MNRAS 470, 2328',
+    note: 'Colder over its size than a Gaussian sky makes likely. Why is open: chance, the Eridanus Supervoid in front (disputed), or something primordial. Drawn as a circle 5° in radius about it, on the wall.',
+    extent: { kind: 'sky-disc', radiusDeg: COLD_SPOT.radiusDeg },
+  },
+  {
+    key: 'cmb-dipole',
+    name: 'CMB Dipole',
+    otherNames: ['CMB dipole apex', 'Sun’s motion against the CMB', 'Dipole apex'],
+    kind: 'cmb-feature',
+    record: `The Sun moves ${CMB_DIPOLE.speedKmS} km/s this way, against the CMB`,
+    z: Z_LAST_SCATTERING,
+    zPlus: null,
+    zMinus: null,
+    spectroscopic: true,
+    how: `Planck 2018: the CMB ${(CMB_DIPOLE_AMPLITUDE_UK / 1000).toFixed(2)} mK hotter this way than the other`,
+    raDeg: CMB_DIPOLE_APEX.raDeg,
+    decDeg: CMB_DIPOLE_APEX.decDeg,
+    position: `galactic l ${CMB_DIPOLE.lDeg}°, b ${CMB_DIPOLE.bDeg}° (Planck Collaboration 2020)`,
+    reference: 'Planck Collaboration 2020, A&A 641, A1; Secrest et al. 2021, ApJL 908, L51',
+    note: 'Its hot pole, in Crater; the beam from the Sun is the way the Sun goes. The quasars’ own dipole is about twice what this motion predicts (Secrest et al. 2021): open.',
+    extent: { kind: 'direction' },
+  },
 ];
+
+/**
+ * A landmark's ring radius, pc, `distancePc` from the Sun; null where none is drawn: a quasar
+ * group's characteristic size and a span's diameter at Planck's H0, a region of the CMB its
+ * angle at the wall's distance.
+ */
+export function farRingRadiusPc(landmark: FarLandmark, distancePc: number): number | null {
+  const extent = landmark.extent;
+  switch (extent.kind) {
+    case 'group':
+      return 0.5e6 * extent.characteristicMpc * GROUP_SIZE_TO_PLANCK;
+    case 'span':
+      return 0.5e6 * extent.diameterMpc;
+    case 'sky-disc':
+      return distancePc * Math.tan((extent.radiusDeg * Math.PI) / 180);
+    default:
+      return null;
+  }
+}
+
+/** Whether it is drawn as a beam from the Sun: a deep field, or a direction. */
+export function isBeam(landmark: FarLandmark): boolean {
+  return landmark.extent.kind === 'field' || landmark.extent.kind === 'direction';
+}
 
 /** A field's half-width on the sky, radians, as a disc of its area. */
 export function fieldHalfAngle(areaArcmin2: number): number {

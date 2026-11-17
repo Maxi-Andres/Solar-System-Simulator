@@ -1,14 +1,20 @@
 import type { BodyId } from '@sss/tools/types';
 
-import { PLANCK18 } from '../core/cosmology.ts';
-import { recordHolderDistances, recordHolderKindLabel, recordHolderOf } from '../core/recordHolders.ts';
+import {
+  recordHolderCosmology,
+  recordHolderDistanceRedshift,
+  recordHolderDistances,
+  recordHolderKindLabel,
+  recordHolderOf,
+} from '../core/recordHolders.ts';
 import { Panel } from './Panel.tsx';
 
 /**
  * The info panel for a record-holder (recordHolders.ts): its redshift and how it was measured,
  * and the three distances a redshift gives -- where it is now, how far its light came, and how
- * far it was when the light left -- with the universe's age then. In Planck 2018's cosmology; the
- * About says what each distance means.
+ * far it was when the light left -- with the universe's age then. In Planck 2018's cosmology; a
+ * famous galaxy within Laniakea's reach in Cosmicflows-4's, its redshift in the CMB's frame, as
+ * Laniakea's galaxies are. The About says what each distance means.
  */
 
 /** "33.86 billion ly", "972 million ly". */
@@ -33,6 +39,7 @@ export function RecordHolderPanel({ focus, onClose }: { focus: BodyId; onClose: 
     return null;
   }
   const d = recordHolderDistances(holder);
+  const cosmology = recordHolderCosmology(holder);
   return (
     <Panel title={holder.name} onClose={onClose} width="18.5rem">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -46,13 +53,14 @@ export function RecordHolderPanel({ focus, onClose }: { focus: BodyId; onClose: 
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {holder.otherNames.length > 0 && <Row label="Also">{holder.otherNames.slice(0, 2).join(' · ')}</Row>}
         <Row label="Redshift">{formatRedshift(holder.z, holder.zPlus, holder.zMinus)}</Row>
-        <Row label="">{holder.spectroscopic ? 'Spectroscopic' : 'Photometric only'}</Row>
+        <Row label="">{holder.kind === 'cmb-feature' ? 'The last-scattering surface' : holder.spectroscopic ? 'Spectroscopic' : 'Photometric only'}</Row>
+        {holder.nearby === true && <Row label="CMB frame">{`z ${recordHolderDistanceRedshift(holder).toFixed(5)}`}</Row>}
         <Row label="Measured">{holder.how}</Row>
         <Row label="Now at">{`${formatLy(d.comovingLy)}, comoving`}</Row>
         <Row label="Light left">{`${formatYears(d.lookbackGyr)} ago`}</Row>
         <Row label="Then at">{formatLy(d.properAtEmissionLy)}</Row>
         <Row label="Universe then">{formatYears(d.ageAtEmissionGyr)}</Row>
-        <Row label="Cosmology">{`${PLANCK18.name}, H0 ${PLANCK18.h0}`}</Row>
+        <Row label="Cosmology">{`${cosmology.name}, H0 ${cosmology.h0}`}</Row>
         <Row label="Position">{holder.position}</Row>
         <Row label="Source">{holder.reference}</Row>
       </dl>

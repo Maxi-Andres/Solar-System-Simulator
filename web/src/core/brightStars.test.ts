@@ -40,4 +40,9 @@ describe('the famous stars', () => {
     const doubted = BRIGHT_STARS.filter((star) => star.distanceNote !== null).map((star) => star.name);
     expect(doubted).toEqual(expect.arrayContaining(['Polaris', 'Deneb', 'Alnitak', 'Alnilam', 'Mintaka']));
   });
+
+  it('name whose distance each Belt star is drawn at, all three being published ones', () => {
+    const belt = BRIGHT_STARS.filter((star) => ['Alnitak', 'Alnilam', 'Mintaka'].includes(star.name));
+    expect(belt.map((star) => star.distanceSource !== undefined)).toEqual([true, true, true]);
+  });
 });

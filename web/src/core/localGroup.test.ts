@@ -30,6 +30,7 @@ import {
   indexLocalGroup,
   parseFaceOnMap,
   prugnielSimien,
+  RECENT_DWARFS,
   surfaceBrightness,
   YOUNG_V_PER_SFR,
 } from './localGroup.ts';
@@ -244,9 +245,21 @@ describe('where the galaxies are and which way they face', () => {
     expect(n).toBeCloseTo(761_000, -3);
   });
 
-  it('lists the four first, then the catalogue less the three it replaces', () => {
+  it('lists the four first, then the catalogue less the three it replaces, then those found since', () => {
     const archive = indexLocalGroup({ ...FORNAX, count: 2, catalogueName: ['Fornax', 'LMC'], name: ['Fornax', 'Large Magellanic Cloud'] } as never);
-    expect(archive.galaxies.map((galaxy) => galaxy.key)).toEqual(['m31', 'm33', 'lmc', 'smc', 'fornax']);
+    expect(archive.galaxies.map((galaxy) => galaxy.key)).toEqual(['m31', 'm33', 'lmc', 'smc', 'fornax', 'andromeda-xxxvi']);
+  });
+
+  it('leaves out one found since once the catalogue has it', () => {
+    const twice = Object.fromEntries(Object.entries(FORNAX).map(([column, values]) => [column, Array.isArray(values) ? [values[0], values[0]] : values]));
+    const archive = indexLocalGroup({ ...twice, count: 2, catalogueName: ['Fornax', 'AndromedaXXXVI'], name: ['Fornax', 'Andromeda XXXVI'] } as never);
+    expect(archive.galaxies.filter((galaxy) => galaxy.key === 'andromeda-xxxvi').map((galaxy) => galaxy.catalogueIndex)).toEqual([1]);
+  });
+
+  it('draws Andromeda XXXVI from its paper: 64 pc across, M_V -6.0, at Andromeda’s distance', () => {
+    const dwarf = RECENT_DWARFS[0]!;
+    expect(galaxyHalfLightPc(dwarf)).toBeCloseTo(64, 0);
+    expect(dwarf.vMag! - 5 * Math.log10(dwarf.distancePc / 10)).toBeCloseTo(-6.0, 9);
   });
 
   it('keys each by its catalogue name', () => {

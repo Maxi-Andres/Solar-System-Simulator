@@ -83,10 +83,13 @@ export type LayerId =
   | 'stellarStreams'
   | 'galacticBubbles'
   | 'localInterstellar'
+  | 'interstellarClouds'
+  | 'galacticOrbit'
   | 'messier'
   | 'notableStars'
   | 'milkyWay'
   | 'localGroup'
+  | 'localStructure'
   | 'laniakea'
   | 'laniakeaBasin'
   | 'shapleyBasin'
@@ -175,6 +178,13 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The Sun's surroundings in the interstellar medium (core/localInterstellar.ts): the Local
   // Bubble, the Radcliffe Wave, the Local Interstellar Cloud.
   { id: 'localInterstellar', label: 'Local Interstellar Medium', hint: 'The gas around the Sun. Shapes partly modelled.', pending: null },
+  // Named clouds and bubbles of the interstellar medium, the Milky Way's high-velocity clouds and
+  // the Magellanic Stream (core/interstellarClouds.ts): marks and rings of their measured size at
+  // their measured distances; the Stream's track a model. Marks, off as the Messier ones are.
+  { id: 'interstellarClouds', label: 'Interstellar Clouds', hint: 'Dark clouds, superbubbles, fast gas clouds. Marked at measured distances.', pending: null },
+  // The Sun's path about the Galactic Centre, computed in a model of the Galaxy's pull, and the
+  // dark halo's R200, a model (core/galacticOrbit.ts). Off: neither is something seen.
+  { id: 'galacticOrbit', label: 'Sun’s Galactic Orbit', hint: 'The Sun’s path round the centre, computed; the dark halo’s edge, a model.', pending: null },
   // The Messier objects drawn as nothing else (core/messier.ts): open clusters and the
   // rest, marked. Off until asked for, as the pulsars are: a catalogue's marks, not a view.
   { id: 'messier', label: 'Messier Objects', hint: 'The Messier catalogue, marked.', pending: null },
@@ -182,7 +192,7 @@ export const LAYERS: readonly LayerDefinition[] = [
   // (core/notableStars.ts): marks at their measured distances. Off until asked for, as the
   // Messier marks are; a search for one turns it on. With them, the paths of the two stellar
   // flybys, computed (core/stellarFlybys.ts).
-  { id: 'notableStars', label: 'Notable Stars', hint: 'Famous and extreme stars, stellar black holes, flyby paths (computed).', pending: null },
+  { id: 'notableStars', label: 'Notable Stars', hint: 'Famous and extreme stars, black holes, supernovae, flyby paths (computed).', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -190,6 +200,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   // The Local Group's galaxies (core/localGroup.ts): each a volume of its measured light,
   // size and shape, past the Milky Way; the dwarfs marked as the camera leaves the disc.
   { id: 'localGroup', label: 'Local Group', hint: 'Andromeda, the Magellanic Clouds and our nearest galaxies.', pending: null },
+  // The Local Group's zero-velocity surface, the Local Sheet's plane and the Council of Giants'
+  // ring (core/localStructure.ts): a computed sphere and fitted outlines. Off: none is seen.
+  { id: 'localStructure', label: 'Local Structure', hint: 'The Local Group’s edge, the Local Sheet, the Council of Giants. Computed.', pending: null },
   // Laniakea and beyond (core/laniakea.ts): 86,899 galaxies out to 700 Mpc, each its light,
   // and the named clusters, superclusters, voids and walls.
   { id: 'laniakea', label: 'Laniakea', hint: 'Our supercluster: 87,000 galaxies, clusters and voids.', pending: null },
@@ -290,10 +303,13 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   stellarStreams: true,
   galacticBubbles: false,
   localInterstellar: false,
+  interstellarClouds: false,
+  galacticOrbit: false,
   messier: false,
   notableStars: false,
   milkyWay: true,
   localGroup: true,
+  localStructure: false,
   laniakea: true,
   laniakeaBasin: false,
   shapleyBasin: false,

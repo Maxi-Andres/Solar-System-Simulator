@@ -2,6 +2,7 @@ import type { BodyDefinition } from '@sss/tools/types';
 import { describe, expect, it } from 'vitest';
 
 import { describeBody, layersFor, mergeBodiesAndCatalogues, normalizeName, searchBodies } from './search.ts';
+import { registerRegion } from './regions.ts';
 import { tagSatelliteBody, untagSatelliteBody } from './satelliteGroups.ts';
 
 /** Just enough of a body for the search; the rest is never read. */
@@ -184,5 +185,25 @@ describe('bodies and catalogues together', () => {
       '16 Psyche',
       'a star whose designation contains it',
     ]);
+  });
+});
+
+describe('searchBodies, a region by its other names', () => {
+  it('finds Loop I as the North Polar Spur, and turns on the Interstellar Clouds for it', () => {
+    registerRegion({
+      id: 'ism-test-loop',
+      name: 'Loop I',
+      layer: 'interstellar-cloud',
+      kindLabel: 'Radio loop',
+      measured: false,
+      facts: [],
+      framingKm: 1,
+      parent: null,
+      color: '#ffffff',
+      aliases: ['North Polar Spur'],
+    });
+    const loop = body('ism-test-loop', 'Loop I', 'region');
+    expect(searchBodies([...BODIES, loop], 'polar spur').map((result) => result.body.id)).toEqual(['ism-test-loop']);
+    expect(layersFor(loop)).toEqual(['interstellarClouds']);
   });
 });

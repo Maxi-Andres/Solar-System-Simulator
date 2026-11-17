@@ -293,6 +293,45 @@ export const GIANTS: readonly LocalGroupGalaxy[] = [
 const REPLACED = new Set(['Triangulum', 'LMC', 'SMC']);
 
 /**
+ * Dwarfs found since the catalogue's last version (January 2021), from their discovery papers,
+ * by the catalogue name they would have there.
+ *
+ * - **Andromeda XXXVI** (Sakowska et al. 2026, A&A, arXiv:2603.28492): found by eye in the
+ *   PAndAS images by G. Donatiello, confirmed with OSIRIS on the GTC; 46 stars. Centre 19.168,
+ *   +47.656 deg; M_V -6.0 +- 0.2; half-light radius 0.284' (64 pc), ellipticity 0.015, the major
+ *   axis at 78.6 deg (their Table 1). Its distance is not measured: its red giants fit an old,
+ *   metal-poor isochrone put at Andromeda's distance, 776 kpc (Savino et al. 2022, ApJ 938,
+ *   101), and it is drawn there -- 119 kpc from Andromeda on the sky. Its V is that M_V at
+ *   that distance; no gas is measured, so its colour is an old population's (colourIndex).
+ *   arXiv: Sakowska et al. 2026, 2603.28492; Savino et al. 2022, 2206.02801.
+ */
+export const RECENT_DWARFS: readonly LocalGroupGalaxy[] = (() => {
+  const distancePc = 776_000;
+  const major = Math.tan((0.284 / 60) * (Math.PI / 180)) * distancePc;
+  const minor = major * (1 - 0.015);
+  return [
+    {
+      key: galaxyKey('AndromedaXXXVI'),
+      name: 'Andromeda XXXVI',
+      otherNames: ['And XXXVI'],
+      catalogueIndex: null,
+      ambiguous: false,
+      raDeg: 19.168,
+      decDeg: 47.656,
+      distancePc,
+      distanceUpPc: null,
+      distanceDownPc: null,
+      distanceSource: 'Andromeda’s, assumed (Savino et al. 2022): not measured',
+      vMag: -6.0 + 5 * Math.log10(distancePc / 10),
+      colourIndex: colourIndex(null, null),
+      model: { kind: 'plummer', majorPc: major, minorPc: minor, depthPc: Math.sqrt(major * minor), positionAngleDeg: 78.6 },
+      shapeSource: 'Sakowska et al. 2026',
+      giant: false,
+    },
+  ];
+})();
+
+/**
  * The colour a galaxy's light is drawn in, B-V: estimated, for the catalogue gives none. One
  * rich in gas -- a fifth of a solar mass of HI or more for each solar luminosity -- is forming
  * stars, and its light is a young population's, B-V 0.45; one with less is old, 0.75 -- the
@@ -993,7 +1032,7 @@ export function galaxyEarthView(galaxy: LocalGroupGalaxy): { direction: [number,
 // The archive: the catalogue with the four, as search reads it
 
 export interface LocalGroupArchive {
-  /** The four big ones first, then the catalogue's, in its order. */
+  /** The four big ones first, then the catalogue's, in its order, then those found since (RECENT_DWARFS). */
   readonly galaxies: readonly LocalGroupGalaxy[];
   readonly catalog: LocalGroupCatalog | null;
   readonly search: Searchable;
@@ -1033,6 +1072,9 @@ export function indexLocalGroup(catalog: LocalGroupCatalog | null): LocalGroupAr
         galaxies.push(catalogueGalaxy(catalog, k));
       }
     }
+    // After the catalogue's, those found since it, unless a later version has them.
+    const listed = new Set(catalog.catalogueName);
+    galaxies.push(...RECENT_DWARFS.filter((dwarf) => !listed.has(dwarf.name.replace(/ /g, ''))));
   }
   return {
     galaxies,

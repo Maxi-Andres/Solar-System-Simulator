@@ -3,7 +3,10 @@ import type { BodyId } from '@sss/tools/types';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import { GalacticBubbles } from './GalacticBubbles.tsx';
+import { GalacticOrbit } from './GalacticOrbit.tsx';
+import { InterstellarClouds } from './InterstellarClouds.tsx';
 import { LocalInterstellar } from './LocalInterstellar.tsx';
+import { LocalStructure } from './LocalStructure.tsx';
 import { Nebulae } from './Nebulae.tsx';
 import { Streams } from './Streams.tsx';
 
@@ -19,6 +22,10 @@ export interface GalaxyFeatureLayers {
   readonly stellarStreams: boolean;
   readonly galacticBubbles: boolean;
   readonly localInterstellar: boolean;
+  /** The Local Group's edge, the Local Sheet and the Council of Giants (LocalStructure). */
+  readonly localStructure: boolean;
+  readonly interstellarClouds: boolean;
+  readonly galacticOrbit: boolean;
   /** The Labels layer, with the interface shown. */
   readonly labels: boolean;
   /** The Icons layer. */
@@ -50,6 +57,9 @@ export function GalaxyFeatures({ store, clock, focus, layers }: GalaxyFeaturesPr
       <Streams {...common} visible={layers.stellarStreams} />
       <GalacticBubbles {...common} visible={layers.galacticBubbles} />
       <LocalInterstellar {...common} visible={layers.localInterstellar} />
+      <LocalStructure {...common} visible={layers.localStructure} />
+      <InterstellarClouds {...common} visible={layers.interstellarClouds} />
+      <GalacticOrbit {...common} visible={layers.galacticOrbit} />
     </>
   );
 }

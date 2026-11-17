@@ -42,6 +42,7 @@ import { ensureHeliosphereBodies } from './core/heliosphere.ts';
 import { ensureMagnetosphereBodies } from './core/magnetosphere.ts';
 import { ensureAuroraBodies } from './core/aurora.ts';
 import { ensureMeteorShowers } from './core/meteorShowers.ts';
+import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
 import { tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
@@ -66,7 +67,7 @@ import { renderDemand } from './core/renderDemand.ts';
 import { whenIdle } from './core/idle.ts';
 import {
   ensureRecordHolders,
-  RECORD_HOLDER_FRAMING_KM,
+  recordHolderFramingKm,
   RECORD_HOLDER_LAYER,
   recordHolderEarthView,
   recordHolderOf,
@@ -103,7 +104,7 @@ setFocusFraming((id) => {
   // A record-holder from a billion light years on our side of it, looking out (recordHolders.ts).
   const holder = recordHolderOf(id);
   if (holder !== null) {
-    return { km: RECORD_HOLDER_FRAMING_KM, view: recordHolderEarthView(holder) };
+    return { km: recordHolderFramingKm(holder), view: recordHolderEarthView(holder) };
   }
   const structure = structureOf(id);
   if (structure !== null) {
@@ -183,6 +184,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   magnetosphere: ['region', 'magnetosphere'],
   aurora: ['region', 'aurora'],
   meteorShowers: ['region', 'meteor-shower'],
+  // The interstellar clouds (interstellarClouds.ts), places made bodies as the regions are.
+  interstellarClouds: ['region', 'interstellar-cloud'],
   landingSites: ['region', 'landing-site'],
 };
 
@@ -514,6 +517,7 @@ export function App() {
       // The auroral ovals' marks, and where Earth crosses each meteor shower: no data to wait for.
       ensureAuroraBodies(store, tdbToUtc);
       ensureMeteorShowers(store);
+      ensureInterstellarClouds(store);
       // The landing sites on the Moon and Mars: published coordinates, turned with the ground.
       ensureLandingSites(store, () => clock.tdbJulianDay);
       renderDemand.request();
@@ -814,6 +818,9 @@ export function App() {
           stellarStreams: layers.stellarStreams,
           galacticBubbles: layers.galacticBubbles,
           localInterstellar: layers.localInterstellar,
+          localStructure: layers.localStructure,
+          interstellarClouds: layers.interstellarClouds,
+          galacticOrbit: layers.galacticOrbit,
           labels: layers.labels && uiVisible,
           icons: layers.icons,
         }}

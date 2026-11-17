@@ -77,6 +77,11 @@ export function StructurePanel({
         <StructureRows landmark={landmark} catalogue={catalogue} />
         <Row label="Source">{citation(landmark.source)}</Row>
       </dl>
+      {landmark.status !== undefined && (
+        <div style={{ color: '#8a8a8a', fontSize: '0.68rem', marginTop: '0.6rem', lineHeight: 1.45 }}>
+          {`[${landmark.status.label}] ${landmark.status.why}`}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -124,7 +129,9 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
       {behindThePlane(landmark, catalogue) && <Row label="">Behind the Milky Way’s plane: few galaxies seen</Row>}
       {landmark.kind === 'wall' && <Row label="">Not bound: a pattern of the cosmic web</Row>}
       {landmark.kind === 'wall' && <Row label="Drawn as">Its galaxies, tinted</Row>}
-      {landmark.kind === 'void' && <Row label="Drawn as">A soft shell of its extents</Row>}
+      {landmark.kind === 'void' && (
+        <Row label="Drawn as">{landmark.status?.label === 'disputed' ? 'A soft shell, only while chosen' : 'A soft shell of its extents'}</Row>
+      )}
       {landmark.kind === 'basin' && <Row label="Drawn as">{landmark.name === 'Laniakea Supercluster' ? 'Its basin’s outline' : 'Its attractor'}</Row>}
     </>
   );

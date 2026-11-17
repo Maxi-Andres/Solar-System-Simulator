@@ -41,6 +41,7 @@ export const measuredSection: AboutSection = {
     { id: 'streams', label: 'Stellar streams' },
     { id: 'bubbles', label: 'The Fermi and eROSITA bubbles' },
     { id: 'local-ism', label: 'The local interstellar medium' },
+    { id: 'interstellar-clouds', label: 'Interstellar clouds' },
     { id: 'galaxy', label: 'The Milky Way' },
     { id: 'local-group', label: 'The Local Group' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
@@ -277,12 +278,15 @@ export const measuredSection: AboutSection = {
             <Cite k="torres2022" />, and Orion’s Belt <Cite k={['hummel2013', 'oplistilova2025', 'shenar2015']} />.
             Fomalhaut is a disc of its measured size; the others stay points, as the catalogue has them. Where
             a distance is in doubt the panel says so: Polaris’s, 133 to 160 pc <Cite k="bond2018" />; Deneb’s,
-            433 pc by its parallax, drawn, or 802 by its association; Alnitak’s and Mintaka’s. Alnilam, whose
-            own parallax gives no distance, is placed at its association’s, Orion OB1b’s, 384 pc{' '}
-            <Cite k="oplistilova2025" />.
+            433 pc by its parallax, drawn, or 802 by its association. The Belt’s three are placed at published
+            distances, not the catalogue’s: Alnilam, whose own parallax gives no distance, at its association’s,
+            Orion OB1b’s, 384 pc <Cite k="oplistilova2025" />; Alnitak at 387 pc, from its companion’s light,
+            which its orbit’s 294 pc does not overturn <Cite k="hummel2013" />; Mintaka at 381 pc, the Gaia
+            parallax of its faint member δ Ori C <Cite k="oplistilova2023" />.
             <Why>
-              without it the catalogue would leave it out of 3D, and the Belt two stars; the association’s
-              distance is the best measured for it.
+              Gaia saturates on all three, and Hipparcos’s parallaxes put Alnitak and Mintaka at 225 and 212 pc,
+              where their stars’ light does not fit, and leave Alnilam out of 3D; the published distances are the
+              best measured for each.
             </Why>
           </Item>
           {stars3dInfo !== null && (
@@ -725,6 +729,25 @@ export const measuredSection: AboutSection = {
             <Cite k="king2003" />, 414 ± 23 million years old <Cite k="jones2015" />; no centre is published,
             so the mark is at the mean of the six, 24.8 pc away.
           </Item>
+          <Item title="Supernovae in nearby galaxies">
+            Three marks where a star was seen to explode, each on its own measured place in its host and at the
+            host’s distance. <Strong>SN 2023ixf</Strong> in M101, a type II found on 2023 May 19, at g ≈ 10.9 at
+            its peak; its flash spectra show gas the star shed in its last years{' '}
+            <Cite k="jacobsonGalan2023" />, and the red supergiant itself is in Hubble’s and Spitzer’s archives{' '}
+            <Cite k="kilpatrick2023" />. <Strong>SN 2011fe</Strong>, also in M101, a type Ia found 11 hours after
+            it exploded: the star was under a tenth of the Sun’s radius, a white dwarf{' '}
+            <Cite k="nugent2011" />; B 10.00 at its peak <Cite k="richmondSmith2012" />.{' '}
+            <Strong>SN 2014J</Strong> in M82, a type Ia found on 2014 January 21 <Cite k="fossey2014" />, V 10.61
+            at its peak through 1.95 magnitudes of M82’s dust <Cite k="foley2014" />; INTEGRAL saw cobalt-56’s
+            gamma-ray lines, the decay that powers its light <Cite k="churazov2014" />.
+          </Item>
+          <Item title="A hypervelocity star">
+            <Strong>S5-HVS1</Strong>, moving at 1,755 km/s, fast enough to leave the Galaxy: 8.6 ± 0.3 kpc away
+            by its spectrum and colours, its motion Gaia’s and its velocity along the line of sight its spectrum’s{' '}
+            <Cite k="koposov2020" />. Traced back, it left the Galactic Centre 4.8 million years ago at 1,800 km/s,
+            thrown out when Sgr A* tore apart the pair of stars it was in. Its path back is drawn, dashed, from
+            Sgr A* to it: the straight line a star thrown from the centre of a nearly round pull keeps to.
+          </Item>
         </Items>
 
         <Sub section="measured" id="streams">
@@ -742,6 +765,12 @@ export const measuredSection: AboutSection = {
               What is not
             </Xref>
             .
+          </Item>
+          <Item title="Andromeda’s Giant Stellar Stream">
+            Found in 2001 <Cite k="ibata2001" />, falling away behind Andromeda <Cite k="mcconnachie2003" />:
+            drawn along Conn et al.’s 19 fields, each on the sky and at the distance of the tip of its red giant
+            branch, from 17 kpc in front of Andromeda to 100 behind, six degrees out <Cite k="conn2016" />; 0.5°
+            wide <Cite k="fardal2006" />.
           </Item>
         </Items>
 
@@ -773,6 +802,38 @@ export const measuredSection: AboutSection = {
           <Item title="The Local Interstellar Cloud">
             The warm cloud the Sun is just inside: its shape as Linsky et al. fitted it to the hydrogen in front
             of 62 stars <Cite k={['linsky2019', 'redfieldLinsky2000']} />, a few parsecs across.
+          </Item>
+        </Items>
+
+        <Sub section="measured" id="interstellar-clouds">
+          Interstellar clouds
+        </Sub>
+        <Items>
+          <Item title="Dark and molecular clouds">
+            Each a mark and a ring of its size at its measured distance. The <Strong>Coalsack</Strong> at 189 pc and{' '}
+            <Strong>Taurus</Strong> at 141, where Gaia’s stars first show the dust’s reddening{' '}
+            <Cite k={['zucker2019', 'zucker2020']} />; the Coalsack 10° on the sky <Cite k="versteeg2024" />, Taurus’s
+            young stars over 15° <Cite k="galli2019" />. The <Strong>ρ Ophiuchi Cloud</Strong> at 137.3 pc by its
+            young stars’ VLBA parallaxes <Cite k="ortizLeon2017" />. <Strong>Cygnus X</Strong> at 1.40 kpc by four
+            masers’ <Cite k="rygl2012" />. <Strong>Barnard 68</Strong>, 12,500 AU across <Cite k="alves2001" />.
+          </Item>
+          <Item title="Superbubbles and loops">
+            The <Strong>Orion–Eridanus Superbubble</Strong>: its driving stars at 390 pc in fits to its shape, its
+            near wall about 180 <Cite k={['pon2016', 'joubaud2019']} />, its outer wall 45° across{' '}
+            <Cite k="ochsendorf2015" />. <Strong>Barnard’s Loop</Strong>, a 14° arc of glowing hydrogen about Orion{' '}
+            <Cite k="foley2023" />. <Strong>Loop I</Strong>, a radio ring 58° in radius <Cite k="berkhuijsen1971" />,
+            the dust in front of its North Polar Spur 112–135 pc off <Cite k={['panopoulou2021', 'das2020']} />.
+          </Item>
+          <Item title="High-velocity clouds">
+            Hydrogen falling onto the Galaxy, its distance bracketed by halo stars whose spectra it does and does
+            not absorb in: <Strong>Complex C</Strong> at 10 ± 2.5 kpc, 15 kpc long <Cite k="thom2008" />;{' '}
+            <Strong>Complex A</Strong> at 8–10 kpc <Cite k="vanWoerden1999" />. The <Strong>Smith Cloud</Strong> at
+            12.4 ± 1.3 kpc by its motion, 3 kpc long, its tip 2.9 kpc below the plane <Cite k="lockman2008" />.
+          </Item>
+          <Item title="The Magellanic Stream, Bridge and Leading Arm">
+            Their hydrogen on the sky, along Nidever et al.’s great circle: the Stream at least 140° behind the
+            Clouds, the Leading Arm some 60° ahead <Cite k={['nidever2008', 'nidever2010']} />. No distance along
+            them is measured.
           </Item>
         </Items>
 
@@ -828,6 +889,15 @@ export const measuredSection: AboutSection = {
             say so. Two it gives no size are measured elsewhere: <Strong>KK 258</Strong>’s half-light ellipse,
             30″ along its major axis, axis ratio 0.65 at 43° <Cite k="lauberts1989" />, and{' '}
             <Strong>Leo P</Strong>’s shape, ellipticity 0.52 at 335° <Cite k="mcquinn2013" />.
+          </Item>
+          <Item>
+            Found since: <Strong>Andromeda XXXVI</Strong>, 46 stars 119 kpc from Andromeda on the sky, M_V −6.0,
+            64 pc in half-light radius <Cite k="sakowska2026" />. Two groupings are rows in their members’
+            panels: the <Strong>NGC 3109 association</Strong> — NGC 3109, Antlia, Sextans A and B, just past the
+            Local Group <Cite k="mcconnachie2012" />, with Leo P <Cite k="bellazzini2013" /> and Antlia B{' '}
+            <Cite k="sand2015" /> — and McCall’s <Strong>Council of Giants</Strong>, the twelve big galaxies in a
+            ring about the Local Group, from NGC 253 to the Maffeis, M81 and Centaurus A{' '}
+            <Cite k="mccall2014" />.
           </Item>
           <Item>
             The four big ones from their own papers. <Strong>Andromeda</Strong> at 761 ± 11 kpc, from Hubble’s
@@ -972,6 +1042,20 @@ export const measuredSection: AboutSection = {
             </Xref>
             .
           </Item>
+          <Item>
+            <Strong>Two voids from papers of their own</Strong>, each a sphere of the size its paper gives: the Giant
+            Void in Canes Venatici, about 300 Mpc across at z 0.11 <Cite k="kopylov2002" />; and the KBC Void about
+            us, the light per volume a third lower within z 0.07 <Cite k="keenan2013" /> — disputed, the supernovae
+            finding no such void <Cite k="kenworthy2019" />, so its shell is drawn only while it is chosen. The Caelum
+            Supercluster is Einasto et al.’s candidate, 9 of its 11 clusters’ redshifts estimated{' '}
+            <Cite k="einasto1997" />.
+          </Item>
+          <Item>
+            <Strong>Three famous galaxies</Strong> neither catalogue has, marks at NED’s places and redshifts, moved
+            into the CMB’s frame as the catalogue’s are <Cite k="ned" />: Hoag’s Object <Cite k="hoag1950" />,
+            Mayall’s Object <Cite k="arp1966" /> and the Cartwheel <Cite k="higdon1995" />. NED lists no other
+            distance for any of them.
+          </Item>
         </Items>
 
         <Sub section="measured" id="cosmic-web">
@@ -1023,6 +1107,21 @@ export const measuredSection: AboutSection = {
             <Cite k={['clowesCampusano1991', 'clowes2012', 'clowes2013']} />.
           </Item>
           <Item>
+            <Strong>Three protoclusters</Strong>, clusters still forming: the Spiderweb, z 2.16{' '}
+            <Cite k="miley2006" />; SPT2349-56, fourteen starbursts at z 4.30 <Cite k="miller2018" />; Hyperion, seven
+            peaks at z 2.42–2.51 <Cite k="cucciati2018" />. And the <Strong>BOSS Great Wall</Strong>, 830 galaxies at
+            z 0.47, 271 h<sup>−1</sup> Mpc across <Cite k="lietzen2016" />.
+          </Item>
+          <Item>
+            <Strong>Four giants claimed or disputed</Strong>, each so labelled: the Hercules–Corona Borealis Great
+            Wall, a clump of gamma-ray bursts at z 1.6–2.1 <Cite k={['horvath2014', 'horvath2015']} />, doubtful at
+            best <Cite k="christian2020" />; the Giant GRB Ring, nine bursts at z 0.82 <Cite k="balazs2015" />; the
+            Giant Arc and the Big Ring in Mg II absorbers at z 0.80 <Cite k={['lopez2022', 'lopez2024']} />, whose
+            like random catalogues make <Cite k="sawalaTeeriaho2025" />. And the Eridanus Supervoid toward the Cold Spot, z
+            0.22 by colours <Cite k="szapudi2015" />, which spectra find too shallow to make it{' '}
+            <Cite k="mackenzie2017" />.
+          </Item>
+          <Item>
             <Strong>Four deep fields</Strong>, each at its centre and as wide as its area: the Hubble Ultra Deep
             Field, 11 arcmin² <Cite k="beckwith2006" />; JADES in GOODS-S, 245{' '}
             <Cite k={['eisenstein2023', 'johnson2026']} />; COSMOS-Web, 0.54 deg² <Cite k="casey2023" />; and
@@ -1047,6 +1146,13 @@ export const measuredSection: AboutSection = {
             bright sources inpainted <Cite k={['planck2020compsep', 'gorski2005']} />. Each point its difference
             from the mean, 2.7255 K <Cite k="fixsen2009" />, the dipole of our own motion taken out: a hundred
             microkelvin, typically.
+          </Item>
+          <Item>
+            On it, the <Strong>Cold Spot</Strong>, a circle 5° in radius at galactic l 209°, b −57°{' '}
+            <Cite k={['vielva2004', 'cruz2007']} />, where the map is coldest; and the <Strong>dipole</Strong> taken
+            out of it, a beam from the Sun to its hot pole: the Sun’s 369.82 km/s toward l 264.021°, b 48.253°{' '}
+            <Cite k="planck2020" />. The quasars’ own dipole is about twice what that motion predicts{' '}
+            <Cite k="secrest2021" />.
           </Item>
           <Item>
             The <Strong>cosmology</Strong> every distance past Laniakea is in: Planck 2018’s, fitted to that sky —

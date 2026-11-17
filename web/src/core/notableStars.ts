@@ -63,6 +63,8 @@ export interface NotableStar {
   readonly extent?: { readonly pc: number; readonly label: string; readonly source: string };
   /** A group's other facts, label and value, as its panel shows them. */
   readonly rows?: readonly (readonly [string, string])[];
+  /** How far it is framed from, pc, where not a tenth of a parsec: a supernova's, its host about it. */
+  readonly framingPc?: number;
 }
 
 const SIMBAD = 'SIMBAD (CDS)';
@@ -333,6 +335,28 @@ export const NOTABLE_STARS: readonly NotableStar[] = [
     motion: null,
     note: 'A white dwarf and a red giant; it erupts about every 80 years, seen in 1866 and 1946.',
   },
+  {
+    // Koposov et al. 2020 (MNRAS 491, 2465, arXiv 1907.11725), Table 1: Gaia DR2
+    // 6513109241989477504 at 343.715345, -51.195607 (J2015.5), taken back to J2000 along its
+    // proper motion; its distance from its spectrum and colours alone, log10(D/kpc) = 0.936 +/-
+    // 0.015 -- Gaia's parallax, -0.04 +/- 0.09 mas, gives none. Assuming it came from the centre
+    // they get 8.884 kpc; the 8.63 here assumes nothing. Its path back: hypervelocity.ts.
+    key: 's5-hvs1',
+    name: 'S5-HVS1',
+    aliases: ['S5 HVS1', 'Gaia DR2 6513109241989477504'],
+    type: 'Hypervelocity star',
+    raDeg: 343.715102,
+    decDeg: -51.19561,
+    positionSource: 'Koposov et al. 2020, from Gaia DR2, moved to J2000',
+    distancePc: 1000 * 10 ** 0.936,
+    distanceUpPc: 1000 * (10 ** 0.951 - 10 ** 0.936),
+    distanceDownPc: 1000 * (10 ** 0.936 - 10 ** 0.921),
+    parallaxMas: null,
+    distanceMethod: 'its spectrum and colours, fitted to stellar models',
+    distanceReference: 'Koposov et al. 2020, MNRAS 491, 2465',
+    motion: { pmRa: 35.328, pmDec: 0.587, rv: 1017 },
+    note: 'Thrown out of the Galactic Centre 4.8 million years ago at 1,800 km/s, when Sgr A* tore apart the binary it was in; leaving the Galaxy at 1,755 km/s. Its path back, dashed, meets Sgr A*.',
+  },
   // --- Young massive clusters --------------------------------------------------------------
   {
     key: 'westerlund-1',
@@ -467,6 +491,92 @@ export const NOTABLE_STARS: readonly NotableStar[] = [
     motion: null,
     note: 'At least 8,200 solar masses, from seven stars moving faster than the centre could hold without it (Häberle et al. 2024, Nature 631, 285).',
   },
+  // --- Supernovae in nearby galaxies --------------------------------------------------------
+  // Each where it was seen, at its host's distance as the Local Volume layer draws the host
+  // (Karachentsev et al. 2013's UNGC): its depth in the host's disc is not measured. Always
+  // marked, whatever the clock says: a mark of where a star died, not of its light -- the
+  // explosion's light reached Earth on the date its panel gives, and is long faded. Brightest
+  // is as seen from Earth, through the dust in front. Off with the layer, as every mark is.
+  // Sources: Jacobson-Galán et al. 2023 (arXiv 2306.04721), Kilpatrick et al. 2023 (ApJL 952,
+  // L23, arXiv 2306.04722); Nugent et al. 2011 (arXiv 1110.6201), Richmond & Smith 2012 (JAAVSO
+  // 40, 872); Fossey et al. 2014 (CBET 3792), Foley et al. 2014 (arXiv 1405.3677), Churazov et
+  // al. 2014 (Nature 512, 406). SN 2023ixf's g at peak is their M_g -18.4 at 6.85 Mpc, dimmed by
+  // the E(B-V) 0.041 they find in front (A_g about 0.14).
+  {
+    key: 'sn-2023ixf',
+    name: 'SN 2023ixf',
+    aliases: ['AT 2023ixf'],
+    type: 'Supernova',
+    // 14h03m38.56s, +54°18'41.96".
+    raDeg: 210.9106667,
+    decDeg: 54.3116556,
+    positionSource: 'Jacobson-Galán et al. 2023, ApJL 954, L42',
+    distancePc: 7_379_042,
+    distanceUpPc: 339_817,
+    distanceDownPc: 339_817,
+    parallaxMas: null,
+    distanceMethod: 'its host M101’s, from Cepheids, as the Local Volume layer has it',
+    distanceReference: 'Karachentsev et al. 2013 (UNGC)',
+    motion: null,
+    note: 'Reported a day after its first light (Jacobson-Galán et al. 2023). Its papers put M101 at 6.85 Mpc (Riess et al. 2022).',
+    rows: [
+      ['Type', 'II: a massive star’s core collapsed'],
+      ['Found', '2023 May 19, Koichi Itagaki'],
+      ['Brightest', 'g ≈ 10.9, May 24.6 (M_g −18.4)'],
+      ['Taught', 'flash spectra of gas the star shed in its last years; the red supergiant itself in Hubble’s and Spitzer’s archives'],
+    ],
+    framingPc: 5000,
+  },
+  {
+    key: 'sn-2011fe',
+    name: 'SN 2011fe',
+    aliases: ['PTF11kly'],
+    type: 'Supernova',
+    // 14h03m05.81s, +54°16'25.4".
+    raDeg: 210.7742083,
+    decDeg: 54.2737222,
+    positionSource: 'AAVSO, from the discovery report',
+    distancePc: 7_379_042,
+    distanceUpPc: 339_817,
+    distanceDownPc: 339_817,
+    parallaxMas: null,
+    distanceMethod: 'its host M101’s, from Cepheids, as the Local Volume layer has it',
+    distanceReference: 'Karachentsev et al. 2013 (UNGC)',
+    motion: null,
+    note: 'The nearest type Ia in 25 years when found, 11 hours after it exploded (Nugent et al. 2011, Nature 480, 344).',
+    rows: [
+      ['Type', 'Ia: a white dwarf blew up'],
+      ['Found', '2011 Aug 24.17, Palomar Transient Factory'],
+      ['Brightest', 'B 10.00, Sep 11.5 (Richmond & Smith 2012)'],
+      ['Taught', 'the star under 0.1 R☉: a carbon–oxygen white dwarf, seen as one; a red-giant companion ruled out'],
+    ],
+    framingPc: 5000,
+  },
+  {
+    key: 'sn-2014j',
+    name: 'SN 2014J',
+    aliases: ['PSN J09554214+6940260'],
+    type: 'Supernova',
+    // 09h55m42.14s, +69°40'26.0".
+    raDeg: 148.92558333,
+    decDeg: 69.67388889,
+    positionSource: 'Fossey et al. 2014, CBET 3792',
+    distancePc: 3_531_832,
+    distanceUpPc: 65_059,
+    distanceDownPc: 65_059,
+    parallaxMas: null,
+    distanceMethod: 'its host M82’s, from its red giants’ tip, as the Local Volume layer has it',
+    distanceReference: 'Karachentsev et al. 2013 (UNGC)',
+    motion: null,
+    note: 'The nearest type Ia in decades, behind M82’s dust: A_V 1.95 (Foley et al. 2014, MNRAS 443, 2887).',
+    rows: [
+      ['Type', 'Ia: a white dwarf blew up'],
+      ['Found', '2014 Jan 21.81, S. J. Fossey and students, UCL'],
+      ['Brightest', 'V 10.61, near Feb 2 (Foley et al. 2014)'],
+      ['Taught', 'cobalt-56’s gamma-ray lines, seen by INTEGRAL: the decay that powers a Ia’s light (Churazov et al. 2014)'],
+    ],
+    framingPc: 3000,
+  },
   // --- Star groups: the Hyades and the Ursa Major moving group (stellarGroups.ts) ---------
   ...STELLAR_GROUP_MARKS,
 ];
@@ -527,6 +637,7 @@ const COLOURS: Readonly<Record<string, string>> = {
   'Young massive cluster': '#b4c6e6',
   'Open cluster': '#b4c6e6',
   'Moving group': '#b4c6e6',
+  Supernova: '#ffd98a',
 };
 
 /**
@@ -534,6 +645,7 @@ const COLOURS: Readonly<Record<string, string>> = {
  * of its radii -- all of it in view, as a Messier cluster's is (messier.ts).
  */
 function framingKm(star: NotableStar): number {
+  if (star.framingPc !== undefined) return star.framingPc * PARSEC_KM;
   return star.extent === undefined ? FRAMING_KM : 3 * star.extent.pc * PARSEC_KM;
 }
 

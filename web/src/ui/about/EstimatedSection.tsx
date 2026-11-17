@@ -1,5 +1,5 @@
 import { frac, math, mi, mn, mo, mtext, paren, row, sub, sup, table } from './math.ts';
-import { Cite, Equation, Item, Items, Prose, Sub, Why, Xref } from './prose.tsx';
+import { Cite, Equation, Item, Items, Prose, Strong, Sub, Why, Xref } from './prose.tsx';
 import type { AboutSection } from './section.ts';
 import { beltAccuracySentence, cometAccuracySentence, seamSentence } from './sentences.ts';
 import { HELIOPAUSE_NOSE_AU, TERMINATION_SHOCK_AU } from '../../core/heliosphere.ts';
@@ -30,6 +30,7 @@ export const estimatedSection: AboutSection = {
     { id: 'streams', label: 'Stellar streams' },
     { id: 'bubbles', label: 'The Fermi and eROSITA bubbles' },
     { id: 'local-ism', label: 'The local interstellar medium' },
+    { id: 'interstellar-clouds', label: 'Interstellar clouds' },
     { id: 'spacecraft', label: 'Spacecraft' },
     { id: 'small-bodies', label: 'Asteroids and comets' },
     { id: 'maps', label: 'Surface maps' },
@@ -37,6 +38,7 @@ export const estimatedSection: AboutSection = {
     { id: 'surroundings', label: 'The Sun’s surroundings' },
     { id: 'galaxy', label: 'The galaxy' },
     { id: 'local-group', label: 'The Local Group' },
+    { id: 'local-structure', label: 'The Local Group’s edge and the Local Sheet' },
     { id: 'local-volume', label: 'Beyond the Local Group' },
     { id: 'laniakea', label: 'Laniakea and beyond' },
     { id: 'cosmic-web', label: 'The cosmic web' },
@@ -512,7 +514,9 @@ export const estimatedSection: AboutSection = {
           <Item title="Marks, not stars">
             Their sizes and light are not drawn. Procyon B is marked at Procyon A’s place, 5″ off; Gaia BH2’s
             orbit is not drawn. The Pistol Star, the Arches and the Quintuplet are put at the Galactic Centre’s
-            distance: how far before or behind it they are is not measured.
+            distance: how far before or behind it they are is not measured. The three supernovae are put at
+            their hosts’ distances as the Local Volume draws them, M101 at 7.38 Mpc and M82 at 3.53: where in the
+            host’s depth each lies is not measured; SN 2023ixf’s papers put M101 at 6.85.
           </Item>
           <Item title="Left out">
             μ Cephei: Gaia’s parallax is 0.12 ± 0.26 mas, Hipparcos’s no better. ρ Cassiopeiae: Gaia DR3’s
@@ -528,12 +532,14 @@ export const estimatedSection: AboutSection = {
           <Item title="Depth across, width where none is given, brightness">
             How thick a stream is along the line of sight is not measured: drawn as round as it is wide. Where no
             width is given, 100 pc. galstreams holds no stream’s light, so each is as bright along its length as
-            the next; a wide one is dimmer across.
+            the next; a wide one is dimmer across. Andromeda’s Giant Stellar Stream the same way; its distances
+            are scaled from Conn et al.’s Andromeda, 773 kpc, to the one drawn, 761, so it lies about Andromeda
+            as they measure it.
           </Item>
           <Item title="Not drawn">
             The Helmi streams, Gaia-Enceladus, Sequoia and Kraken are groups of stars in velocity, not paths on
-            the sky; TriAnd has no track in galstreams. The Magellanic Stream, Bridge and Leading Arm are mapped
-            on the sky, but no distance along them is measured.
+            the sky; TriAnd has no track in galstreams. The Magellanic Stream, Bridge and Leading Arm are gas,
+            mapped on the sky with no distance along them: drawn with the Interstellar Clouds.
           </Item>
         </Items>
 
@@ -566,6 +572,39 @@ export const estimatedSection: AboutSection = {
           <Item title="The G-cloud: not drawn">
             Only its outline on the sky and its velocity are published <Cite k="redfieldLinsky2008" />, not how
             far it reaches.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="interstellar-clouds">
+          Interstellar clouds
+        </Sub>
+        <Items>
+          <Item title="A ring, not the dust">
+            Each cloud is a ring of its radius about its mark, turned to the camera: its gas and dust are not
+            drawn. A dark cloud dims the light behind it, which a glow would show the wrong way round.
+          </Item>
+          <Item title="Distances assumed or disputed: dashed">
+            <Strong>Barnard’s Loop</Strong> has no distance of its own: the Orion complex’s 400 pc is assumed, and
+            its centre is put at Orion’s Belt, the papers’ centres disagreeing{' '}
+            <Cite k={['ochsendorf2015', 'foley2023']} />. <Strong>Barnard 68</Strong>: 125 pc is assumed; estimates
+            run 60 to 205 <Cite k="alves2001" />. <Strong>Loop I</Strong>: drawn as the local answer, a sphere
+            filling its circle with its rim at the Spur’s dust, 120 pc <Cite k="panopoulou2021" />; its X rays are
+            absorbed by gas past 300 pc <Cite k="lallement2016" />, and many read it as the eROSITA bubble’s edge,
+            kiloparsecs off <Cite k="predehl2020" />.
+          </Item>
+          <Item title="Where the extended ones are marked">
+            The Orion–Eridanus Superbubble at its driving stars’ place in Pon et al.’s fits; Complex C between the
+            two stars that place it; Complex A at the middle of its outline; the Smith Cloud at its tip; the
+            Coalsack and Taurus at their middles. Each radius is half its longest extent.
+          </Item>
+          <Item title="The Magellanic gas: at the Clouds’ distance">
+            The Stream and the Leading Arm are drawn on the sky where they are mapped, at the Large Cloud’s 49.6
+            kpc; the Bridge from it to the Small Cloud’s 62.4. Dashed, their panels saying so. The Leading Arm is
+            drawn along the Stream’s great circle, which it wanders from.
+            <Why>
+              no star is known in the gas, and the models disagree tenfold: 80–230 kpc at the Stream’s tip{' '}
+              <Cite k="besla2012" />, or 20 kpc at its nearest <Cite k="lucchini2021" />.
+            </Why>
           </Item>
         </Items>
 
@@ -748,6 +787,23 @@ export const estimatedSection: AboutSection = {
               <Cite k="reid2019" />.
             </Why>
           </Item>
+          <Item title="The Sun’s orbit: computed">
+            One turn of the Sun about the centre, forward from now, integrated in a smooth model of the Galaxy’s
+            pull <Cite k={['priceWhelan2017', 'bovy2015']} />: no bar, no arms, no clouds. Its start is measured —
+            Sgr A* where it is on the sky <Cite k="reidBrunthaler2004" /> at GRAVITY’s distance <Cite k="gravity2024" />, the Sun 25 pc above the plane{' '}
+            <Cite k="blandHawthorn2016" />, 251.5 km/s along the rotation from Sgr A*’s proper motion{' '}
+            <Cite k="reidBrunthaler2020" />, 11.1 toward the centre and 7.25 out of the plane{' '}
+            <Cite k="schoenrich2010" />. The turn takes 238 million years, 8.2 to 10.1 kpc from the centre and
+            within 120 pc of the plane, and does not close. The model’s circular speed at the Sun, 231 km/s, is
+            8 short of what the Sun’s motion and its lead on its neighbours give: the orbit’s width is partly the
+            model’s. Off by default, dashed.
+          </Item>
+          <Item title="The dark halo’s edge: a model">
+            A faint sphere about Sgr A*, 218 kpc in radius: the R200 within which the Galaxy is 200 times the
+            universe’s critical density, for the halo mass Cautun et al. find from Gaia’s rotation curve and the
+            satellites’ motions, 1.08 × 10¹² solar masses <Cite k="cautun2020" />. Nothing marks it in the sky;
+            other definitions give up to 300 kpc. Off by default.
+          </Item>
         </Items>
 
         <Sub section="estimated" id="local-group">
@@ -868,8 +924,31 @@ export const estimatedSection: AboutSection = {
           </Item>
           <Item title="What is not drawn">
             The Small Cloud’s structure, deeper along our line of sight than it is wide, and no disc to draw
-            from above; Andromeda’s halo, 4% of its light, and its streams; the Magellanic
+            from above; Andromeda’s halo, 4% of its light, and its streams but the giant one; the Magellanic
             Stream; and each galaxy’s motion. A galaxy whose size or V is not measured is its mark only.
+          </Item>
+        </Items>
+
+        <Sub section="estimated" id="local-structure">
+          The Local Group’s edge and the Local Sheet
+        </Sub>
+        <Items>
+          <Item title="Andromeda XXXVI’s distance">
+            Not measured: its stars fit an old isochrone put at Andromeda’s distance, 776 kpc{' '}
+            <Cite k={['sakowska2026', 'savino2022']} />, and it is drawn there.
+          </Item>
+          <Item title="Computed, off at first">
+            The Local Structure layer draws three outlines, none of them anything seen. The{' '}
+            zero-velocity surface, inside which the Local Group’s pull has stopped the
+            expansion: a sphere of 0.96 Mpc about the barycentre, 0.55 of the way from the Milky Way to
+            Andromeda, both from the Hubble flow of 30 galaxies about it <Cite k="karachentsev2009" />; its shape
+            is assumed, and from inside it, from the Milky Way, it has no outline. The{' '}
+            Local Sheet <Cite k="tully2008" />: McCall’s plane through the giants within 6 Mpc,
+            tilted 7.95° to the supergalactic plane, the Sun 129 kpc above it, drawn out to its giants’ 3σ edge,
+            5.2 Mpc; the giants scatter 233 kpc about it. The Council of Giants’ ring, 3.746 Mpc
+            in radius in that plane <Cite k="mccall2014" />: McCall gives its centre no coordinates, so the
+            circle is fitted again from his table the way he fitted it, and comes out his — 3.746 Mpc, its centre
+            0.81 Mpc from the Sun.
           </Item>
         </Items>
 

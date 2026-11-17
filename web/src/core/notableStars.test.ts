@@ -85,3 +85,26 @@ describe('the notable stars', () => {
     expect(deepSkyLayerKind(messierMarkBodyId(MESSIER_MARKS[0]!))).toBe(MESSIER_MARK_KIND);
   });
 });
+
+describe('the supernovae', () => {
+  // Their hosts' centres as the Local Volume layer has them (UNGC): M101 and M82.
+  const hosts: Record<string, readonly [number, number]> = {
+    'sn-2023ixf': [210.80333, 54.35056],
+    'sn-2011fe': [210.80333, 54.35056],
+    'sn-2014j': [148.97458, 69.6825],
+  };
+
+  it('are each inside its host on the sky, at its distance, framed with the host about it', () => {
+    const rad = Math.PI / 180;
+    for (const [key, [ra, dec]] of Object.entries(hosts)) {
+      const sn = star(key);
+      const cos =
+        Math.sin(sn.decDeg * rad) * Math.sin(dec * rad) + Math.cos(sn.decDeg * rad) * Math.cos(dec * rad) * Math.cos((sn.raDeg - ra) * rad);
+      // M101 spans 29' across, M82 11': each well within.
+      expect(Math.acos(Math.min(1, cos)) / rad, key).toBeLessThan(0.15);
+      expect(sn.type).toBe('Supernova');
+      expect(notableStarFraming(notableStarBodyId(sn))!.km).toBeGreaterThan(1000 * PARSEC_KM);
+    }
+    expect(star('sn-2023ixf').distancePc).toBe(star('sn-2011fe').distancePc);
+  });
+});

@@ -2189,6 +2189,12 @@ export interface LaniakeaLandmark {
     readonly width: string;
     readonly thickness: string;
   };
+  /**
+   * For one not established, as its panel says it: a candidate (too few of its members
+   * measured), a claim (a pattern whose reality is argued) or disputed (its measurement
+   * contested), and why, a sentence.
+   */
+  readonly status?: { readonly label: 'candidate' | 'claim' | 'disputed'; readonly why: string };
   readonly source: string;
   readonly note: string | null;
 }

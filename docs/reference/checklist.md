@@ -308,15 +308,15 @@ them out.
 ## Nearby galaxies (to about 200 Mpc)
 
 - [x] Nearby galaxies: the Local Group's 145 (McConnachie's 144 and M31), the Local Volume's 764 (UNGC) and the Virgo Cluster's 999 (EVCC).
-- [ ] Hoag's Object: not in Cosmicflows-4 or 2MRS under any name. G3.
+- [x] Hoag's Object: not in Cosmicflows-4 or 2MRS, so a mark at NED's place and redshift (CMB frame, CF4's H0), `Hoag’s Object` (`web/src/core/famousGalaxies.ts`).
 - [x] NGC 1300: Laniakea's catalogue, `NGC 1300`.
 - [x] Sunflower Galaxy (M63): Local Volume, `M63`.
 - [x] Black Eye (M64): Local Volume, `M64`.
 - [x] Sombrero (M104): Local Volume, `M104`.
-- [ ] Mayall's Object: not in Cosmicflows-4 or 2MRS under any name. G3.
+- [x] Mayall's Object: a mark at NED's place and redshift, `Mayall’s Object` (Arp 148, `web/src/core/famousGalaxies.ts`).
 - [x] Whirlpool (M51): Local Volume, `M51`.
 - [x] Bode's Galaxy (M81): Local Volume, `M81`.
-- [ ] Cartwheel Galaxy: not in Cosmicflows-4 or 2MRS (`ESO 350-40`, PGC 2248). G3.
+- [x] Cartwheel Galaxy: a mark at NED's place and redshift, `Cartwheel Galaxy` (`ESO 350-40`, `web/src/core/famousGalaxies.ts`).
 - [x] Pinwheel Galaxy (M101): Local Volume, `M101`.
 - [x] Cigar Galaxy (M82): Local Volume, `M82`.
 - [x] Tadpole Galaxy: Laniakea's catalogue, `UGC 10214`.
@@ -327,19 +327,19 @@ them out.
 - [x] Superclusters of galaxies: Einasto et al.'s eleven named here, and the CF4 watershed basins (Laniakea, Shapley, Perseus-Pisces, Hercules, Lepus, Apus).
 - [x] Fornax Cluster: a structure, its galaxies drawn.
 - [x] Shapley Supercluster: a structure, with Abell 3558 and Abell 3571; its basin the Shapley Basin layer.
-- [ ] KBC Void: disputed, and in none of G3's catalogues. G3.
+- [x] KBC Void: a void about us to z 0.07 (Keenan et al. 2013), its panel `[disputed]`, its shell and mark only while chosen (`tools/src/laniakea/landmarks.ts` paperVoids; in laniakea.json from the next data build).
 - [x] Hydra Cluster: a structure (`Abell 1060`).
 - [~] Pavo-Indus Supercluster: the Pavo II Cluster in it drawn and named; the supercluster not named.
 - [x] Northern Local Supervoid: the `Hercules Void` (Tully et al. 2019), an outline.
 - [x] Centaurus Cluster: a structure (`Abell 3526`).
 - [x] Horologium Supercluster: `Horologium-Reticulum Supercluster`.
 - [x] Coma Wall: the `CfA2 Great Wall`, drawn as a line through the Coma Cluster's declination.
-- [ ] Sculptor Wall: not in G3's landmarks; the Sculptor Supercluster is. G3.
+- [ ] Sculptor Wall: not in G3's landmarks; the Sculptor Supercluster is. G3. Left out: its sources disagree where it is (Fairall's wall at z 0.03 in the southern slices; MSCC 33, the Sculptor superclusters, at z 0.11), and none gives a span to draw.
 - [x] Southern Local Supervoid: the `Sculptor Void` (Tully et al. 2019), an outline.
-- [ ] Giant Void: not in G3's landmarks. G3.
+- [x] Giant Void: a void, a sphere 300 Mpc across at z 0.11 toward Canes Venatici (Kopylov & Kopylova 2002; `tools/src/laniakea/landmarks.ts` paperVoids, from the next data build).
 - [x] Leo Supercluster: a structure.
 - [x] Walls and filaments: the CfA2 and Sloan Great Walls as lines; the filaments of Tempel et al. 2014 (SDSS main sample, to z 0.155) and Malavasi et al. 2020 (BOSS North, z 0.15-0.75) as threads, the Filaments layer (`cosmic-web/filaments.bin`, `web/src/scene/CosmicWeb.tsx`).
-- [ ] Caelum Supercluster: not in G3's landmarks. G3.
+- [x] Caelum Supercluster: Einasto et al. 1997's candidate 59, its panel `[candidate]` (`tools/src/laniakea/landmarks.ts` SUPERCLUSTERS, from the next data build).
 - [x] Sloan Great Wall: a structure, drawn as a line (Gott et al. 2005).
 - [x] Corona Borealis Supercluster: a structure.
 - [x] ASASSN-15lh, "brightest supernova": a record-holder (`web/src/core/recordHolders.ts`), z 0.2326, its panel saying it may be a tidal disruption.
@@ -347,13 +347,13 @@ them out.
 - [x] Pandora's Cluster (Abell 2744): a record-holder, z 0.308.
 - [x] Bullet Cluster: a record-holder, z 0.296.
 - [x] Saraswati Supercluster: a record-holder, z 0.28, marked at Abell 2631, its centre.
-- [ ] Giant GRB Ring: a claim (see README). G4.
+- [x] Giant GRB Ring: a far landmark at its nine bursts' mean, z 0.822, a ring of 1,720 Mpc, its record `[claim]` (`web/src/core/farLandmarks.ts`).
 - [x] El Gordo Cluster: a record-holder, z 0.870.
 - [x] Cosmic web of galaxies: the SDSS main sample's and BOSS DR12's 1.8 million galaxies to z 0.95, in the surveys' wedges, the SDSS Galaxies layer (`cosmic-web/galaxies-*.bin`, `web/src/scene/CosmicWeb.tsx`); their filaments, the Filaments layer.
 
 ## The far universe
 
-- [ ] Hercules-Corona Borealis Great Wall: a claim. G4.
+- [x] Hercules-Corona Borealis Great Wall: a far landmark, a mark at z 1.85 in Hercules and Corona Borealis (its papers give no centre), its record `[claim]`, Christian 2020's doubt in its note.
 - [x] Clowes-Campusano LQG: a far landmark (`web/src/core/farLandmarks.ts`), `Clowes–Campusano LQG`, at its 34
   quasars' mean place and redshift (z 1.28), a ring of its size; the Observable Universe layer.
 - [x] Huge-LQG: a far landmark, `Huge-LQG`, z 1.27, a ring of its size, its panel saying it is a claim (Nadathur 2013).
@@ -425,7 +425,7 @@ What the map does not show but a realism-first simulator should. These are unche
 ### Nearby stars and planets
 - [x] Barnard's Star's four planets (2025), from Basant et al. (`planetarySystems.ts`); α Cen A's candidate S1 [uncertain]: `Alpha Centauri A S1 (candidate)`, on one of Beichman, Sanghi et al.'s fitted orbits, said so (`alphaCenAPlanets.ts`); ε Ind Ab, GJ 251 c, HD 20794 d: from the NASA Exoplanet Archive, gone to by their stars
 - [x] Ross 128, 154, 248; Gliese 1061; Teegarden's Star; Kapteyn's Star; YZ Ceti; Gliese 581, Gliese 667C: 3D stars, named; their planets from the Archive when gone to (Ross 128 b; GJ 1061, Teegarden's, YZ Ceti and GJ 581 three each; GJ 667 C five, three disputed; Kapteyn c disputed). Ross 154 and 248 have none
-- [x] Bright stars: Polaris, Deneb, Altair, Spica, Regulus, Fomalhaut, Mira, Algol, Castor, Orion's Belt: catalogue stars with their measured facts and disputed distances in the panel (`web/src/core/brightStars.ts`), Fomalhaut a disc of its size; Alnilam placed at Orion OB1b's 384 pc (build3d.ts OVERRIDES). Not drawn: companions (none a catalogue star of its own), Fomalhaut's ring
+- [x] Bright stars: Polaris, Deneb, Altair, Spica, Regulus, Fomalhaut, Mira, Algol, Castor, Orion's Belt: catalogue stars with their measured facts and disputed distances in the panel (`web/src/core/brightStars.ts`), Fomalhaut a disc of its size; Alnilam placed at Orion OB1b's 384 pc, Alnitak at Hummel et al.'s 387 pc, Mintaka at δ Ori C's Gaia 381 pc (build3d.ts OVERRIDES). Not drawn: companions (none a catalogue star of its own), Fomalhaut's ring
 - [x] Compact objects: Procyon B, 40 Eridani B (Notable Stars marks); RX J1856.5-3754, PSR J0437-4715 (Pulsars layer)
 - [~] Planetary systems: all below from the NASA Exoplanet Archive, gone to by search (51 Peg curated; Kepler-90, the Archive's KOI-351, found by its name). Not yet: rogue planets, which the Archive does not list
   - firsts: 51 Peg, PSR B1257+12;
@@ -440,7 +440,7 @@ What the map does not show but a realism-first simulator should. These are unche
 
 ### The Milky Way near us
 - [~] The Local Bubble (Pelgrims et al. 2020's wall); the Radcliffe Wave (Konietzka et al. 2024's model and clouds): Local Interstellar Medium layer. Not the Gould Belt
-- [ ] Interstellar features: Loop I, the Orion–Eridanus superbubble, Barnard's Loop, the Coalsack, ρ Oph, Taurus, Barnard 68, Cygnus X
+- [x] Interstellar features: Loop I [disputed], the Orion–Eridanus superbubble, Barnard's Loop, the Coalsack, ρ Oph, Taurus, Barnard 68, Cygnus X: Interstellar Clouds layer (`web/src/core/interstellarClouds.ts`), each a mark and a ring of its size at its Gaia-dust, VLBA or published distance; dashed where assumed or disputed (Loop I, Barnard 68, Barnard's Loop). Their dust is not drawn
 - [~] Star-forming regions: the Orion Nebula M42, Lagoon, Trifid, Rosette (Nebulae layer, volumes; also the Eagle, Omega, Carina, Horsehead, Tarantula). Not yet: the Orion molecular clouds, North America, Heart and Soul, NGC 3603, Westerlund 2
 - [~] Planetary nebulae: Helix, Dumbbell, Cat's Eye, Southern Ring (Nebulae layer, their published shapes; the Owl a Messier mark). Not yet: Butterfly, Red Rectangle, Boomerang
 - [ ] Remnants: Crab, Cassiopeia A, Tycho, Kepler, SN 1006, Vela, the Veil, SN 1987A (check which are in the remnant catalogue)
@@ -458,14 +458,14 @@ What the map does not show but a realism-first simulator should. These are unche
 - [~] The bar, labelled `Galactic Bar`; each spiral arm by name (Norma, Scutum–Centaurus, Sagittarius–Carina, the Local Arm or Orion spur, Perseus, Outer, 3-kpc). Not the X-shaped bulge, the warp or the flare
 - [x] The Fermi and eROSITA bubbles: faint shells, their outlines measured, their depth modelled (`galacticBubbles.ts`)
 - [~] Halo: the Sagittarius stream, GD-1, Palomar 5's tails, the Monoceros Ring and 114 more streams (Stellar Streams layer, galstreams). Not Gaia-Enceladus, Kraken, Sequoia or the Helmi streams (groups in velocity, not tracks), nor TriAnd (no track in galstreams)
-- [ ] The Magellanic Stream, Bridge and Leading Arm (mapped on the sky; no distance along them is measured); high-velocity clouds (Smith Cloud, Complex C); hypervelocity stars (S5-HVS1)
-- [ ] The Sun's galactic orbit; the dark halo's virial radius
+- [x] The Magellanic Stream, Bridge and Leading Arm (mapped on the sky; no distance along them is measured): their H I tracks, dashed, at the Clouds' distance, said so; high-velocity clouds (Smith Cloud, Complex C, Complex A): Interstellar Clouds layer; hypervelocity stars (S5-HVS1): a Notable Stars mark, its path back to Sgr A* dashed (`web/src/core/hypervelocity.ts`)
+- [x] The Sun's galactic orbit (one turn, 238 Myr, computed in gala's MilkyWayPotential from the measured start); the dark halo's R200, 218 kpc (Cautun et al. 2020), a model: the Sun's Galactic Orbit layer, off by default (`web/src/core/galacticOrbit.ts`)
 - [~] Every Messier object: 108 of 110 drawn and found by number (`messier.ts`); M24 (a star cloud at every distance) and M76 (no distance) not. Not the Caldwell catalogue
 - [x] ω Cen's intermediate-mass black hole (Häberle et al. 2024): a Notable Stars mark at the cluster's centre
 
 ### Local Group
-- [ ] M31's Giant Stellar Stream; Andromeda XXXVI (2026)
-- [ ] The NGC 3109 / Antlia–Sextans group; the zero-velocity surface; the Local Sheet; the "Council of Giants"
+- [x] M31's Giant Stellar Stream: Conn et al. 2016's 19 fields, each at its measured distance, in the Stellar Streams layer (`m31Stream.ts`); Andromeda XXXVI (Sakowska et al. 2026), at Andromeda's distance, its own not measured
+- [x] The NGC 3109 / Antlia–Sextans group (a row in its six members' panels); the zero-velocity surface, the Local Sheet and the "Council of Giants" (its ring, and a row in its twelve's panels): the Local Structure layer, computed, off at first (`localStructure.ts`)
 - [~] The LMC's Tarantula Nebula (Nebulae layer) and R136a1 (a mark). Not SN 1987A
 
 ### Local Volume (G2)
@@ -482,15 +482,15 @@ What the map does not show but a realism-first simulator should. These are unche
 - [~] Superclusters and walls: Perseus–Pisces, Pisces–Cetus, Hercules, the CfA2 Great Wall, the South Pole Wall: all but the South Pole Wall
 - [~] The Dipole Repeller; Ho'oleilana; Quipu (2025): the Dipole Repeller (with the Cold Spot Repeller, one CF4 basin); not Ho'oleilana or Quipu
 - [~] Galaxies: the Antennae, Stephan's Quintet, Arp 220, Malin 1, NGC 4993 (GW170817): NGC 4038, NGC 7317 and NGC 7319, NGC 4993; not NGC 4039, the rest of the quintet, Arp 220 or Malin 1
-- [ ] Supernovae: SN 2023ixf, SN 2011fe, SN 2014J
+- [x] Supernovae: SN 2023ixf, SN 2011fe, SN 2014J: Notable Stars marks at their hosts' distances, marked at every date, found and type, peak and lesson in the panel
 - [x] The flow of galaxies: the Cosmicflows-4 velocity field's streamlines (Courtois et al. 2023): 53, coloured by the basin each ends in, Laniakea's 18 in its gold (`laniakea/flows.bin`, `tools/src/laniakea/flows.ts`, the Flow Lines layer); Laniakea's basin filled; "You are here" past 370 Mpc
 - [x] The walls as their galaxies: the Sloan and CfA2 Great Walls' galaxies tinted, by their papers' spans on the sky and an estimated depth
 
 ### The far universe (G4)
 - [~] Clusters: Phoenix (PSZ2 G339.63-69.34) and MACS J0717 (PSZ2 G180.25+21.03) are among the 1,088 Planck SZ
   clusters drawn as rings (SZ Clusters layer, `quasars/sz-clusters.bin`), not named or searchable; not Abell 370 or the Musket Ball
-- [ ] Protoclusters: Spiderweb, SPT2349-56, Hyperion; the BOSS Great Wall
-- [ ] The Giant Arc, the Big Ring [disputed]
+- [x] Protoclusters: Spiderweb, SPT2349-56, Hyperion; the BOSS Great Wall: far landmarks (`web/src/core/farLandmarks.ts`), Hyperion and the BGW rings of their sizes
+- [x] The Giant Arc, the Big Ring [disputed]: far landmarks at z 0.802, the arc a mark at its central cluster, the ring a ring of 400 Mpc, each `[disputed]` (Sawala & Teeriaho 2025)
 - [~] Quasars and supermassive black holes: SDSS DR16Q's 749,742 quasars to z 7.02, in the SDSS's wedges, the Quasars
   layer (`quasars/quasars-*.bin`, `web/src/scene/Quasars.tsx`); 3C 273 a record-holder; not OJ 287, Phoenix A,
   Holmberg 15A, the Cosmic Horseshoe
@@ -505,7 +505,7 @@ What the map does not show but a realism-first simulator should. These are unche
 - [~] Epochs as shells: the last-scattering surface drawn; not reionisation, cosmic dawn, the dark ages
 
 ### Cosmology
-- [ ] The CMB dipole (the Sun's 370 km/s); the Cold Spot and the Eridanus supervoid [disputed]
+- [x] The CMB dipole (the Sun's 370 km/s); the Cold Spot and the Eridanus supervoid [disputed]: the dipole a beam from the Sun to its hot pole on the wall, the Cold Spot a 5° circle on the map's cold patch (`web/src/core/farLandmarks.test.ts`), the supervoid a ring at z 0.22, its record `[disputed]`
 - [~] The Hubble sphere (14.5 Gly), the event horizon (16.6 Gly), the particle horizon (46.2 Gly): in the About, Planck 2018; the camera zooms out past the last; none drawn
 - [x] The cosmology the app uses, stated, given the Hubble tension: Planck 2018 past Laniakea, Cosmicflows-4's H0 within it (`web/src/core/cosmology.ts`, About)
 

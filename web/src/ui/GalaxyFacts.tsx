@@ -14,6 +14,7 @@ import {
   UNDRAWN_REASONS,
 } from '../core/localGroup.ts';
 import { groupLabel, localVolumeCatalog, regionOf } from '../core/localVolume.ts';
+import { groupingsOf } from '../core/localStructure.ts';
 import { httpBeltFetchers } from '../core/belt.ts';
 import {
   basinNamesAt,
@@ -141,6 +142,7 @@ export function GalaxyPanel({
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {galaxy.otherNames.length > 0 && <Row label="Also">{galaxy.otherNames.join(' · ')}</Row>}
+        <Groupings galaxy={galaxy} />
         <Row label="Distance">{fromSun === null ? '--' : formatGalaxyDistance(fromSun / PARSEC_KM)}</Row>
         <Row label="">{fromSun === null ? '' : formatLightYears(fromSun / PARSEC_KM)}</Row>
         {up !== null && down !== null && (
@@ -235,6 +237,7 @@ function VolumePanel({
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {galaxy.otherNames.length > 0 && <Row label="Also">{galaxy.otherNames.slice(0, 4).join(' · ')}</Row>}
         <Row label="In">{groupLabel(c.group[k] ?? null, regionOf(c, k))}</Row>
+        <Groupings galaxy={galaxy} />
         <Row label="Distance">{fromSun === null ? '--' : formatGalaxyDistance(fromSun / PARSEC_KM)}</Row>
         <Row label="">{fromSun === null ? '' : formatLightYears(fromSun / PARSEC_KM)}</Row>
         {error !== null && <Row label="">{`± ${formatGalaxyDistance(error)}`}</Row>}
@@ -276,6 +279,19 @@ function VolumePanel({
         <Row label="Colour">{`B−V ${galaxy.colourIndex.toFixed(2)}${c.colourIndex[k] == null || c.colourEstimated[k] ? ', estimated' : ''}`}</Row>
       </dl>
     </Panel>
+  );
+}
+
+/** The groupings it is in that a paper drew (core/localStructure.ts): the NGC 3109 association, the Council of Giants. */
+function Groupings({ galaxy }: { galaxy: LocalGroupGalaxy }) {
+  return (
+    <>
+      {groupingsOf(galaxy).map((grouping) => (
+        <Row key={grouping.name} label="Grouping">
+          {`${grouping.name} · ${grouping.source}`}
+        </Row>
+      ))}
+    </>
   );
 }
 

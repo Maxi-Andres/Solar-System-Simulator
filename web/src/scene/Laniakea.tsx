@@ -1567,7 +1567,9 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       const v = (dx * SUPERGALACTIC_Y.x + dy * SUPERGALACTIC_Y.y + dz * SUPERGALACTIC_Y.z) / b;
       const w = (dx * SUPERGALACTIC_Z.x + dy * SUPERGALACTIC_Z.y + dz * SUPERGALACTIC_Z.z) / c;
       const within = u * u + v * v + w * w < 1;
-      setUniforms(mesh, visible ? structureFade * VOID_SHELL * (within ? VOID_INSIDE : 1) : 0);
+      // A disputed void (the KBC Void, about us) only while it is chosen: not drawn as if established.
+      const shown = visible && (landmark.status?.label !== 'disputed' || structureOf(focus) === landmark);
+      setUniforms(mesh, shown ? structureFade * VOID_SHELL * (within ? VOID_INSIDE : 1) : 0);
     }
     const focusedWall = structureOf(focus)?.kind === 'wall' ? structureOf(focus)!.name : null;
     for (const line of structures?.walls ?? []) {

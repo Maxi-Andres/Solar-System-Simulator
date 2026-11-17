@@ -84,6 +84,20 @@ const MATCH_RADIUS = STAR3D_MATCH_RADIUS_ARCSEC * ARCSEC;
  * stars. Its distance is its association's, Orion OB1b's, the median of its members' Gaia
  * DR3 parallaxes, 384 +/- 8 pc, which Oplistilova et al. (2025, A&A 704, A204) adopt for it:
  * as a parallax, 2.604 +/- 0.054 mas.
+ *
+ * **Alnitak**, the Belt's eastern star. Gaia saturates on it too, and Hipparcos's 4.43 +/-
+ * 0.64 mas (225 pc) is a five-parameter fit to a pair that moves about each other every seven
+ * years, which Hummel et al. (2013, A&A 554, A52) discard. Their own orbit gives an orbital
+ * parallax, 3.4 +/- 0.2 mas (294 pc), but from velocity amplitudes so small that they judge it
+ * less robust than the distance the B0 III companion's brightness gives, 387 +/- 54 pc, the one
+ * they fit the masses to -- and the one that agrees with Orion OB1b's. That is the one taken:
+ * 2.584 +/- 0.361 mas.
+ *
+ * **Mintaka**, the western star. Gaia saturates on delta Ori A; Hipparcos's 4.71 mas (212 pc)
+ * puts the eclipsing pair at half the distance its stars' light fits (Shenar et al. 2015).
+ * Oplistilova et al. (2023, A&A 672, A31) take the system's distance from its faint member
+ * delta Ori C, 52" north, whose Gaia DR3 parallax (source 3220757015623151616, RUWE 1.1) is
+ * well measured: 2.6245 +/- 0.0538 mas, 381 +/- 8 pc, Orion OB1b's centre.
  */
 export const OVERRIDES: readonly {
   readonly hip: number;
@@ -112,6 +126,20 @@ export const OVERRIDES: readonly {
     parallaxMas: 2.604,
     parallaxErrorMas: 0.054,
     reference: 'Oplistilova et al. 2025, A&A 704, A204: Orion OB1b, 384 +/- 8 pc',
+  },
+  {
+    hip: 26727,
+    star: 'Alnitak (HIP 26727)',
+    parallaxMas: 2.584,
+    parallaxErrorMas: 0.361,
+    reference: 'Hummel et al. 2013, A&A 554, A52: photometric, from zeta Ori B, 387 +/- 54 pc',
+  },
+  {
+    hip: 25930,
+    star: 'Mintaka (HIP 25930)',
+    parallaxMas: 2.6245,
+    parallaxErrorMas: 0.0538,
+    reference: 'Oplistilova et al. 2023, A&A 672, A31: Gaia DR3 of delta Ori C, 381 +/- 8 pc',
   },
 ];
 

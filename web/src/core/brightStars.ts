@@ -9,8 +9,10 @@
  * Each number is its paper's, and a size or a light is at the distance that paper took, which
  * is said where it is not the catalogue's. Where a star's distance is in dispute -- Polaris,
  * Deneb, the Belt -- the panel says so and names the other measurements; the catalogue's stays
- * the one it is drawn at, except Alnilam's, which the catalogue has from its association
- * (tools/src/stars/build3d.ts OVERRIDES): its own parallax is no distance.
+ * the one it is drawn at, except the Belt's, which the catalogue has from the literature
+ * (tools/src/stars/build3d.ts OVERRIDES): Alnilam's from its association, its own parallax
+ * being no distance; Alnitak's from its companion's light (Hummel et al. 2013); Mintaka's from
+ * its faint member delta Ori C's Gaia parallax (Oplištilová et al. 2023, 2301.10290).
  *
  * Drawn as a disc of its measured size only where that size is the star's alone, round and at
  * the catalogue's distance: Fomalhaut. Altair and Regulus are flattened by their spin, and
@@ -183,7 +185,8 @@ export const BRIGHT_STARS: readonly BrightStar[] = [
     rows: [['Masses', '14.0 and 7.4 M☉, the inner pair']],
     note: 'The eastern star of Orion’s Belt: a hot supergiant and its companion, 7 years about each other.',
     distanceNote:
-      'Hipparcos’s, drawn here: 226 pc. Its orbit gives 294 ± 21 (Hummel et al.); its association, Orion OB1b, 384 ± 8 (Oplištilová et al. 2025).',
+      'Drawn at 387 ± 54 pc, from its companion ζ Ori B’s brightness, which Hummel et al. adopt. Its orbit gives 294 ± 21, from small velocities; Hipparcos 225, a fit blind to the orbit. Orion OB1b: 384 ± 8 (Oplištilová et al. 2025).',
+    distanceSource: 'Hummel et al. 2013, photometric',
     reference: 'Hummel et al. 2013, A&A 554, A52 (NPOI)',
   },
   {
@@ -208,7 +211,8 @@ export const BRIGHT_STARS: readonly BrightStar[] = [
     rows: [['Orbit', '5.73 days, the eclipsing pair']],
     note: 'The western star of Orion’s Belt: an O giant and a smaller star eclipse each other; a third star farther out.',
     distanceNote:
-      'Hipparcos’s, drawn here: 212 pc. Its stars fit only at about twice that (Shenar et al. 2015), near Orion OB1b’s 384 pc (Oplištilová et al. 2025).',
+      'Drawn at 381 ± 8 pc, the Gaia parallax of its faint member δ Ori C (Oplištilová et al. 2023), where its stars fit (Shenar et al. 2015). Hipparcos gave 212.',
+    distanceSource: 'δ Ori C’s, Gaia DR3',
     reference: 'Shenar et al. 2015, ApJ 809, 135',
   },
 ];

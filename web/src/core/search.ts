@@ -194,7 +194,8 @@ export function layersFor(body: BodyDefinition): LayerId[] {
     case 'galaxy':
       return ['localGroup'];
     case 'structure':
-      return recordHolderOf(body.id) !== null ? ['observableUniverse'] : ['laniakea'];
+      // A record-holder the Observable Universe's; a famous galaxy near enough (famousGalaxies.ts) Laniakea's.
+      return recordHolderOf(body.id) !== null && recordHolderOf(body.id)!.nearby !== true ? ['observableUniverse'] : ['laniakea'];
     case 'nebula':
       return ['nebulae'];
     case 'deep-sky':
@@ -302,7 +303,9 @@ export function searchBodies(
           ? normalizedName(recordHolderAliases(body.id))
           : body.kind === 'nebula' || body.kind === 'deep-sky'
             ? normalizedName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
-            : ''
+            : body.kind === 'region'
+              ? normalizedName((regionOf(body.id)?.aliases ?? []).join(' '))
+              : ''
         : normalizedName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
