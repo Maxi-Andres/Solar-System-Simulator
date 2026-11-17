@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { drawnFromData } from '../descriptions/generated.ts';
@@ -37,6 +37,20 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
   const description = descriptionOf(focus);
   const body = store.body(focus);
   const [opened, setOpened] = useState<number | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  /**
+   * A citation's source, brought into view by scrolling this page's own column and nothing
+   * else. scrollIntoView scrolls every ancestor that can scroll -- the app's own frame too,
+   * which hides its overflow but still moves -- and it shifted the whole app up out of its
+   * window (Maxi, 2026-11-17: "toque el dos y me rompio todo").
+   */
+  const goToSource = (key: string): void => {
+    const box = scroller.current;
+    const target = document.getElementById(`source-${key}`);
+    if (box === null || target === null) return;
+    const top = target.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - box.clientHeight / 3;
+    box.scrollTo({ top, behavior: 'smooth' });
+  };
 
   // Escape goes back to the body's panel, unless a photo is open: then it closes the photo.
   useEffect(() => {
@@ -73,7 +87,7 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
           BACK
         </button>
       </header>
-      <div className="scroll-hidden" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+      <div ref={scroller} className="scroll-hidden" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
         <article style={{ maxWidth: '46rem', width: '100%', padding: '2.2rem 1rem 7rem', boxSizing: 'border-box' }}>
           <div style={{ fontSize: '0.66rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
             {body.kind.replace('-', ' ')}
@@ -88,19 +102,19 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
           <Photos photos={description.photos} onOpen={setOpened} />
 
           <Section title="How it is drawn here">
-            <Points points={[...generated, ...description.drawnHere]} numbers={numbers} />
+            <Points points={[...generated, ...description.drawnHere]} numbers={numbers} onCite={goToSource} />
           </Section>
           <Section title="Measured">
-            <Points points={description.measured} numbers={numbers} />
+            <Points points={description.measured} numbers={numbers} onCite={goToSource} />
           </Section>
           <Section title="Estimated, from models">
-            <Points points={description.estimated} numbers={numbers} />
+            <Points points={description.estimated} numbers={numbers} onCite={goToSource} />
           </Section>
           <Section title="Not known, or not drawn">
-            <Points points={description.missing} numbers={numbers} />
+            <Points points={description.missing} numbers={numbers} onCite={goToSource} />
           </Section>
           <Section title="What people often get wrong">
-            <Points points={description.misconceptions} numbers={numbers} />
+            <Points points={description.misconceptions} numbers={numbers} onCite={goToSource} />
           </Section>
           <Section title="Sources">
             <Sources description={description} />
@@ -140,7 +154,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Points({ points, numbers }: { points: readonly DescriptionPoint[]; numbers: ReadonlyMap<string, number> }) {
+function Points({
+  points,
+  numbers,
+  onCite,
+}: {
+  points: readonly DescriptionPoint[];
+  numbers: ReadonlyMap<string, number>;
+  onCite: (key: string) => void;
+}) {
   return (
     <ul style={{ margin: '0 0 1.1rem', paddingLeft: '1.1rem' }}>
       {points.map((point) => (
@@ -157,7 +179,7 @@ function Points({ points, numbers }: { points: readonly DescriptionPoint[]; numb
                   <button
                     type="button"
                     title="Go to this source"
-                    onClick={() => document.getElementById(`source-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    onClick={() => onCite(key)}
                     style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: ACCENT, cursor: 'pointer' }}
                   >
                     {numbers.get(key) ?? '?'}
