@@ -228,10 +228,15 @@ function waitingPlace(target: ShowMeTarget): Arrival | null {
   }
 }
 
-/** The layers the target is drawn in, switched on, so the app does not step straight back off it. */
-function layersOf(target: ShowMeTarget, store: EphemerisStore, id: BodyId): LayerId[] {
+/**
+ * The layers the target is drawn in, switched on, so the app does not step straight back off it
+ * -- and, for one not a body yet, so it is ever loaded: the satellites come only with their layer,
+ * and without it "show me" waited at Earth for a Space Station that never came.
+ */
+export function layersOf(target: ShowMeTarget, store: EphemerisStore, id: BodyId): LayerId[] {
   const layers = hasBody(store, id) ? layersFor(store.body(id)) : [];
   if (target.kind === 'body' && target.alsoLayers !== undefined) layers.push(...target.alsoLayers);
+  if (target.kind === 'satellite') layers.push('satellites');
   if (target.kind === 'structure') layers.push('laniakea');
   if (target.kind === 'structure' && target.laniakeaView === true) layers.push('laniakeaBasin', 'flowLines');
   if (target.kind === 'view' && target.view === 'observable-universe') layers.push('observableUniverse');
