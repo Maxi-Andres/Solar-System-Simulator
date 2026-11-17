@@ -663,9 +663,20 @@ export const physicsSection: AboutSection = {
             that a single-scattering model throws away is still in the air. Closing it needs precomputed
             multiple scattering, which is a piece of work in its own right.
           </Item>
-          <Item title="No aerosols, ozone or refraction">
-            It also has no aerosols, no ozone and no refraction, so there is none of the white haze that hangs
-            low in a real atmosphere and the Sun sets about half a degree early.
+          <Item title="Ozone">
+            The ozone layer absorbs light and scatters none. Its cross-sections are measured
+            <Cite k="serdyuchenko2014" />, there are 300 Dobson units of it, and it is spread from 10 to 40 km
+            with its peak at 25, as in Bruneton’s reference model
+            <Cite k="bruneton2017" />. Looking straight down it barely matters: an optical depth of 0.028 at
+            550 nm, against the air’s 0.097. Sunlight reaching the high air over the terminator is different:
+            it has passed edge-on through the layer, and there ozone removes more green and red than the
+            air removes blue. That is why the band over the terminator turns blue above its orange instead of
+            brown, and why a clear sky stays blue overhead after sunset
+            <Cite k="hulburt1953" />.
+          </Item>
+          <Item title="No aerosols or refraction">
+            It has no aerosols and no refraction, so there is none of the white haze that hangs low in a real
+            atmosphere, and the Sun sets about half a degree early.
             <Why>
               Aerosols are the reason the easy one is missing: their loading varies tenfold with place and
               season, so it would be the first fitted number in a model that currently has none.

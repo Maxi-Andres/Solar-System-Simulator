@@ -7,6 +7,7 @@ import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
 import { GAIA_ZERO_POINT_MAS } from './messier.ts';
 import { PARSEC_KM } from './stars3d.ts';
+import { STELLAR_GROUP_MARKS } from './stellarGroups.ts';
 import type { StateVector } from './vec3.ts';
 import type { FramingRequest } from '../state/store.ts';
 
@@ -14,7 +15,9 @@ import type { FramingRequest } from '../state/store.ts';
  * Named stars, stellar black holes and young clusters the star catalogue does not place --
  * too faint for it, too far, missing from Gaia, or with no parallax it can use -- each a mark
  * at a measured distance, in the Notable Stars layer: bodies of kind 'deep-sky', as the
- * Messier marks are (messier.ts), found by search and gone to.
+ * Messier marks are (messier.ts), found by search and gone to. With them, the two star groups
+ * nearest the Sun, the Hyades and the Ursa Major moving group (stellarGroups.ts): their stars
+ * are the catalogue's, and the mark is their centre, sized and framed by their extent.
  *
  * ## Where and how far
  *
@@ -56,6 +59,10 @@ export interface NotableStar {
   /** Its motion, mas/yr and km/s, for those that move fast enough to matter; null to stand still. */
   readonly motion: { readonly pmRa: number; readonly pmDec: number; readonly rv: number } | null;
   readonly note: string | null;
+  /** A group's size (stellarGroups.ts), pc: what it is sized and framed by; marks have none. */
+  readonly extent?: { readonly pc: number; readonly label: string; readonly source: string };
+  /** A group's other facts, label and value, as its panel shows them. */
+  readonly rows?: readonly (readonly [string, string])[];
 }
 
 const SIMBAD = 'SIMBAD (CDS)';
@@ -123,6 +130,28 @@ export const NOTABLE_STARS: readonly NotableStar[] = [
     distanceReference: 'Kirkpatrick et al. 2021, ApJS 253, 7',
     motion: { pmRa: -8123.7, pmDec: 673.2, rv: 0 },
     note: 'The coldest brown dwarf known, near water’s freezing point. Too faint for Gaia.',
+  },
+  {
+    // Gaia DR3 has it (3048443305671969152) with no parallax or proper motion: a two-parameter
+    // solution, as in DR2. Dupuy et al.'s position is at 2010.0 (110.0135245, -8.7809247),
+    // taken back to J2000 along their proper motion; their system velocity is the pair's,
+    // corrected for the orbit. It passed through the outer Oort cloud: stellarFlybys.ts.
+    key: 'scholz',
+    name: 'Scholz’s Star',
+    aliases: ['WISE J072003.20-084651.2', 'WISE 0720-0846', "Scholz's Star", 'Scholz Star'],
+    type: 'Star and brown dwarf pair',
+    raDeg: 110.0136539,
+    decDeg: -8.7806011,
+    positionSource: 'Dupuy et al. 2019, AJ 158, 174, at 2010.0, moved to J2000',
+    // 147.1 +1.1/-1.2 mas: the far side of the distance from the lower parallax.
+    distancePc: 1000 / 147.1,
+    distanceUpPc: 1000 / (147.1 - 1.2) - 1000 / 147.1,
+    distanceDownPc: 1000 / 147.1 - 1000 / (147.1 + 1.1),
+    parallaxMas: 147.1,
+    distanceMethod: 'its parallax, from CFHT and Keck imaging, fitted with the pair’s orbit',
+    distanceReference: 'Dupuy et al. 2019, AJ 158, 174',
+    motion: { pmRa: -46, pmDec: -116.5, rv: 82.4 },
+    note: 'An M9.5 star of 99 Jupiter masses and a T dwarf of 66, 2.2 AU apart, marked as one. It passed through the outer Oort cloud 80,000 years ago.',
   },
   {
     key: 'procyon-b',
@@ -438,6 +467,8 @@ export const NOTABLE_STARS: readonly NotableStar[] = [
     motion: null,
     note: 'At least 8,200 solar masses, from seven stars moving faster than the centre could hold without it (Häberle et al. 2024, Nature 631, 285).',
   },
+  // --- Star groups: the Hyades and the Ursa Major moving group (stellarGroups.ts) ---------
+  ...STELLAR_GROUP_MARKS,
 ];
 
 /** Asked for and left out, with why: no distance that holds. */
@@ -490,13 +521,25 @@ const COLOURS: Readonly<Record<string, string>> = {
   'White dwarf': '#cfe0ff',
   'Brown dwarf': '#c0745a',
   'Brown dwarf pair': '#c0745a',
+  'Star and brown dwarf pair': '#c0745a',
   'Red supergiant': '#ff9a6a',
   'Red hypergiant': '#ff9a6a',
   'Young massive cluster': '#b4c6e6',
+  'Open cluster': '#b4c6e6',
+  'Moving group': '#b4c6e6',
 };
 
+/**
+ * How far a mark is framed from, km: a tenth of a parsec, or, for a group with a size, three
+ * of its radii -- all of it in view, as a Messier cluster's is (messier.ts).
+ */
+function framingKm(star: NotableStar): number {
+  return star.extent === undefined ? FRAMING_KM : 3 * star.extent.pc * PARSEC_KM;
+}
+
 function definition(star: NotableStar): BodyDefinition {
-  const radius = FRAMING_KM / 8;
+  // A place, not a surface: framed at eight of these, as every mark is.
+  const radius = framingKm(star) / 8;
   return {
     id: notableStarBodyId(star),
     name: star.name,
@@ -546,5 +589,5 @@ export function notableStarFraming(id: BodyId): FramingRequest | null {
   const at = notableStarState(star)(J2000_JD).position;
   const n = Math.hypot(at.x, at.y, at.z);
   const { north, away } = skyAxes({ x: at.x / n, y: at.y / n, z: at.z / n });
-  return { km: FRAMING_KM, view: { direction: [-away.x, -away.y, -away.z], up: [north.x, north.y, north.z] } };
+  return { km: framingKm(star), view: { direction: [-away.x, -away.y, -away.z], up: [north.x, north.y, north.z] } };
 }

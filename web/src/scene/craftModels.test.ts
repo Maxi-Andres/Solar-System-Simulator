@@ -403,8 +403,9 @@ async function forEachVertex(
 
 describe('the spacecraft models', () => {
   it('gives every craft but two a shape: a model, or a box of positive size', () => {
-    // Aditya-L1 has no three published dimensions, and keeps its marker.
-    expect(craftShapes).toHaveLength(53);
+    // Aditya-L1 has no three published dimensions, and keeps its marker; nor has SOLAR-1
+    // (SWFO-L1) any. Carruthers's box, from Horizons' 1.72 x 1.08 x 0.97 m, made it 54.
+    expect(craftShapes).toHaveLength(54);
     for (const { shape } of shapes) {
       if (shape.model === null) {
         expect(shape.boxM).not.toBeNull();

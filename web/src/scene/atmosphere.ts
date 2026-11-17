@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { POINT_LIGHT_HOOK } from './ringShadow.ts';
 
 /**
- * Earth's atmosphere: Rayleigh single scattering, ray-marched.
+ * Earth's atmosphere: Rayleigh single scattering, ray-marched, and ozone's absorption.
  *
  * **Why this exists rather than another colour constant.** Held against NASA's own
  * render, ours was too saturated, and the obvious response was to keep desaturating the
@@ -43,9 +43,31 @@ import { POINT_LIGHT_HOOK } from './ringShadow.ts';
  *  - **Multiple scattering.** Single scattering only, which under-lights the deep blue
  *    end and the twilight band -- the same simplification, and the same direction of
  *    error, as the first ring model.
- *  - **Ozone**, which is what makes a real twilight sky blue rather than brown.
  *  - **Refraction.** Rays are straight, so the Sun sets a little under half a degree
  *    early.
+ *
+ * ## Ozone, and why it is not a detail
+ *
+ * Ozone scatters nothing; it absorbs, in the Chappuis band across the whole visible, most near
+ * 600 nm. Straight down it hardly matters -- 0.028 of optical depth at 550 nm against the air's
+ * 0.097 -- which is why the first version could leave it out. Along the paths that make twilight
+ * it is the other way round. Sunlight reaching the high air over the terminator has come in
+ * tangent to the ozone layer, where Rayleigh's air is thin and the ozone at its densest: on the
+ * half of a path from a tangent point 25 km up out to space, ozone's optical depth at 550 nm is
+ * 0.51 and the air's 0.18, and in red 0.18 against 0.08. Ozone takes the green and the red,
+ * the air the blue, so the band over the terminator goes blue above its orange rather than
+ * brown -- Hulburt's explanation of why the zenith sky stays blue after sunset (1953, JOSA 43,
+ * 113), and the blue band astronauts photograph over the limb.
+ *
+ * The numbers: Serdyuchenko et al.'s cross-sections at 233 K (2014, AMT 7, 625), averaged over
+ * the 10 nm bins starting at the three channels' wavelengths, as Bruneton tabulates them in his
+ * reference implementation of precomputed atmospheric scattering (2017); a column of 300 Dobson
+ * units, the global mean; and Bruneton's profile, rising linearly from nothing at 10 km to its
+ * peak at 25 and back to nothing at 40. Toward the Sun the profile is carried as three flat
+ * layers -- 10 to 20, 20 to 30 and 30 to 40 km, each at the tent's mean density there -- because
+ * a flat layer's path length has a closed form and the tent's does not: straight down the column
+ * is exact, and a horizontal ray at the peak gets 7% less than the tent would give it. Along the
+ * view ray, which is marched anyway, the tent itself.
  *
  * ## What it costs
  *
@@ -137,6 +159,75 @@ export const RAYLEIGH_BETA_PER_M: readonly [number, number, number] =
     number,
     number,
   ];
+
+/**
+ * Ozone's absorption cross-sections at the three channels, m^2 per molecule: Serdyuchenko et al.
+ * 2014 at 233 K, averaged over 680-690, 550-560 and 440-450 nm (Bruneton 2017's table).
+ */
+export const OZONE_CROSS_SECTION_M2: readonly [number, number, number] = [1.209e-25, 3.5e-25, 1.582e-26];
+
+/** Molecules per square metre in one Dobson unit. */
+export const DOBSON_UNIT_PER_M2 = 2.687e20;
+
+/** The ozone column, Dobson units: the global mean. */
+export const OZONE_COLUMN_DU = 300;
+
+/** The profile's corners, km: nothing below the first, its peak at the second, nothing past the third. */
+export const OZONE_PROFILE_KM: readonly [number, number, number] = [10, 25, 40];
+
+/** Number density at the peak, per cubic metre: the column over the tent's integral, 15 km. */
+export const OZONE_PEAK_NUMBER_DENSITY =
+  (OZONE_COLUMN_DU * DOBSON_UNIT_PER_M2) / (((OZONE_PROFILE_KM[2] - OZONE_PROFILE_KM[0]) / 2) * 1000);
+
+/** Ozone's absorption coefficient at its peak, per metre, per channel. */
+export const OZONE_ABSORPTION_PER_M: readonly [number, number, number] = OZONE_CROSS_SECTION_M2.map(
+  (sigma) => sigma * OZONE_PEAK_NUMBER_DENSITY,
+) as unknown as readonly [number, number, number];
+
+/**
+ * How much of a ray from a point at `radius` (planet radii), with `cosZenith` to its local
+ * vertical, lies inside a sphere of `sphereRadius` ahead of the point.
+ */
+export function sphereChord(radius: number, cosZenith: number, sphereRadius: number): number {
+  const b = radius * cosZenith;
+  const discriminant = b * b - (radius * radius - sphereRadius * sphereRadius);
+  if (discriminant <= 0) return 0;
+  const root = Math.sqrt(discriminant);
+  return Math.max(-b + root, 0) - Math.max(-b - root, 0);
+}
+
+/**
+ * The ozone column along a ray leaving a point, in planet radii of peak-density ozone: the three
+ * flat layers' path lengths, each at its share of the peak -- a third, five sixths, a third, the
+ * tent's means over 10 to 20, 20 to 30 and 30 to 40 km. `altitudes` are the four layer edges in
+ * planet radii; the planet locally a sphere through the point's ground, as in chapmanColumn.
+ */
+export function ozoneColumn(
+  altitude: number,
+  cosZenith: number,
+  altitudes: readonly [number, number, number, number],
+): number {
+  const r = 1 + altitude;
+  const [l0, l1, l2, l3] = altitudes.map((a) => sphereChord(r, cosZenith, 1 + a)) as [number, number, number, number];
+  return (-2 * l0 - 3 * l1 + 3 * l2 + 2 * l3) / 6;
+}
+
+/** The layer edges, 10, 20, 30 and 40 km, in a planet's radii. */
+export function ozoneAltitudes(equatorialRadiusKm: number): [number, number, number, number] {
+  const [bottom, , top] = OZONE_PROFILE_KM;
+  const step = (top - bottom) / 3;
+  return [0, 1, 2, 3].map((k) => (bottom + k * step) / equatorialRadiusKm) as [number, number, number, number];
+}
+
+/** Ozone's peak absorption in the units the shader works in: per planet radius. */
+export function ozonePerPlanetRadius(equatorialRadiusKm: number): [number, number, number] {
+  const radiusM = equatorialRadiusKm * 1000;
+  return [
+    OZONE_ABSORPTION_PER_M[0] * radiusM,
+    OZONE_ABSORPTION_PER_M[1] * radiusM,
+    OZONE_ABSORPTION_PER_M[2] * radiusM,
+  ];
+}
 
 /**
  * Published Rayleigh optical thickness of Earth's atmosphere at 550 nm, sea level.
@@ -336,6 +427,11 @@ export function chapmanColumn(
  * So the ground and the clouds go amber as they approach the terminator, which is the
  * band a reference render shows and ours did not have at all.
  *
+ * That table is the air alone. `ozone`, when given, adds the ozone layer's absorption on the
+ * same path, as the shader always does: at the ground it takes a few percent more of the green
+ * and red at a low Sun, and it is high up, where the path skims the layer, that it decides the
+ * colour (see the note on ozone at the top).
+ *
  * Below the horizon it returns zero, and the boundary is *strictly* below: at exactly
  * grazing incidence the column is finite and the answer is a deep orange, so cutting at
  * `<= 0` would put a black discontinuity precisely where the sunset is. Past that the
@@ -347,15 +443,21 @@ export function sunlightTransmittance(
   cosSolarZenith: number,
   scaleHeight: number,
   betaPerRadius: readonly [number, number, number],
+  ozone: {
+    readonly perRadius: readonly [number, number, number];
+    readonly altitudes: readonly [number, number, number, number];
+  } | null = null,
 ): [number, number, number] {
   if (cosSolarZenith < 0) {
     return [0, 0, 0];
   }
   const column = chapmanColumn(altitude, cosSolarZenith, scaleHeight);
+  const ozoneDepth = ozone === null ? 0 : ozoneColumn(altitude, cosSolarZenith, ozone.altitudes);
+  const ozonePerRadius = ozone?.perRadius ?? [0, 0, 0];
   return [
-    Math.exp(-betaPerRadius[0] * column),
-    Math.exp(-betaPerRadius[1] * column),
-    Math.exp(-betaPerRadius[2] * column),
+    Math.exp(-betaPerRadius[0] * column - ozonePerRadius[0] * ozoneDepth),
+    Math.exp(-betaPerRadius[1] * column - ozonePerRadius[1] * ozoneDepth),
+    Math.exp(-betaPerRadius[2] * column - ozonePerRadius[2] * ozoneDepth),
   ];
 }
 
@@ -370,6 +472,9 @@ export function sunlightTransmittance(
 export const ATMOSPHERIC_EXTINCTION_GLSL = /* glsl */ `
 uniform vec3 uBeta;
 uniform float uScaleHeight;
+/** Ozone's absorption at its peak, per planet radius; its layers' edges, planet radii. */
+uniform vec3 uOzone;
+uniform vec4 uOzoneAltitudes;
 
 /** exp(y*y) erfc(y). See erfcx in atmosphere.ts for why the textbook form is wrong here. */
 float erfcx(float y) {
@@ -400,6 +505,35 @@ float chapmanColumn(float altitude, float cosZenith) {
   return 2.0 * throughPerigee - outward * erfcx(sqrt(0.5 * x) * -cosZenith);
 }
 
+/** How much of a ray from radius r, cosZenith mu, lies inside a sphere of the given radius ahead. */
+float sphereChord(float r, float mu, float sphereRadius) {
+  float b = r * mu;
+  float discriminant = b * b - (r * r - sphereRadius * sphereRadius);
+  if (discriminant <= 0.0) {
+    return 0.0;
+  }
+  float root = sqrt(discriminant);
+  return max(-b + root, 0.0) - max(-b - root, 0.0);
+}
+
+/** Ozone along a ray leaving a point, in planet radii at peak density: three flat layers. */
+float ozoneColumn(float altitude, float cosZenith) {
+  float r = 1.0 + altitude;
+  return (
+    -2.0 * sphereChord(r, cosZenith, 1.0 + uOzoneAltitudes.x)
+    - 3.0 * sphereChord(r, cosZenith, 1.0 + uOzoneAltitudes.y)
+    + 3.0 * sphereChord(r, cosZenith, 1.0 + uOzoneAltitudes.z)
+    + 2.0 * sphereChord(r, cosZenith, 1.0 + uOzoneAltitudes.w)
+  ) / 6.0;
+}
+
+/** Ozone's density at a height, relative to its peak: the tent itself, for the view ray's march. */
+float ozoneDensity(float altitude) {
+  float peak = 0.5 * (uOzoneAltitudes.x + uOzoneAltitudes.w);
+  float halfWidth = 0.5 * (uOzoneAltitudes.w - uOzoneAltitudes.x);
+  return max(1.0 - abs(altitude - peak) / halfWidth, 0.0);
+}
+
 /** What survives of the sunlight coming down to a point, per channel. */
 vec3 sunlightTransmittance(float altitude, float cosSolarZenith) {
   // Strictly below, not at: the column at grazing incidence is finite, and cutting it
@@ -407,7 +541,10 @@ vec3 sunlightTransmittance(float altitude, float cosSolarZenith) {
   if (cosSolarZenith < 0.0) {
     return vec3(0.0);
   }
-  return exp(-uBeta * chapmanColumn(altitude, cosSolarZenith));
+  return exp(
+    -uBeta * chapmanColumn(altitude, cosSolarZenith)
+    - uOzone * ozoneColumn(altitude, cosSolarZenith)
+  );
 }
 `;
 
@@ -508,6 +645,7 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     float step = (far - near) / float(${VIEW_SAMPLES});
     float viewDepth = 0.0;
+    float ozoneViewDepth = 0.0;
     vec3 scattered = vec3(0.0);
 
     for (int i = 0; i < ${VIEW_SAMPLES}; i++) {
@@ -517,6 +655,7 @@ const FRAGMENT_SHADER = /* glsl */ `
       float altitude = altitudeAt(p, up, radius);
       float density = exp(-altitude / uScaleHeight);
       viewDepth += density * step;
+      ozoneViewDepth += ozoneDensity(altitude) * step;
 
       // Anything the planet stands in front of gets no sunlight, which is what draws the
       // terminator into the sky rather than only onto the ground.
@@ -527,8 +666,14 @@ const FRAGMENT_SHADER = /* glsl */ `
       // One closed form instead of an eight-sample march. Wavelength-dependent on both
       // legs, which is the whole of why the band above the terminator goes orange: blue
       // is gone by the time that path is that long.
-      float sunDepth = chapmanColumn(altitude, dot(up, uSunLocal));
-      scattered += density * exp(-uBeta * (viewDepth + sunDepth)) * step;
+      // Ozone on both legs too: it is the sunward one, tangent to the layer over the
+      // terminator, that turns the twilight band blue (see the note on ozone above).
+      float cosSun = dot(up, uSunLocal);
+      float sunDepth = chapmanColumn(altitude, cosSun);
+      float ozoneSunDepth = ozoneColumn(altitude, cosSun);
+      scattered += density
+        * exp(-uBeta * (viewDepth + sunDepth) - uOzone * (ozoneViewDepth + ozoneSunDepth))
+        * step;
     }
 
     float cosTheta = dot(direction, uSunLocal);
@@ -538,7 +683,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     // What the surface behind loses on the way out. A single luminance figure rather
     // than three, because the blend can only carry one: the wavelength dependence is
     // kept in the light that is added and dropped from the light that is removed.
-    vec3 transmittance = exp(-uBeta * viewDepth);
+    vec3 transmittance = exp(-uBeta * viewDepth - uOzone * ozoneViewDepth);
     float opacity = 1.0 - dot(transmittance, vec3(0.2126, 0.7152, 0.0722));
 
     gl_FragColor = vec4(inScattered * uFade, opacity * uFade);
@@ -571,6 +716,8 @@ export function atmosphereMaterial(): THREE.ShaderMaterial {
       uCameraLocal: { value: new THREE.Vector3(0, 0, 10) },
       uSunLocal: { value: new THREE.Vector3(1, 0, 0) },
       uBeta: { value: new THREE.Vector3() },
+      uOzone: { value: new THREE.Vector3() },
+      uOzoneAltitudes: { value: new THREE.Vector4() },
       uAtmosphereRadius: { value: 1 },
       uScaleHeight: { value: 1 },
       uFlattening: { value: 1 },
@@ -607,6 +754,8 @@ export function configureAtmosphere(
     RAYLEIGH_BETA_PER_M[1] * radiusM,
     RAYLEIGH_BETA_PER_M[2] * radiusM,
   );
+  material.uniforms.uOzone!.value.set(...ozonePerPlanetRadius(equatorialRadiusKm));
+  material.uniforms.uOzoneAltitudes!.value.set(...ozoneAltitudes(equatorialRadiusKm));
   material.uniforms.uAtmosphereRadius!.value = atmosphereRadiusRatio(equatorialRadiusKm);
   material.uniforms.uScaleHeight!.value = RAYLEIGH_SCALE_HEIGHT_KM / equatorialRadiusKm;
   material.uniforms.uFlattening!.value = polarRadiusKm / equatorialRadiusKm;
@@ -630,13 +779,17 @@ export function betaPerPlanetRadius(equatorialRadiusKm: number): [number, number
 export interface ExtinctionUniforms {
   readonly uBeta: { value: THREE.Vector3 };
   readonly uScaleHeight: { value: number };
+  readonly uOzone: { value: THREE.Vector3 };
+  readonly uOzoneAltitudes: { value: THREE.Vector4 };
 }
 
-/** The two uniforms `ATMOSPHERIC_EXTINCTION_GLSL` needs, for a given body. */
+/** The uniforms `ATMOSPHERIC_EXTINCTION_GLSL` needs, for a given body. */
 export function extinctionUniforms(equatorialRadiusKm: number): ExtinctionUniforms {
   return {
     uBeta: { value: new THREE.Vector3(...betaPerPlanetRadius(equatorialRadiusKm)) },
     uScaleHeight: { value: RAYLEIGH_SCALE_HEIGHT_KM / equatorialRadiusKm },
+    uOzone: { value: new THREE.Vector3(...ozonePerPlanetRadius(equatorialRadiusKm)) },
+    uOzoneAltitudes: { value: new THREE.Vector4(...ozoneAltitudes(equatorialRadiusKm)) },
   };
 }
 

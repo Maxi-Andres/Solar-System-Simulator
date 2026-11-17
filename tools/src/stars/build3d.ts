@@ -48,7 +48,7 @@ import type { BrightGaiaRow, GcnsTable, Hipparcos2Row } from './sources3d.ts';
  * star carried on its proper motion to J2016, Gaia's epoch, and the nearest Gaia source
  * within 2" whose G is within 1.5 mag of the star's V. The count of each is published.
  *
- * **The one published parallax that replaces the catalogues'.** See OVERRIDES.
+ * **The published parallaxes that replace the catalogues'.** See OVERRIDES.
  *
  * Positions are at J2000.0 in the scene's frame. A Gaia star's position, published at
  * J2016.0, is carried back along its proper motion -- linear on the sphere, the same
@@ -77,6 +77,13 @@ const MATCH_RADIUS = STAR3D_MATCH_RADIUS_ARCSEC * ARCSEC;
  * 594, A107) fix one parallax for the pair from its astrometry, 747.17 +/- 0.61 mas:
  * 1.3384 pc. Proxima, the third member, keeps its own Gaia DR3 parallax: it is 13,000 AU
  * from the pair, and its measurement stands on its own.
+ *
+ * **Alnilam**, the middle star of Orion's Belt. Gaia saturates on it, and Hipparcos's
+ * parallax, 1.65 +/- 0.45 mas, is under the signal-to-noise a distance is taken from
+ * (STAR3D_PARALLAX_SNR): left to the catalogues it would not be in 3D at all, the Belt two
+ * stars. Its distance is its association's, Orion OB1b's, the median of its members' Gaia
+ * DR3 parallaxes, 384 +/- 8 pc, which Oplistilova et al. (2025, A&A 704, A204) adopt for it:
+ * as a parallax, 2.604 +/- 0.054 mas.
  */
 export const OVERRIDES: readonly {
   readonly hip: number;
@@ -98,6 +105,13 @@ export const OVERRIDES: readonly {
     parallaxMas: 747.17,
     parallaxErrorMas: 0.61,
     reference: 'Kervella et al. 2016, A&A 594, A107: the AB system parallax',
+  },
+  {
+    hip: 26311,
+    star: 'Alnilam (HIP 26311)',
+    parallaxMas: 2.604,
+    parallaxErrorMas: 0.054,
+    reference: 'Oplistilova et al. 2025, A&A 704, A204: Orion OB1b, 384 +/- 8 pc',
   },
 ];
 

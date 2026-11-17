@@ -33,12 +33,16 @@ import { ensureBlackHoles } from './core/blackHoles.ts';
 import { ensureSupernovaRemnants, remnantEarthView, remnantOf, remnantRadiusKm } from './core/supernovaRemnants.ts';
 import { ensureNebulae, nebulaFraming } from './core/nebulae.ts';
 import { ensureMessierObjects, messierFraming } from './core/messier.ts';
-import { ensureNotableStars, notableStarFraming } from './core/notableStars.ts';
+import { ensureNotableStars, notableStarFraming, notableStarOf } from './core/notableStars.ts';
+import { markGroupMembers, stellarGroupOf } from './core/stellarGroups.ts';
 import { MESSIER_MARK_KIND, NOTABLE_STAR_KIND } from './core/deepSky.ts';
 import { regionOf } from './core/regions.ts';
 import { ensureLagrangePoints } from './core/lagrange.ts';
 import { ensureHeliosphereBodies } from './core/heliosphere.ts';
 import { ensureMagnetosphereBodies } from './core/magnetosphere.ts';
+import { ensureAuroraBodies } from './core/aurora.ts';
+import { ensureMeteorShowers } from './core/meteorShowers.ts';
+import { tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
@@ -177,6 +181,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   lagrangePoints: ['region', 'lagrange-point'],
   heliosphere: ['region', 'heliosphere'],
   magnetosphere: ['region', 'magnetosphere'],
+  aurora: ['region', 'aurora'],
+  meteorShowers: ['region', 'meteor-shower'],
   landingSites: ['region', 'landing-site'],
 };
 
@@ -505,6 +511,9 @@ export function App() {
       ensureLagrangePoints(store);
       ensureHeliosphereBodies(store);
       ensureMagnetosphereBodies(store);
+      // The auroral ovals' marks, and where Earth crosses each meteor shower: no data to wait for.
+      ensureAuroraBodies(store, tdbToUtc);
+      ensureMeteorShowers(store);
       // The landing sites on the Moon and Mars: published coordinates, turned with the ground.
       ensureLandingSites(store, () => clock.tdbJulianDay);
       renderDemand.request();
@@ -552,6 +561,34 @@ export function App() {
       cancelled = true;
     };
   }, [store, stars3d, starNames]);
+
+  // A star group gone to -- the Hyades, the Ursa Major moving group -- has its named members
+  // made star bodies: marked and named on screen (stellarGroups.ts).
+  useEffect(() => {
+    const group = stellarGroupOf(notableStarOf(focus)?.key ?? null);
+    if (store === null || stars3d === null || starNames === null || group === null) {
+      return;
+    }
+    let cancelled = false;
+    // Their light is drawn by the 3D stars: asked for now, as search does.
+    void stars3d.request();
+    starNames
+      .request()
+      .then(async () => {
+        const index = starNames.value;
+        if (cancelled || index === null) {
+          return;
+        }
+        await markGroupMembers(store, stars3d, index, group, focus);
+        renderDemand.request();
+      })
+      .catch((error: unknown) => {
+        console.error(`Could not mark the members of ${group.key}`, error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, stars3d, starNames, focus]);
   const galaxyLabels = useRef<(HTMLElement | null)[]>([]);
   const horizonScaleLabels = useRef<(HTMLElement | null)[]>([]);
   const cmbLabel = useRef<HTMLElement | null>(null);

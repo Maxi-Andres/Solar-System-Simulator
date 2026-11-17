@@ -76,7 +76,7 @@ export interface ExoPlanet {
    * the radius (the Archive's "M-R relationship"), a limit, or not known at all (then
    * `massEarth` is 0, and nothing is drawn from it). Absent for a measured mass.
    */
-  readonly massNote?: 'estimate' | 'upper limit' | 'lower limit' | 'unknown';
+  readonly massNote?: 'estimate' | 'from light' | 'upper limit' | 'lower limit' | 'unknown';
   /**
    * The radius measured from its transits, Earth radii; absent or null where none was --
    * then the sphere is the size its mass suggests (estimatedRadiusEarth), and called so.
@@ -87,6 +87,12 @@ export interface ExoPlanet {
   readonly inclinationDeg: number | null;
   /** Measured position angle of the ascending node, degrees east of north; null if not. */
   readonly nodeDeg: number | null;
+  /**
+   * For a planet seen too seldom to fix its orbit (a candidate imaged once): what its tilt,
+   * node and phase are instead of measurements -- "one fitted orbit of many". Absent where
+   * they are measured or the conventions above.
+   */
+  readonly orbitChosen?: string;
   readonly reference: string;
 }
 

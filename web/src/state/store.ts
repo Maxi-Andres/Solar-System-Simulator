@@ -71,6 +71,8 @@ export type LayerId =
   | 'lagrangePoints'
   | 'heliosphere'
   | 'magnetosphere'
+  | 'aurora'
+  | 'meteorShowers'
   | 'landingSites'
   | 'starMap'
   | 'exoplanetHosts'
@@ -137,6 +139,12 @@ export const LAYERS: readonly LayerDefinition[] = [
   // Earth's magnetopause, bow shock, Van Allen belts and Kármán line, as the standard models draw
   // them (core/magnetosphere.ts). Off until asked for: shells about Earth are not a first view.
   { id: 'magnetosphere', label: 'Magnetosphere', hint: "Earth's magnetic shield. A model: invisible in reality.", pending: null },
+  // NOAA's OVATION Prime forecast of the auroral ovals (core/aurora.ts), fetched by the browser
+  // and drawn only near the forecast's time. Off: a model's forecast, and a megabyte to fetch.
+  { id: 'aurora', label: 'Auroras', hint: "NOAA's forecast of the northern and southern lights, now.", pending: null },
+  // The major meteor showers (core/meteorShowers.ts): where Earth crosses each stream, and the
+  // stream's mean path there, computed from its radiant and speed. Off: computed lines.
+  { id: 'meteorShowers', label: 'Meteor Showers', hint: 'Where Earth crosses meteor streams. Paths computed.', pending: null },
   // Past the Solar System every star in the catalogue drawn at least as a dot, at its real
   // place: a map, not a view (see stars3dShader.ts). Off, the stars are only what an eye
   // would see from where the camera is.
@@ -172,8 +180,9 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'messier', label: 'Messier Objects', hint: 'The Messier catalogue, marked.', pending: null },
   // Named stars, stellar black holes and young clusters the star catalogue does not place
   // (core/notableStars.ts): marks at their measured distances. Off until asked for, as the
-  // Messier marks are; a search for one turns it on.
-  { id: 'notableStars', label: 'Notable Stars', hint: 'Famous and extreme stars, stellar black holes.', pending: null },
+  // Messier marks are; a search for one turns it on. With them, the paths of the two stellar
+  // flybys, computed (core/stellarFlybys.ts).
+  { id: 'notableStars', label: 'Notable Stars', hint: 'Famous and extreme stars, stellar black holes, flyby paths (computed).', pending: null },
   // Past the catalogue, the galaxy as a model of published structure (core/milkyWay.ts):
   // a glow, never stars. On by default, so the dark past the census is not taken for the
   // edge of the stars.
@@ -266,6 +275,10 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   lagrangePoints: false,
   heliosphere: false,
   magnetosphere: false,
+  // A forecast, from a model, and only for now: off until asked for (see core/aurora.ts).
+  aurora: false,
+  // Lines computed from the radiants, not something seen: off, as the Lagrange points are.
+  meteorShowers: false,
   // Real places, the hardware still on them: on, as the spacecraft are.
   landingSites: true,
   starMap: true,

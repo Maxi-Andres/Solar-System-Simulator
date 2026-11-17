@@ -2,6 +2,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { colorIndexToTemperature, starColor, surfaceLuminanceRelativeToSun } from '../scene/blackbody.ts';
 import { measuredMassSun, measuredRadiusKm } from './alphaCentauri.ts';
+import { brightStarOf } from './brightStars.ts';
 import { matchOrbitingStar, orbitingStarSize, orbitingStarState } from './orbitingStars.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { STAR3D, STAR3D_FLOATS, starState, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
@@ -257,16 +258,25 @@ export async function addStarRecordBody(
     const at = { x: record[STAR3D.x]!, y: record[STAR3D.y]!, z: record[STAR3D.z]! };
     const component = matchOrbitingStar(at);
     const size = component === null ? null : orbitingStarSize(component);
+    // A famous star whose measured size is its own, round, at the catalogue's distance (brightStars.ts).
+    const disc = brightStarOf(entry.designations)?.disc ?? null;
     const radiusKm =
       (size === null ? null : size.radiusSun * SOLAR_RADIUS_KM) ??
       measuredRadiusKm(at) ??
-      (radiusSun === null ? null : radiusSun * SOLAR_RADIUS_KM);
+      (radiusSun === null ? null : radiusSun * SOLAR_RADIUS_KM) ??
+      (disc === null ? null : disc.radiusSun * SOLAR_RADIUS_KM);
     if (radiusKm !== null) {
       discExposures.set(id, surfaceLuminanceRelativeToSun(colorIndexToTemperature(record[STAR3D.bv]!)));
       discColorIndices.set(id, record[STAR3D.bv]!);
     }
     store.addPropagatedBody(
-      starBodyDefinition(id, entry.display, record[STAR3D.bv]!, radiusKm, size?.massSun ?? measuredMassSun(at) ?? massSun),
+      starBodyDefinition(
+        id,
+        entry.display,
+        record[STAR3D.bv]!,
+        radiusKm,
+        size?.massSun ?? measuredMassSun(at) ?? massSun ?? disc?.massSun ?? null,
+      ),
       null,
       component === null ? (jd) => starState(record, 0, jd) : (jd) => orbitingStarState(component, jd),
       { exact: true },

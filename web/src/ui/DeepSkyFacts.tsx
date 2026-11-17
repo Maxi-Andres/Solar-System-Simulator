@@ -3,7 +3,9 @@ import type { BodyId } from '@sss/tools/types';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { messierMarkOf, messierRadiusKm } from '../core/messier.ts';
 import { notableStarOf } from '../core/notableStars.ts';
+import { flybyOfNotable } from '../core/stellarFlybys.ts';
 import { PARSEC_KM } from '../scene/scale.ts';
+import { FlybyFacts } from './FlybyFacts.tsx';
 import { Panel } from './Panel.tsx';
 import { formatStarDistance } from './StarFacts.tsx';
 
@@ -81,6 +83,7 @@ function NotableStarPanel({
   }
   const body = store.body(focus);
   const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
+  const flyby = flybyOfNotable(star.key);
   const pc = (value: number) => (value < 10 ? value.toFixed(2) : String(Math.round(value)));
   const error =
     star.distanceUpPc === null || star.distanceDownPc === null
@@ -106,7 +109,26 @@ function NotableStarPanel({
         <Row label="Source">{star.distanceReference}</Row>
         <Row label="Position">{star.positionSource}</Row>
         {star.note !== null && <Row label="Note">{star.note}</Row>}
-        <Row label="Drawn">{star.motion === null ? 'a mark' : 'a mark, moving as measured'}</Row>
+        {(star.extent !== undefined || star.rows !== undefined) && <Divider />}
+        {star.extent !== undefined && (
+          <>
+            <Row label="Radius">{`${star.extent.pc.toFixed(1)} pc, ${star.extent.label}`}</Row>
+            <Row label="Radius from">{star.extent.source}</Row>
+          </>
+        )}
+        {star.rows?.map(([label, value]) => (
+          <Row key={label} label={label}>
+            {value}
+          </Row>
+        ))}
+        <Row label="Drawn">
+          {star.extent !== undefined
+            ? 'its centre; named members marked'
+            : star.motion === null
+              ? 'a mark'
+              : 'a mark, moving as measured'}
+        </Row>
+        {flyby !== null && <FlybyFacts flyby={flyby} />}
       </dl>
     </Panel>
   );

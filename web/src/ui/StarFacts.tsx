@@ -1,7 +1,9 @@
 import type { BodyId } from '@sss/tools/types';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import { isProximaRecord, MASS_PROXIMA_SUN, RADIUS_PROXIMA_SUN } from '../core/alphaCentauri.ts';
+import { brightStarOf, type BrightStar } from '../core/brightStars.ts';
+import { groupNameOf } from '../core/stellarGroups.ts';
 import {
   matchOrbitingStar,
   orbitingStarParallax,
@@ -11,6 +13,7 @@ import {
 } from '../core/orbitingStars.ts';
 import { planetarySystemOf, type PlanetarySystem } from '../core/planetarySystems.ts';
 import { starBodyFacts } from '../core/starBodies.ts';
+import { flybyOfGaia } from '../core/stellarFlybys.ts';
 import {
   apparentMagnitude,
   KM_S_PER_ARCSEC_PC_PER_YEAR,
@@ -24,6 +27,7 @@ import {
   type Stars3dSource,
 } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
+import { FlybyFacts } from './FlybyFacts.tsx';
 
 /**
  * What the info panel says about a catalogue star made a body (starBodies.ts): how far it
@@ -144,9 +148,14 @@ export function StarFacts({
         ? null
         : { radius: host.hostRadiusSun, mass: host.hostMassSun };
   const now = component === null ? starNow(record, 0, jd) : componentNow(component, record[STAR3D.Mv]!, jd);
+  // A famous star's measured facts (brightStars.ts), and the star group it is of (stellarGroups.ts).
+  const bright = brightStarOf(facts.designations);
+  const group = groupNameOf(facts.designations);
   const gaiaPhotometry = (flags & STAR3D_FLAG.GAIA_PHOTOMETRY) !== 0;
   const gcns = (flags & STAR3D_FLAG.GCNS) !== 0;
   const within100 = (flags & STAR3D_FLAG.GCNS_WITHIN_100PC) !== 0;
+  // A star that passes through the Oort cloud, known by its Gaia DR3 id (stellarFlybys.ts).
+  const flyby = flybyOfGaia(details?.gaiaDr3);
 
   return (
     <>
@@ -204,6 +213,13 @@ export function StarFacts({
           <dd style={VALUE}>{`no. ${facts.nearest}`}</dd>
         </>
       )}
+      {group !== null && (
+        <>
+          <dt style={TERM}>Member of</dt>
+          <dd style={VALUE}>{group}</dd>
+        </>
+      )}
+      {bright !== null && <BrightStarRows star={bright} />}
 
       <div style={DIVIDER} />
 
@@ -239,7 +255,19 @@ export function StarFacts({
       {/* Where each number comes from, a word or two each (the About has the long version). */}
       <div style={DIVIDER} />
       <dt style={TERM}>Distance from</dt>
-      <dd style={VALUE}>{component !== null ? orbitingStarParallax(component).source : parallaxSource(flags)}</dd>
+      <dd style={VALUE}>
+        {component !== null
+          ? orbitingStarParallax(component).source
+          : (flags & STAR3D_FLAG.LITERATURE_PARALLAX) !== 0 && bright?.distanceSource !== undefined
+            ? bright.distanceSource
+            : parallaxSource(flags)}
+      </dd>
+      {bright !== null && (
+        <>
+          <dt style={TERM}>Facts from</dt>
+          <dd style={VALUE}>{bright.reference}</dd>
+        </>
+      )}
       <dt style={TERM}>Photometry</dt>
       <dd style={VALUE}>{gaiaPhotometry ? 'Gaia, transformed' : 'Johnson V, B−V'}</dd>
       {gcns && (
@@ -267,8 +295,37 @@ export function StarFacts({
       {host?.archive !== undefined && <ArchiveSources system={host} />}
       <dt style={TERM}>Drawn as</dt>
       <dd style={VALUE}>
-        {measured?.radius == null ? 'Point' : host?.archive !== undefined ? 'Disc, Archive radius' : 'Disc, measured size'}
+        {measured?.radius == null && bright?.disc === undefined
+          ? 'Point'
+          : host?.archive !== undefined
+            ? 'Disc, Archive radius'
+            : 'Disc, measured size'}
       </dd>
+      {flyby !== null && <FlybyFacts flyby={flyby} />}
+    </>
+  );
+}
+
+/** A famous star's kind, its measured facts, why it is known and what its distance is in doubt by. */
+function BrightStarRows({ star }: { readonly star: BrightStar }) {
+  return (
+    <>
+      <dt style={TERM}>Kind</dt>
+      <dd style={VALUE}>{star.type}</dd>
+      {star.rows.map(([label, value]) => (
+        <Fragment key={label}>
+          <dt style={TERM}>{label}</dt>
+          <dd style={VALUE}>{value}</dd>
+        </Fragment>
+      ))}
+      <dt style={TERM}>Note</dt>
+      <dd style={VALUE}>{star.note}</dd>
+      {star.distanceNote !== null && (
+        <>
+          <dt style={TERM}>Its distance</dt>
+          <dd style={VALUE}>{star.distanceNote}</dd>
+        </>
+      )}
     </>
   );
 }

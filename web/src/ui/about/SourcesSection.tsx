@@ -82,6 +82,13 @@ export const sourcesSection: AboutSection = {
             : `: ${satelliteInfo.count.toLocaleString('en-US')} objects, queried ${satelliteInfo.source.queriedAt.slice(0, 10)}. ${satelliteInfo.credit}`}{' '}
           Propagated with <Strong>satellite.js</Strong> (MIT licence), David Vallado’s SGP4 in JavaScript.
         </Prose>
+        <Prose>
+          The auroral ovals are NOAA’s <Strong>OVATION Prime</Strong> forecast. It is not built into this
+          build: your browser fetches it from services.swpc.noaa.gov when the Auroras layer is on, and again
+          every ten minutes, so it is always the latest one. The meteor showers are the{' '}
+          <Strong>International Meteor Organization</Strong>’s 2026 working list, with speeds and parents
+          from the <Strong>IAU Meteor Data Center</Strong>, written into the code.
+        </Prose>
 
         {REFERENCE_GROUPS.map((group) => (
           <div key={group.id}>
@@ -134,9 +141,25 @@ export const sourcesSection: AboutSection = {
             MER Analyst’s Notebook, PDS Geosciences Node, Washington University in St. Louis.
           </Item>
           <Item>
+            Aurora forecast: <Strong>NOAA Space Weather Prediction Center</Strong>, OVATION Prime, public domain
+            (a work of the U.S. Government), https://www.swpc.noaa.gov/products/aurora-30-minute-forecast.
+          </Item>
+          <Item>
+            Meteor showers: the International Meteor Organization’s 2026 Meteor Shower Calendar, edited by
+            Jürgen Rendtel, https://www.imo.net; the IAU Meteor Data Center, https://www.ta3.sk/IAUC22DB/MDC2022/
+            (Jenniskens et al. 2020, Planetary and Space Science 182, 104821; Jopek &amp; Kaňuchová 2017,
+            Planetary and Space Science 143, 3), as its maintainers ask it to be cited.
+          </Item>
+          <Item>
             This research has made use of the NASA Exoplanet Archive, which is operated by the California
             Institute of Technology, under contract with the National Aeronautics and Space Administration
             under the Exoplanet Exploration Program.
+          </Item>
+          <Item>
+            α Centauri A’s candidate S1: one orbit from S1+C1_stable_orbits_consistent_with_JWST_nondetections.txt,
+            in “The data for ‘Worlds Next Door: A Candidate Giant Planet Imaged in the Habitable Zone of αCen A.
+            I.’”, Beichman, Sanghi et al. 2025, Zenodo, doi:10.5281/zenodo.16280658, CC BY 4.0; its numbers used
+            as published.
           </Item>
           <Item>
             Pulsars from the <Strong>ATNF Pulsar Catalogue</Strong>: “The ATNF Pulsar Catalogue”, R. N.

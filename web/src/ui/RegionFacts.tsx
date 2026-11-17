@@ -53,7 +53,7 @@ export function RegionPanel({
             <Divider />
           </>
         )}
-        {region.facts.map((fact) => (
+        {[...(region.liveFacts?.(jd) ?? []), ...region.facts].map((fact) => (
           <Row key={fact.label} label={fact.label}>
             {fact.value}
           </Row>

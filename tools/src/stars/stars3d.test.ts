@@ -115,7 +115,7 @@ describe('the distances, against the published ones', () => {
       expect(built.table.flags[k]! & STAR3D_FLAGS.LITERATURE_PARALLAX).toBeTruthy();
       expect(built.table.parallaxMas[k]).toBe(747.17);
     }
-    expect(OVERRIDES.map((entry) => entry.hip)).toEqual([71683, 71681]);
+    expect(OVERRIDES.map((entry) => entry.hip)).toEqual([71683, 71681, 26311]);
   });
 
   it('prefers the smaller error when Gaia and Hipparcos both qualify', () => {

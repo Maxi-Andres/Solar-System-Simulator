@@ -47,13 +47,18 @@ Where things come from:
 
 - [~] Ground level: Earth is a textured globe with a Rayleigh atmosphere; no relief, no
   ground-level view.
-- [ ] Ozone layer: the atmosphere has no ozone (`web/src/scene/atmosphere.ts` lists it as
-  left out). Solar System.
+- [x] Ozone layer: Chappuis-band absorption in the atmosphere (`web/src/scene/atmosphere.ts`),
+  Serdyuchenko et al.'s cross-sections, 300 DU on Bruneton's 10–25–40 km profile, on the sunward
+  and view paths of the sky, the ground and the clouds. Solar System.
 - [ ] Commercial airplanes. Solar System.
 - [ ] High-altitude balloon. Solar System.
-- [ ] Meteor: no meteors or showers (their parent comets 55P and 109P are bodies). Solar
-  System.
-- [ ] Auroras. Solar System.
+- [~] Meteor showers: Meteor Showers layer (`web/src/core/meteorShowers.ts`), thirteen major
+  showers from IMO's 2026 working list and the IAU MDC: each crossing a body, the stream's mean
+  orbit computed from radiant and speed, Earth's path through it. Not yet: single meteors; a
+  radiant marked on the sky from Earth. Solar System.
+- [x] Auroras: Auroras layer (`web/src/core/aurora.ts`), NOAA SWPC's OVATION Prime forecast
+  fetched live, the green line's glow on the night side, only within an hour of the forecast.
+  Solar System.
 
 ## Earth orbit (to about 100,000 km)
 
@@ -415,14 +420,14 @@ What the map does not show but a realism-first simulator should. These are unche
 - [ ] Planet Nine, as a region where it might be [hypothetical]
 - [~] The heliosphere: the Hills cloud (inner Oort cloud, inferred); the heliotail drawn fading, its extent unknown. Not yet: IBEX ribbon, hydrogen wall; the Sun's gravitational focus (≥ 550 AU)
 - [~] The Local Interstellar Cloud: Local Interstellar Medium layer, Linsky et al. 2019's shape. Not the G-cloud: only its outline on the sky is published
-- [ ] Stellar flybys: Scholz's Star (70,000 years ago), Gliese 710 (in 1.3 Myr)
+- [x] Stellar flybys: Scholz's Star (0.333 pc, 80,500 years ago; Dupuy et al. 2019, Mamajek et al. 2015's 70,000 the first) a Notable Stars mark, `Scholz’s Star`; Gliese 710 (0.052 pc in 1.29 Myr, Gaia DR3) a 3D star, named `Gliese 710` from the next data build (`tools/src/stars/nearbySystems.ts`). Both beyond the clock: each one's path drawn as a computed straight line, dashed, with the Notable Stars; the published approaches in the panel (`web/src/core/stellarFlybys.ts`)
 
 ### Nearby stars and planets
-- [ ] Barnard's Star's four planets (2025); α Cen A's candidate planet S1 [uncertain]; ε Ind Ab; GJ 251 c; HD 20794 d
-- [ ] Ross 128, 154, 248; Gliese 1061; Teegarden's Star; Kapteyn's Star; YZ Ceti; Gliese 581, Gliese 667C
-- [ ] Bright stars: Polaris, Deneb, Altair, Spica, Regulus, Fomalhaut, Mira, Algol, Castor, Orion's Belt
+- [x] Barnard's Star's four planets (2025), from Basant et al. (`planetarySystems.ts`); α Cen A's candidate S1 [uncertain]: `Alpha Centauri A S1 (candidate)`, on one of Beichman, Sanghi et al.'s fitted orbits, said so (`alphaCenAPlanets.ts`); ε Ind Ab, GJ 251 c, HD 20794 d: from the NASA Exoplanet Archive, gone to by their stars
+- [x] Ross 128, 154, 248; Gliese 1061; Teegarden's Star; Kapteyn's Star; YZ Ceti; Gliese 581, Gliese 667C: 3D stars, named; their planets from the Archive when gone to (Ross 128 b; GJ 1061, Teegarden's, YZ Ceti and GJ 581 three each; GJ 667 C five, three disputed; Kapteyn c disputed). Ross 154 and 248 have none
+- [x] Bright stars: Polaris, Deneb, Altair, Spica, Regulus, Fomalhaut, Mira, Algol, Castor, Orion's Belt: catalogue stars with their measured facts and disputed distances in the panel (`web/src/core/brightStars.ts`), Fomalhaut a disc of its size; Alnilam placed at Orion OB1b's 384 pc (build3d.ts OVERRIDES). Not drawn: companions (none a catalogue star of its own), Fomalhaut's ring
 - [x] Compact objects: Procyon B, 40 Eridani B (Notable Stars marks); RX J1856.5-3754, PSR J0437-4715 (Pulsars layer)
-- [ ] Planetary systems:
+- [~] Planetary systems: all below from the NASA Exoplanet Archive, gone to by search (51 Peg curated; Kepler-90, the Archive's KOI-351, found by its name). Not yet: rogue planets, which the Archive does not list
   - firsts: 51 Peg, PSR B1257+12;
   - TRAPPIST-1;
   - Kepler: Kepler-16, -186, -452, -90; HD 110067;
@@ -431,7 +436,7 @@ What the map does not show but a realism-first simulator should. These are unche
   - hot planets: 55 Cnc e, WASP-39, -121, KELT-9, WASP-12;
   - imaged: HR 8799, β Pic, PDS 70, 2M1207, TWA 7, 14 Her;
   - WD 1856+534; rogue planets
-- [ ] The Hyades; the Ursa Major moving group
+- [x] The Hyades; the Ursa Major moving group: Notable Stars marks at their centres, framed by their extent (`web/src/core/stellarGroups.ts`); gone to, their named members are made star bodies, marked and named
 
 ### The Milky Way near us
 - [~] The Local Bubble (Pelgrims et al. 2020's wall); the Radcliffe Wave (Konietzka et al. 2024's model and clouds): Local Interstellar Medium layer. Not the Gould Belt

@@ -27,6 +27,10 @@ import {
   betaPerPlanetRadius,
   extinctionUniforms,
   sunlightTransmittance,
+  OZONE_ABSORPTION_PER_M,
+  ozoneAltitudes,
+  ozoneColumn,
+  ozonePerPlanetRadius,
 } from './atmosphere.ts';
 
 /**
@@ -504,5 +508,54 @@ describe('sunlight coming down through the air', () => {
       PUBLISHED_ZENITH_OPTICAL_DEPTH_550,
       3,
     );
+  });
+});
+
+/**
+ * The ozone layer. Absorption only, and nearly nothing straight down; along the sunward paths
+ * that skim the layer over the terminator, more than the air itself in green and red.
+ */
+describe('ozone', () => {
+  const altitudes = ozoneAltitudes(earth.radiusEquatorialKm);
+  const ozone = { perRadius: ozonePerPlanetRadius(earth.radiusEquatorialKm), altitudes };
+  const beta = betaPerPlanetRadius(earth.radiusEquatorialKm);
+  const km = (value: number) => value / earth.radiusEquatorialKm;
+
+  it('has the published column: 300 Dobson units, 0.028 of optical depth at 550 nm straight up', () => {
+    // Straight up from the ground, the three flat layers hold the tent's whole 15 km.
+    expect(ozoneColumn(0, 1, altitudes) * earth.radiusEquatorialKm).toBeCloseTo(15, 6);
+    expect(OZONE_ABSORPTION_PER_M[1] * 15_000).toBeCloseTo(0.0282, 3);
+    // Chappuis: most in green, a third of that in red, next to nothing in blue.
+    expect(OZONE_ABSORPTION_PER_M[0] / OZONE_ABSORPTION_PER_M[1]).toBeCloseTo(0.345, 2);
+    expect(OZONE_ABSORPTION_PER_M[2] / OZONE_ABSORPTION_PER_M[1]).toBeLessThan(0.05);
+  });
+
+  it('is nothing above the layer looking up, and all of it looking down past the planet', () => {
+    expect(ozoneColumn(km(50), 1, altitudes)).toBe(0);
+    // A ray from 25 km, level: the tent would give 292 km on the way out; the flat layers 272.
+    expect(ozoneColumn(km(25), 0, altitudes) * earth.radiusEquatorialKm).toBeCloseTo(272, -1);
+  });
+
+  it('outweighs the air in green and red where sunlight skims the layer, and so turns it blue', () => {
+    // From the tangent point 25 km up, out to space: half the path that lights the high air over
+    // the terminator.
+    const tangent = km(25);
+    const ozoneDepth = ozoneColumn(tangent, 0, altitudes);
+    const airColumn = chapmanColumn(tangent, 0, scaleHeightRatio);
+    expect(ozone.perRadius[1] * ozoneDepth).toBeGreaterThan(2 * beta[1] * airColumn);
+    expect(ozone.perRadius[0] * ozoneDepth).toBeGreaterThan(2 * beta[0] * airColumn);
+    expect(ozone.perRadius[2] * ozoneDepth).toBeLessThan(0.1 * beta[2] * airColumn);
+
+    const [r0, , b0] = sunlightTransmittance(tangent, 0, scaleHeightRatio, beta);
+    const [r1, , b1] = sunlightTransmittance(tangent, 0, scaleHeightRatio, beta, ozone);
+    expect(b1 / r1).toBeGreaterThan(1.15 * (b0 / r0));
+  });
+
+  it('is handed to every material that dims sunlight', () => {
+    const uniforms = extinctionUniforms(earth.radiusEquatorialKm);
+    expect(uniforms.uOzone.value.y).toBeCloseTo(ozone.perRadius[1], 9);
+    expect(uniforms.uOzoneAltitudes.value.w * earth.radiusEquatorialKm).toBeCloseTo(40, 9);
+    expect(ATMOSPHERIC_EXTINCTION_GLSL).toContain('uniform vec3 uOzone');
+    expect(ATMOSPHERE_SHADERS.fragment).toContain('ozoneColumn(altitude, cosSun)');
   });
 });

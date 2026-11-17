@@ -44,11 +44,14 @@ import { SkyVolume } from './SkyVolume.tsx';
 import { HorizonScale } from './HorizonScale.tsx';
 import { Heliosphere } from './Heliosphere.tsx';
 import { Magnetosphere } from './Magnetosphere.tsx';
+import { Aurora } from './Aurora.tsx';
+import { MeteorShowers } from './MeteorShowers.tsx';
 import { CosmicMicrowaveBackground } from './CosmicMicrowaveBackground.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
 import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
 import { SiriusOrbits } from './SiriusOrbits.tsx';
+import { StellarFlybys } from './StellarFlybys.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
@@ -448,10 +451,13 @@ export function SolarSystemCanvas({
       <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
       <Heliosphere store={store} clock={clock} focus={focus} />
       <Magnetosphere store={store} clock={clock} focus={focus} />
+      <Aurora store={store} clock={clock} focus={focus} />
+      <MeteorShowers store={store} clock={clock} focus={focus} />
       <SolarSystemWatch store={store} clock={clock} focus={focus} />
       <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
       <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
+      <StellarFlybys store={store} clock={clock} focus={focus} />
       <LabelProjector
         store={store}
         clock={clock}

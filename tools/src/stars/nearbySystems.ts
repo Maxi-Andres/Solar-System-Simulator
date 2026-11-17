@@ -7,7 +7,7 @@
  * those names. So they are listed here, for every star within 7.5 pc in the catalogue
  * this app builds, 138 stars in roughly 115 systems: the hundred nearest systems the
  * catalogue holds and some margin, so the hundredth does not depend on the last decimal
- * of a parallax.
+ * of a parallax. One more, past them, is named for its coming flyby: Gliese 710.
  *
  * **How the list was made, 2026-10-22.** The stars within 7.5 pc were taken from this
  * build's own output and their identifiers looked up in SIMBAD (CDS, Wenger et al. 2000,
@@ -1156,5 +1156,16 @@ export const NEARBY_STARS: readonly NearbyStar[] = [
     hip: 2021,
     spectralType: 'G0V',
     designations: ['GJ 19', 'bet Hyi', 'LHS 6'],
+  },
+  // Past 7.5 pc, at 19.1, and named for what it will do: pass 0.05 pc from the Sun in 1.3
+  // million years (web/src/core/stellarFlybys.ts). Its ids checked against this build's
+  // record (tier 1): Gaia DR3 and HIP; the type is Gray et al. 2006's (AJ 132, 161).
+  {
+    name: 'Gliese 710',
+    system: null,
+    gaiaDr3: '4270814637616488064',
+    hip: 89825,
+    spectralType: 'K7Vk',
+    designations: ['GJ 710', 'HD 168442', 'BD-01 3474', 'V1430 Aql'],
   },
 ];

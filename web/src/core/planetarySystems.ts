@@ -10,6 +10,7 @@ import {
   viewOffPole,
   type ExoPlanet,
 } from './exoplanets.ts';
+import { alphaCenAPlanetOf } from './alphaCenAPlanets.ts';
 import { proximaPlanetOf } from './proximaPlanets.ts';
 import { addStarBody, starBodyFacts } from './starBodies.ts';
 import { STAR3D, type StarNameIndex, type Stars3dSource } from './stars3d.ts';
@@ -288,9 +289,9 @@ export function systemPlanetOf(id: BodyId): { system: PlanetarySystem; planet: E
   return system === undefined || planet === undefined ? null : { system, planet };
 }
 
-/** Any star's planet by its body id -- Proxima's or these systems' -- or null. */
+/** Any star's planet by its body id -- Alpha Centauri's or these systems' -- or null. */
 export function exoPlanetOf(id: BodyId): ExoPlanet | null {
-  return proximaPlanetOf(id) ?? systemPlanetOf(id)?.planet ?? null;
+  return proximaPlanetOf(id) ?? alphaCenAPlanetOf(id) ?? systemPlanetOf(id)?.planet ?? null;
 }
 
 /** The system whose star a set of designations names, or null. */

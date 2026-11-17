@@ -520,6 +520,8 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
   const mass = fromArchive ? Number(planet.massEarth.toPrecision(3)) : planet.massEarth;
   const massNote = planet.massNote;
   const measuredRadius = planet.radiusEarth ?? null;
+  // Measured, or -- for a candidate seen once -- one of the orbits that fit it.
+  const orientation = planet.orbitChosen === undefined ? ' measured' : `, ${planet.orbitChosen}`;
   return (
     <>
       <Row label="Status">{status}</Row>
@@ -531,11 +533,13 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
           ? 'unknown'
           : massNote === 'estimate'
             ? `~${mass} Earths, from radius`
-            : massNote === 'upper limit'
-              ? `< ${mass} Earths`
-              : planet.massIsMinimum || massNote === 'lower limit'
-                ? `≥ ${mass} Earths`
-                : `${mass} Earths`}
+            : massNote === 'from light'
+              ? `~${mass} Earths, from its light`
+              : massNote === 'upper limit'
+                ? `< ${mass} Earths`
+                : planet.massIsMinimum || massNote === 'lower limit'
+                  ? `≥ ${mass} Earths`
+                  : `${mass} Earths`}
       </Row>
       <Row label="Radius">
         {measuredRadius !== null
@@ -545,17 +549,23 @@ function ExoPlanetFacts({ planet }: { planet: ExoPlanet }) {
       <Row label="Tilt">
         {planet.inclinationDeg === null
           ? 'unknown: edge-on'
-          : `${Number(planet.inclinationDeg.toFixed(2))}° measured`}
+          : `${Number(planet.inclinationDeg.toFixed(2))}°${orientation}`}
       </Row>
-      <Row label="Node">{planet.nodeDeg === null ? 'unknown: east-west' : `${planet.nodeDeg}° measured`}</Row>
+      <Row label="Node">
+        {planet.nodeDeg === null
+          ? 'unknown: east-west'
+          : `${Number(planet.nodeDeg.toFixed(2))}°${orientation}`}
+      </Row>
       <Row label="Along its orbit">
-        {phase.kind === 'conjunction'
-          ? 'from its fit'
-          : phase.kind === 'periastron'
-            ? 'from its periastron'
-            : phase.kind === 'pastConjunction'
-              ? 'loosely'
-              : 'unknown'}
+        {planet.orbitChosen !== undefined
+          ? planet.orbitChosen
+          : phase.kind === 'conjunction'
+            ? 'from its fit'
+            : phase.kind === 'periastron'
+              ? 'from its periastron'
+              : phase.kind === 'pastConjunction'
+                ? 'loosely'
+                : 'unknown'}
       </Row>
       <Row label="Source">{planet.reference.split(';')[0]}</Row>
       {fromArchive && <Row label="Listed by">NASA Exoplanet Archive</Row>}

@@ -117,6 +117,9 @@ describe('what the belt leaves out because the catalog draws it', () => {
       '136472',
       '152830',
       '162173',
+      // Earth's companions (earthCompanions.ts), by their provisional designations.
+      '2024 PT5',
+      '2025 PN7',
       '486958',
     ]);
     // Horizons' 999 is Pluto from DE441; SBDB's asteroid 999 is Zachia, which is not.

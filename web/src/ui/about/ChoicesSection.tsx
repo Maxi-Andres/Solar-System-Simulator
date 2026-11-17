@@ -234,6 +234,15 @@ export const choicesSection: AboutSection = {
             The Voyager crossings, the Lagrange points and each boundary’s nose are marks of their own, each
             with a panel saying whether it is measured, computed or modelled.
           </Item>
+          <Item title="Auroras only near their forecast">
+            The auroral ovals are drawn only while the clock is within an hour of the time NOAA’s forecast
+            covers. At any other time there are none, and the panel says how far off the clock is.
+            <Why>
+              the ovals grow and shrink with the solar wind over a few hours. An average oval for some level of
+              geomagnetic activity would be possible, but for a past or future date nobody knows that night’s
+              activity here, so the oval would show a night that may never have happened.
+            </Why>
+          </Item>
         </Items>
 
         <Sub section="choices" id="black-holes">

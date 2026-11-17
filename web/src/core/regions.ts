@@ -5,17 +5,24 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
  * observed -- the Lagrange points (lagrange.ts) -- and the marks on boundaries that are modelled
  * rather than seen -- the heliopause's nose, the Voyagers' crossings (heliosphere.ts), the
  * magnetopause's (magnetosphere.ts) -- and the places on the Moon and Mars where craft landed
- * (landingSites.ts), measured from orbit. None is an object: each is a place, made a body so
+ * (landingSites.ts), measured from orbit; the auroral ovals (aurora.ts), and where Earth crosses
+ * each meteor shower's stream (meteorShowers.ts). None is an object: each is a place, made a body so
  * that it is named, found by search and can be gone to, with a panel saying what of it is
  * measured.
  *
- * Each belongs to one of four layers, switched by pseudo-kinds as the record-holders' layer is
+ * Each belongs to one of six layers, switched by pseudo-kinds as the record-holders' layer is
  * (scene/floatingOrigin.ts isShown): every one of them is also of the kind 'region', which each
  * layer lists too, so the label pass's kind test lets them through.
  */
 
 /** The pseudo-kinds the layers switch them by (App.tsx LAYER_KINDS). */
-export type RegionLayer = 'lagrange-point' | 'heliosphere' | 'magnetosphere' | 'landing-site';
+export type RegionLayer =
+  | 'lagrange-point'
+  | 'heliosphere'
+  | 'magnetosphere'
+  | 'landing-site'
+  | 'aurora'
+  | 'meteor-shower';
 
 export interface RegionFact {
   readonly label: string;
@@ -42,6 +49,11 @@ export interface Region {
    * found and gone to: it has no place of its own, so the panel gives no distance to it.
    */
   readonly centredOnSun?: boolean;
+  /**
+   * Rows that change with the clock or with data fetched later, after `facts`: an auroral oval's
+   * forecast time (aurora.ts), whether a meteor shower is active (meteorShowers.ts).
+   */
+  readonly liveFacts?: (jd: number) => readonly RegionFact[];
 }
 
 const regions = new Map<BodyId, Region>();
@@ -61,6 +73,8 @@ export const REGION_LAYER_IDS = {
   heliosphere: 'heliosphere',
   magnetosphere: 'magnetosphere',
   'landing-site': 'landingSites',
+  aurora: 'aurora',
+  'meteor-shower': 'meteorShowers',
 } as const satisfies Record<RegionLayer, string>;
 
 /**

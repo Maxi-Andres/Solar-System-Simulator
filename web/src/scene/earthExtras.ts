@@ -431,6 +431,8 @@ export interface EarthExtrasUniforms {
   /** The air the sunlight came down through. See atmosphere.ts. */
   readonly uBeta: { value: THREE.Vector3 };
   readonly uScaleHeight: { value: number };
+  readonly uOzone: { value: THREE.Vector3 };
+  readonly uOzoneAltitudes: { value: THREE.Vector4 };
 }
 
 /** Fresh uniforms for one Earth, with both maps absent and therefore switched off. */

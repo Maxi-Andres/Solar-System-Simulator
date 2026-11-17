@@ -196,4 +196,26 @@ describeWithData('the published Archive', () => {
     expect(data.hosts.tier[h]).toBeGreaterThanOrEqual(0);
     expect(archiveSystem(data, h, false).planets).toHaveLength(7);
   });
+
+  it('finds Kepler-90 by that name, though the Archive files it as KOI-351', () => {
+    const [best] = searchNames(indexExoplanets(data).search, 'Kepler-90', 5);
+    expect(searchEntry(data, best!.k)).toEqual({ host: at('KOI-351'), planet: null });
+    expect(archiveSystem(data, at('KOI-351'), false).archive?.designations).toContain('Kepler-90');
+  });
+
+  it('has the nearby stars’ planets the curated systems leave to it', () => {
+    // Each a named 3D star (nearbySystems.ts) whose planets come from here (archiveSystems.ts).
+    const planets = (name: string): string[] => archiveSystem(data, at(name), false).planets.map((p) => p.name);
+    expect(planets('Ross 128')).toEqual(['Ross 128 b']);
+    expect(planets('GJ 1061')).toHaveLength(3);
+    expect(planets("Teegarden's Star")).toHaveLength(3);
+    expect(planets('YZ Cet')).toHaveLength(3);
+    expect(planets('GJ 581')).toHaveLength(3);
+    expect(planets('GJ 251')).toContain('GJ 251 c');
+    expect(planets('HD 20794')).toContain('HD 20794 d');
+    expect(planets('eps Ind A')).toEqual(['eps Ind A b']);
+    // Kapteyn's c and three of Gliese 667 C's five are flagged, and drawn as disputed.
+    expect(planets('Kapteyn')).toEqual(['Kapteyn c (disputed)']);
+    expect(planets('GJ 667 C').filter((name) => name.endsWith('(disputed)'))).toHaveLength(3);
+  });
 });

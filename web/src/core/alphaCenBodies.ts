@@ -1,5 +1,6 @@
 import type { BodyId, Stars3dNames } from '@sss/tools/types';
 
+import { ALPHA_CEN_A_PLANETS } from './alphaCenAPlanets.ts';
 import { abOrbitNormal } from './alphaCentauri.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { viewOffPole } from './exoplanets.ts';
@@ -104,7 +105,9 @@ export async function ensureAlphaCenBodies(
   for (const member of ALPHA_CEN_MEMBERS) {
     ids[member.key] = await addStarBody(store, stars3d, names, entries[member.key], keep, true);
   }
-  // Proxima's planets (proximaPlanets.ts), as any star's (planetarySystems.ts).
+  // Proxima's planets (proximaPlanets.ts), as any star's (planetarySystems.ts), and A's
+  // candidate (alphaCenAPlanets.ts).
   addPlanets(store, ids.Proxima!, PROXIMA_PLANETS);
+  addPlanets(store, ids.A!, ALPHA_CEN_A_PLANETS);
   return ids as Record<AlphaCenKey, BodyId>;
 }

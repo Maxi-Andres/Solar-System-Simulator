@@ -214,6 +214,22 @@ export const measuredSection: AboutSection = {
             5.1°, measured from the neutral helium IBEX sampled
             <Cite k="mccomas2015" />.
           </Item>
+          <Item title="Meteor showers">
+            Thirteen major showers. Each one’s radiant, active dates, maximum (as a solar longitude) and
+            hourly rate are from the International Meteor Organization’s 2026 working list
+            <Cite k="imo2026" />. Its speed and parent body are from the IAU Meteor Data Center’s list of
+            established showers
+            <Cite k="iauMdc" />. The mark is where Earth is at the maximum, the nearest one to the clock. The
+            line through it is the stream’s mean orbit, computed from the radiant and speed, drawn only near
+            Earth. A brighter arc of Earth’s own orbit shows the active dates. The solar longitude comes from
+            Meeus’s Sun
+            <Cite k="meeus1998" />.
+            <Why>
+              the radiant and speed are what is measured of a stream where Earth meets it; its path further
+              out is not seen, and a real stream is spread over weeks of Earth’s orbit, so only its mean is
+              drawn, and only nearby.
+            </Why>
+          </Item>
         </Items>
 
         <Sub section="measured" id="stars">
@@ -250,6 +266,24 @@ export const measuredSection: AboutSection = {
             The Sun becomes one of these stars once its disc is smaller than a pixel: absolute magnitude 4.81
             (Willmer 2018)
             <Cite k="willmer2018" />.
+          </Item>
+          <Item title="Famous stars">
+            Twelve of the sky’s best known have their measured facts in their panel, each from its paper:
+            Polaris’s mass and size <Cite k="evans2024" />, Deneb’s <Cite k="schillerPrzybilla2008" />, Altair’s
+            flattened shape <Cite k="monnier2007" />, Spica’s two stars <Cite k="tkachenko2016" />, Regulus’s
+            shape and companion <Cite k={['mcalister2005', 'gies2020']} />, Fomalhaut and its ring of dust{' '}
+            <Cite k={['mamajek2012', 'macgregor2017']} />, Mira’s changing size and its tail{' '}
+            <Cite k={['woodruff2004', 'martin2007']} />, Algol’s three stars <Cite k="baron2012" />, Castor’s six{' '}
+            <Cite k="torres2022" />, and Orion’s Belt <Cite k={['hummel2013', 'oplistilova2025', 'shenar2015']} />.
+            Fomalhaut is a disc of its measured size; the others stay points, as the catalogue has them. Where
+            a distance is in doubt the panel says so: Polaris’s, 133 to 160 pc <Cite k="bond2018" />; Deneb’s,
+            433 pc by its parallax, drawn, or 802 by its association; Alnitak’s and Mintaka’s. Alnilam, whose
+            own parallax gives no distance, is placed at its association’s, Orion OB1b’s, 384 pc{' '}
+            <Cite k="oplistilova2025" />.
+            <Why>
+              without it the catalogue would leave it out of 3D, and the Belt two stars; the association’s
+              distance is the best measured for it.
+            </Why>
           </Item>
           {stars3dInfo !== null && (
             <Item>
@@ -352,6 +386,19 @@ export const measuredSection: AboutSection = {
             <Cite k="bainesArmstrong2012" />, Barnard’s Star 0.1869 and 51 Pegasi 1.15 (Boyajian et al. 2012,
             2013)
             <Cite k={['boyajian2012', 'boyajian2013']} />.
+          </Item>
+          <Item title="α Centauri A’s candidate">
+            <Strong>S1</Strong>, a point JWST saw once beside α Centauri A, on 2024-08-10, 1.51″ out — 2 AU, in its
+            habitable zone — and not again in 2025 <Cite k="beichmanSanghi2025" />. A candidate, grey and named so:
+            seen once, at one roll angle, it cannot be confirmed. Its light gives 90 to 150 Earth masses; drawn at
+            100. Its orbit is not known: the fits that match its place, and an earlier sighting from the ground,
+            fall in four families, a 1.7 or 2.2 AU, e about 0.4, tilted 50° or 130° to the stars’ orbit. The one
+            drawn is one of the authors’ own <Cite k="beichmanSanghi2025Orbits" />, the most typical of the
+            largest family; its panel says so.
+            <Why>
+              an orbit has to be drawn to place it at all; one they published, and that puts it where JWST saw
+              it, is the honest choice, and the panel does not call its tilt measured.
+            </Why>
           </Item>
           <Item title="Every other confirmed planet">
             Every other star with a confirmed planet is from the <Strong>NASA Exoplanet Archive</Strong>’s
@@ -639,9 +686,10 @@ export const measuredSection: AboutSection = {
         </Sub>
         <Items>
           <Item>
-            Twenty-five stars, black holes and young clusters the star catalogue does not place, each a mark at a
+            Twenty-six stars, black holes and young clusters the star catalogue does not place, each a mark at a
             distance measured for it: Luhman 16 by its ground-based parallax <Cite k="lazorenko2018" />, WISE
-            0855−0714 by Spitzer’s <Cite k="kirkpatrick2021" />; VY Canis Majoris <Cite k="zhang2012" />, V404
+            0855−0714 by Spitzer’s <Cite k="kirkpatrick2021" />, Scholz’s Star by Keck’s and CFHT’s, fitted with
+            its pair’s orbit <Cite k="dupuy2019" />; VY Canis Majoris <Cite k="zhang2012" />, V404
             Cygni <Cite k="millerJones2009" /> and GRS 1915+105 <Cite k="reid2014" /> by radio parallaxes; Gaia BH2
             by Gaia’s parallax fitted with its orbit <Cite k="elBadry2023b" />; A0620−00 by its star’s brightness{' '}
             <Cite k="cantrell2010" />; ω Centauri’s black hole <Cite k="haberle2024" /> at the cluster’s distance{' '}
@@ -651,6 +699,31 @@ export const measuredSection: AboutSection = {
             rest by their own <Cite k="gaiaDr3" />. Positions SIMBAD’s <Cite k="simbad" />. The fast ones — the
             brown dwarfs, the white dwarfs, HD 140283 — move along their measured motion. The panel names each
             source.
+          </Item>
+          <Item title="Stellar flybys">
+            Two stars pass through the Oort cloud. <Strong>Scholz’s Star</Strong> did: 0.333 ± 0.010 pc (68,700 AU)
+            from the Sun, 80,500 ± 700 years ago, by its parallax and motion on a straight line{' '}
+            <Cite k="dupuy2019" />, first found at 0.25 pc 70,000 years ago <Cite k="mamajek2015" />.{' '}
+            <Strong>Gliese 710</Strong> will: 0.052 ± 0.002 pc (10,700 AU) in 1.29 ± 0.02 million years, from Gaia
+            DR3 in the Galaxy’s potential <Cite k="delaFuenteMarcos2022" />; 0.062 pc with its velocities corrected
+            for gravitational redshift and convective blueshift <Cite k="fernandezPuig2026" />; first found this
+            close with Gaia DR1 <Cite k="berskiDybczynski2016" />. Each panel gives these. The clock does not reach
+            either passage, so each star’s path is drawn instead: the straight line of its measured position and
+            velocity, dashed, with the Notable Stars. That line gives 0.333 pc 80,500 years ago and 0.051 pc in 1.29
+            million years.
+            <Why>
+              the clock runs from the year 1, a year a second at most; the line is the motion every star here
+              moves by, and over these spans the Galaxy’s pull bends it by less than the estimates differ.
+            </Why>
+          </Item>
+          <Item title="The Hyades and the Ursa Major moving group">
+            Two star groups marked at their centres, framed with all of them in view, their stars the
+            catalogue’s; gone to, their named members are marked and named. The Hyades, the nearest open
+            cluster: Gaia’s centre at 47.03 pc, 381 members within its 9 pc tidal radius, about 640 million years
+            old <Cite k="lodieu2019" />, its four named giants members since Hipparcos{' '}
+            <Cite k="perryman1998" />. The Ursa Major moving group: five of the Big Dipper’s stars and Alcor{' '}
+            <Cite k="king2003" />, 414 ± 23 million years old <Cite k="jones2015" />; no centre is published,
+            so the mark is at the mean of the six, 24.8 pc away.
           </Item>
         </Items>
 

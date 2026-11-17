@@ -202,7 +202,9 @@ export const estimatedSection: AboutSection = {
           </Item>
           <Item title="Candidates and disputed planets">
             Proxima c is a candidate, drawn grey and named so: its discoverers themselves leave open that its
-            signal is the star’s own activity. Planets the Archive flags as controversial are grey and called
+            signal is the star’s own activity. So is α Centauri A’s S1, seen once by JWST; its orbit is one
+            of many that fit, its tilt and node said so in its panel, and the side of the sky’s plane it is on
+            is a convention, imaging giving none. Planets the Archive flags as controversial are grey and called
             disputed.{' '}
             <Xref to="choices" sub="colours">
               Choices › Colours that mean something
@@ -712,6 +714,16 @@ export const estimatedSection: AboutSection = {
             <Cite k="farris1991" />; the Van Allen belts as dipole shells from L 1.2 to 2 and 3 to 7
             <Cite k="ganushkina2011" />, about IGRF-13’s dipole axis
             <Cite k="alken2021" />; the Kármán line 100 km up, a convention.
+          </Item>
+          <Item title="The auroral ovals: a forecast">
+            NOAA’s OVATION Prime forecast, fetched by your browser when the Auroras layer is on, and again every
+            ten minutes while it stays on
+            <Cite k={['swpcOvation', 'newell2009', 'machol2012']} />. It is a map, one degree square, of the
+            chance of seeing aurora about an hour from now, worked out from the solar wind measured upstream
+            of Earth. It is drawn as oxygen’s green glow, 557.7 nm, between 90 and 260 km up, fixed to the
+            ground and only over the night side. Brightness follows the forecast’s probability, not a measured
+            radiance. The glow peaks at 110 km and fades above, the usual height for the green line, not a
+            fit to any night. The red 630 nm line higher up is left out.
           </Item>
         </Items>
 

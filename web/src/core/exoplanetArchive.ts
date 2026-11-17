@@ -1,7 +1,7 @@
 import type { BodyId, ExoplanetCatalog } from '@sss/tools/types';
 
 import type { BeltFetchers } from './belt.ts';
-import type { Searchable } from './beltNames.ts';
+import { aliasField, type Searchable } from './beltNames.ts';
 import type { ExoPlanet, PlanetPhase } from './exoplanets.ts';
 import type { PlanetarySystem } from './planetarySystems.ts';
 import { normalizeName } from './search.ts';
@@ -65,6 +65,20 @@ export const CURATED_HOSTS: Readonly<Record<string, string>> = {
   '51 Peg': '51-pegasi',
 };
 
+/**
+ * Names a host is known by that the Archive does not list for it. The Archive files
+ * Kepler-90's eight planets under KOI-351, its Kepler Object of Interest number -- all but
+ * Kepler-90 i -- so the name it is known by would find only that one planet.
+ */
+export const HOST_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  'KOI-351': ['Kepler-90'],
+};
+
+/** A host's designations, the Archive's and any alias above. */
+export function hostDesignations(catalog: ExoplanetCatalog, h: number): readonly string[] {
+  return [...(HOST_ALIASES[catalog.hosts.name[h]!] ?? []), ...(catalog.hosts.designations[h] ?? [])];
+}
+
 /** The catalogue, and its hosts and planets as one search index: hosts first, then planets. */
 export interface ExoplanetArchive {
   readonly catalog: ExoplanetCatalog;
@@ -111,7 +125,11 @@ export function indexExoplanets(catalog: ExoplanetCatalog): ExoplanetArchive {
     catalog,
     search: {
       display: [...hosts.name.map(normalizeName), ...planets.name.map(normalizeName)],
-      designation: [...hosts.designations.map((list) => normalizeName(list.join(' '))), ...planets.name.map(() => '')],
+      designation: [
+        // Each name kept apart, so one typed whole is matched whole (aliasField).
+        ...hosts.name.map((_, h) => aliasField(hostDesignations(catalog, h))),
+        ...planets.name.map(() => ''),
+      ],
     },
   };
 }
@@ -267,7 +285,7 @@ export function archiveSystem(
       distancePc: hosts.distancePc[h] ?? null,
       teffK: hosts.teffK[h] ?? null,
       spectralType: hosts.spectralType[h] ?? null,
-      designations: hosts.designations[h] ?? [],
+      designations: hostDesignations(catalog, h),
       stars: hosts.stars[h] ?? 1,
       listed: hosts.planetCount[h]!,
       massFromOrbits: mass?.fromOrbits ?? false,
