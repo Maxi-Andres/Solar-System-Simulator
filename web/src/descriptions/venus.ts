@@ -7,6 +7,7 @@ import type { Description } from './types.ts';
 export const VENUS: Description = {
   id: 'venus',
   lead: [
+    'Venus is the planet that shows how a world like ours can go wrong. Born almost Earth’s twin, it may once have had oceans; today its ground is hotter than a kitchen oven, under a sky that never clears.',
     'Venus is the second planet from the Sun and the one most like Earth in size: 12,104 kilometres across, 95% of Earth’s width, with four-fifths of its mass. After the Moon it is the brightest thing in the night sky, because it is wrapped completely in pale clouds that reflect most of the sunlight that falls on them. Those clouds never part, and they are not water: they are droplets of sulfuric acid.',
     'Under them is the hottest surface of any planet. The air is almost all carbon dioxide and so thick that the pressure on the ground is 92 times Earth’s, like being nearly a kilometre under the sea. It traps the Sun’s heat so well — a runaway greenhouse effect — that the ground stays at about 464 °C, day and night, pole and equator, hot enough to melt lead. Venus is hotter than Mercury, which is nearly twice as close to the Sun.',
     'It spins slowly, and backwards. One turn takes 243 Earth days, longer than its year of 225, and in the opposite sense to almost every other planet, so on Venus the Sun would rise in the west, and sunrise to sunrise would take 117 Earth days. Its clouds do the opposite of the ground: high winds carry them right round the planet in about four days.',

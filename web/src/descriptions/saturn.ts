@@ -8,6 +8,7 @@ import type { Description } from './types.ts';
 export const SATURN: Description = {
   id: 'saturn',
   lead: [
+    'Saturn is the planet that makes people gasp the first time they see it through a telescope. Its rings are countless pieces of ice, some as fine as dust and some as big as a house, and how old they are — as old as the planet, or far younger — is still argued about.',
     'Saturn is the second-largest planet: nine and a half Earths across, 95 times Earth’s mass. Like Jupiter it is a giant of hydrogen and helium with no solid surface, but it is far less dense — the least dense of all the planets, less dense than water. It spins in about ten and a half hours, and is the most flattened planet: almost a tenth shorter from pole to pole than across.',
     'Its rings are what make it famous. The main rings span 273,000 kilometres, more than two-thirds of the way from Earth to the Moon, yet they are only tens of metres thick. They are not solid: they are countless pieces of almost pure water ice, from grains of dust to boulders the size of houses, each on its own orbit. All together they weigh less than half as much as Saturn’s small moon Mimas. How old they are is still argued over: perhaps far younger than Saturn, perhaps as old.',
     'Its pale bands hide fast weather. Winds at its equator reach 400 metres per second. Around its north pole a jet stream runs in a near-perfect hexagon, wider than Earth, and every few decades a great white storm breaks out and wraps around the whole planet, as one did in 2010 and 2011.',

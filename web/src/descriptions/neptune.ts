@@ -7,6 +7,7 @@ import type { Description } from './types.ts';
 export const NEPTUNE: Description = {
   id: 'neptune',
   lead: [
+    'Neptune is the planet found with a pen before it was seen with a telescope — proof that the laws of physics hold even at the edge of the Solar System. It is so far away that since it was discovered in 1846 it has gone round the Sun only once, finishing its first orbit in 2011.',
     'Neptune is the eighth and farthest planet from the Sun, an ice giant almost four times as wide as Earth and 17 times as massive. It is the planet found by mathematics: Urbain Le Verrier, and independently John Couch Adams, predicted where an unseen planet should be, and Johann Galle found it there on 23 September 1846.',
     'It is 30 times as far from the Sun as Earth, where sunlight is 900 times fainter, and yet it is not a still world. Its winds reach 580 metres per second, more than twice the strongest on Uranus, and it gives off 2.6 times as much energy as it absorbs from the Sun — heat from inside it. When Voyager 2 flew past in 1989 it carried a storm as wide as Earth, the Great Dark Spot; five years later it was gone.',
     'It is pale blue, only a little bluer than Uranus. The deep blue of the famous Voyager pictures was stretched to bring out its clouds, and the captions saying so got separated from the pictures; in 2024 the original images were re-processed to show what an eye would see.',

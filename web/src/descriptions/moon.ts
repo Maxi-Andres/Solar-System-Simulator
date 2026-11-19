@@ -7,6 +7,7 @@ import type { Description } from './types.ts';
 export const MOON: Description = {
   id: 'moon',
   lead: [
+    'Every person who has ever looked up at night has seen the same face of the Moon. It is the only other world people have walked on — twelve of them, between 1969 and 1972 — and the footprints they left are still there, with no wind to wipe them away.',
     'The Moon is Earth’s only natural satellite: a ball of rock 3,474 kilometres across, a little more than a quarter of Earth’s width, with 81 times less mass. It has almost no air, no liquid water and no weather, so the craters of four and a half billion years of impacts are still there. The dark patches seen from Earth, the maria or “seas”, are plains of lava that flooded old impact basins, most of them between 3.7 and 3.3 billion years ago.',
     'It probably formed 4.51 billion years ago from the debris of a collision between the young Earth and a body about the mass of Mars. Its crust is 34 to 43 kilometres thick on average, and its far side, never seen from Earth, has almost none of the dark maria of the near side.',
     'It always turns the same face to Earth, spinning once for each orbit. Its pull raises Earth’s tides, and the tides in turn push it slowly away, 3.8 centimetres a year, measured by bouncing lasers off reflectors left on its surface. Its phases are only its sunlit half seen from changing angles; when it passes through Earth’s shadow it turns red, a lunar eclipse.',
