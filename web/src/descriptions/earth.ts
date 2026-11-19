@@ -9,7 +9,8 @@ import type { Description } from './types.ts';
 export const EARTH: Description = {
   id: 'earth',
   lead: [
-    'Earth is the third planet from the Sun and the only place known to have life. It is the largest of the four rocky planets, 12,742 kilometres across, and the densest planet of all. From space it is mostly blue and white: oceans cover 71% of its surface, and at any moment clouds cover about two-thirds of it.',
+    'Earth is home. Every person who has ever lived, every forest and reef, every language and every story has happened here, on a ball of rock a little under 13,000 kilometres wide. It is the only place in the universe where life is known to exist. Astronomers have now found more than six thousand planets around other stars and searched Mars for half a century, and nowhere else has anything living turned up yet — which may say more about how little of the universe we can search than about how rare life is. For now, this is the one world we know where matter woke up, looked around, and began to ask what it is.',
+    'It is the third planet from the Sun and the largest of the four rocky planets, 12,742 kilometres across, and the densest planet of all. From space it is mostly blue and white: oceans cover 71% of its surface, and at any moment clouds cover about two-thirds of it.',
     'What sets it apart is water that stays liquid on the surface, at temperatures and pressures that let it. Its air is mostly nitrogen and oxygen — the oxygen made by living things over billions of years — and it scatters the blue of sunlight more than the red, which is why the sky is blue and the planet’s edge glows from space. Deep inside, molten iron in the outer core stirs up a magnetic field, and the crust is broken into plates that drift a few centimetres a year, building mountains and opening oceans.',
     'It orbits 150 million kilometres from the Sun; sunlight takes 8 minutes 19 seconds to arrive. Its axis is tilted 23.4°, and that tilt — not its distance from the Sun — makes the seasons: Earth is in fact nearest the Sun in early January, in the middle of the northern winter. The Moon, its one large natural satellite, raises the tides and helps keep that tilt steady.',
     'Its magnetic field holds off the solar wind about 65,000 kilometres out on the Sun’s side, carving a bubble around the planet, the magnetosphere. Particles from the Sun that get in are led down toward the poles, where they light the auroras; others are trapped in the Van Allen radiation belts. Inside that bubble now fly tens of thousands of satellites and pieces of debris.',
@@ -107,7 +108,7 @@ export const EARTH: Description = {
       height: 800,
       title: 'The Pale Blue Dot, 14 February 1990',
       caption:
-        'Earth from Voyager 1, about 6 billion km away: the speck inside the band of scattered sunlight, smaller than one pixel. Taken 34 minutes before Voyager’s cameras were switched off for good. Green, blue and violet filters shown as red, green and blue, so strictly false colour; reprocessed in 2020 and cropped here around Earth.',
+        'Earth from Voyager 1, about 6 billion km away: the speck inside the band of scattered sunlight, smaller than one pixel. Taken 34 minutes before Voyager’s cameras were switched off for good. Green, blue and violet filters shown as red, green and blue, so strictly false colour; reprocessed in 2020 and cropped here around Earth. Carl Sagan, who asked for it to be taken, wrote of that speck: “That’s here. That’s home. That’s us.”',
       colour: 'false',
       credit: 'NASA/JPL-Caltech; processed by Kevin M. Gill',
       licence: 'NASA media, not copyrighted',
@@ -249,6 +250,11 @@ export const EARTH: Description = {
     },
   ],
   missing: [
+    {
+      title: 'Whether we are alone',
+      text: 'Not known. No life has been found beyond Earth: not on Mars, which landers and rovers have searched since Viking in 1976, and not on any of the more than six thousand planets confirmed around other stars, only a handful of whose atmospheres can yet be read at all. Absence of evidence, so far, from a search that has barely begun.',
+      cite: ['exoplanetArchive', 'klein1978'],
+    },
     {
       title: 'Today’s weather',
       text: 'Not drawn. The clouds are a fixed composite of MODIS passes over weeks in 2001, never the weather on the date shown, and moving them does not make them true.',
@@ -423,6 +429,16 @@ export const EARTH: Description = {
       key: 'mcdowell2018',
       text: 'McDowell, J. C. 2018, The edge of space: Revisiting the Karman Line, Acta Astronaut. 151, 668',
       url: 'https://doi.org/10.1016/j.actaastro.2018.07.003',
+    },
+    {
+      key: 'exoplanetArchive',
+      text: 'NASA Exoplanet Archive, 6,470 confirmed planets as of 19 November 2026, NASA Exoplanet Science Institute',
+      url: 'https://exoplanetarchive.ipac.caltech.edu/',
+    },
+    {
+      key: 'klein1978',
+      text: 'Klein, H. P. 1978, The Viking biological experiments on Mars, Icarus 34, 666',
+      url: 'https://doi.org/10.1016/0019-1035(78)90053-2',
     },
   ],
 };
