@@ -111,7 +111,7 @@ export const CMB: Description = {
     },
     {
       title: 'Only far out',
-      text: 'None of it nearer than 3 billion light years from the Sun, all of it from 15 billion: nearer, at the scales of the galaxy, the Local Group or Laniakea, it is the sky’s microwave glow, which no eye sees, and a wall there would be a backdrop to views it has nothing to do with.',
+      text: 'None of it until the camera is 18.7 billion light years from the Sun, where the scale bar first reads a billion light years on an ordinary screen, all of it from 30 billion: nearer, at the scales of the galaxy, the Local Group, Laniakea or the mapped universe, it is the sky’s microwave glow, which no eye sees, and a wall there would be a backdrop to views it has nothing to do with.',
     },
     {
       title: 'Planck’s map on it',

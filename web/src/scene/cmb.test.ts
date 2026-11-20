@@ -50,9 +50,12 @@ describe('the last-scattering sphere', () => {
     // Laniakea's view, 1.8 billion ly from its attractor: some 2 billion from the Sun.
     expect(cmbVisibility(LANIAKEA_FRAMING_KM + 0.4e9 * LIGHT_YEAR_KM)).toBe(0);
     expect(cmbVisibility(CMB_FROM_LY * LIGHT_YEAR_KM)).toBe(0);
-    expect(cmbVisibility(6e9 * LIGHT_YEAR_KM)).toBeGreaterThan(0);
-    expect(cmbVisibility(6e9 * LIGHT_YEAR_KM)).toBeLessThan(1);
-    expect(cmbVisibility(15e9 * LIGHT_YEAR_KM)).toBe(1);
+    // Not until the scale bar reads a billion light years: 18.7 billion out on a 1080-pixel screen.
+    expect(CMB_FROM_LY / 1e9).toBeCloseTo(18.74, 2);
+    expect(cmbVisibility(15e9 * LIGHT_YEAR_KM)).toBe(0);
+    expect(cmbVisibility(24e9 * LIGHT_YEAR_KM)).toBeGreaterThan(0);
+    expect(cmbVisibility(24e9 * LIGHT_YEAR_KM)).toBeLessThan(1);
+    expect(cmbVisibility(30e9 * LIGHT_YEAR_KM)).toBe(1);
     expect(cmbVisibility(OBSERVABLE_UNIVERSE_FRAMING_KM)).toBe(1);
     expect(cmbVisibility(MAX_VIEW_DISTANCE_KM)).toBe(1);
   });

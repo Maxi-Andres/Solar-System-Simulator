@@ -600,7 +600,7 @@ function GlossaryText() {
           times, it now arrives from every direction as microwaves at 2.725 K. Its spots, one part in 100,000, are
           the seeds the cosmic web grew from.
         </Term>
-        <Term id="observable-universe" title="The observable universe" app="Zoom out past 3 billion light years, and the CMB’s wall comes up all about; the camera goes to 40 billion, never outside.">
+        <Term id="observable-universe" title="The observable universe" app="Zoom out until the scale bar reads a billion light years, and the CMB’s wall comes up all about; the camera goes to 40 billion, never outside.">
           The part of the universe from which light has had time to reach us in the 13.8 billion years since the
           Big Bang: a sphere about 46 billion light years in radius, centred on us, as every observer has their own.
           The whole universe is at least this big and may be infinite; nobody knows.

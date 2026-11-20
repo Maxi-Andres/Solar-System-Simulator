@@ -4,7 +4,8 @@ import { LAST_SCATTERING_RADIUS_MPC, mpcToKm, PLANCK18, Z_LAST_SCATTERING } from
 import type { Vec3 } from '../core/vec3.ts';
 import { blackbodyLinearSrgb, cieY, planckSpectralRadiance, type Rgb } from './blackbody.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
-import { LIGHT_YEAR_KM } from './scale.ts';
+import { SCALE_BAR_MAX_PX } from './scaleBar.ts';
+import { FOV_DEG, LIGHT_YEAR_KM } from './scale.ts';
 
 /**
  * The last-scattering sphere (G4): what the CosmicMicrowaveBackground draws, and how -- kept
@@ -74,15 +75,15 @@ export const LAST_SCATTERING_RADIUS_KM = mpcToKm(LAST_SCATTERING_RADIUS_MPC);
 
 /**
  * When it is drawn, light years from the Sun: none of it nearer than CMB_FROM_LY, all of it from
- * CMB_FULL_LY, smoothly in the logarithm between. 3 billion is past the farthest view of the
- * nearby universe -- Laniakea's, 1.8 billion from its attractor, some 2 billion from the Sun, and
- * G3's farthest zoom, 3 billion -- so it is never on the sky of a galaxy, the Local Group,
- * Laniakea or the Solar System. By 15 billion the quasars (whole from 3 billion, Quasars.tsx)
- * and the record-holders (from 10, core/recordHolders.ts) are all out: the view is of the
- * observable universe, and the wall is its edge.
+ * CMB_FULL_LY, smoothly in the logarithm between. It comes in only once the scale bar reads a
+ * billion light years (Maxi, 2026-11-20: "quiero que recién aparezca en 1 billón") -- on a
+ * 1080-pixel screen, where the bar's 120 pixels first reach 10^9 ly, 18.7 billion out -- so on
+ * the sky of no galaxy, group, supercluster or of the mapped universe, only of the views where the
+ * whole of the observable universe is the subject; whole by 30 billion, before the Observable
+ * Universe's own framing at 36 and the camera's limit at 40.
  */
-export const CMB_FROM_LY = 3e9;
-export const CMB_FULL_LY = 15e9;
+export const CMB_FROM_LY = (1e9 * 1080) / (SCALE_BAR_MAX_PX * 2 * Math.tan((FOV_DEG * Math.PI) / 360));
+export const CMB_FULL_LY = 30e9;
 
 export function cmbVisibility(cameraFromSunKm: number): number {
   const ly = cameraFromSunKm / LIGHT_YEAR_KM;

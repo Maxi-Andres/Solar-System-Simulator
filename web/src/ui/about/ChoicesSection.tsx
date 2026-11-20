@@ -780,7 +780,7 @@ export const choicesSection: AboutSection = {
             The camera never leaves it: 40 billion ly from the Sun at most, the sphere 45.3. It is what every
             direction from here shows at 13.8 billion years’ look-back, centred on us, and anyone elsewhere has a
             sphere of their own: there is no outside to stand in. So it is the wall of the sky all about, the Cold
-            Spot toward Eridanus as in our sky. Drawn only from 3 billion ly out, whole from 15; never on the sky of the
+            Spot toward Eridanus as in our sky. Drawn only once the scale bar reads a billion ly, 18.7 billion out, whole from 30; never on the sky of the
             Solar System, the galaxy, the Local Group or Laniakea, where it is the microwave glow no eye sees.
           </Item>
           <Item title="What it encloses, drawn over it">
