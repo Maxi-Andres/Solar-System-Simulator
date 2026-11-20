@@ -12,6 +12,15 @@ import {
   SOLAR_SYSTEM_DESCRIPTION_ID,
   VIRGO_CLUSTER_DESCRIPTION_ID,
 } from '../descriptions/subjects.ts';
+import {
+  GALAXY_FRAMING_KM,
+  LOCAL_GROUP_FRAMING_KM,
+  LOCAL_VOLUME_FRAMING_KM,
+  NEARBY_UNIVERSE_FRAMING_KM,
+  NEIGHBOURHOOD_FRAMING_KM,
+  OBSERVABLE_UNIVERSE_FRAMING_KM,
+  SOLAR_SYSTEM_FRAMING_KM,
+} from '../scene/scale.ts';
 
 /**
  * The breadcrumb's levels, as things that can be selected (Maxi, 2026-11-20: "toqué Milky Way
@@ -125,4 +134,46 @@ export const LEVELS: Readonly<Record<LevelId, Level>> = {
  */
 export function crumbShown(tier: number, selected: LevelId | null): boolean {
   return selected === null || tier <= LEVELS[selected].tier;
+}
+
+/**
+ * The levels centred on the Sun, nearest first, each with the distance its crumb frames it from
+ * (scene/scale.ts) -- and before them the Sun itself, null, at the eight radii a body is framed
+ * from. Zooming out from the Sun walks up this list and zooming in walks back down (Maxi,
+ * 2026-11-20: "si hago zoom o deszoom debería aparecer y desaparecer el camino"), so the
+ * breadcrumb grows and shrinks with the view as it does with a crumb clicked.
+ */
+export const SUN_LADDER: readonly { readonly level: LevelId | null; readonly km: number }[] = [
+  { level: null, km: 8 * 695_700 },
+  { level: 'solar-system', km: SOLAR_SYSTEM_FRAMING_KM },
+  { level: 'solar-neighbourhood', km: NEIGHBOURHOOD_FRAMING_KM },
+  { level: 'milky-way', km: GALAXY_FRAMING_KM },
+  { level: 'local-group', km: LOCAL_GROUP_FRAMING_KM },
+  { level: 'local-volume', km: LOCAL_VOLUME_FRAMING_KM },
+  { level: 'nearby-universe', km: NEARBY_UNIVERSE_FRAMING_KM },
+  { level: 'observable-universe', km: OBSERVABLE_UNIVERSE_FRAMING_KM },
+];
+
+/** How far past the boundary between two rungs the view must go before the level changes. */
+export const LADDER_HYSTERESIS = 1.25;
+
+/**
+ * The Sun-centred level for the camera `cameraFromSunKm` from the Sun, given the one selected
+ * now: the rung whose framing is nearest in the logarithm, the boundary between two rungs at
+ * their geometric mean, and the current rung kept until the view is LADDER_HYSTERESIS past it,
+ * so a camera resting near a boundary does not flicker the breadcrumb.
+ */
+export function levelForDistance(current: LevelId | null, cameraFromSunKm: number): LevelId | null {
+  const d = Math.max(cameraFromSunKm, 1);
+  let index = 0;
+  for (let k = 1; k < SUN_LADDER.length; k += 1) {
+    if (d >= Math.sqrt(SUN_LADDER[k - 1]!.km * SUN_LADDER[k]!.km)) index = k;
+  }
+  const at = SUN_LADDER.findIndex((rung) => rung.level === current);
+  if (at >= 0 && Math.abs(at - index) === 1) {
+    const boundary = Math.sqrt(SUN_LADDER[Math.min(at, index)]!.km * SUN_LADDER[Math.max(at, index)]!.km);
+    const past = index > at ? d / boundary : boundary / d;
+    if (past < LADDER_HYSTERESIS) return current;
+  }
+  return SUN_LADDER[index]!.level;
 }

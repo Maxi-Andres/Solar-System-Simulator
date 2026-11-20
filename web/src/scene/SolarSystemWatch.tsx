@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
+import { levelForDistance, SUN_LADDER } from '../state/levels.ts';
 import { useViewStore } from '../state/store.ts';
 import { nextInSolarSystem } from './inSolarSystem.ts';
 import { KM_PER_UNIT } from './scale.ts';
@@ -32,6 +33,14 @@ export function SolarSystemWatch({
     const state = useViewStore.getState();
     const next = nextInSolarSystem(state.inSolarSystem, fromSunKm);
     if (next !== state.inSolarSystem) state.setInSolarSystem(next);
+    // With the Sun in focus, the breadcrumb follows the zoom: out, the level reached is selected;
+    // back in to the Sun, none is (levels.ts levelForDistance). Not for Laniakea or Virgo, whose
+    // centres are not the Sun, nor for any other focus.
+    const current = state.selectedLevel;
+    if (focus === 'sun' && (current === null || SUN_LADDER.some((rung) => rung.level === current))) {
+      const level = levelForDistance(current, fromSunKm);
+      if (level !== current) state.setZoomLevel(level);
+    }
   });
   return null;
 }

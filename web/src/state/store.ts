@@ -490,6 +490,8 @@ export interface ViewState {
    * it. A description open is left for the level's panel.
    */
   readonly selectLevel: (level: LevelId) => void;
+  /** The level the zoom has reached with the Sun in focus (levels.ts levelForDistance): only the selection, nothing else. */
+  readonly setZoomLevel: (level: LevelId | null) => void;
   readonly toggleLayer: (id: LayerId) => void;
   readonly setInSolarSystem: (inside: boolean) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
@@ -563,6 +565,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
         ? { focus: id, selectedLevel: null }
         : { focus: id, framingRequestKm: own.km, framingView: own.view, selectedLevel: null },
     );
+  },
+
+  setZoomLevel: (level) => {
+    if (get().selectedLevel !== level) set({ selectedLevel: level });
   },
 
   selectLevel: (level) => {
