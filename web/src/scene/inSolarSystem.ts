@@ -1,4 +1,5 @@
-import { NEIGHBOURHOOD_FROM_KM } from './scale.ts';
+import { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
+import { LIGHT_YEAR_KM, NEIGHBOURHOOD_FROM_KM } from './scale.ts';
 
 /**
  * Whether the camera is in the Solar System: within NEIGHBOURHOOD_FROM_KM of the Sun, the
@@ -19,4 +20,22 @@ export function nextInSolarSystem(wasIn: boolean, cameraFromSunKm: number): bool
   return wasIn
     ? cameraFromSunKm < LEAVE_SHARE * NEIGHBOURHOOD_FROM_KM
     : cameraFromSunKm < ENTER_SHARE * NEIGHBOURHOOD_FROM_KM;
+}
+
+/**
+ * What the view is of, when it is of something that is no body and so has no panel of its own:
+ * the Milky Way, seen whole from 20,000 to a million light years out (its breadcrumb frames it
+ * from 180,000), and the cosmic microwave background, the wall, from 15 billion out, where it is
+ * drawn whole. The Sun's panel then offers that description too (Maxi, 2026-11-20: "toqué Milky
+ * Way pero me pone read about the Sun"). Null otherwise.
+ */
+export const MILKY_WAY_VIEW_FROM_LY = 20_000;
+export const MILKY_WAY_VIEW_TO_LY = 1_000_000;
+export const CMB_VIEW_FROM_LY = 15e9;
+
+export function viewSubject(cameraFromSunKm: number): string | null {
+  const ly = cameraFromSunKm / LIGHT_YEAR_KM;
+  if (ly >= CMB_VIEW_FROM_LY) return CMB_DESCRIPTION_ID;
+  if (ly >= MILKY_WAY_VIEW_FROM_LY && ly < MILKY_WAY_VIEW_TO_LY) return MILKY_WAY_DESCRIPTION_ID;
+  return null;
 }

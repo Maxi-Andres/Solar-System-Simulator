@@ -29,6 +29,7 @@ import { KIND_TERM } from './about/terms.ts';
 import { WhatIs } from './WhatIs.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { descriptionOf } from '../descriptions/index.ts';
+import { MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -53,6 +54,7 @@ export interface InfoPanelProps {
 export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: InfoPanelProps) {
   const focus = useViewStore((state) => state.focus);
   const closePanel = useViewStore((state) => state.closePanel);
+  const viewSubject = useViewStore((state) => state.viewSubject);
   void tick;
 
   const body = store.body(focus);
@@ -142,6 +144,14 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         </span>
         <WhatIs term={focus === 'sun' ? 'sun' : KIND_TERM[body.kind]} kind={body.kind.replace('-', ' ')} />
       </div>
+      {/* From the Milky Way's or the observable universe's view, with the Sun in focus, what the
+          view is of first: it is no body, so this is its panel (scene/inSolarSystem.ts viewSubject). */}
+      {focus === 'sun' && viewSubject !== null && (
+        <ReadMore
+          name={viewSubject === MILKY_WAY_DESCRIPTION_ID ? 'Milky Way' : 'cosmic microwave background'}
+          about={viewSubject}
+        />
+      )}
       {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
 
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />

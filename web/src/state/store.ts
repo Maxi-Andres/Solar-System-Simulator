@@ -474,10 +474,16 @@ export interface ViewState {
    * SolarSystemWatch: while it is, the nebulae and supernova remnants are not drawn.
    */
   readonly inSolarSystem: boolean;
+  /**
+   * The description of what the view is of when that is no body -- the Milky Way, the CMB
+   * (scene/inSolarSystem.ts viewSubject) -- offered by the Sun's panel; null otherwise.
+   */
+  readonly viewSubject: BodyId | null;
 
   readonly setFocus: (id: BodyId) => void;
   readonly toggleLayer: (id: LayerId) => void;
   readonly setInSolarSystem: (inside: boolean) => void;
+  readonly setViewSubject: (subject: BodyId | null) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
   readonly setLighting: (mode: LightingMode) => void;
   readonly setBeltTiers: (tiers: number) => void;
@@ -523,6 +529,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
   cmbColours: readStoredInteger(CMB_COLOURS_KEY, 0, 0) === 1 ? 'planck' : 'true',
   inSolarSystem: true,
+  viewSubject: null,
 
   setFocus: (id) => {
     const state = get();
@@ -544,6 +551,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setInSolarSystem: (inside) => {
     set({ inSolarSystem: inside });
+  },
+
+  setViewSubject: (subject) => {
+    set({ viewSubject: subject });
   },
 
   setLayer: (id, on) => {
