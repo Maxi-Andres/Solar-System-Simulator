@@ -6,7 +6,9 @@ import { basinNamesAt, laniakeaCatalogue, structureKindLabel, structureOf, type 
 import { GALACTIC_BASIS } from '../scene/galactic.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { LIGHT_YEAR_KM, PARSEC_KM } from '../scene/scale.ts';
+import { descriptionOf } from '../descriptions/index.ts';
 import { Panel } from './Panel.tsx';
+import { ReadMore } from './ReadMore.tsx';
 
 /**
  * The info panel for a named structure of Laniakea's catalogue (laniakea.ts): a cluster, a
@@ -68,6 +70,7 @@ export function StructurePanel({
           {structureKindLabel(landmark.kind)}
         </span>
       </div>
+      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {landmark.otherNames.length > 0 && <Row label="Also">{landmark.otherNames.slice(0, 3).join(' · ')}</Row>}

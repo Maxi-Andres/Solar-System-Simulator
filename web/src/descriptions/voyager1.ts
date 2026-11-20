@@ -58,6 +58,90 @@ export const VOYAGER_1: Description = {
       sourceUrl: 'https://images.nasa.gov/details/PIA21477',
     },
     {
+      file: 'photos/voyager-1/record-front.webp',
+      largeFile: 'photos/voyager-1/record-front-large.webp',
+      width: 640,
+      height: 639,
+      title: 'The Golden Record',
+      caption:
+        'The record’s face, “The Sounds of Earth”: copper plated with gold, 30 cm across. The same record rides on both Voyagers; around the label, hand-etched, “To the makers of music – all worlds, all times”.',
+      colour: 'true',
+      credit: 'NASA/JPL-Caltech',
+      licence: 'NASA media, not copyrighted',
+      date: '1977',
+      sourceUrl: 'https://science.nasa.gov/image-detail/voyager-gold-record-front/',
+    },
+    {
+      file: 'photos/voyager-1/record-cover.webp',
+      largeFile: 'photos/voyager-1/record-cover-large.webp',
+      width: 640,
+      height: 640,
+      title: 'The record’s cover',
+      caption:
+        'The aluminium cover that shields the record, engraved with how to play it and where it came from: the stylus and record top left, how to build its pictures top right, the pulsar map bottom left, the hydrogen atom bottom right. The Golden Record section below reads it symbol by symbol.',
+      colour: 'true',
+      credit: 'NASA/JPL-Caltech',
+      licence: 'NASA media, not copyrighted',
+      date: '1977',
+      sourceUrl: 'https://science.nasa.gov/image-detail/voyager-record-cover-446eb9/',
+    },
+    {
+      file: 'photos/voyager-1/record-plating-1977.webp',
+      largeFile: 'photos/voyager-1/record-plating-1977-large.webp',
+      width: 640,
+      height: 490,
+      title: 'Plating a record with gold, 23 August 1977',
+      caption:
+        'A copper disc lowered into the plating bath at the James G. Lee Record Processing center in Gardena, California, where eight copies were cut and plated, thirteen days before Voyager 1’s launch.',
+      colour: 'true',
+      credit: 'NASA/JPL-Caltech',
+      licence: 'NASA media, not copyrighted',
+      date: '1977-08-23',
+      sourceUrl: 'https://science.nasa.gov/image-detail/voyager-golden-record-gold-plating-8-23-77-30812980156-o/',
+    },
+    {
+      file: 'photos/voyager-1/record-mounting-1977.webp',
+      largeFile: 'photos/voyager-1/record-mounting-1977-large.webp',
+      width: 640,
+      height: 508,
+      title: 'Mounting the record, 1977',
+      caption:
+        'Two engineers in clean-room suits fix the record to the side of the spacecraft’s body, in 1977. Black and white.',
+      colour: 'true',
+      credit: 'NASA/JPL-Caltech',
+      licence: 'NASA media, not copyrighted',
+      date: '1977',
+      sourceUrl: 'https://science.nasa.gov/image-detail/mounting-the-golden-record-30269499363-o/',
+    },
+    {
+      file: 'photos/voyager-1/earth-moon-1977.webp',
+      largeFile: 'photos/voyager-1/earth-moon-1977-large.webp',
+      width: 565,
+      height: 790,
+      title: 'Earth and the Moon, 18 September 1977',
+      caption:
+        'Thirteen days after launch, from 11.66 million km: the first picture of Earth and the Moon together taken by a spacecraft, both crescents, the Moon at the top. Eastern Asia, the western Pacific and part of the Arctic are on Earth’s lit side. Three colour-filter images combined, and the Moon brightened three times against Earth so both show.',
+      colour: 'false',
+      credit: 'NASA/JPL',
+      licence: 'NASA media, not copyrighted',
+      date: '1977-09-18',
+      sourceUrl: 'https://images.nasa.gov/details/PIA00013',
+    },
+    {
+      file: 'photos/voyager-1/jupiter-io-europa-1979.webp',
+      largeFile: 'photos/voyager-1/jupiter-io-europa-1979-large.webp',
+      width: 640,
+      height: 421,
+      title: 'Jupiter with Io and Europa, 13 February 1979',
+      caption:
+        'Three weeks before closest approach: Io, left, over the Great Red Spot, and Europa over the clouds to the right. A colour composite from the camera’s filters, near an eye’s colours but not quite.',
+      colour: 'false',
+      credit: 'NASA/JPL',
+      licence: 'NASA media, not copyrighted',
+      date: '1979-02-13',
+      sourceUrl: 'https://images.nasa.gov/details/PIA00144',
+    },
+    {
       file: 'photos/voyager-1/pale-blue-dot.webp',
       largeFile: 'photos/voyager-1/pale-blue-dot-large.webp',
       width: 453,
@@ -128,6 +212,82 @@ export const VOYAGER_1: Description = {
       sourceUrl: 'https://images.nasa.gov/details/PIA01374',
     },
   ],
+  sections: [
+    {
+      title: 'The Golden Record',
+      text: [
+        'Fixed to the side of each Voyager is a phonograph record: a time capsule meant to tell the story of our world to whoever might one day find it. It holds pictures, greetings, the sounds of Earth and music, and its cover says, in drawings and numbers meant for someone who shares no language with us, how to play it, how to see its pictures, where it came from and when.',
+        'No one is expected to find it soon, if ever: the Voyagers will not come close to another star’s planets for tens of thousands of years. But it is also, as Voyager’s project scientist put it, a message to ourselves — what a few people chose, in a few weeks of 1977, to say about everyone.',
+      ],
+      points: [
+        {
+          title: 'What it is',
+          text: 'A disc of copper plated with gold, 30 cm (12 inches) across, in an aluminium cover. Eight copies were cut and gold-plated in Gardena, California, the plating done on 23 August 1977, then mounted in aluminium containers and delivered to JPL. Hand-etched on it: “To the makers of music – all worlds, all times”. Both Voyagers carry one.',
+          cite: ['grmaking', 'groverview'],
+        },
+        {
+          title: 'Who made it',
+          text: 'A committee chaired by Carl Sagan of Cornell University, with less than six weeks to do it. Frank Drake suggested a record with pictures on one side and sounds on the other; Ann Druyan was its creative director and designed its essay in sounds. With Timothy Ferris, Jon Lomberg and Linda Salzman Sagan, the six told how they made it in Murmurs of Earth (1978).',
+          cite: ['voyager30', 'grcontents', 'sagan1978'],
+        },
+        {
+          title: 'Its pictures',
+          text: '115 images, encoded on the record in analog form, as sound to be turned back into lines of a picture.',
+          cite: ['grcontents'],
+        },
+        {
+          title: 'Its greetings',
+          text: 'Spoken greetings in 55 languages, from Akkadian to Wu, a modern Chinese dialect. In English: “Hello from the children of planet Earth.”',
+          cite: ['grcontents', 'howdy'],
+        },
+        {
+          title: 'The sounds of Earth',
+          text: 'Surf, wind and thunder, birds, whales and other animals — and the brain waves of a young woman in love: Ann Druyan’s, an hour of them recorded in 1977 and pressed into about a minute.',
+          cite: ['grcontents', 'jpl2011', 'sagan1978'],
+        },
+        {
+          title: 'Its music',
+          text: 'Ninety minutes of it, 27 pieces from many cultures and ages. It opens with the first movement of Bach’s Brandenburg Concerto No. 2; among the rest are the first movement of Beethoven’s Fifth and the Cavatina of his String Quartet No. 13, the Queen of the Night’s aria from Mozart’s Magic Flute, the Sacrificial Dance from Stravinsky’s Rite of Spring, Louis Armstrong’s “Melancholy Blues”, Chuck Berry’s “Johnny B. Goode” and Blind Willie Johnson’s “Dark Was the Night”.',
+          cite: ['grcontents', 'grmusic'],
+        },
+        {
+          title: 'Two messages',
+          text: 'Printed messages from US President Jimmy Carter and UN Secretary-General Kurt Waldheim. Carter’s: “We cast this message into the cosmos. It is likely to survive a billion years into our future.”',
+          cite: ['grcontents', 'howdy'],
+        },
+        {
+          title: 'The cover: how to play it',
+          text: 'Top left, the record drawn with its stylus set at the start. Binary digits round it give the time of one turn, 3.6 seconds — 16⅔ turns a minute — counted in a unit of 0.70 billionths of a second, and show it is played from the outside in; the number below gives the playing time of a side, about an hour.',
+          cite: ['grcover'],
+        },
+        {
+          title: 'The cover: how to see its pictures',
+          text: 'Top right, the signal of a picture as it comes off the record, and how to draw it: in vertical lines, as a television draws horizontal ones, each line about 8 milliseconds long, 512 to a picture, interlaced. Below is the first picture on the record, a circle, so that whoever decodes it can check they have its proportions right.',
+          cite: ['grcover'],
+        },
+        {
+          title: 'The cover: where it came from',
+          text: 'Bottom left, the pulsar map first sent on the Pioneer 10 and 11 plaques: the Sun at its centre, lines out to 14 pulsars, each line’s length their rough distance and the binary marks along it the pulsar’s period, and one long line to the centre of the galaxy. A pulsar’s period changes slowly over time, so comparing their periods then with the ones on the map tells how long ago the record left.',
+          cite: ['grcover', 'pbsmap'],
+        },
+        {
+          title: 'The cover: the unit of time',
+          text: 'Bottom right, a hydrogen atom drawn in its two lowest states, joined by a line and the digit 1: the time of that transition is the unit every number on the cover counts in.',
+          cite: ['grcover', 'pbsmap'],
+        },
+        {
+          title: 'The cover: a clock',
+          text: 'A spot 2 cm across of ultra-pure uranium-238 is electroplated onto the cover. Its half-life is about 4.5 billion years, so measuring how much of it has decayed tells how long ago it was put there: a check on the pulsar map’s date.',
+          cite: ['grcover', 'grmaking'],
+        },
+        {
+          title: 'Will anyone find it?',
+          text: 'Probably not. It will be about forty thousand years before either Voyager comes close to another planetary system, and only a spacefaring civilisation could find and play it. Ed Stone, Voyager’s project scientist, said there is almost no chance of it being found — and that the record is important as a message to ourselves.',
+          cite: ['grcontents', 'voyager30'],
+        },
+      ],
+    },
+  ],
   drawnHere: [
     {
       title: 'Its crossings',
@@ -184,11 +344,6 @@ export const VOYAGER_1: Description = {
       title: 'The Pale Blue Dot',
       text: 'Taken on 14 February 1990, among 60 frames of the first portrait of the Solar System, from more than 6 billion km and 32° above the plane of the planets. Earth was a crescent 0.12 of a pixel wide.',
       cite: ['pbd'],
-    },
-    {
-      title: 'The Golden Record',
-      text: 'A 30-centimetre gold-plated copper disc carrying greetings in 55 languages, 35 sounds of life on Earth, 90 minutes of music and 115 images, chosen for NASA by a committee chaired by Carl Sagan.',
-      cite: ['voyager1', 'sagan1978'],
     },
     {
       title: 'Its power',
@@ -293,6 +448,51 @@ export const VOYAGER_1: Description = {
     {
       key: 'sagan1978',
       text: 'Sagan, C., Drake, F. D., Druyan, A., Ferris, T., Lomberg, J., & Salzman Sagan, L. 1978, Murmurs of Earth: The Voyager Interstellar Record (Random House)',
+    },
+    {
+      key: 'groverview',
+      text: 'NASA Science, Golden Record Overview (Voyager mission pages)',
+      url: 'https://science.nasa.gov/mission/voyager/voyager-golden-record-overview/',
+    },
+    {
+      key: 'grcover',
+      text: 'NASA Science, The Golden Record Cover (Voyager mission pages: each diagram explained)',
+      url: 'https://science.nasa.gov/mission/voyager/golden-record-cover/',
+    },
+    {
+      key: 'grcontents',
+      text: 'NASA Science, Golden Record Contents (Voyager mission pages)',
+      url: 'https://science.nasa.gov/mission/voyager/golden-record-contents/',
+    },
+    {
+      key: 'grmusic',
+      text: 'NASA Science, Golden Record Sounds and Music (the 27 pieces, with performers and lengths)',
+      url: 'https://science.nasa.gov/mission/voyager/golden-record-contents/sounds/',
+    },
+    {
+      key: 'grmaking',
+      text: 'NASA Science, Making of the Voyager Golden Record (Voyager mission pages)',
+      url: 'https://science.nasa.gov/mission/voyager/making-of-the-golden-record/',
+    },
+    {
+      key: 'voyager30',
+      text: 'NASA 2007, Voyager at 30: Looking Beyond and Within — The Golden Record (20 August 2007)',
+      url: 'https://science.nasa.gov/missions/voyager-program/voyager-at-30-the-golden-record/',
+    },
+    {
+      key: 'howdy',
+      text: 'NASA 2002, Howdy, Strangers (19 August 2002): the greetings, and President Carter’s message',
+      url: 'https://science.nasa.gov/missions/voyager-program/howdy-strangers/',
+    },
+    {
+      key: 'jpl2011',
+      text: 'NASA/JPL 2011, Voyager Set to Enter Interstellar Space (28 April 2011)',
+      url: 'https://www.jpl.nasa.gov/news/voyager-set-to-enter-interstellar-space/',
+    },
+    {
+      key: 'pbsmap',
+      text: 'PBS, The Farthest: How to Read a Pulsar Map (Tangled Bank Studios)',
+      url: 'https://www.pbs.org/the-farthest/science/pulsar-map',
     },
     {
       key: 'pia17046',

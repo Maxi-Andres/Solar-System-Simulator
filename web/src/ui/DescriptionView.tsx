@@ -34,10 +34,17 @@ const COLOUR_NOTE: Record<DescriptionPhoto['colour'], string> = {
 
 export function DescriptionView({ store }: { store: EphemerisStore }) {
   const focus = useViewStore((state) => state.focus);
+  const reading = useViewStore((state) => state.reading);
   const togglePanel = useViewStore((state) => state.togglePanel);
+  const closePanel = useViewStore((state) => state.closePanel);
   const closing = useClosing();
-  const description = descriptionOf(focus);
+  const description = descriptionOf(reading ?? focus);
+  // What is no body (the Milky Way, the CMB) names itself; there is no panel to go back to.
+  const subject = description?.subject ?? null;
   const body = store.body(focus);
+  const name = subject?.name ?? body.name;
+  const kind = subject?.kind ?? body.kind.replace('-', ' ');
+  const back = (): void => (reading === null ? togglePanel('body') : closePanel());
   const [opened, setOpened] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   /**
@@ -59,14 +66,18 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       if (opened !== null) setOpened(null);
-      else togglePanel('body');
+      else back();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [opened, togglePanel]);
+  });
 
-  // A craft's path says which dates it runs between; a planet's coverage is not quoted.
-  const generated = useMemo(() => drawnFromData(body, store.coverage(focus)), [body, store, focus]);
+  // A craft's path says which dates it runs between; a planet's coverage is not quoted. What is
+  // no body has nothing worked out from data.
+  const generated = useMemo(
+    () => (subject === null ? drawnFromData(body, store.coverage(focus)) : []),
+    [subject, body, store, focus],
+  );
   // True colour first, then tinted, then false: what an eye would see before the conventions.
   const photos = useMemo(
     () => [...(description?.photos ?? [])].sort((a, b) => COLOUR_ORDER[a.colour] - COLOUR_ORDER[b.colour]),
@@ -79,7 +90,7 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
     <div
       className={closing ? 'overlay-exit' : 'overlay-enter'}
       role="dialog"
-      aria-label={`About ${body.name}`}
+      aria-label={`About ${name}`}
       style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'rgba(4,4,6,0.96)' }}
     >
       <header
@@ -91,16 +102,16 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
           borderBottom: `1px solid ${RULE}`,
         }}
       >
-        <button type="button" onClick={() => togglePanel('body')} style={BUTTON}>
+        <button type="button" onClick={back} style={BUTTON}>
           BACK
         </button>
       </header>
       <div ref={scroller} className="scroll-hidden" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
         <article style={{ maxWidth: '46rem', width: '100%', padding: '2.2rem 1rem 7rem', boxSizing: 'border-box' }}>
           <div style={{ fontSize: '0.66rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
-            {body.kind.replace('-', ' ')}
+            {kind}
           </div>
-          <h1 style={{ margin: '0.3rem 0 1.4rem', fontSize: '1.6rem', fontWeight: 500, color: BRIGHT }}>{body.name}</h1>
+          <h1 style={{ margin: '0.3rem 0 1.4rem', fontSize: '1.6rem', fontWeight: 500, color: BRIGHT }}>{name}</h1>
           {description.lead.map((paragraph) => (
             <p key={paragraph} style={PARAGRAPH}>
               {paragraph}
@@ -108,6 +119,17 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
           ))}
 
           <Photos photos={photos} onOpen={setOpened} />
+
+          {description.sections?.map((section) => (
+            <Section key={section.title} title={section.title}>
+              {section.text?.map((paragraph) => (
+                <p key={paragraph} style={PARAGRAPH}>
+                  {paragraph}
+                </p>
+              ))}
+              <Points points={section.points} numbers={numbers} onCite={goToSource} />
+            </Section>
+          ))}
 
           <Section title="How it is drawn here">
             <Points points={[...generated, ...description.drawnHere]} numbers={numbers} onCite={goToSource} />

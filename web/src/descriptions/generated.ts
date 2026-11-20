@@ -1,10 +1,16 @@
 import { NAMED_SATELLITES } from '@sss/tools/satellites/named';
 import type { BodyDefinition, CraftShape } from '@sss/tools/types';
 
+import { DISC_FLATTENING, galaxyLuminosity, galaxyOf, type LocalGroupGalaxy } from '../core/localGroup.ts';
+import { nebulaOf, nebulaRadiusKm, type Nebula } from '../core/nebulae.ts';
 import { namedSatelliteBodyId } from '../core/satelliteBodies.ts';
+import { PARSEC_KM } from '../core/stars3d.ts';
+import { structureOf } from '../core/structures.ts';
+import { remnantOf, remnantRadiusKm, type SupernovaRemnant } from '../core/supernovaRemnants.ts';
 import { NAMED_WINDOW_DAYS } from '../core/satellites.ts';
 import { ESA_MODEL_CREDIT, MODEL_REQUEST_PX } from '../scene/craftModels.ts';
 import { facingRule } from '../ui/facing.ts';
+import { blackHoleFromData, isCatalogueStarBody, starFromData } from './starsFromData.ts';
 import type { DescriptionPoint } from './types.ts';
 
 /**
@@ -43,6 +49,11 @@ const formatKm = (km: number): string => `${Math.round(km).toLocaleString('en-US
 export function drawnFromData(body: BodyDefinition, coverage: Coverage | null = null): DescriptionPoint[] {
   // A spacecraft or an Earth satellite is not a sphere with a map: see craftFromData.
   if (body.kind === 'spacecraft' || body.kind === 'satellite') return craftFromData(body, coverage);
+  // Nor is a galaxy, a nebula, a remnant or a structure: a place of no surface (deepSkyFromData).
+  if (DEEP_SKY_KINDS.has(body.kind)) return deepSkyFromData(body);
+  // Nor is a catalogue star, or a black hole: see starsFromData.ts.
+  if (isCatalogueStarBody(body)) return starFromData(body);
+  if (body.kind === 'black-hole') return blackHoleFromData(body);
   const points: DescriptionPoint[] = [];
 
   if (body.horizonsId !== '') {
@@ -162,6 +173,7 @@ export const MODEL_CREDITS: Readonly<Record<string, string>> = {
   'jwst.glb': 'NASA, from NASA 3D Resources (its “James Webb Space Telescope (B)”)',
   'iss.glb': 'NASA VTAD, from NASA’s Space Station 3D model page; it shows the station as it was about 2020',
   'hubble.glb': 'NASA VTAD, from NASA’s Hubble 3D model page',
+  'roman.glb': 'NASA, from NASA 3D Resources (its “Nancy Grace Roman Space Telescope (B)”)',
 };
 
 /** A TDB Julian day as a calendar date in words, e.g. "5 September 1977". */
@@ -302,5 +314,190 @@ function craftFromData(body: BodyDefinition, coverage: Coverage | null): Descrip
     });
   }
 
+  return points;
+}
+
+// ---------------------------------------------------------------------------------------
+// A galaxy, a nebula, a supernova remnant, a structure
+
+/** The kinds that are places of no surface, read off their own catalogues (deepSkyFromData). */
+const DEEP_SKY_KINDS: ReadonlySet<string> = new Set(['galaxy', 'nebula', 'supernova-remnant', 'structure']);
+
+/** Light years in a parsec (IAU 2015: the parsec from the astronomical unit, the light year Julian). */
+const LY_PER_PC = 3.261564;
+
+/**
+ * A distance in parsecs as people say it: in parsecs, kiloparsecs or megaparsecs, its
+ * uncertainty after it where one is given, and in light years.
+ */
+export function distanceInWords(pc: number, up: number | null = null, down: number | null = null): string {
+  const ly = pc * LY_PER_PC;
+  const lyText =
+    ly >= 1e9
+      ? `${Number((ly / 1e9).toPrecision(3))} billion`
+      : ly >= 1e6
+        ? `${Number((ly / 1e6).toPrecision(3))} million`
+        : Number(ly.toPrecision(3)).toLocaleString('en-US');
+  const pcText =
+    pc >= 1e6
+      ? `${Number((pc / 1e6).toPrecision(3))} Mpc`
+      : pc >= 1e4
+        ? `${Number((pc / 1e3).toPrecision(3))} kpc`
+        : `${Math.round(pc).toLocaleString('en-US')} pc`;
+  return `${pcText}${plusMinus(up, down)}, ${lyText} light years`;
+}
+
+/** A distance's uncertainty either way, or nothing where none is given. */
+function plusMinus(up: number | null, down: number | null): string {
+  if (up === null || down === null) return '';
+  const say = (pc: number): string => (pc >= 1000 ? `${Number((pc / 1000).toPrecision(2))} kpc` : `${Math.round(pc)} pc`);
+  return say(up) === say(down) ? ` ± ${say(up)}` : ` (+${say(up)} −${say(down)})`;
+}
+
+const kpc = (pc: number): string => `${Number((pc / 1000).toPrecision(3))} kpc`;
+
+/**
+ * "How it is drawn here" for a place of no surface -- a galaxy, a nebula, a supernova remnant,
+ * a structure of Laniakea's catalogue -- read off its catalogue entry and the code that draws it:
+ * where it is and whose distance that is, and what stands in its place: never a sphere, never a
+ * picture pasted on the sky. A structure is known only once Laniakea's catalogue is loaded;
+ * before, nothing is said of it here, and its description's own points say the rest.
+ */
+function deepSkyFromData(body: BodyDefinition): DescriptionPoint[] {
+  const galaxy = galaxyOf(body.id);
+  if (galaxy !== null) return galaxyFromData(galaxy);
+  const nebula = nebulaOf(body.id);
+  if (nebula !== null) return nebulaFromData(nebula);
+  const remnant = remnantOf(body.id);
+  if (remnant !== null) return remnantFromData(remnant);
+  const landmark = structureOf(body.id);
+  if (landmark === null) return [];
+  const points: DescriptionPoint[] = [
+    {
+      title: 'Where it is',
+      text:
+        `Its mark is ${distanceInWords(landmark.distancePc)} from the Sun, by ${landmark.distanceMethod}` +
+        `${landmark.distanceEstimated ? ' — an estimate, not a measured distance' : ''}.`,
+    },
+  ];
+  if (landmark.radiusPc !== null) {
+    points.push({
+      title: 'Its size',
+      text: `Framed as ${kpc(landmark.radiusPc)} — ${distanceInWords(landmark.radiusPc).split(', ')[1]} — in radius. ${landmark.sizeNote ?? ''}`.trimEnd(),
+    });
+  }
+  return points;
+}
+
+function galaxyFromData(galaxy: LocalGroupGalaxy): DescriptionPoint[] {
+  const points: DescriptionPoint[] = [
+    {
+      title: 'Where it is',
+      text:
+        `${distanceInWords(galaxy.distancePc, galaxy.distanceUpPc, galaxy.distanceDownPc)} from the Sun (${galaxy.distanceSource})` +
+        `${galaxy.giant ? ', at the place on the sky McConnachie’s catalogue of the Local Group gives' : ''}. ` +
+        'It stands still: its own motion, across the sky and toward or away from us, is not drawn.',
+    },
+  ];
+  const luminosity = galaxyLuminosity(galaxy);
+  if (galaxy.vMag !== null && luminosity !== null) {
+    points.push({
+      title: 'How bright',
+      text:
+        `Its measured visual magnitude, ${Number(galaxy.vMag.toFixed(2))} once the dimming by our own galaxy’s dust is taken off, ` +
+        `at its distance: ${Number((luminosity / 1e9).toPrecision(2))} billion times the Sun’s light in V, all of it in what is drawn.`,
+    });
+  }
+  const model = galaxy.model;
+  if (model === null) {
+    points.push({ title: 'What stands in its place', text: 'Its mark alone: its size is not catalogued.' });
+  } else if (model.kind === 'disc') {
+    const bulge =
+      model.bulge === null
+        ? ''
+        : ` Its bulge is drawn apart, a ball holding ${Math.round(model.bulge.share * 100)}% of the light, which seen from any side is a Sérsic profile of index ${model.bulge.sersicN} and half-light radius ${kpc(model.bulge.effectiveRadiusPc)}.`;
+    points.push({
+      title: 'What stands in its place',
+      text:
+        'A volume of light the camera can go round and into, not a picture: a disc whose glow falls off exponentially, by a factor of e every ' +
+        `${kpc(model.scaleLengthPc)} outward, and ${DISC_FLATTENING} times thinner than that, ${Math.round(model.scaleHeightPc)} pc — ` +
+        'the mean of the edge-on discs Kregel, van der Kruit and de Grijs measured, for the thickness of its own light is not measured. ' +
+        `Tilted ${model.inclinationDeg}° from face-on, its major axis at ${model.positionAngleDeg}° east of north; its shape after ${galaxy.shapeSource}.` +
+        (model.faceOnMap === null
+          ? ''
+          : ' Across it, its old stars, its young stars and its dust lie where its face-on map puts them — made by undoing its tilt in surveys of the real galaxy — each a sheet of its own thickness, the dust dimming the light behind it.') +
+        bulge,
+    });
+  } else if (model.kind === 'exponential-ellipsoid') {
+    points.push({
+      title: 'What stands in its place',
+      text:
+        `A volume of light, not a picture. Its smooth model is an ellipsoid whose glow falls off exponentially, by a factor of e every ${kpc(model.majorPc)} and ${kpc(model.minorPc)} ` +
+        `across the sky and ${kpc(model.depthPc)} along our line of sight, after ${galaxy.shapeSource}. Where it has maps of the sky, they take its place once they load.`,
+    });
+  } else {
+    points.push({
+      title: 'What stands in its place',
+      text: `A volume of light, not a picture: a ${model.kind === 'plummer' ? 'Plummer' : 'Sérsic'} ellipsoid of its measured size and shape, after ${galaxy.shapeSource}.`,
+    });
+  }
+  points.push({
+    title: 'The exposure',
+    text:
+      'Every galaxy is drawn through one exposure, a long photograph’s rather than an eye’s: a pixel shows all the light along its line of sight, ' +
+      'through a soft shoulder that a surface brightness of 21 magnitudes per square arcsecond brings to two-thirds of white, so a bright centre never cuts off. ' +
+      'Too small for a pixel, a galaxy becomes a point that holds all of its light.',
+  });
+  return points;
+}
+
+function nebulaFromData(nebula: Nebula): DescriptionPoint[] {
+  const [major, minor] = nebula.sizeArcmin;
+  const radiusPc = nebulaRadiusKm(nebula) / PARSEC_KM;
+  return [
+    {
+      title: 'Where it is',
+      text:
+        `${distanceInWords(nebula.distancePc, nebula.distanceUpPc, nebula.distanceDownPc)} from the Sun, from the ${nebula.distanceMethod}: ` +
+        `${nebula.reference}.${nebula.note === null ? '' : ` ${nebula.note}`} It stands still.`,
+    },
+    {
+      title: 'What stands in its place',
+      text:
+        `A volume of glowing gas the camera can go round and into, not a picture: ${major === minor ? `${major}′` : `${major}′ by ${minor}′`} across the sky, ` +
+        `${radiusPc.toFixed(1)} pc in radius at its distance — ${nebula.sizeReference}. Its 3D shape is ${nebula.shapeReference === null ? 'an estimate' : `from ${nebula.shapeReference}`}; ` +
+        `modelled, not measured: ${nebula.modelled}. Its colours are those of its spectral lines, hydrogen’s red and doubly ionised oxygen’s teal; its brightness is a long exposure’s.`,
+    },
+  ];
+}
+
+function remnantFromData(remnant: SupernovaRemnant): DescriptionPoint[] {
+  const [major, minor] = remnant.sizeArcmin;
+  const radiusPc = remnantRadiusKm(remnant) / PARSEC_KM;
+  const points: DescriptionPoint[] = [
+    {
+      title: 'Where it is',
+      text:
+        `${distanceInWords(remnant.distancePc, remnant.distanceUpPc, remnant.distanceDownPc)} from the Sun, from the ${remnant.distanceMethod}: ` +
+        `${remnant.reference}. On the sky where Green’s catalogue of Galactic supernova remnants puts it, ${remnant.green}.` +
+        `${remnant.note === null ? '' : ` ${remnant.note}`} It stands still: its expansion is not drawn.`,
+    },
+    {
+      title: 'Its size',
+      text: `${major === minor ? `${major}′` : `${major}′ by ${minor}′`} across the sky in Green’s catalogue: ${radiusPc.toFixed(1)} pc in mean radius at its distance, the ring that marks it from afar.`,
+    },
+  ];
+  if (remnant.map !== null) {
+    points.push({
+      title: 'What stands in its place',
+      text:
+        `Up close, a volume of its light made from a photograph of it — ${remnant.map.light}, by ${remnant.map.credit} (${remnant.map.licence}) — ` +
+        'its stars taken out and each point’s light spread along its line of sight through the remnant, so that from Earth it adds up to the photograph and from anywhere else it has depth. ' +
+        (remnant.map.points === null
+          ? 'How deep along the line of sight each part lies is a model’s, not measured.'
+          : `How deep its light lies is measured: ${remnant.map.points.method} (${remnant.map.points.reference}).`) +
+        (remnant.axis === null ? '' : ` Its shape is a spheroid stretched along its measured axis: ${remnant.axis.reference}.`),
+    });
+  }
   return points;
 }

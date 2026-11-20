@@ -3,7 +3,9 @@ import type { BodyId } from '@sss/tools/types';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { nebulaKindLabel, nebulaOf, nebulaRadiusKm } from '../core/nebulae.ts';
 import { PARSEC_KM } from '../scene/scale.ts';
+import { descriptionOf } from '../descriptions/index.ts';
 import { Panel } from './Panel.tsx';
+import { ReadMore } from './ReadMore.tsx';
 import { formatStarDistance } from './StarFacts.tsx';
 
 /** The info panel for a nebula (nebulae.ts): short rows, each with its source. */
@@ -47,6 +49,7 @@ export function NebulaPanel({
           {nebulaKindLabel(nebula.kind).toLowerCase()}
         </span>
       </div>
+      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         <Row label="Also">{nebula.otherNames.join(' · ')}</Row>

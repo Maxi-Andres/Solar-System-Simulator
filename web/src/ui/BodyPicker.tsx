@@ -61,6 +61,8 @@ import { virgoCentre, volumeRegion, type LocalVolumeArchive, type VolumeRegion }
 import type { LazySource } from '../core/satellites.ts';
 import { useViewStore } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
+import { ReadMore } from './ReadMore.tsx';
+import { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
 
 /**
  * The breadcrumb, and the list of bodies that drops down from it.
@@ -660,6 +662,7 @@ export function BodyPicker({
             renderDemand.request();
             setUniverseOpen(false);
           }}
+          onRead={() => setUniverseOpen(false)}
         />
       </Presence>
 
@@ -752,6 +755,7 @@ export function BodyPicker({
             toGalaxyPlace(id);
             setBlackHolesOpen(false);
           }}
+          onRead={() => setBlackHolesOpen(false)}
         />
       </Presence>
 
@@ -1730,19 +1734,23 @@ function LaniakeaList({
 }
 
 /**
- * The list under Observable Universe: the view itself and Laniakea, then the record-holders
- * (recordHolders.ts), farthest first, each with its kind and redshift.
+ * The list under Observable Universe: the way into the cosmic microwave background's
+ * description -- the wall the view stands inside, which is no body to go to -- the view itself
+ * and Laniakea, then the record-holders (recordHolders.ts), farthest first, each with its kind
+ * and redshift.
  */
 function UniverseList({
   active,
   onObservableUniverse,
   onLaniakea,
   onChoose,
+  onRead,
 }: {
   active: BodyId | null;
   onObservableUniverse: () => void;
   onLaniakea: () => void;
   onChoose: (holder: RecordHolder) => void;
+  onRead: () => void;
 }) {
   const closing = useClosing();
   const holders = [...RECORD_HOLDERS].sort((a, b) => b.z - a.z);
@@ -1753,6 +1761,7 @@ function UniverseList({
       className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
       style={{ ...LIST_STYLE, width: '17rem', maxHeight: '70vh', overflowY: 'auto' }}
     >
+      <ReadMore name="cosmic microwave background" about={CMB_DESCRIPTION_ID} onRead={onRead} />
       <MemberRow name="Observable Universe" active={false} onChoose={onObservableUniverse} />
       <MemberRow name="Laniakea" active={false} onChoose={onLaniakea} />
       <div style={SECTION_HEADING}>Record-holders</div>
@@ -1793,6 +1802,7 @@ function PlaceList({
   onNeighbourhood,
   onChoose,
   onChoosePlace,
+  onRead,
 }: {
   store: EphemerisStore;
   visibleKinds: ReadonlySet<string>;
@@ -1803,6 +1813,7 @@ function PlaceList({
   onNeighbourhood: () => void;
   onChoose: (system: BlackHoleSystem) => void;
   onChoosePlace: (id: BodyId) => void;
+  onRead: () => void;
 }) {
   const closing = useClosing();
   useStoreVersion(store);
@@ -1813,6 +1824,7 @@ function PlaceList({
       className={`scroll-hidden ${closing ? 'dropdown-exit' : 'dropdown-enter'}`}
       style={{ ...LIST_STYLE, maxHeight: '70vh', overflowY: 'auto' }}
     >
+      <ReadMore name="Milky Way" about={MILKY_WAY_DESCRIPTION_ID} onRead={onRead} />
       <div style={TOP_HEADING}>Home</div>
       <MemberRow name="Solar System" active={inSolarSystem} onChoose={onSolarSystem} />
       <MemberRow name="Solar Neighbourhood" active={false} onChoose={onNeighbourhood} />

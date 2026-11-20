@@ -22,6 +22,7 @@ import { ISS } from './iss.ts';
 import { JWST } from './jwst.ts';
 import { NEW_HORIZONS } from './newHorizons.ts';
 import { PARKER_SOLAR_PROBE } from './parkerSolarProbe.ts';
+import { ROMAN } from './roman.ts';
 import { VOYAGER_1 } from './voyager1.ts';
 import { VOYAGER_2 } from './voyager2.ts';
 import { CERES } from './ceres.ts';
@@ -30,19 +31,55 @@ import { ERIS } from './eris.ts';
 import { HAUMEA } from './haumea.ts';
 import { MAKEMAKE } from './makemake.ts';
 import { PLUTO } from './pluto.ts';
+import { ANDROMEDA } from './andromeda.ts';
+import { LMC } from './lmc.ts';
+import { SMC } from './smc.ts';
+import { ORION_NEBULA } from './orionNebula.ts';
+import { CRAB_NEBULA } from './crabNebula.ts';
+import { LANIAKEA } from './laniakea.ts';
+import { MILKY_WAY } from './milkyWay.ts';
+import { CMB } from './cmb.ts';
+import { ALPHA_CENTAURI_A, ALPHA_CENTAURI_B } from './alphaCentauri.ts';
+import { BETELGEUSE } from './betelgeuse.ts';
+import { POLARIS } from './polaris.ts';
+import { PROXIMA_CENTAURI } from './proximaCentauri.ts';
+import { SGR_A_STAR } from './sgrAStar.ts';
+import { SIRIUS_A, SIRIUS_B } from './sirius.ts';
+import { starBodyFacts } from '../core/starBodies.ts';
 import type { Description } from './types.ts';
 
 /** The spacecraft and Earth satellites with descriptions. */
-const CRAFT: readonly Description[] = [VOYAGER_1, VOYAGER_2, NEW_HORIZONS, PARKER_SOLAR_PROBE, JWST, HUBBLE, ISS];
+const CRAFT: readonly Description[] = [VOYAGER_1, VOYAGER_2, NEW_HORIZONS, PARKER_SOLAR_PROBE, JWST, HUBBLE, ROMAN, ISS];
 
 /** Pluto and the other dwarf planets with descriptions, and Charon. */
 const DWARFS: readonly Description[] = [CERES, PLUTO, CHARON, HAUMEA, MAKEMAKE, ERIS];
 
+/**
+ * Beyond the Solar System: the galaxies, nebulae, remnants and structures with descriptions, and
+ * what is no body at all -- the Milky Way, the cosmic microwave background (Description.subject).
+ */
+const FAR: readonly Description[] = [MILKY_WAY, ANDROMEDA, LMC, SMC, ORION_NEBULA, CRAB_NEBULA, LANIAKEA, CMB];
+
+/**
+ * The stars with descriptions, and Sgr A*. A catalogue star's body id is made at run time from
+ * its record (core/starBodies.ts), so it is found by its designations (Description.catalogueStar).
+ */
+const STARS: readonly Description[] = [ALPHA_CENTAURI_A, ALPHA_CENTAURI_B, PROXIMA_CENTAURI, SIRIUS_A, SIRIUS_B, BETELGEUSE, POLARIS, SGR_A_STAR];
+
 /** Every body with a description, by id. Written one at a time; the panel offers it where there is one. */
 export const DESCRIPTIONS: ReadonlyMap<BodyId, Description> = new Map(
-  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT].map((description) => [description.id, description]),
+  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT, ...FAR, ...STARS].map((description) => [description.id, description]),
 );
 
+/** The description of the catalogue star known by any of `designations` ("HIP 27989", "alf CMa B"), or null. */
+export function descriptionByDesignations(designations: readonly string[]): Description | null {
+  return STARS.find((description) => description.catalogueStar?.designations.some((name) => designations.includes(name))) ?? null;
+}
+
+/**
+ * A body's description, by its id: the one entry point. A catalogue star made a body
+ * (`star-<tier>-<index>`) has no fixed id, so it is looked up by the designations it carries.
+ */
 export function descriptionOf(id: BodyId): Description | null {
-  return DESCRIPTIONS.get(id) ?? null;
+  return DESCRIPTIONS.get(id) ?? descriptionByDesignations(starBodyFacts(id)?.designations ?? []);
 }

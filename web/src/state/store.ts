@@ -362,6 +362,11 @@ export interface ViewState {
   readonly lighting: LightingMode;
   readonly openPanel: PanelId | null;
   /**
+   * The description open that is not the focused body's -- the Milky Way's, the cosmic microwave
+   * background's, which are no bodies to focus (descriptions/): null for the focus's own.
+   */
+  readonly reading: BodyId | null;
+  /**
    * Pending zoom multiplier from the toolbar buttons.
    *
    * The camera rig consumes this inside its frame loop rather than reacting to a
@@ -428,6 +433,8 @@ export interface ViewState {
   readonly toggleSatelliteChip: (index: number) => void;
   readonly setCmbColours: (colours: CmbColours) => void;
   readonly togglePanel: (id: PanelId) => void;
+  /** Opens a description: `id`'s, one that is no body, or the focused body's for null. */
+  readonly readAbout: (id: BodyId | null) => void;
   readonly closePanel: () => void;
   readonly nudgeZoom: (factor: number) => void;
   readonly consumeZoomImpulse: () => number;
@@ -452,6 +459,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   layers: DEFAULT_LAYER_STATE,
   lighting: PHYSICAL_LIGHTING,
   openPanel: null,
+  reading: null,
   zoomImpulse: 1,
   framingRequestKm: null,
   framingView: null,
@@ -519,6 +527,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   togglePanel: (id) => {
     set((state) => ({ openPanel: state.openPanel === id ? null : id }));
+  },
+
+  readAbout: (id) => {
+    set({ reading: id, openPanel: 'description' });
   },
 
   closePanel: () => {

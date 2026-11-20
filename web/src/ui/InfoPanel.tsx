@@ -27,6 +27,7 @@ import { recordHolderOf } from '../core/recordHolders.ts';
 import { GalaxyPanel } from './GalaxyFacts.tsx';
 import { KIND_TERM } from './about/terms.ts';
 import { WhatIs } from './WhatIs.tsx';
+import { ReadMore } from './ReadMore.tsx';
 import { descriptionOf } from '../descriptions/index.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
@@ -101,6 +102,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
           </span>
           <WhatIs term="star" kind="star" />
         </div>
+        {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
         <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
           <StarFacts id={focus} jd={jd} stars3d={stars3d} />
@@ -591,42 +593,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
         {children}
       </dd>
     </>
-  );
-}
-
-/** Names said with "the" before them, in the way into a description. */
-const WITH_THE: ReadonlySet<string> = new Set([
-  'Sun',
-  'Moon',
-  'James Webb Space Telescope',
-  'Hubble Space Telescope',
-  'International Space Station',
-]);
-
-/** The way into the body's description (DescriptionView): what it is, its photos, what is measured and what is not. */
-function ReadMore({ name }: { name: string }) {
-  const togglePanel = useViewStore((state) => state.togglePanel);
-  return (
-    <button
-      type="button"
-      onClick={() => togglePanel('description')}
-      style={{
-        display: 'block',
-        width: '100%',
-        marginTop: '0.6rem',
-        padding: '0.4rem 0.6rem',
-        background: 'transparent',
-        border: '1px solid #2a2a2a',
-        borderRadius: '0.3rem',
-        color: '#9fc3e0',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        fontSize: '0.74rem',
-        textAlign: 'left',
-      }}
-    >
-      Read about {WITH_THE.has(name) ? `the ${name}` : name} →
-    </button>
   );
 }
 

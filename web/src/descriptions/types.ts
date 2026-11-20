@@ -48,11 +48,36 @@ export interface DescriptionPhoto {
   readonly sourceUrl: string;
 }
 
+export interface DescriptionSection {
+  readonly title: string;
+  /** Plain paragraphs before the points, if any. */
+  readonly text?: readonly string[];
+  readonly points: readonly DescriptionPoint[];
+}
+
 export interface Description {
   readonly id: BodyId;
+  /**
+   * For what is no body -- the Milky Way, seen only from inside; the cosmic microwave
+   * background -- its name and what it is, for the page's head: it has no body to read them
+   * from, and nothing is worked out from its data (generated.ts). Opened by the store's readAbout.
+   */
+  readonly subject?: { readonly name: string; readonly kind: string };
+  /**
+   * For a catalogue star, made a body at run time with an id of the record it is
+   * (`star-<tier>-<index>`, core/starBodies.ts): the designations it is known by in the star
+   * names -- "HIP 27989", "alf CMa B" -- any one of which finds it (descriptionOf). Its `id`
+   * is then this description's own, never a body's.
+   */
+  readonly catalogueStar?: { readonly designations: readonly string[] };
   /** A few plain paragraphs: what it is and why it is worth looking at. */
   readonly lead: readonly string[];
   readonly photos: readonly DescriptionPhoto[];
+  /**
+   * Something about it that deserves its own heading, after the photos and before how it is
+   * drawn: Voyager's Golden Record, its cover read symbol by symbol. Cited as the rest are.
+   */
+  readonly sections?: readonly DescriptionSection[];
   /** How this app draws it, besides what is worked out from its data (generated.ts). */
   readonly drawnHere: readonly DescriptionPoint[];
   readonly measured: readonly DescriptionPoint[];

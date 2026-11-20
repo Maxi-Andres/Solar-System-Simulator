@@ -30,7 +30,9 @@ import {
 } from '../core/laniakea.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { LIGHT_YEAR_KM, PARSEC_KM } from '../scene/scale.ts';
+import { descriptionOf } from '../descriptions/index.ts';
 import { Panel } from './Panel.tsx';
+import { ReadMore } from './ReadMore.tsx';
 
 /**
  * The info panel for a galaxy of the Local Group (localGroup.ts), or one beyond it
@@ -139,6 +141,7 @@ export function GalaxyPanel({
           {galaxy.ambiguous ? 'galaxy or star cluster' : 'galaxy'}
         </span>
       </div>
+      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {galaxy.otherNames.length > 0 && <Row label="Also">{galaxy.otherNames.join(' · ')}</Row>}
