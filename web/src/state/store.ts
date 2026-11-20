@@ -58,7 +58,8 @@ export const LIGHTING_MODES: readonly {
  *
  * Several are listed but not yet available. They are shown disabled rather than
  * hidden, so the panel doubles as an honest statement of what this does and does not
- * have yet — and so nothing has to move when they arrive.
+ * have yet — and so nothing has to move when they arrive. The panel lists them by
+ * LAYER_GROUPS, not in this order.
  */
 export type LayerId =
   | 'userInterface'
@@ -116,14 +117,12 @@ export interface LayerDefinition {
   readonly pending: string | null;
   /** What it is, a few words, shown on hover in the Layers panel. */
   readonly hint: string;
-  /** Draws a separator above this entry, grouping the list like NASA Eyes does. */
-  readonly startsGroup?: boolean;
 }
 
 export const LAYERS: readonly LayerDefinition[] = [
   { id: 'userInterface', label: 'User Interface', hint: 'Panels, names and controls.', pending: null },
 
-  { id: 'planets', label: 'Planets', hint: 'The Sun and the eight planets.', pending: null, startsGroup: true },
+  { id: 'planets', label: 'Planets', hint: 'The Sun and the eight planets.', pending: null },
   { id: 'dwarfPlanets', label: 'Dwarf Planets', hint: 'Pluto, Eris, Ceres, Haumea, Makemake.', pending: null },
   { id: 'moons', label: 'Moons', hint: 'The major moons.', pending: null },
   // The 437 beyond the major moons. They need Moons on too: they are moons.
@@ -238,7 +237,7 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'nuclearCluster', label: 'Nuclear Cluster Model', hint: 'Stars round the central black hole. A model.', pending: null },
   { id: 'constellations', label: 'Constellations', hint: 'Constellation lines.', pending: 'Phase D' },
 
-  { id: 'spacecraft', label: 'Spacecraft', hint: 'Probes and missions, on their real paths.', pending: null, startsGroup: true },
+  { id: 'spacecraft', label: 'Spacecraft', hint: 'Probes and missions, on their real paths.', pending: null },
   // Earth's satellites from CelesTrak (Phase C): a hundred named ones as bodies, and tens
   // of thousands more as dots. Off by default: they matter only near Earth, and switched
   // on they download a few megabytes.
@@ -250,7 +249,7 @@ export const LAYERS: readonly LayerDefinition[] = [
 
   // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
   // be its orbit drawn twice, so the layer is the craft's alone.
-  { id: 'trails', label: 'Trails', hint: "Spacecraft's past paths.", pending: null, startsGroup: true },
+  { id: 'trails', label: 'Trails', hint: "Spacecraft's past paths.", pending: null },
   { id: 'orbits', label: 'Orbits', hint: 'Orbit lines.', pending: null },
   // Circles about the Sun at 1, 5, 10, 50 and 100 light years: a ruler, not a thing (see
   // distanceRings.ts). On, because they draw nothing until the camera is out among the
@@ -258,6 +257,59 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'distanceRings', label: 'Distance Rings', hint: 'Circles 1 to 100 light years from the Sun. A ruler.', pending: null },
   { id: 'labels', label: 'Labels', hint: 'Names.', pending: null },
   { id: 'icons', label: 'Icons', hint: 'Marks and rings.', pending: null },
+];
+
+export type LayerGroupId = 'solarSystem' | 'stars' | 'galaxies' | 'models' | 'display';
+
+/** A section of the Layers panel: its layers, in the order the panel lists them. */
+export interface LayerGroup {
+  readonly id: LayerGroupId;
+  readonly label: string;
+  readonly layers: readonly LayerId[];
+  /** Open on a first visit; the others start collapsed, their count still showing. */
+  readonly openByDefault: boolean;
+}
+
+/**
+ * How the Layers panel sorts LAYERS: what is seen, by scale -- the Solar System, the stars and
+ * the Milky Way, the galaxies and beyond -- then what is computed or modelled rather than seen
+ * (most of it off by default, see DEFAULT_LAYER_STATE) and the rulers, then how things are
+ * drawn. Every layer in exactly one group (store.test.ts). The galaxy's and the nuclear
+ * cluster's models stay with the stars: they are models of light that is really there, on by
+ * default, not shapes nothing shows.
+ */
+export const LAYER_GROUPS: readonly LayerGroup[] = [
+  {
+    id: 'solarSystem',
+    label: 'Solar System',
+    layers: ['planets', 'dwarfPlanets', 'moons', 'smallMoons', 'asteroids', 'comets', 'spacecraft', 'satellites', 'landingSites', 'meteorShowers', 'aurora'],
+    openByDefault: true,
+  },
+  {
+    id: 'stars',
+    label: 'Stars & the Milky Way',
+    layers: ['starMap', 'exoplanetHosts', 'notableStars', 'pulsars', 'globularClusters', 'nebulae', 'supernovaRemnants', 'interstellarClouds', 'stellarStreams', 'messier', 'milkyWay', 'nuclearCluster'],
+    openByDefault: false,
+  },
+  {
+    id: 'galaxies',
+    label: 'Galaxies & beyond',
+    layers: ['localGroup', 'laniakea', 'sdssGalaxies', 'filaments', 'quasars', 'szClusters', 'observableUniverse'],
+    openByDefault: false,
+  },
+  {
+    id: 'models',
+    label: 'Models & guides',
+    // By scale, then the rulers.
+    layers: ['magnetosphere', 'lagrangePoints', 'heliosphere', 'localInterstellar', 'galacticBubbles', 'galacticOrbit', 'localStructure', 'laniakeaBasin', 'shapleyBasin', 'flowLines', 'distanceRings', 'constellations'],
+    openByDefault: false,
+  },
+  {
+    id: 'display',
+    label: 'Display',
+    layers: ['orbits', 'trails', 'labels', 'icons', 'userInterface'],
+    openByDefault: false,
+  },
 ];
 
 export type LayerState = Record<LayerId, boolean>;

@@ -5,6 +5,7 @@ import { bodiesDifferingBySet, TEXTURE_SETS } from '@sss/tools/catalog';
 import { ALL_SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import {
   isLayerAvailable,
+  LAYER_GROUPS,
   LAYERS,
   LIGHTING_MODES,
   useViewStore,
@@ -62,6 +63,20 @@ describe('layer catalog', () => {
         expect(layer.pending).toMatch(/^Phase [A-D]$/);
       }
     }
+  });
+
+  it('puts every layer in exactly one group of the panel', () => {
+    const grouped = LAYER_GROUPS.flatMap((group) => group.layers);
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect([...grouped].sort()).toEqual(LAYERS.map((layer) => layer.id).sort());
+    expect(new Set(LAYER_GROUPS.map((group) => group.id)).size).toBe(LAYER_GROUPS.length);
+    for (const group of LAYER_GROUPS) {
+      expect(group.layers.length, group.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('opens only the Solar System on a first visit', () => {
+    expect(LAYER_GROUPS.filter((group) => group.openByDefault).map((group) => group.id)).toEqual(['solarSystem']);
   });
 
   it('reports availability consistently with the catalog', () => {

@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useId, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -13,7 +13,17 @@ import {
 import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import { chipCounts, type SatelliteSource } from '../core/satellites.ts';
 import type { CmbColours } from '../scene/cmb.ts';
-import { LAYERS, useViewStore, type LayerDefinition } from '../state/store.ts';
+import { readStoredInteger, writeStoredInteger } from '../state/persisted.ts';
+import {
+  DEFAULT_LAYER_STATE,
+  LAYER_GROUPS,
+  LAYERS,
+  useViewStore,
+  type LayerDefinition,
+  type LayerGroup,
+  type LayerId,
+  type LayerState,
+} from '../state/store.ts';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -30,6 +40,14 @@ import { Panel } from './Panel.tsx';
  * explanation and sources are the About's, and here they buried the switches (Maxi: "tiene
  * que ser corto, que solo tengas las check boxes"). What each is, in a few words, shows beside
  * its row on hover (LayerHint) -- and says so where the layer is a model rather than a sight.
+ *
+ * Fifty switches in one list were too many to scan (Maxi: "está muy desordenado"), so they
+ * are in LAYER_GROUPS' sections, each folding under a header that says how many of its
+ * layers are on: a collapsed section hides its switches, never that something in it is on.
+ * Which are open is kept between visits, and a section opens by itself when one of its layers
+ * is turned on from elsewhere -- a search for a pulsar, say -- so the switch is in sight.
+ * No all-or-none switch per section: "all" would fetch megabytes (Asteroids, Satellites,
+ * SDSS, Quasars) or hide the interface, and it would be one more control on every header.
  */
 export function LayersPanel({
   belt,
@@ -42,32 +60,181 @@ export function LayersPanel({
   const toggleLayer = useViewStore((state) => state.toggleLayer);
   const closePanel = useViewStore((state) => state.closePanel);
   const [hint, setHint] = useState<ShownHint | null>(null);
+  const [open, setOpen] = useState(readOpenGroups);
+
+  const changeOpen = (next: number) => {
+    openGroupsThisVisit = next;
+    writeStoredInteger(OPEN_GROUPS_KEY, next);
+    setOpen(next);
+  };
+
+  // Before the panel paints, so a section does not pop open a frame after it appears.
+  useLayoutEffect(() => {
+    const opened = groupsTurnedOn(layersSeen, layers);
+    layersSeen = layers;
+    if ((opened & ~open) !== 0) {
+      changeOpen(open | opened);
+    }
+    // changeOpen is this render's; open and layers are what it depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers, open]);
 
   return (
     <Panel title="Layers" onClose={closePanel}>
       {hint !== null && <LayerHint hint={hint} />}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {LAYERS.map((layer) => (
-          <LayerRow
-            key={layer.id}
-            layer={layer}
-            checked={layers[layer.id]}
-            onToggle={() => toggleLayer(layer.id)}
-            onHint={setHint}
+        {LAYER_GROUPS.map((group, index) => (
+          <LayerSection
+            key={group.id}
+            group={group}
+            first={index === 0}
+            open={(open & (1 << index)) !== 0}
+            count={groupCount(group, layers)}
+            onToggleOpen={() => {
+              setHint(null);
+              changeOpen(open ^ (1 << index));
+            }}
           >
-            {/* Controls only: what each layer is and where it comes from is the About's. */}
-            {layer.id === 'asteroids' && layers.asteroids && (
-              <>
-                <BeltDensityPicker belt={belt} />
-                <BeltFamilies belt={belt} />
-              </>
-            )}
-            {layer.id === 'satellites' && layers.satellites && <SatelliteChips satellites={satellites} />}
-            {layer.id === 'observableUniverse' && layers.observableUniverse && <CmbColourChips />}
-          </LayerRow>
+            {group.layers.map((id) => (
+              <LayerRow
+                key={id}
+                layer={LAYER_BY_ID.get(id)!}
+                checked={layers[id]}
+                onToggle={() => toggleLayer(id)}
+                onHint={setHint}
+              >
+                {/* Controls only: what each layer is and where it comes from is the About's. */}
+                {id === 'asteroids' && layers.asteroids && (
+                  <>
+                    <BeltDensityPicker belt={belt} />
+                    <BeltFamilies belt={belt} />
+                  </>
+                )}
+                {id === 'satellites' && layers.satellites && <SatelliteChips satellites={satellites} />}
+                {id === 'observableUniverse' && layers.observableUniverse && <CmbColourChips />}
+              </LayerRow>
+            ))}
+          </LayerSection>
         ))}
       </div>
     </Panel>
+  );
+}
+
+const LAYER_BY_ID: ReadonlyMap<LayerId, LayerDefinition> = new Map(LAYERS.map((layer) => [layer.id, layer]));
+
+/** Where the open sections are kept between visits: a bit per LAYER_GROUPS entry. */
+export const OPEN_GROUPS_KEY = 'layer-groups-open';
+
+/** Every section's bit. */
+const ALL_GROUPS = (1 << LAYER_GROUPS.length) - 1;
+
+/** The sections open on a first visit. */
+export const DEFAULT_OPEN_GROUPS = LAYER_GROUPS.reduce(
+  (mask, group, index) => (group.openByDefault ? mask | (1 << index) : mask),
+  0,
+);
+
+/**
+ * The open sections as last left this visit: kept here too, so they survive the panel
+ * closing where the storage cannot be written. Null until first read.
+ */
+let openGroupsThisVisit: number | null = null;
+
+function readOpenGroups(): number {
+  openGroupsThisVisit ??= readStoredInteger(OPEN_GROUPS_KEY, DEFAULT_OPEN_GROUPS, 0) & ALL_GROUPS;
+  return openGroupsThisVisit;
+}
+
+/**
+ * The layers as the panel last saw them, so that one turned on while it was closed -- by a
+ * search, by the breadcrumb -- opens its section when it next opens.
+ */
+let layersSeen: LayerState = DEFAULT_LAYER_STATE;
+
+/** The sections, a bit each, holding a layer that is on in `next` and was off in `previous`. */
+export function groupsTurnedOn(previous: LayerState, next: LayerState): number {
+  return LAYER_GROUPS.reduce(
+    (mask, group, index) =>
+      group.layers.some((id) => next[id] && !previous[id]) ? mask | (1 << index) : mask,
+    0,
+  );
+}
+
+/** How many of a section's layers are on, of those that exist yet. */
+export function groupCount(group: LayerGroup, layers: LayerState): { readonly on: number; readonly of: number } {
+  const available = group.layers.filter((id) => LAYER_BY_ID.get(id)?.pending === null);
+  return { on: available.filter((id) => layers[id]).length, of: available.length };
+}
+
+interface LayerSectionProps {
+  readonly group: LayerGroup;
+  /** The first section has no rule above it. */
+  readonly first: boolean;
+  readonly open: boolean;
+  readonly count: { readonly on: number; readonly of: number };
+  readonly onToggleOpen: () => void;
+  /** The section's rows, drawn only while it is open. */
+  readonly children: React.ReactNode;
+}
+
+/** A section's header -- a button: its name, and how many of its layers are on -- and its rows. */
+function LayerSection({ group, first, open, count, onToggleOpen, children }: LayerSectionProps) {
+  const bodyId = useId();
+  const counted = `${count.on} of ${count.of}`;
+  return (
+    <div style={first ? undefined : { borderTop: '1px solid #242424', marginTop: '0.3rem' }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        aria-label={`${group.label}, ${counted} on`}
+        onClick={onToggleOpen}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          width: '100%',
+          margin: 0,
+          padding: first ? '0 0 0.3rem' : '0.5rem 0 0.3rem',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: '0.2rem',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: '0.74rem',
+          fontWeight: 500,
+          textAlign: 'left',
+          color: open ? '#d6d6d6' : '#9a9a9a',
+        }}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ flex: 'none', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 130ms ease' }}
+        >
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+        <span>{group.label}</span>
+        <span
+          aria-hidden="true"
+          style={{ marginLeft: 'auto', fontSize: '0.66rem', fontWeight: 400, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+        >
+          <span style={{ color: count.on > 0 ? '#a8a8a8' : '#5e5e5e' }}>{count.on}</span>
+          <span style={{ color: '#5e5e5e' }}> of {count.of}</span>
+        </span>
+      </button>
+      <div id={bodyId} role="group" aria-label={group.label} hidden={!open} style={{ paddingBottom: '0.15rem' }}>
+        {open && children}
+      </div>
+    </div>
   );
 }
 
@@ -86,9 +253,6 @@ function LayerRow({ layer, checked, onToggle, onHint, children }: LayerRowProps)
 
   return (
     <>
-      {layer.startsGroup === true && (
-        <div style={{ height: 1, background: '#242424', margin: '0.55rem 0' }} />
-      )}
       <label
         className="ui-press"
         // The stylesheet keys the hover and press off this rather than off the input's
@@ -106,7 +270,7 @@ function LayerRow({ layer, checked, onToggle, onHint, children }: LayerRowProps)
           display: 'flex',
           alignItems: 'center',
           gap: '0.6rem',
-          padding: '0.32rem 0',
+          padding: '0.2rem 0',
           cursor: disabled ? 'default' : 'pointer',
           color: disabled ? '#4e4e4e' : '#d6d6d6',
           fontSize: '0.82rem',

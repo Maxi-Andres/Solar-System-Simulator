@@ -1,6 +1,44 @@
 import { describe, expect, it } from 'vitest';
 
-import { compactCount, densityLabel, megabytes, progressText, spokenCount } from './LayersPanel.tsx';
+import { DEFAULT_LAYER_STATE, LAYER_GROUPS } from '../state/store.ts';
+import {
+  compactCount,
+  DEFAULT_OPEN_GROUPS,
+  densityLabel,
+  groupCount,
+  groupsTurnedOn,
+  megabytes,
+  progressText,
+  spokenCount,
+} from './LayersPanel.tsx';
+
+describe('the panel sections', () => {
+  const bit = (id: string) => 1 << LAYER_GROUPS.findIndex((group) => group.id === id);
+
+  it('start with the Solar System open and the rest folded', () => {
+    expect(DEFAULT_OPEN_GROUPS).toBe(bit('solarSystem'));
+  });
+
+  it('open the section of a layer turned on, and only that', () => {
+    expect(groupsTurnedOn(DEFAULT_LAYER_STATE, DEFAULT_LAYER_STATE)).toBe(0);
+    expect(groupsTurnedOn(DEFAULT_LAYER_STATE, { ...DEFAULT_LAYER_STATE, pulsars: true })).toBe(bit('stars'));
+    expect(
+      groupsTurnedOn(DEFAULT_LAYER_STATE, { ...DEFAULT_LAYER_STATE, flowLines: true, asteroids: true }),
+    ).toBe(bit('models') | bit('solarSystem'));
+    // Turning one off opens nothing.
+    expect(groupsTurnedOn(DEFAULT_LAYER_STATE, { ...DEFAULT_LAYER_STATE, quasars: false })).toBe(0);
+  });
+
+  it('count what is on of what exists yet', () => {
+    const models = LAYER_GROUPS.find((group) => group.id === 'models')!;
+    // Constellations is still to come, so it is not counted.
+    expect(groupCount(models, DEFAULT_LAYER_STATE)).toEqual({ on: 1, of: models.layers.length - 1 });
+    expect(groupCount(models, { ...DEFAULT_LAYER_STATE, heliosphere: true })).toEqual({
+      on: 2,
+      of: models.layers.length - 1,
+    });
+  });
+});
 
 /**
  * The belt's density choices, as words. Every number here comes from belt.json in the
