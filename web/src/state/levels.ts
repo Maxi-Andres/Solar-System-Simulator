@@ -143,7 +143,20 @@ export function crumbShown(tier: number, selected: LevelId | null): boolean {
  * 2026-11-20: "si hago zoom o deszoom debería aparecer y desaparecer el camino"), so the
  * breadcrumb grows and shrinks with the view as it does with a crumb clicked.
  */
-export const SUN_LADDER: readonly { readonly level: LevelId | null; readonly km: number }[] = [
+export interface Rung {
+  readonly level: LevelId | null;
+  readonly km: number;
+}
+
+let ladder: readonly Rung[] | null = null;
+
+/**
+ * Made on first use, not when this module loads: scale.ts and this module import each other's
+ * neighbours, and at load the framings may not be defined yet (a ReferenceError that left the
+ * page blank, 2026-11-20).
+ */
+export function sunLadder(): readonly Rung[] {
+  ladder ??= [
   { level: null, km: 8 * 695_700 },
   { level: 'solar-system', km: SOLAR_SYSTEM_FRAMING_KM },
   { level: 'solar-neighbourhood', km: NEIGHBOURHOOD_FRAMING_KM },
@@ -152,7 +165,9 @@ export const SUN_LADDER: readonly { readonly level: LevelId | null; readonly km:
   { level: 'local-volume', km: LOCAL_VOLUME_FRAMING_KM },
   { level: 'nearby-universe', km: NEARBY_UNIVERSE_FRAMING_KM },
   { level: 'observable-universe', km: OBSERVABLE_UNIVERSE_FRAMING_KM },
-];
+  ];
+  return ladder;
+}
 
 /** How far past the boundary between two rungs the view must go before the level changes. */
 export const LADDER_HYSTERESIS = 1.25;
@@ -164,6 +179,7 @@ export const LADDER_HYSTERESIS = 1.25;
  * so a camera resting near a boundary does not flicker the breadcrumb.
  */
 export function levelForDistance(current: LevelId | null, cameraFromSunKm: number): LevelId | null {
+  const SUN_LADDER = sunLadder();
   const d = Math.max(cameraFromSunKm, 1);
   let index = 0;
   for (let k = 1; k < SUN_LADDER.length; k += 1) {

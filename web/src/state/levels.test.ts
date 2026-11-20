@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
-import { levelForDistance, SUN_LADDER } from './levels.ts';
+import { levelForDistance, sunLadder } from './levels.ts';
+
+const SUN_LADDER = sunLadder();
 
 describe('the breadcrumb following the zoom', () => {
   it('names the level each crumb frames from its own framing distance', () => {
