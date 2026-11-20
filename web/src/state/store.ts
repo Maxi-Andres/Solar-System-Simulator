@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { CmbColours } from '../scene/cmb.ts';
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
 import { ALL_BELT_FAMILIES, toggledFamily } from '../core/belt.ts';
+import { ALL_BASIN_CHIPS, DEFAULT_BASIN_CHIPS, toggledBasinChip } from '../core/basinChips.ts';
 import { ALL_SATELLITE_CHIPS, toggledChip } from '../core/satelliteGroups.ts';
 import type { LevelId } from './levels.ts';
 import { readStoredInteger, writeStoredInteger } from './persisted.ts';
@@ -93,8 +94,7 @@ export type LayerId =
   | 'localGroup'
   | 'localStructure'
   | 'laniakea'
-  | 'laniakeaBasin'
-  | 'shapleyBasin'
+  | 'basins'
   | 'flowLines'
   | 'sdssGalaxies'
   | 'filaments'
@@ -206,12 +206,11 @@ export const LAYERS: readonly LayerDefinition[] = [
   // Laniakea and beyond (core/laniakea.ts): 86,899 galaxies out to 700 Mpc, each its light,
   // and the named clusters, superclusters, voids and walls.
   { id: 'laniakea', label: 'Laniakea', hint: 'Our supercluster: 87,000 galaxies, clusters and voids.', pending: null },
-  // Laniakea's boundary as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois
-  // 2023): a faint outline.
-  { id: 'laniakeaBasin', label: 'Laniakea Basin', hint: "Laniakea's border, computed from galaxy motions.", pending: null },
-  // The groups' reconstruction's answer: the Milky Way's flow ends at Shapley, and Laniakea is
-  // part of Shapley's basin. Off, as the other answer is; the About says why both.
-  { id: 'shapleyBasin', label: 'Shapley Basin', hint: 'The alternative answer: we belong to Shapley.', pending: null },
+  // The basins of attraction as the Cosmicflows-4 watersheds draw them (Dupuy & Courtois 2023):
+  // Laniakea's and its neighbours', each a faint outline in its own hue, each a chip
+  // (core/basinChips.ts) -- and the groups' reconstruction's answer, Shapley's basin taking
+  // Laniakea in, a chip off at first, as the other answer is; the About says why both.
+  { id: 'basins', label: 'Basins of Attraction', hint: 'Superclusters’ borders, computed from galaxy motions.', pending: null },
   // The Cosmicflows-4 velocity field's streamlines (core/laniakea.ts FlowLines): where the
   // galaxies' flow goes: a few dozen, Laniakea's in its gold, a brightening running down each
   // toward its attractor. Off by default: computed, not seen (see DEFAULT_LAYER_STATE).
@@ -302,7 +301,7 @@ export const LAYER_GROUPS: readonly LayerGroup[] = [
     id: 'models',
     label: 'Models & guides',
     // By scale, then the rulers.
-    layers: ['magnetosphere', 'lagrangePoints', 'heliosphere', 'localInterstellar', 'galacticBubbles', 'galacticOrbit', 'localStructure', 'laniakeaBasin', 'shapleyBasin', 'flowLines', 'distanceRings', 'constellations'],
+    layers: ['magnetosphere', 'lagrangePoints', 'heliosphere', 'localInterstellar', 'galacticBubbles', 'galacticOrbit', 'localStructure', 'basins', 'flowLines', 'distanceRings', 'constellations'],
     openByDefault: false,
   },
   {
@@ -364,8 +363,7 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   localGroup: true,
   localStructure: false,
   laniakea: true,
-  laniakeaBasin: false,
-  shapleyBasin: false,
+  basins: false,
   flowLines: false,
   sdssGalaxies: true,
   filaments: true,
@@ -472,6 +470,12 @@ export interface ViewState {
    */
   readonly satelliteChips: number;
   /**
+   * Which basins the Basins of Attraction layer draws, a bit per BASIN_CHIPS entry and one for
+   * any other (core/basinChips.ts): all but the groups' Shapley by default, kept between visits
+   * like the satellites' chips.
+   */
+  readonly basinChips: number;
+  /**
    * How the CMB's map is coloured (scene/cmb.ts): true colour, its light as it left, by default
    * -- realism first -- or Planck's map, false colour. Kept between visits like the belt's
    * families.
@@ -499,6 +503,7 @@ export interface ViewState {
   readonly setBeltTiers: (tiers: number) => void;
   readonly toggleBeltFamily: (index: number) => void;
   readonly toggleSatelliteChip: (index: number) => void;
+  readonly toggleBasinChip: (index: number) => void;
   readonly setCmbColours: (colours: CmbColours) => void;
   readonly togglePanel: (id: PanelId) => void;
   /** Opens a description: `id`'s, one that is no body, or the focused body's for null. */
@@ -519,6 +524,9 @@ export const BELT_FAMILIES_KEY = 'belt-families';
 /** Where the satellites' chips are kept between visits; see `satelliteChips`. */
 export const SATELLITE_CHIPS_KEY = 'satellite-chips';
 
+/** Where the basins' chips are kept between visits; see `basinChips`. */
+export const BASIN_CHIPS_KEY = 'basin-chips';
+
 /** Where the CMB's colours are kept between visits, 0 true colour and 1 Planck's map; see `cmbColours`. */
 export const CMB_COLOURS_KEY = 'cmb-colours';
 
@@ -537,6 +545,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // older stored value, and junk beyond them is dropped.
   beltFamilies: readStoredInteger(BELT_FAMILIES_KEY, ALL_BELT_FAMILIES, 0) & ALL_BELT_FAMILIES,
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
+  basinChips: readStoredInteger(BASIN_CHIPS_KEY, DEFAULT_BASIN_CHIPS, 0) & ALL_BASIN_CHIPS,
   cmbColours: readStoredInteger(CMB_COLOURS_KEY, 0, 0) === 1 ? 'planck' : 'true',
   inSolarSystem: true,
   selectedLevel: null,
@@ -601,6 +610,12 @@ export const useViewStore = create<ViewState>((set, get) => ({
     const beltFamilies = toggledFamily(get().beltFamilies, index);
     writeStoredInteger(BELT_FAMILIES_KEY, beltFamilies);
     set({ beltFamilies });
+  },
+
+  toggleBasinChip: (index) => {
+    const basinChips = toggledBasinChip(get().basinChips, index);
+    writeStoredInteger(BASIN_CHIPS_KEY, basinChips);
+    set({ basinChips });
   },
 
   toggleSatelliteChip: (index) => {

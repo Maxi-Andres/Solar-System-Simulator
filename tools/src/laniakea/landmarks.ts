@@ -15,7 +15,7 @@ import {
   type Vec3,
 } from './frames.ts';
 import { type Cf4Galaxy, type Cf4Group, type PlacedGalaxy, type PlacedGroup, type TullyGalaxy } from './galaxies.ts';
-import { BASINS, basinGrid, CF4_BOX_MPC_H, type WatershedGrid } from './watersheds.ts';
+import { BASINS, basinGrid, CF4_BOX_MPC_H, type BasinRow, type DrawnBasin, type WatershedGrid } from './watersheds.ts';
 
 /**
  * The structures about Laniakea that have names: clusters, superclusters, Laniakea's basin
@@ -49,7 +49,10 @@ import { BASINS, basinGrid, CF4_BOX_MPC_H, type WatershedGrid } from './watershe
  *   Laniakea, Apus, Hercules, Lepus, Perseus-Pisces and Shapley, each at its attractor, with
  *   its basin in basins.bin and the radius of a sphere of its volume; and the repellers'
  *   basins, the Sculptor Void's, the one beside the Bootes Void, and the Dipole and Cold
- *   Spot Repellers' (Hoffman et al. 2017), which Dupuy & Courtois find to be one.
+ *   Spot Repellers' (Hoffman et al. 2017), which Dupuy & Courtois find to be one. Each basin
+ *   with its box along the supergalactic axes and a mass estimated from the reconstruction's
+ *   density (watersheds.ts selectBasins; Laniakea's is Tully et al. 2014's), and any basin more
+ *   the grids hold and the table does not name, named for the structure nearest its attractor.
  *
  * ## The Great Attractor
  *
@@ -227,7 +230,7 @@ function landmark(fields: Partial<LaniakeaLandmark> & Pick<LaniakeaLandmark, 'na
 /** Tully's H0 = 100 lengths and virial masses, at H0 74.6. */
 const TULLY_SCALE = 100 / 74.6;
 
-export function clusterLandmarks(parts: LandmarkParts): { landmarks: LaniakeaLandmark[]; missing: string[] } {
+export function clusterLandmarks(parts: Omit<LandmarkParts, 'basinVoxels' | 'basinVoxelSize'>): { landmarks: LaniakeaLandmark[]; missing: string[] } {
   const cf4ByPgc = new Map(parts.cf4.map((c) => [c.pgc, c]));
   const tullyByPgc = new Map(parts.tully.map((t) => [t.pgc, t]));
   const out: LaniakeaLandmark[] = [];
@@ -342,9 +345,60 @@ function fromSupergalactic(sgMpcH: Vec3): { raDeg: number; decDeg: number; dista
   return { raDeg, decDeg, distancePc: (Math.hypot(...sgMpcH) / LITTLE_H) * 1e6 };
 }
 
-export function basinLandmarks(parts: Pick<LandmarkParts, 'basinVoxels' | 'basinVoxelSize'>): LaniakeaLandmark[] {
+/** A Table A.1 row's structure's name: "Laniakea Supercluster", "Apus basin", "Sculptor Void repeller". */
+export function basinLandmarkName(row: Pick<BasinRow, 'name' | 'kind'>): string {
+  if (row.name === 'Laniakea') return 'Laniakea Supercluster';
+  if (row.kind === 'attraction') return `${row.name} basin`;
+  return /Repeller/.test(row.name) ? row.name : `${row.name} repeller`;
+}
+
+/** A drawn basin's structure's name: its row's for one Table A.1 names, its own for one more. */
+export function drawnBasinLandmarkName(drawn: DrawnBasin): string {
+  return drawn.naming === 'paper' ? basinLandmarkName({ name: drawn.name, kind: 'attraction' }) : drawn.name;
+}
+
+const MASS_NOTE =
+  "Estimated: the mean matter density (Omega_m 0.3, H0 74.6) times its basin's volume, each voxel weighted by 1 + delta of the CF4 galaxies' reconstruction (a linear field, floored at 0). The paper gives volumes only.";
+
+function extentPcOf(drawn: DrawnBasin | undefined): [number, number, number] | null {
+  return drawn === undefined ? null : (drawn.extentMpcH.map((e) => Math.round((e / LITTLE_H) * 1e6)) as [number, number, number]);
+}
+
+/**
+ * The basins and repellers as structures: Table A.1's, each at its attractor or repeller; and,
+ * from `drawn` (watersheds.ts selectBasins), each basin's box and estimated mass, and any basin
+ * more that the table does not name.
+ */
+export function basinLandmarks(parts: Pick<LandmarkParts, 'basinVoxels' | 'basinVoxelSize'> & { readonly drawn?: readonly DrawnBasin[] }): LaniakeaLandmark[] {
   const voxelMpc3 = (CF4_BOX_MPC_H / parts.basinVoxelSize / LITTLE_H) ** 3;
-  return BASINS.map((row) => {
+  const drawn = parts.drawn ?? [];
+  const extras = drawn
+    .filter((d) => d.naming !== 'paper')
+    .map((d) => {
+      const { raDeg, decDeg, distancePc } = fromSupergalactic(d.attractorSgMpcH);
+      const radiusPc = Math.cbrt((3 * d.voxels * voxelMpc3) / (4 * Math.PI)) * 1e6;
+      const reconstruction = d.grid === 'galaxiesAttraction' ? 'galaxies' : 'groups';
+      return landmark({
+        name: d.name,
+        kind: 'basin',
+        raDeg,
+        decDeg,
+        distancePc,
+        distanceMethod: 'CF4 velocity field (where its flow comes to rest)',
+        distanceEstimated: true,
+        radiusPc: Math.round(radiusPc),
+        extentPc: extentPcOf(d),
+        sizeNote: `Radius of a sphere of its basin's volume (${reconstruction} ${((d.voxels * voxelMpc3) / 1e6).toFixed(1)} million Mpc^3); extents its box's along SGX, SGY, SGZ.`,
+        basin: [{ grid: d.grid, label: d.label }],
+        massSun: d.massSun,
+        massNote: MASS_NOTE,
+        source: `Dupuy & Courtois 2023, A&A 678, A176: a basin of the CF4 ${reconstruction}' watersheds their Table A.1 does not name; ${
+          d.naming === 'unnamed' ? 'no named structure near its attractor' : 'named here for the named structure nearest its attractor'
+        }.`,
+        note: null,
+      });
+    });
+  const rows = BASINS.map((row) => {
     const fit = row.galaxies ?? row.groups!;
     const { raDeg, decDeg, distancePc } = fromSupergalactic(fit.sgMpcH);
     const basin: { grid: WatershedGrid; label: number }[] = [];
@@ -361,8 +415,10 @@ export function basinLandmarks(parts: Pick<LandmarkParts, 'basinVoxels' | 'basin
     const voxels = parts.basinVoxels[basin[0]!.grid][basin[0]!.label] ?? 0;
     const radiusPc = Math.cbrt((3 * voxels * voxelMpc3) / (4 * Math.PI)) * 1e6;
     const isLaniakea = row.name === 'Laniakea';
+    // Its basin as drawn: the galaxies' reconstruction's where it has one.
+    const own = row.kind === 'attraction' ? drawn.find((d) => d.naming === 'paper' && d.grid === basin[0]!.grid && d.label === basin[0]!.label) : undefined;
     return landmark({
-      name: isLaniakea ? 'Laniakea Supercluster' : row.kind === 'attraction' ? `${row.name} basin` : /Repeller/.test(row.name) ? row.name : `${row.name} repeller`,
+      name: basinLandmarkName(row),
       otherNames: isLaniakea ? ['Laniakea'] : row.name === 'Dipole Repeller and Cold Spot Repeller' ? ['Dipole Repeller', 'Cold Spot Repeller'] : [],
       kind: row.kind === 'attraction' ? 'basin' : 'repeller',
       raDeg,
@@ -371,10 +427,11 @@ export function basinLandmarks(parts: Pick<LandmarkParts, 'basinVoxels' | 'basin
       distanceMethod: 'CF4 velocity field (Dupuy & Courtois 2023)',
       distanceEstimated: true,
       radiusPc: Math.round(radiusPc),
-      sizeNote: `Radius of a sphere of its basin's volume (${sizes.join('; ')}); its shape is the basin's, in basins.bin.`,
+      extentPc: extentPcOf(own),
+      sizeNote: `Radius of a sphere of its basin's volume (${sizes.join('; ')}); its shape is the basin's, in basins.bin${own === undefined ? '' : "; extents its box's along SGX, SGY, SGZ"}.`,
       basin,
-      massSun: isLaniakea ? 1e17 : null,
-      massNote: isLaniakea ? 'About 10^17 solar masses (Tully et al. 2014, Nature 513, 71, from Cosmicflows-2).' : null,
+      massSun: isLaniakea ? 1e17 : (own?.massSun ?? null),
+      massNote: isLaniakea ? 'About 10^17 solar masses (Tully et al. 2014, Nature 513, 71, from Cosmicflows-2).' : own === undefined ? null : MASS_NOTE,
       source: `Dupuy & Courtois 2023, A&A 678, A176, Table A.1: the ${row.kind === 'attraction' ? 'attractor' : 'repeller'} of the basin; the Cosmicflows-4 reconstruction of Courtois et al. 2023.`,
       note: isLaniakea
         ? 'Defined by the flow of galaxies, not by an edge one could see (Tully et al. 2014, Nature 513, 71: about 10^17 solar masses, 160 Mpc across). A basin of its own in the CF4 galaxies\' reconstruction; in the CF4 groups\' the Milky Way\'s flow ends at Shapley, which then takes Laniakea in, and Valade et al. 2024 (Nature Astronomy 8, 1610) find the data slightly prefer that. Placed at its attractor.'
@@ -383,6 +440,7 @@ export function basinLandmarks(parts: Pick<LandmarkParts, 'basinVoxels' | 'basin
           : null,
     });
   });
+  return [...rows, ...extras];
 }
 
 export function greatAttractor(): LaniakeaLandmark {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { bodiesDifferingBySet, TEXTURE_SETS } from '@sss/tools/catalog';
 
+import { DEFAULT_BASIN_CHIPS } from '../core/basinChips.ts';
 import { ALL_SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import {
   isLayerAvailable,
@@ -107,6 +108,17 @@ describe('layer catalog', () => {
     expect(isLayerAvailable('satellites')).toBe(true);
     expect(INITIAL.layers.satellites).toBe(false);
     expect(INITIAL.satelliteChips).toBe(ALL_SATELLITE_CHIPS);
+  });
+
+  it('keeps the basins off until asked for, every one with them but the groups’ Shapley', () => {
+    expect(isLayerAvailable('basins')).toBe(true);
+    expect(INITIAL.layers.basins).toBe(false);
+    expect(INITIAL.basinChips).toBe(DEFAULT_BASIN_CHIPS);
+    const before = useViewStore.getState().basinChips;
+    useViewStore.getState().toggleBasinChip(0);
+    expect(useViewStore.getState().basinChips).toBe(before ^ 1);
+    useViewStore.getState().toggleBasinChip(0);
+    expect(useViewStore.getState().basinChips).toBe(before);
   });
 
   it('shows the spacecraft from the start too', () => {

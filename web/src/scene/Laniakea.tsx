@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
+import { basinChipShown, basinOutlines, type BasinOutline } from '../core/basinChips.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   basinAt,
@@ -110,16 +111,18 @@ import { SUPERGALACTIC_POLE } from './supergalactic.ts';
  * is marked and named by the scene's bodies' own marks and labels. Decluttered most luminous
  * first, as the Local Volume's (LocalGroup.tsx declutterMarks).
  *
- * ## The basin
+ * ## The basins
  *
- * Laniakea's boundary as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois 2023,
- * basins.bin), a smoothed surface netted from the grid (isosurface.ts), faint and lit at its rim
- * so it reads as an outline and not a wall, and its inside a faint glow marched through the
- * blurred grid (FILL_FRAGMENT), so the basin reads as a region and not as crossed sheets: the
- * Basins layer. From inside, both weaker, and nothing within BASIN_NEAR_PC of the camera. And the groups' reconstruction's
- * answer beside it, where the Milky Way's flow ends at Shapley and Laniakea is a part of
- * Shapley's basin (Valade et al. 2024 find the data slightly prefer it): the Shapley Basin
- * layer. Neither is drawn as the truth; the About and the panels say both.
+ * Every basin of attraction as the Cosmicflows-4 galaxies' watersheds draw it (Dupuy & Courtois
+ * 2023, basins.bin) -- Laniakea's and its neighbours' -- each a smoothed surface netted from the
+ * grid (isosurface.ts) in its own hue (core/basinChips.ts), faint and lit at its rim so it reads
+ * as an outline and not a wall, and its inside a faint glow marched through the blurred grid
+ * (FILL_FRAGMENT), so the basin reads as a region and not as crossed sheets: the Basins of
+ * Attraction layer, a chip a basin. From inside, both weaker, and nothing within BASIN_NEAR_PC
+ * of the camera. And the groups' reconstruction's answer, where the Milky Way's flow ends at
+ * Shapley and Laniakea is a part of Shapley's basin (Valade et al. 2024 find the data slightly
+ * prefer it): a chip of its own, off at first. Neither is drawn as the truth; the About and the
+ * panels say both. Each basin is named and marked at its attractor by its structure body.
  *
  * ## Where the galaxies flow
  *
@@ -177,7 +180,7 @@ export const WALL_NEAR_PC = 50e6;
 /** The rim's sharpness: (1 - |n.v|)^RIM_POWER, a thin line where the surface turns away. */
 export const RIM_POWER = 5;
 
-/** The colours of Laniakea's outline (its map's gold), Shapley's (a blue apart from it), the voids' and the walls'. */
+/** Laniakea's hue (its map's gold) and Shapley's (a blue apart from it), as their outlines' (core/basinChips.ts), for their flow lines; the voids' and the walls'. */
 export const LANIAKEA_OUTLINE_COLOR = '#e8b45a';
 export const SHAPLEY_OUTLINE_COLOR = '#6fa8d8';
 export const VOID_COLOR = '#8a8f9e';
@@ -758,16 +761,11 @@ export interface BasinObjects {
   readonly texture: THREE.Data3DTexture;
 }
 
-/** A basin's label in its grid, for laniakeaBasins.ts to net; null where the catalogue has no such basin. */
-export function basinRequest(
-  catalogue: LaniakeaCatalogue,
-  grid: 'galaxiesAttraction' | 'groupsAttraction',
-  name: string,
-): BasinRequest | null {
+/** A basin's label in its grid, for laniakeaBasins.ts to net; null where the catalogue has no grids. */
+export function basinRequest(catalogue: LaniakeaCatalogue, outline: Pick<BasinOutline, 'grid' | 'label'>): BasinRequest | null {
   const basins = catalogue.basins;
-  const label = catalogue.info.basins.basins.find((b) => b.grid === grid && b.name === name)?.label;
-  if (basins === null || label === undefined) return null;
-  return { labels: basins.grids[grid], size: basins.size, label, voxelToScene: basins.voxelToScene };
+  if (basins === null) return null;
+  return { labels: basins.grids[outline.grid], size: basins.size, label: outline.label, voxelToScene: basins.voxelToScene };
 }
 
 /** A basin's outline (laniakeaBasins.ts basinGeometry) and its fill (FILL_FRAGMENT), in `color`, from its parts. */
@@ -821,6 +819,16 @@ export function basinObjectsFor(
   return { outline, fill, texture };
 }
 
+/** A basin's meshes and field let go. */
+function disposeBasin(basin: BasinObjects | null | undefined): void {
+  if (!basin) return;
+  for (const mesh of [basin.outline, basin.fill]) {
+    mesh.geometry.dispose();
+    (mesh.material as THREE.Material).dispose();
+  }
+  basin.texture.dispose();
+}
+
 /** A void as an ellipsoid of its extents along the supergalactic axes, in parsecs about the Sun. */
 export function voidGeometry(landmark: LaniakeaLandmark): THREE.BufferGeometry | null {
   const extent = landmark.extentPc;
@@ -862,9 +870,9 @@ export interface LaniakeaProps {
   readonly visible: boolean;
   /** The Icons layer: the galaxies' marks. */
   readonly showMarks: boolean;
-  /** The Basins layer: Laniakea's outline; and the groups' reconstruction's Shapley basin. */
-  readonly showBasin: boolean;
-  readonly showShapley: boolean;
+  /** The Basins of Attraction layer, and which of its basins are on (core/basinChips.ts). */
+  readonly showBasins: boolean;
+  readonly basinChips: number;
   /** The Flow Lines layer: the velocity field's streamlines, flowing. */
   readonly showFlows: boolean;
   /** A galaxy's mark clicked: its record. */
@@ -921,7 +929,7 @@ function volumeFixed(galaxy: LocalGroupGalaxy, layerOf: (n: number) => number): 
   };
 }
 
-export function Laniakea({ source, names, store, clock, focus, visible, showMarks, showBasin, showShapley, showFlows, onPick }: LaniakeaProps) {
+export function Laniakea({ source, names, store, clock, focus, visible, showMarks, showBasins, basinChips, showFlows, onPick }: LaniakeaProps) {
   const { gl, camera } = useThree();
   const catalogue = useSyncExternalStore(source.subscribe, () => source.value);
   const nameIndex = useSyncExternalStore(names.subscribe, () => names.value);
@@ -1164,34 +1172,31 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     });
   // Each basin netted and its field made once, in a worker (laniakeaBasins.ts), the first time
   // its layer is on: 100 to 200 ms a basin, which between frames held one back as long.
-  const [basinObjects, setBasinObjects] = useState<Partial<Record<'laniakea' | 'shapley', BasinObjects | null>>>({});
+  // The layer's basins, each with its chip and hue (core/basinChips.ts).
+  const outlines = useMemo(() => (catalogue === null ? [] : basinOutlines(catalogue.info)), [catalogue]);
+  const [basinObjects, setBasinObjects] = useState<Readonly<Record<string, BasinObjects | null>>>({});
   // The basins asked for, under a token a new catalogue -- or unmounting -- replaces, so an
-  // answer for an old one is dropped.
-  const basinsAsked = useRef({ token: {}, keys: new Set<'laniakea' | 'shapley'>() });
+  // answer for an old one is dropped; netted one after another, one worker at a time.
+  const basinsAsked = useRef({ token: {}, keys: new Set<string>(), queue: Promise.resolve() as Promise<unknown> });
   useEffect(() => {
-    if (catalogue === null || catalogue.basins === null) return;
+    if (catalogue === null || catalogue.basins === null || !showBasins) return;
     const basins = catalogue.basins;
     const asked = basinsAsked.current;
-    const wanted = (['laniakea', 'shapley'] as const).filter(
-      (key) => (key === 'laniakea' ? showBasin : showShapley) && !(key in basinObjects) && !asked.keys.has(key),
-    );
-    for (const key of wanted) {
-      asked.keys.add(key);
-      const request =
-        key === 'laniakea'
-          ? basinRequest(catalogue, 'galaxiesAttraction', 'Laniakea')
-          : // The groups' reconstruction: the basin the Milky Way's voxel is in there (info.home), Shapley's.
-            basinRequest(catalogue, 'groupsAttraction', 'Shapley');
-      void (request === null ? Promise.resolve(null) : basinPartsAhead(request)).then((parts) => {
-        if (basinsAsked.current.token !== asked.token) return;
-        const color = key === 'laniakea' ? LANIAKEA_OUTLINE_COLOR : SHAPLEY_OUTLINE_COLOR;
-        const made = parts === null ? null : basinObjectsFor(basins, parts, color, outlineMaterial);
-        setBasinObjects((before) => ({ ...before, [key]: made }));
-        renderDemand.request();
-      });
+    const wanted = outlines.filter((o) => basinChipShown(basinChips, o.chip) && !(o.key in basinObjects) && !asked.keys.has(o.key));
+    for (const outline of wanted) {
+      asked.keys.add(outline.key);
+      const request = basinRequest(catalogue, outline);
+      asked.queue = asked.queue.then(() =>
+        (request === null ? Promise.resolve(null) : basinPartsAhead(request)).then((parts) => {
+          if (basinsAsked.current.token !== asked.token) return;
+          const made = parts === null ? null : basinObjectsFor(basins, parts, outline.color, outlineMaterial);
+          setBasinObjects((before) => ({ ...before, [outline.key]: made }));
+          renderDemand.request();
+        }),
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalogue, showBasin, showShapley, basinObjects]);
+  }, [catalogue, outlines, showBasins, basinChips, basinObjects]);
 
   const structures = useMemo(() => {
     if (catalogue === null) return null;
@@ -1385,21 +1390,27 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   // A catalogue read anew drops the basins made from the old one.
   useEffect(
     () => () => {
-      basinsAsked.current = { token: {}, keys: new Set() };
+      basinsAsked.current = { token: {}, keys: new Set(), queue: Promise.resolve() };
       setBasinObjects({});
     },
     [catalogue],
   );
-  useEffect(() => () => {
-    for (const basin of Object.values(basinObjects)) {
-      if (!basin) continue;
-      for (const mesh of [basin.outline, basin.fill]) {
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-      }
-      basin.texture.dispose();
+  // A basin disposed once it is dropped -- with the catalogue, or unmounting -- and not as the
+  // next is added beside it.
+  const basinsHeld = useRef<Readonly<Record<string, BasinObjects | null>>>({});
+  useEffect(() => {
+    for (const [key, basin] of Object.entries(basinsHeld.current)) {
+      if (basinObjects[key] !== basin) disposeBasin(basin);
     }
+    basinsHeld.current = basinObjects;
   }, [basinObjects]);
+  useEffect(
+    () => () => {
+      for (const basin of Object.values(basinsHeld.current)) disposeBasin(basin);
+      basinsHeld.current = {};
+    },
+    [],
+  );
 
   // Scratch for the frame: the volumes drawn this frame.
   const resolved = useMemo(() => ({ k: [] as number[], px: [] as number[] }), []);
@@ -1538,14 +1549,9 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       (uniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
       uniforms['uOpacity']!.value = opacity;
     };
-    const inside = (grid: 'galaxiesAttraction' | 'groupsAttraction', name: string): boolean => {
-      const basins = catalogue.basins;
-      const label = catalogue.info.basins.basins.find((b) => b.grid === grid && b.name === name)?.label;
-      return basins !== null && label !== undefined && basinAt(basins, grid, [cameraPc.x, cameraPc.y, cameraPc.z]) === label;
-    };
-    const basin = (objects: BasinObjects | null | undefined, shown: boolean, grid: 'galaxiesAttraction' | 'groupsAttraction', name: string) => {
+    const basin = (objects: BasinObjects | null | undefined, shown: boolean, outline: BasinOutline) => {
       if (!objects) return;
-      const within = inside(grid, name);
+      const within = catalogue.basins !== null && basinAt(catalogue.basins, outline.grid, [cameraPc.x, cameraPc.y, cameraPc.z]) === outline.label;
       setUniforms(objects.outline, shown ? structureFade * (within ? OUTLINE_INSIDE : 1) : 0);
       setUniforms(objects.fill, shown ? structureFade * (within ? FILL_INSIDE : 1) : 0);
       if (shown && catalogue.basins !== null) {
@@ -1554,8 +1560,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         (uniforms['uCameraVoxel']!.value as THREE.Vector3).set(x, y, z);
       }
     };
-    basin(basinObjects.laniakea, showBasin, 'galaxiesAttraction', 'Laniakea');
-    basin(basinObjects.shapley, showShapley, 'groupsAttraction', 'Shapley');
+    for (const outline of outlines) basin(basinObjects[outline.key], showBasins && basinChipShown(basinChips, outline.chip), outline);
     for (const mesh of structures?.voids ?? []) {
       const landmark = mesh.userData['landmark'] as LaniakeaLandmark;
       // From inside, its shell is all about the camera: fainter.

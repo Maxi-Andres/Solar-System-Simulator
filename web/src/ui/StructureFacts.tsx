@@ -1,6 +1,7 @@
 import type { BodyId, LaniakeaLandmark } from '@sss/tools/types';
 import { useSyncExternalStore } from 'react';
 
+import { outlineOfStructure } from '../core/basinChips.ts';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { basinNamesAt, laniakeaCatalogue, structureKindLabel, structureOf, type LaniakeaCatalogue } from '../core/laniakea.ts';
 import { GALACTIC_BASIS } from '../scene/galactic.ts';
@@ -56,7 +57,7 @@ export function StructurePanel({
   onClose: () => void;
 }) {
   const landmark = structureOf(focus);
-  const catalogue = useSyncExternalStore(noSubscribe, laniakeaCatalogue);
+  const catalogue = useSyncExternalStore(noSubscribe, laniakeaCatalogue, laniakeaCatalogue);
   if (landmark === null) {
     return null;
   }
@@ -74,7 +75,7 @@ export function StructurePanel({
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {landmark.otherNames.length > 0 && <Row label="Also">{landmark.otherNames.slice(0, 3).join(' · ')}</Row>}
-        <Row label="Distance">{fromSun === null ? '--' : formatGalaxyDistance(fromSun / PARSEC_KM)}</Row>
+        <Row label={landmark.kind === 'basin' ? 'Attractor at' : 'Distance'}>{fromSun === null ? '--' : formatGalaxyDistance(fromSun / PARSEC_KM)}</Row>
         <Row label="">{fromSun === null ? '' : formatLightYears(fromSun / PARSEC_KM)}</Row>
         <Row label="Distance from">{`${landmark.distanceMethod}${landmark.distanceEstimated ? ', estimated' : ''}`}</Row>
         <StructureRows landmark={landmark} catalogue={catalogue} />
@@ -106,6 +107,9 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
         </>
       )}
 
+      {landmark.kind === 'basin' && landmark.extentPc !== null && (
+        <Row label="Extent">{`${landmark.extentPc.map((e) => Math.round(e / 1e6)).join(' × ')} Mpc, its box`}</Row>
+      )}
       {landmark.kind === 'void' && landmark.extentPc !== null && (
         <Row label="Extent">{`${landmark.extentPc.map((e) => Math.round(e / 1e6)).join(' × ')} Mpc, rough`}</Row>
       )}
@@ -135,7 +139,7 @@ function StructureRows({ landmark, catalogue }: { landmark: LaniakeaLandmark; ca
       {landmark.kind === 'void' && (
         <Row label="Drawn as">{landmark.status?.label === 'disputed' ? 'A soft shell, only while chosen' : 'A soft shell of its extents'}</Row>
       )}
-      {landmark.kind === 'basin' && <Row label="Drawn as">{landmark.name === 'Laniakea Supercluster' ? 'Its basin’s outline' : 'Its attractor'}</Row>}
+      {landmark.kind === 'basin' && <Row label="Drawn as">{basinDrawnAs(landmark, catalogue)}</Row>}
     </>
   );
 }
@@ -164,4 +168,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       </dd>
     </>
   );
+}
+
+/** How a basin is drawn: its outline, where the Basins of Attraction layer has one for it; else its attractor's mark. */
+export function basinDrawnAs(landmark: Pick<LaniakeaLandmark, 'name'>, catalogue: Pick<LaniakeaCatalogue, 'info'> | null): string {
+  return catalogue !== null && outlineOfStructure(catalogue.info, landmark.name) !== null ? 'Its basin’s outline, computed' : 'Its attractor';
 }

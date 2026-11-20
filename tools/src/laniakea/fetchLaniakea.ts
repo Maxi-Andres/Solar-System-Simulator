@@ -49,8 +49,20 @@ import {
 import { assembleLaniakea, describeLaniakea, type LaniakeaOutput } from './laniakea.ts';
 import { basinLandmarks, clusterLandmarks, greatAttractor, superclusterLandmarks, voidLandmarks, wallLandmarks, wallMembers } from './landmarks.ts';
 import { fetchLedaByPgc } from './ledaPgc.ts';
-import { checkVelocityAxes, FLOW_AGREEMENT_LEAST, FLOW_AXES_MOST, LANIAKEA_LINES, readFitsVectorCube, traceFlows, transposeCube, VELOCITY_UNIT_KMS, type VectorField } from './flows.ts';
-import { BASINS, checkAttractors, cropBasins, keptLabels, quantiseDensity, readFitsCube, readZip, WATERSHED_FILES, type WatershedGrid } from './watersheds.ts';
+import {
+  checkVelocityAxes,
+  FLOW_AGREEMENT_LEAST,
+  FLOW_AXES_MOST,
+  LANIAKEA_LINES,
+  readFitsVectorCube,
+  regrid,
+  traceFlows,
+  traceStreamline,
+  transposeCube,
+  VELOCITY_UNIT_KMS,
+  type VectorField,
+} from './flows.ts';
+import { BASINS, checkAttractors, cropBasins, keptLabels, quantiseDensity, readFitsCube, readZip, selectBasins, WATERSHED_FILES, type WatershedGrid } from './watersheds.ts';
 
 const LOG = '[laniakea]';
 
@@ -168,8 +180,30 @@ export async function loadLaniakea(
   if (problems.length > 0) {
     throw new Error(`The watershed grids do not read as Dupuy & Courtois describe them:\n  ${problems.join('\n  ')}`);
   }
-  const basins = cropBasins(cubes);
   const basinSize = cubes.galaxiesAttraction.size;
+
+  const clusters = clusterLandmarks({ cf4, cf4Groups, tully, einasto: einastoRows.rows, groups: build.groups });
+  const superclusters = superclusterLandmarks(einastoRows.rows);
+  for (const missing of [...clusters.missing, ...superclusters.missing]) {
+    console.warn(`${LOG} landmark ${missing}: not found in the catalogues, left out.`);
+  }
+  // Every basin of attraction the grids hold, drawn or cut (watersheds.ts selectBasins): an
+  // attractor not in Table A.1 found where the galaxies' flow from its densest voxel comes to rest.
+  const selection = selectBasins({
+    cubes,
+    density,
+    error: velocityError,
+    places: [...superclusters.landmarks, ...clusters.landmarks],
+    settle: (grid, voxel) => {
+      if (grid !== 'galaxiesAttraction') return null;
+      const n = velocity.size;
+      const trace = traceStreamline(velocity, voxel.map((c) => regrid(c, basinSize, n)) as [number, number, number]);
+      if (trace.end !== 'attractor' || trace.points.length < 3) return null;
+      const end = trace.points.slice(-3);
+      return end.map((c) => regrid(c, n, basinSize)) as [number, number, number];
+    },
+  });
+  const basins = cropBasins(cubes, selection.drawn);
 
   // The streamlines, checked twice: the planes' order against the density, and the lines' ends
   // against Dupuy & Courtois's watersheds -- which is what says the grids' axes are read right.
@@ -185,7 +219,7 @@ export async function loadLaniakea(
     error: velocityError,
     density,
     basins: cubes.galaxiesAttraction,
-    kept: keptLabels('galaxiesAttraction'),
+    kept: keptLabels('galaxiesAttraction', selection.drawn),
     budgets: new Map([[laniakeaLabel, LANIAKEA_LINES]]),
   });
   if (!(flows.agreement >= FLOW_AGREEMENT_LEAST)) {
@@ -193,13 +227,8 @@ export async function loadLaniakea(
   }
   console.log(`${LOG} streamlines: divergence against density ${axes.toFixed(4)}; ${flows.seeds} seeds, ${(100 * flows.agreement).toFixed(1)}% ending in their own voxel's basin; ${flows.lines.length} lines kept.`);
 
-  const clusters = clusterLandmarks({ cf4, cf4Groups, tully, einasto: einastoRows.rows, groups: build.groups, basinVoxels: basins.voxels, basinVoxelSize: basinSize });
-  const superclusters = superclusterLandmarks(einastoRows.rows);
-  for (const missing of [...clusters.missing, ...superclusters.missing]) {
-    console.warn(`${LOG} landmark ${missing}: not found in the catalogues, left out.`);
-  }
   const landmarks = [
-    ...basinLandmarks({ basinVoxels: basins.voxels, basinVoxelSize: basinSize }),
+    ...basinLandmarks({ basinVoxels: basins.voxels, basinVoxelSize: basinSize, drawn: selection.drawn }),
     greatAttractor(),
     ...superclusters.landmarks,
     ...clusters.landmarks,
@@ -247,6 +276,7 @@ export async function loadLaniakea(
       source: `Courtois et al. 2023, A&A 670, L15: the CF4 galaxies' reconstruction, ${density.size}^3 voxels over 1000 Mpc/h (${density.url}).`,
     },
     basins,
+    selection,
     basinSize,
     landmarks,
     sources,

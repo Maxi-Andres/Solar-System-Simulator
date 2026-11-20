@@ -2412,8 +2412,16 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
         who: 'Dupuy & Courtois 2023',
         title: 'Dynamic cosmography of the local Universe: Laniakea and five more watershed superclusters',
         where: 'A&A 678, A176',
-        link: 'https://doi.org/10.1051/0004-6361/202346885',
-        use: 'the basins of attraction and repulsion, and their attractors',
+        link: 'https://doi.org/10.1051/0004-6361/202346802',
+        use: 'the basins of attraction and repulsion, their names and attractors (their Table 1), and every basin outlined',
+      },
+      {
+        key: 'cf4Watersheds',
+        who: 'Dupuy & Courtois 2023',
+        title: 'The CF4 watersheds, 128³ grids of basin numbers (CF4_new_128-z008_watersheds-fits.zip)',
+        where: 'the CosmicFlows project page, IP2I Lyon',
+        link: 'https://projets.ip2i.in2p3.fr/cosmicflows/',
+        use: 'the basins’ outlines: each voxel’s basin, from the galaxies’ reconstruction and from the groups’',
       },
       {
         key: 'valade2024',

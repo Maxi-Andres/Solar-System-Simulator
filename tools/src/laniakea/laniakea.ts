@@ -17,6 +17,7 @@ import {
   GONE_ABOVE_KMS,
   JOIN_VOXELS,
   milkyWayVelocity,
+  SEED_CONSTRAINT,
   SEED_SPACING,
   SEPARATION_VOXELS,
   SINK_KMS,
@@ -25,7 +26,20 @@ import {
   type FlowResult,
   type VectorField,
 } from './flows.ts';
-import { BASINS, basinGrid, CF4_BOX_MPC_H, DENSITY_SCALE, voxelToScene, WATERSHED_FILES, type BasinCrop } from './watersheds.ts';
+import { basinLandmarkName, drawnBasinLandmarkName } from './landmarks.ts';
+import {
+  BASINS,
+  basinGrid,
+  CF4_BOX_MPC_H,
+  DENSITY_SCALE,
+  MIN_BASIN_VOXELS,
+  NAME_NEAR_PC,
+  NAME_WITHIN_PC,
+  voxelToScene,
+  WATERSHED_FILES,
+  type BasinCrop,
+  type BasinSelection,
+} from './watersheds.ts';
 
 /**
  * G3's files, from the build: what `laniakea/` holds and how laniakea.json describes it.
@@ -125,6 +139,8 @@ export interface LaniakeaAssembly {
   readonly build: LaniakeaBuild;
   readonly density: { size: number; values: Int8Array; source: string };
   readonly basins: BasinCrop;
+  /** Which basins of attraction are drawn, and why the others are not (watersheds.ts selectBasins). */
+  readonly selection: BasinSelection;
   readonly basinSize: number;
   readonly landmarks: readonly LaniakeaLandmark[];
   readonly sources: LaniakeaInfo['sources'];
@@ -266,17 +282,52 @@ export function assembleLaniakea(parts: LaniakeaAssembly): LaniakeaOutput {
       voxelToScene: voxelToScene(parts.basinSize, crop.offset).map((v) => Number(v.toPrecision(10))),
       grids: gridOrder,
       home: crop.home,
-      basins: BASINS.flatMap((row) =>
-        (['galaxies', 'groups'] as const).flatMap((reconstruction) => {
-          const fit = row[reconstruction];
-          const grid = basinGrid(row.kind, reconstruction);
-          if (fit === null || grid === null) {
-            return [];
-          }
-          const voxels = crop.voxels[grid][fit.label] ?? 0;
-          return [{ name: row.name, kind: row.kind, grid, label: fit.label, voxels, volumeMpc3: Math.round(voxels * voxelMpc3), paperVolumeMpcH3: fit.volumeMpcH3 }];
-        }),
-      ),
+      basins: [
+        ...BASINS.flatMap((row) =>
+          (['galaxies', 'groups'] as const).flatMap((reconstruction) => {
+            const fit = row[reconstruction];
+            const grid = basinGrid(row.kind, reconstruction);
+            if (fit === null || grid === null) {
+              return [];
+            }
+            const voxels = crop.voxels[grid][fit.label] ?? 0;
+            return [
+              {
+                name: row.name,
+                kind: row.kind,
+                grid,
+                label: fit.label,
+                voxels,
+                volumeMpc3: Math.round(voxels * voxelMpc3),
+                paperVolumeMpcH3: fit.volumeMpcH3,
+                ...(row.kind === 'attraction' ? { landmark: basinLandmarkName(row) } : {}),
+              },
+            ];
+          }),
+        ),
+        ...parts.selection.drawn
+          .filter((d) => d.naming !== 'paper')
+          .map((d) => ({
+            name: d.name,
+            kind: 'attraction' as const,
+            grid: d.grid,
+            label: d.label,
+            voxels: d.voxels,
+            volumeMpc3: Math.round(d.voxels * voxelMpc3),
+            paperVolumeMpcH3: null,
+            landmark: drawnBasinLandmarkName(d),
+          })),
+      ],
+      selection: {
+        minVoxels: MIN_BASIN_VOXELS,
+        leastConstraint: SEED_CONSTRAINT,
+        mostErrorKmS: GONE_ABOVE_KMS - SEED_CONSTRAINT * (GONE_ABOVE_KMS - FULL_BELOW_KMS),
+        nameWithinPc: NAME_WITHIN_PC,
+        nameNearPc: NAME_NEAR_PC,
+        cut: parts.selection.cuts,
+        note:
+          "Every basin of attraction in the two grids: Dupuy & Courtois's Table A.1 names six in the galaxies' and four in the groups', all drawn; their SDSS basins are cut, as the authors say they cannot be constrained; any other is drawn if it has minVoxels or more and the velocity's error at its attractor is at most mostErrorKmS (the flow lines' rule), named for the named structure nearest its attractor within nameWithinPc, 'Basin near' one within nameNearPc, else unnamed.",
+      },
       source: 'Dupuy & Courtois 2023, A&A 678, A176: the watersheds of the Cosmicflows-4 velocity field of Courtois et al. 2023, https://projets.ip2i.in2p3.fr/cosmicflows/ (CF4_new_128-z008_watersheds-fits.zip).',
     },
     landmarks: parts.landmarks,
@@ -344,11 +395,23 @@ export function describeLaniakea(output: LaniakeaOutput, build: LaniakeaBuild): 
   lines.push(`[laniakea] most luminous (M_V): ${brightest}.`);
   lines.push(
     `[laniakea] basins (voxels, volume vs the paper's): ${info.basins.basins
-      .map((b) => `${b.name} [${b.grid}] ${b.voxels} = ${(b.volumeMpc3 * LITTLE_H ** 3 / 1e6).toFixed(2)} vs ${(b.paperVolumeMpcH3 / 1e6).toFixed(1)} million (Mpc/h)^3`)
+      .map(
+        (b) =>
+          `${b.name} [${b.grid}] ${b.voxels} = ${(b.volumeMpc3 * LITTLE_H ** 3 / 1e6).toFixed(2)} vs ${b.paperVolumeMpcH3 === null ? 'none in the paper' : (b.paperVolumeMpcH3 / 1e6).toFixed(1)} million (Mpc/h)^3`,
+      )
       .join('; ')}. The Milky Way's voxel: ${Object.entries(info.basins.home)
       .map(([grid, label]) => `${grid} ${label}`)
       .join(', ')}.`,
   );
+  if (info.basins.selection !== undefined) {
+    const s = info.basins.selection;
+    lines.push(
+      `[laniakea] basins of attraction drawn: ${info.basins.basins
+        .filter((b) => b.landmark !== undefined)
+        .map((b) => `${b.landmark} [${b.grid} ${b.label}]`)
+        .join(', ')}; cut: ${s.cut.map((c) => `${c.name ?? `unnamed`} [${c.grid} ${c.label}, ${c.voxels} voxels] ${c.why}`).join(', ') || 'none'}.`,
+    );
+  }
   if (info.flows !== undefined) {
     const f = info.flows;
     lines.push(

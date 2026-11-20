@@ -13,6 +13,6 @@ describe('show me', () => {
 
   it('switches on what a view draws', () => {
     expect(layersOf(SHOW_ME['cmb']!, EMPTY, 'sun')).toContain('observableUniverse');
-    expect(layersOf(SHOW_ME['laniakea']!, EMPTY, 'sun')).toEqual(expect.arrayContaining(['laniakea', 'laniakeaBasin', 'flowLines']));
+    expect(layersOf(SHOW_ME['laniakea']!, EMPTY, 'sun')).toEqual(expect.arrayContaining(['laniakea', 'basins', 'flowLines']));
   });
 });

@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
+import { basinChipShown, basinOutlines, BASIN_CHIPS, OTHER_BASIN_CHIP, OTHER_BASIN_COLOR } from '../core/basinChips.ts';
 import {
   BELT_FAMILIES,
   beltDensities,
@@ -10,6 +11,7 @@ import {
   type BeltProgress,
   type BeltSource,
 } from '../core/belt.ts';
+import { laniakeaCatalogue } from '../core/laniakea.ts';
 import { chipShown, SATELLITE_CHIPS } from '../core/satelliteGroups.ts';
 import { chipCounts, type SatelliteSource } from '../core/satellites.ts';
 import type { CmbColours } from '../scene/cmb.ts';
@@ -35,7 +37,8 @@ import { Panel } from './Panel.tsx';
  *
  * Under Asteroids, while it is on, sits the belt's density -- how many of its magnitude
  * tiers to load, see BeltDensityPicker -- and which of its families to draw, see
- * BeltFamilies. Under Satellites, the same chips for its groups; under the Observable Universe,
+ * BeltFamilies. Under Satellites, the same chips for its groups, and under Basins of Attraction
+ * one a basin (BasinChips); under the Observable Universe,
  * the CMB's two colourings, see CmbColourChips. Nothing else: a layer's
  * explanation and sources are the About's, and here they buried the switches (Maxi: "tiene
  * que ser corto, que solo tengas las check boxes"). What each is, in a few words, shows beside
@@ -111,6 +114,7 @@ export function LayersPanel({
                   </>
                 )}
                 {id === 'satellites' && layers.satellites && <SatelliteChips satellites={satellites} />}
+                {id === 'basins' && layers.basins && <BasinChips />}
                 {id === 'observableUniverse' && layers.observableUniverse && <CmbColourChips />}
               </LayerRow>
             ))}
@@ -614,6 +618,56 @@ function SatelliteChips({ satellites }: { readonly satellites: SatelliteSource }
           >
             {chip.label}
             {count !== null && <span style={{ color: on ? '#7a8fb8' : '#454545' }}> {compactCount(count)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Which basins of attraction to outline: core/basinChips.ts's, in the satellites' chip style,
+ * each with a dot of its outline's hue. "Other" only where the catalogue draws a basin the list
+ * does not name.
+ */
+function BasinChips() {
+  const shown = useViewStore((store) => store.basinChips);
+  const toggle = useViewStore((store) => store.toggleBasinChip);
+  const catalogue = laniakeaCatalogue();
+  const hasOther = catalogue !== null && basinOutlines(catalogue.info).some((o) => o.chip === OTHER_BASIN_CHIP);
+  const chips = [
+    ...BASIN_CHIPS.map((chip, index) => ({ index, label: chip.label, color: chip.color, description: chip.description })),
+    ...(hasOther ? [{ index: OTHER_BASIN_CHIP, label: 'Other', color: OTHER_BASIN_COLOR, description: 'Basins Dupuy & Courtois do not name.' }] : []),
+  ];
+  return (
+    <div role="group" aria-label="Basins of attraction" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', margin: '0 0 0.4rem 1.65rem' }}>
+      {chips.map((chip) => {
+        const on = basinChipShown(shown, chip.index);
+        return (
+          <button
+            key={chip.index}
+            type="button"
+            className="ui-press"
+            aria-pressed={on}
+            onClick={() => toggle(chip.index)}
+            title={chip.description}
+            style={{
+              background: on ? '#16203a' : 'transparent',
+              border: `1px solid ${on ? '#4a86ff' : '#2a2a2a'}`,
+              borderRadius: '0.6rem',
+              color: on ? '#d6d6d6' : '#5e5e5e',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '0.62rem',
+              lineHeight: 1.3,
+              padding: '0.05rem 0.4rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span aria-hidden="true" style={{ color: on ? chip.color : '#454545' }}>
+              ●{' '}
+            </span>
+            {chip.label}
           </button>
         );
       })}

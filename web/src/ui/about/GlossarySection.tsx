@@ -526,7 +526,7 @@ function GlossaryText() {
           cluster, a supercluster is mostly not held together: the universe’s expansion will pull it apart. Shapley,
           the most massive nearby, is about 650 million light years away.
         </Term>
-        <Term id="laniakea" title="Laniakea and basins of attraction" app={<><Layer>Laniakea Basin</Layer>, on; <Layer>Shapley Basin</Layer>, off.</>}>
+        <Term id="laniakea" title="Laniakea and basins of attraction" app={<><Layer>Basins of Attraction</Layer>, off: a chip a basin, the groups’ Shapley off within it.</>}>
           Galaxies do not only drift apart with the expansion; they also fall toward where there is more mass. A{' '}
           <em>basin of attraction</em> is a region whose galaxies all flow toward the same place, like the land that
           drains into one river. Laniakea (Hawaiian for “immeasurable heaven”) is ours, about 520 million light years

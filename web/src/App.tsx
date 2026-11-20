@@ -226,6 +226,7 @@ export function App() {
   const setLayer = useViewStore((state) => state.setLayer);
   const beltTiers = useViewStore((state) => state.beltTiers);
   const beltFamilies = useViewStore((state) => state.beltFamilies);
+  const basinChips = useViewStore((state) => state.basinChips);
   const satelliteChips = useViewStore((state) => state.satelliteChips);
   const inSolarSystem = useViewStore((state) => state.inSolarSystem);
 
@@ -809,8 +810,8 @@ export function App() {
         laniakea={laniakea}
         laniakeaNames={laniakeaNames}
         showLaniakea={layers.laniakea}
-        showLaniakeaBasin={layers.laniakeaBasin}
-        showShapleyBasin={layers.shapleyBasin}
+        showBasins={layers.basins}
+        basinChips={basinChips}
         showFlowLines={layers.flowLines}
         onPickLaniakeaGalaxy={goToLaniakeaGalaxy}
         cosmicWeb={cosmicWeb}

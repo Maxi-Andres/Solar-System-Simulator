@@ -609,10 +609,11 @@ export const choicesSection: AboutSection = {
             <Why>86,899 marks would be a wall of rings.</Why>
           </Item>
           <Item title="Both answers to where we live">
-            The Laniakea Basin layer draws Laniakea’s boundary as the galaxies’ reconstruction finds it; the
-            Shapley Basin layer the groups’ answer, in which there is no Laniakea and the Milky Way’s flow ends at
-            Shapley. Valade et al. find the data slightly prefer the second <Cite k="valade2024" />. The
-            breadcrumb’s “Laniakea” is the first; every panel gives both.
+            The Basins of Attraction layer draws Laniakea’s boundary and its neighbours’ as the galaxies’
+            reconstruction finds them, a chip each; its “Shapley, groups” chip, off at first, the groups’ answer, in
+            which there is no Laniakea and the Milky Way’s flow ends at Shapley. Valade et al. find the data
+            slightly prefer the second <Cite k="valade2024" />. The breadcrumb’s “Laniakea” is the first; every
+            panel gives both.
             <Why>the two reconstructions are of the same data, and neither is settled.</Why>
           </Item>
           <Item title="Drawn faint">

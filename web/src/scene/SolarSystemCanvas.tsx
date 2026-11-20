@@ -173,8 +173,9 @@ export interface SolarSystemCanvasProps {
   readonly laniakea: LazySource<LaniakeaCatalogue>;
   readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
   readonly showLaniakea: boolean;
-  readonly showLaniakeaBasin: boolean;
-  readonly showShapleyBasin: boolean;
+  /** The Basins of Attraction layer, and which of its basins are on (core/basinChips.ts). */
+  readonly showBasins: boolean;
+  readonly basinChips: number;
   /** The Flow Lines layer: the velocity field's streamlines. */
   readonly showFlowLines: boolean;
   readonly onPickLaniakeaGalaxy: (k: number) => void;
@@ -232,8 +233,8 @@ export function SolarSystemCanvas({
   laniakea,
   laniakeaNames,
   showLaniakea,
-  showLaniakeaBasin,
-  showShapleyBasin,
+  showBasins,
+  basinChips,
   showFlowLines,
   onPickLaniakeaGalaxy,
   cosmicWeb,
@@ -294,8 +295,8 @@ export function SolarSystemCanvas({
     showLocalGroup,
     showNuclearCluster,
     showLaniakea,
-    showLaniakeaBasin,
-    showShapleyBasin,
+    showBasins,
+    basinChips,
     showFlowLines,
     showSdssGalaxies,
     showFilaments,
@@ -426,8 +427,8 @@ export function SolarSystemCanvas({
         focus={focus}
         visible={showLaniakea}
         showMarks={showIcons}
-        showBasin={showLaniakeaBasin}
-        showShapley={showShapleyBasin}
+        showBasins={showBasins}
+        basinChips={basinChips}
         showFlows={showFlowLines}
         onPick={onPickLaniakeaGalaxy}
       />

@@ -2304,10 +2304,26 @@ export interface LaniakeaInfo {
       readonly grid: LaniakeaBasinGrid;
       readonly label: number;
       readonly voxels: number;
-      /** Volume, Mpc^3 (h = 0.746), from its voxels; and the paper's, (Mpc/h)^3. */
+      /** Volume, Mpc^3 (h = 0.746), from its voxels; and the paper's, (Mpc/h)^3 (null: a basin its Table 1 does not name). */
       readonly volumeMpc3: number;
-      readonly paperVolumeMpcH3: number;
+      readonly paperVolumeMpcH3: number | null;
+      /** Its structure in `landmarks`, by name (a basin of attraction drawn); absent from a catalogue built before them. */
+      readonly landmark?: string;
     }[];
+    /**
+     * Which basins of attraction were drawn and why the others were not (watersheds.ts
+     * selectBasins); absent from a catalogue built before it.
+     */
+    readonly selection?: {
+      readonly minVoxels: number;
+      /** The least constraint (flows.ts) at a basin's attractor, and the velocity error, km/s, that is. */
+      readonly leastConstraint: number;
+      readonly mostErrorKmS: number;
+      readonly nameWithinPc: number;
+      readonly nameNearPc: number;
+      readonly cut: readonly { readonly grid: LaniakeaBasinGrid; readonly label: number; readonly name: string | null; readonly voxels: number; readonly why: 'sdss' | 'small' | 'unconstrained' }[];
+      readonly note: string;
+    };
     readonly source: string;
   };
   readonly landmarks: readonly LaniakeaLandmark[];

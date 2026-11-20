@@ -324,9 +324,9 @@ them out.
 
 ## Clusters, superclusters and voids (to about 1,000 Mpc)
 
-- [x] Superclusters of galaxies: Einasto et al.'s eleven named here, and the CF4 watershed basins (Laniakea, Shapley, Perseus-Pisces, Hercules, Lepus, Apus).
+- [x] Superclusters of galaxies: Einasto et al.'s eleven named here, and the CF4 watershed basins (Laniakea, Shapley, Perseus-Pisces, Hercules, Lepus, Apus), each outlined in its own hue in the Basins of Attraction layer, a chip each.
 - [x] Fornax Cluster: a structure, its galaxies drawn.
-- [x] Shapley Supercluster: a structure, with Abell 3558 and Abell 3571; its basin the Shapley Basin layer.
+- [x] Shapley Supercluster: a structure, with Abell 3558 and Abell 3571; its basins the Basins of Attraction layer's Shapley chips (the galaxies' reconstruction's, and the groups' that takes Laniakea in).
 - [x] KBC Void: a void about us to z 0.07 (Keenan et al. 2013), its panel `[disputed]`, its shell and mark only while chosen (`tools/src/laniakea/landmarks.ts` paperVoids; in laniakea.json from the next data build).
 - [x] Hydra Cluster: a structure (`Abell 1060`).
 - [~] Pavo-Indus Supercluster: the Pavo II Cluster in it drawn and named; the supercluster not named.

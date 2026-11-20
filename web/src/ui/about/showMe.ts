@@ -1,6 +1,7 @@
 import type { BodyId } from '@sss/tools/types';
 
 import { ALPHA_CEN_FRAMING_KM, alphaCenMember, alphaCenView, type AlphaCenKey } from '../../core/alphaCenBodies.ts';
+import { basinChipShown, LANIAKEA_BASIN_CHIP } from '../../core/basinChips.ts';
 import { BLACK_HOLE_SYSTEMS } from '../../core/blackHoles.ts';
 import type { EphemerisStore } from '../../core/ephemerisStore.ts';
 import { clusterFramingKm, ensureClusterBody, type GlobularClusterArchive } from '../../core/globularClusters.ts';
@@ -256,7 +257,7 @@ export function layersOf(target: ShowMeTarget, store: EphemerisStore, id: BodyId
   if (target.kind === 'body' && target.alsoLayers !== undefined) layers.push(...target.alsoLayers);
   if (target.kind === 'satellite') layers.push('satellites');
   if (target.kind === 'structure') layers.push('laniakea');
-  if (target.kind === 'structure' && target.laniakeaView === true) layers.push('laniakeaBasin', 'flowLines');
+  if (target.kind === 'structure' && target.laniakeaView === true) layers.push('basins', 'flowLines');
   if (target.kind === 'view' && target.view === 'observable-universe') layers.push('observableUniverse');
   if (target.kind === 'view' && target.view === 'nearby-universe') layers.push('sdssGalaxies', 'filaments');
   if (target.kind === 'view' && target.view === 'galaxy') layers.push('milkyWay');
@@ -272,6 +273,10 @@ function go(target: ShowMeTarget, store: EphemerisStore, to: Arrival): void {
   if (target.kind === 'satellite') {
     const chip = satelliteBodyChip(to.id);
     if (chip >= 0 && !chipShown(state.satelliteChips, chip)) state.toggleSatelliteChip(chip);
+  }
+  // Laniakea's view draws its basin: its chip on too, whatever was chosen before.
+  if (target.kind === 'structure' && target.laniakeaView === true && !basinChipShown(state.basinChips, LANIAKEA_BASIN_CHIP)) {
+    state.toggleBasinChip(LANIAKEA_BASIN_CHIP);
   }
   // Asked for before the focus moves, so the camera rig takes it with the new focus.
   if (to.km !== undefined) state.requestFraming(to.km, to.view);

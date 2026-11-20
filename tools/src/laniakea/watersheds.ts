@@ -1,7 +1,8 @@
 import { inflateRawSync } from 'node:zlib';
 
 import { readHeader } from '../localGroup/nearbyGalaxies.ts';
-import { LITTLE_H, supergalacticToScene, type Vec3 } from './frames.ts';
+import { constraint, regrid, SEED_CONSTRAINT } from './flows.ts';
+import { LITTLE_H, OMEGA_M, supergalacticToScene, type Vec3 } from './frames.ts';
 
 /**
  * Laniakea's boundary, and the matter about it, as the Cosmicflows-4 velocity field draws
@@ -59,7 +60,9 @@ import { LITTLE_H, supergalacticToScene, type Vec3 } from './frames.ts';
  *   basin kept (BASINS): the galaxies' basins of attraction, their basins of repulsion, and
  *   the groups' basins of attraction. The basins the SDSS volume shows at the far edge of the
  *   data (SDSS-1a to 2c) are set to 0: Dupuy & Courtois say themselves they cannot be
- *   constrained, their streamlines running off the grid for want of data beyond.
+ *   constrained, their streamlines running off the grid for want of data beyond. Any basin of
+ *   attraction more than Table A.1 names would be kept if it passes selectBasins' cuts (its
+ *   size, and the field constrained at its attractor); by the paper's table, the grids hold none.
  */
 
 // ---------------------------------------------------------------------------------------
@@ -241,9 +244,15 @@ export function basinGrid(kind: BasinRow['kind'], reconstruction: 'galaxies' | '
   return kind === 'attraction' ? 'groupsAttraction' : null;
 }
 
-/** The basin numbers kept in each grid. */
-export function keptLabels(grid: WatershedGrid): Set<number> {
-  const labels = new Set<number>();
+/** A basin by its grid and number. */
+export interface BasinRef {
+  readonly grid: WatershedGrid;
+  readonly label: number;
+}
+
+/** The basin numbers kept in each grid: Table A.1's, and any more selectBasins draws. */
+export function keptLabels(grid: WatershedGrid, extra: readonly BasinRef[] = []): Set<number> {
+  const labels = new Set<number>(extra.filter((b) => b.grid === grid).map((b) => b.label));
   for (const row of BASINS) {
     for (const reconstruction of ['galaxies', 'groups'] as const) {
       const fit = row[reconstruction];
@@ -291,7 +300,7 @@ export interface BasinCrop {
  * The kept basins of the three grids, cropped to the smallest box that holds every one of
  * them (the same box for all three), as Uint8 basin numbers, x (SGX) fastest.
  */
-export function cropBasins(cubes: Readonly<Record<WatershedGrid, { size: number; values: Float64Array }>>): BasinCrop {
+export function cropBasins(cubes: Readonly<Record<WatershedGrid, { size: number; values: Float64Array }>>, extra: readonly BasinRef[] = []): BasinCrop {
   const names = Object.keys(WATERSHED_FILES) as WatershedGrid[];
   const size = cubes.galaxiesAttraction.size;
   for (const name of names) {
@@ -305,7 +314,7 @@ export function cropBasins(cubes: Readonly<Record<WatershedGrid, { size: number;
   const home = {} as Record<WatershedGrid, number>;
   const centre = size / 2 + size * (size / 2 + size * (size / 2));
   for (const name of names) {
-    const kept = keptLabels(name);
+    const kept = keptLabels(name, extra);
     const values = cubes[name].values;
     const counts: Record<number, number> = {};
     home[name] = values[centre]!;
@@ -337,7 +346,7 @@ export function cropBasins(cubes: Readonly<Record<WatershedGrid, { size: number;
   const extent: Vec3 = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1];
   const grids = {} as Record<WatershedGrid, Uint8Array>;
   for (const name of names) {
-    const kept = keptLabels(name);
+    const kept = keptLabels(name, extra);
     const values = cubes[name].values;
     const out = new Uint8Array(extent[0] * extent[1] * extent[2]);
     for (let k = 0; k < extent[2]; k += 1) {
@@ -384,4 +393,249 @@ export function quantiseDensity(values: Float64Array): Int8Array {
     out[at] = Math.max(-127, Math.min(127, Math.round(values[at]! * DENSITY_SCALE)));
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------
+// Every basin: what the grids hold, and which are drawn
+
+/**
+ * Dupuy & Courtois 2023's Table 1 lists every basin the two attraction grids hold: the
+ * galaxies' thirteen -- the six named (BASINS) and seven at the far edge of the SDSS volume,
+ * SDSS-1a to 1d and 2a to 2c -- and the groups' seven, Hercules, Lepus, Perseus-Pisces and
+ * Shapley and SDSS-1a, 2a and 2b. The SDSS basins' numbers here are read off the table's row
+ * order (blank rows skipped), as the named ones' are and are checked to be; theirs are not
+ * checked -- their attractors lie by the grid's edge -- and they are cut whatever their number:
+ * the authors say their streamlines run off the grid for want of data, so they "cannot be
+ * constrained correctly". There is no Coma basin (the paper puts the Coma Supercluster inside
+ * a larger basin) and no Arrowhead (Pomarede et al. 2015's, from Cosmicflows-2, is smaller than
+ * this grid resolves).
+ */
+export const SDSS_BASINS: readonly (BasinRef & { readonly name: string })[] = [
+  { name: 'SDSS-1a', grid: 'galaxiesAttraction', label: 7 },
+  { name: 'SDSS-1b', grid: 'galaxiesAttraction', label: 8 },
+  { name: 'SDSS-1c', grid: 'galaxiesAttraction', label: 9 },
+  { name: 'SDSS-1d', grid: 'galaxiesAttraction', label: 10 },
+  { name: 'SDSS-2a', grid: 'galaxiesAttraction', label: 11 },
+  { name: 'SDSS-2b', grid: 'galaxiesAttraction', label: 12 },
+  { name: 'SDSS-2c', grid: 'galaxiesAttraction', label: 13 },
+  { name: 'SDSS-1a', grid: 'groupsAttraction', label: 5 },
+  { name: 'SDSS-2a', grid: 'groupsAttraction', label: 6 },
+  { name: 'SDSS-2b', grid: 'groupsAttraction', label: 7 },
+];
+
+/**
+ * The cuts on a basin Table 1 does not name, should a grid hold one:
+ *
+ * - **size**: at least MIN_BASIN_VOXELS voxels, 0.12 million (Mpc/h)^3 at 128^3 -- a sphere 60
+ *   Mpc/h (80 Mpc) across, four voxels in radius; the field is smoothed over a few voxels, and a
+ *   basin smaller is the grid's noise, not a supercluster (the smallest Table 1 gives, the
+ *   groups' Hercules, is 1,652 voxels);
+ * - **reliability**: its attractor where the velocity field is constrained, by the flow lines'
+ *   own rule (flows.ts): constraint() of the velocity's error there at least SEED_CONSTRAINT --
+ *   an error under 130 km/s, where a flow line may start. Table 1's named basins are kept as the
+ *   paper keeps them.
+ */
+export const MIN_BASIN_VOXELS = 250;
+
+/**
+ * Naming a basin Table 1 does not name: for the named structure (a supercluster or a cluster,
+ * landmarks.ts) nearest its attractor -- "<it> basin" within NAME_WITHIN_PC, "Basin near <it>"
+ * within NAME_NEAR_PC, else "Unnamed basin (CF4 ...)". 25 Mpc is two and a half voxels: the
+ * reconstruction's attractor is smoothed over that.
+ */
+export const NAME_WITHIN_PC = 25e6;
+export const NAME_NEAR_PC = 75e6;
+
+/** A basin's voxels, box and densest voxel, as a grid gives them. */
+export interface BasinStats {
+  readonly label: number;
+  readonly voxels: number;
+  /** Its box in the grid's voxels, inclusive. */
+  readonly lo: Vec3;
+  readonly hi: Vec3;
+  /** Its voxel of the highest overdensity (its first voxel where there is no density). */
+  readonly peak: Vec3;
+  /** Sum over its voxels of max(0, 1 + delta): its mass in voxels of the mean density. */
+  readonly meanDensityVoxels: number;
+}
+
+/** A scalar on an N^3 grid centred on the Milky Way's voxel, x (SGX) fastest. */
+export interface Cube {
+  readonly size: number;
+  readonly values: ArrayLike<number>;
+}
+
+/** A cube's value at voxel (i, j, k) of an N-grid, read at the nearest voxel of its own size. */
+export function sampleAt(cube: Cube, n: number, i: number, j: number, k: number): number {
+  const m = cube.size;
+  const at = (p: number) => Math.min(m - 1, Math.max(0, Math.round(regrid(p, n, m))));
+  return Number(cube.values[at(i) + m * (at(j) + m * at(k))]);
+}
+
+/** Every basin a grid holds (numbers over 0): its voxels, box and densest voxel. */
+export function basinStats(grid: Cube, density: Cube | null): Map<number, BasinStats> {
+  const n = grid.size;
+  const out = new Map<number, { label: number; voxels: number; lo: Vec3; hi: Vec3; peak: Vec3; best: number; meanDensityVoxels: number }>();
+  for (let k = 0; k < n; k += 1) {
+    for (let j = 0; j < n; j += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const label = Number(grid.values[i + n * (j + n * k)]);
+        if (!(label > 0)) continue;
+        const delta = density === null ? 0 : sampleAt(density, n, i, j, k);
+        let s = out.get(label);
+        if (s === undefined) {
+          s = { label, voxels: 0, lo: [i, j, k], hi: [i, j, k], peak: [i, j, k], best: delta, meanDensityVoxels: 0 };
+          out.set(label, s);
+        }
+        s.voxels += 1;
+        s.meanDensityVoxels += Math.max(0, 1 + delta);
+        s.lo = [Math.min(s.lo[0], i), Math.min(s.lo[1], j), Math.min(s.lo[2], k)];
+        s.hi = [Math.max(s.hi[0], i), Math.max(s.hi[1], j), Math.max(s.hi[2], k)];
+        if (delta > s.best) {
+          s.best = delta;
+          s.peak = [i, j, k];
+        }
+      }
+    }
+  }
+  return new Map([...out].map(([label, s]) => [label, { label, voxels: s.voxels, lo: s.lo, hi: s.hi, peak: s.peak, meanDensityVoxels: s.meanDensityVoxels }]));
+}
+
+/** Solar masses in a voxel of an N-grid at the mean matter density: Omega_m rho_crit, at H0 74.6. */
+export function meanVoxelMassSun(n: number): number {
+  const rhoCritSunPerMpc3 = 2.775e11 * LITTLE_H ** 2;
+  return OMEGA_M * rhoCritSunPerMpc3 * (CF4_BOX_MPC_H / n / LITTLE_H) ** 3;
+}
+
+/** A named structure a basin may be named for: its name and scene position, pc. */
+export interface NamedPlace {
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/** A basin's name from the nearest named structure (see NAME_WITHIN_PC), never one already taken. */
+export function nameBasin(
+  attractorPc: Vec3,
+  places: readonly NamedPlace[],
+  fallback: string,
+  taken: ReadonlySet<string> = new Set(),
+): { name: string; naming: 'nearby' | 'near' | 'unnamed' } {
+  let nearest: NamedPlace | null = null;
+  let best = Infinity;
+  for (const place of places) {
+    const d = Math.hypot(place.x - attractorPc[0], place.y - attractorPc[1], place.z - attractorPc[2]);
+    if (d < best) {
+      best = d;
+      nearest = place;
+    }
+  }
+  if (nearest !== null && best <= NAME_WITHIN_PC) {
+    const name = `${nearest.name.replace(/ (Supercluster|Cluster)$/, '')} basin`;
+    if (!taken.has(name)) return { name, naming: 'nearby' };
+  }
+  if (nearest !== null && best <= NAME_NEAR_PC) {
+    const name = `Basin near ${nearest.name}`;
+    if (!taken.has(name)) return { name, naming: 'near' };
+  }
+  return { name: fallback, naming: 'unnamed' };
+}
+
+/** A basin drawn: Table 1's, or one more that passed the cuts. */
+export interface DrawnBasin extends BasinRef {
+  readonly name: string;
+  /** Where its name is from: the paper's table, the structure at its attractor, one near it, or none. */
+  readonly naming: 'paper' | 'nearby' | 'near' | 'unnamed';
+  readonly voxels: number;
+  /** Its attractor, supergalactic Mpc/h: the paper's, else where the flow from its densest voxel comes to rest. */
+  readonly attractorSgMpcH: Vec3;
+  /** Its box's sides along SGX, SGY, SGZ, Mpc/h. */
+  readonly extentMpcH: Vec3;
+  /** Its mass at the reconstruction's density, solar masses: an estimate (see selectBasins). */
+  readonly massSun: number;
+}
+
+export interface BasinCut extends BasinRef {
+  readonly name: string | null;
+  readonly voxels: number;
+  readonly why: 'sdss' | 'small' | 'unconstrained';
+}
+
+export interface BasinSelection {
+  readonly drawn: DrawnBasin[];
+  readonly cuts: BasinCut[];
+}
+
+export interface BasinSelectionInput {
+  readonly cubes: Readonly<Record<WatershedGrid, Cube>>;
+  /** The overdensity, for each basin's densest voxel and its mass; null: neither. */
+  readonly density: Cube | null;
+  /** The velocity's error, km/s, for the reliability cut; null: every basin Table 1 does not name is cut. */
+  readonly error: Cube | null;
+  /** The named structures a basin may be named for. */
+  readonly places: readonly NamedPlace[];
+  /**
+   * Where the flow from a voxel of the grid comes to rest, fractional voxels, or null where it
+   * does not (flows.ts traceStreamline); absent, the densest voxel stands for the attractor.
+   */
+  readonly settle?: (grid: WatershedGrid, voxel: Vec3) => Vec3 | null;
+}
+
+/**
+ * Every basin of attraction the two attraction grids hold, drawn or cut. Table 1's named
+ * basins are drawn as the paper names and places them; the SDSS ones are cut; any other is
+ * drawn if it passes MIN_BASIN_VOXELS and its attractor the reliability cut, named by
+ * nameBasin. Each drawn basin's mass is the mean matter density times its volume weighted by
+ * 1 + delta of the galaxies' reconstruction, floored at 0 -- a linear field, so a rough
+ * figure, labelled as estimated; the paper gives volumes only.
+ */
+export function selectBasins(input: BasinSelectionInput): BasinSelection {
+  const drawn: DrawnBasin[] = [];
+  const cuts: BasinCut[] = [];
+  const taken = new Set<string>([...BASINS.map((row) => row.name), ...input.places.map((p) => p.name)]);
+  for (const grid of ['galaxiesAttraction', 'groupsAttraction'] as const) {
+    const cube = input.cubes[grid];
+    const n = cube.size;
+    const cell = CF4_BOX_MPC_H / n;
+    const stats = basinStats(cube, input.density);
+    const voxelMass = meanVoxelMassSun(n);
+    const reconstruction = grid === 'galaxiesAttraction' ? 'galaxies' : 'groups';
+    for (const s of [...stats.values()].sort((a, b) => a.label - b.label)) {
+      const extentMpcH: Vec3 = [(s.hi[0] - s.lo[0] + 1) * cell, (s.hi[1] - s.lo[1] + 1) * cell, (s.hi[2] - s.lo[2] + 1) * cell];
+      const massSun = Number((s.meanDensityVoxels * voxelMass).toPrecision(2));
+      const row = BASINS.find((r) => r.kind === 'attraction' && r[reconstruction]?.label === s.label);
+      if (row !== undefined) {
+        const fit = row[reconstruction]!;
+        drawn.push({ grid, label: s.label, name: row.name, naming: 'paper', voxels: s.voxels, attractorSgMpcH: fit.sgMpcH, extentMpcH, massSun });
+        continue;
+      }
+      const sdss = SDSS_BASINS.find((b) => b.grid === grid && b.label === s.label);
+      if (sdss !== undefined) {
+        cuts.push({ grid, label: s.label, name: sdss.name, voxels: s.voxels, why: 'sdss' });
+        continue;
+      }
+      if (s.voxels < MIN_BASIN_VOXELS) {
+        cuts.push({ grid, label: s.label, name: null, voxels: s.voxels, why: 'small' });
+        continue;
+      }
+      const settled = input.settle?.(grid, s.peak) ?? null;
+      const inside = (p: Vec3) => {
+        const [i, j, k] = p.map((c) => Math.round(c)) as Vec3;
+        return i >= 0 && j >= 0 && k >= 0 && i < n && j < n && k < n && Number(cube.values[i + n * (j + n * k)]) === s.label;
+      };
+      const at: Vec3 = settled !== null && inside(settled) ? settled : s.peak;
+      const error = input.error === null ? Infinity : sampleAt(input.error, n, at[0], at[1], at[2]);
+      if (!(constraint(error) >= SEED_CONSTRAINT)) {
+        cuts.push({ grid, label: s.label, name: null, voxels: s.voxels, why: 'unconstrained' });
+        continue;
+      }
+      const attractorSgMpcH: Vec3 = [(at[0] - n / 2) * cell, (at[1] - n / 2) * cell, (at[2] - n / 2) * cell];
+      const fallback = `Unnamed basin (CF4 ${reconstruction}, ${s.label})`;
+      const { name, naming } = nameBasin(sgMpcHToScenePc(attractorSgMpcH), input.places, fallback, taken);
+      taken.add(name);
+      drawn.push({ grid, label: s.label, name, naming, voxels: s.voxels, attractorSgMpcH, extentMpcH, massSun });
+    }
+  }
+  return { drawn, cuts };
 }

@@ -105,12 +105,12 @@ export const LANIAKEA: Description = {
   drawnHere: [
     {
       title: 'Its border',
-      text: 'The basin the Cosmicflows-4 galaxies’ reconstruction gives, as Dupuy and Courtois traced its watersheds — every point followed downstream to the attractor it ends at — read from their published grid of 7.8 Mpc/h cells: a smoothed surface netted from it, faint and lit at its rim so it reads as an outline, with a faint glow inside. The Basins layer. From inside, weaker, and nothing of it within 60 Mpc of the camera.',
+      text: 'The basin the Cosmicflows-4 galaxies’ reconstruction gives, as Dupuy and Courtois traced its watersheds — every point followed downstream to the attractor it ends at — read from their published grid of 7.8 Mpc/h cells: a smoothed surface netted from it, faint and lit at its rim so it reads as an outline, with a faint glow inside, in gold. The Basins of Attraction layer, its neighbours’ beside it each in its own hue. From inside, weaker, and nothing of it within 60 Mpc of the camera.',
       cite: ['dupuy2023', 'courtois2023'],
     },
     {
       title: 'The other answer, beside it',
-      text: 'The Shapley Basin layer draws the reconstruction from the Cosmicflows-4 groups, where the Milky Way’s flow ends at Shapley and Laniakea is a part of Shapley’s basin. Neither is drawn as the truth.',
+      text: 'The same layer’s “Shapley, groups” chip draws the reconstruction from the Cosmicflows-4 groups, where the Milky Way’s flow ends at Shapley and Laniakea is a part of Shapley’s basin. Neither is drawn as the truth.',
       cite: ['dupuy2023', 'valade2024'],
     },
     {

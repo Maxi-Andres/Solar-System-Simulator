@@ -1064,6 +1064,17 @@ export const estimatedSection: AboutSection = {
             <Cite k="tully2019" />; a wall along its line in the survey’s slice. Their panels say which are
             estimates.
           </Item>
+          <Item title="Basins of attraction">
+            A basin is the region whose galaxies all flow toward one attractor. Its outline is a computation, not
+            a sight: the watersheds of a velocity field reconstructed from Cosmicflows-4’s distances, each 10.5 Mpc
+            voxel given to the attractor its flow ends at <Cite k={['dupuyCourtois2023', 'cf4Watersheds']} />. The
+            galaxies’ reconstruction gives six — Laniakea, Apus, Hercules, Lepus, Perseus–Pisces and Shapley —
+            each named as the paper names it; the groups’ has no Laniakea, its Milky Way flowing to Shapley,
+            whose basin then takes Laniakea in <Cite k="valade2024" />. The basins at the far edge of the SDSS’s
+            volume, seven and three, are left out: their authors say the data cannot constrain them. A basin’s extent is its box
+            along the supergalactic axes; its mass, the mean matter density times its volume weighted by the
+            fit’s overdensity, is rough. There is no Coma or Arrowhead basin in these grids.
+          </Item>
           <Item title="What is not drawn">
             Each galaxy’s motion, its arms and dust; a galaxy with no V its faint dot only. Behind the Milky Way’s
             plane, where 2MRS does not look — 5° either side, 8° within 30° of the Galactic Centre — only the 51
