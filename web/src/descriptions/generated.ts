@@ -9,6 +9,7 @@ import { structureOf } from '../core/structures.ts';
 import { remnantOf, remnantRadiusKm, type SupernovaRemnant } from '../core/supernovaRemnants.ts';
 import { NAMED_WINDOW_DAYS } from '../core/satellites.ts';
 import { ESA_MODEL_CREDIT, MODEL_REQUEST_PX } from '../scene/craftModels.ts';
+import { PATCH_HALF_WIDTH_DEG, PATCH_SHOWN_KM } from '../scene/surfaceGround.ts';
 import { facingRule } from '../ui/facing.ts';
 import { blackHoleFromData, isCatalogueStarBody, starFromData } from './starsFromData.ts';
 import { beyondFromData } from './beyondFromData.ts';
@@ -198,6 +199,9 @@ export const MODEL_CREDITS: Readonly<Record<string, string>> = {
   'iss.glb': 'NASA VTAD, from NASA’s Space Station 3D model page; it shows the station as it was about 2020',
   'hubble.glb': 'NASA VTAD, from NASA’s Hubble 3D model page',
   'roman.glb': 'NASA, from NASA 3D Resources (its “Nancy Grace Roman Space Telescope (B)”)',
+  'curiosity.glb': 'NASA/JPL-Caltech, from NASA’s Curiosity 3D model page (its static model)',
+  'perseverance.glb': 'NASA/JPL, from NASA 3D Resources (its Mars 2020 Perseverance Rover), posed with its mast raised as it drives',
+  'insight.glb': 'NASA/JPL-Caltech, from NASA’s InSight 3D model page (deployed), lifted onto its feet',
 };
 
 /** A TDB Julian day as a calendar date in words, e.g. "5 September 1977". */
@@ -221,6 +225,7 @@ const formatMetres = (m: number): string => `${Number(m.toFixed(2)).toLocaleStri
 function craftFromData(body: BodyDefinition, coverage: Coverage | null): DescriptionPoint[] {
   const points: DescriptionPoint[] = [];
   const satellite = body.kind === 'satellite';
+  const site = body.mission?.site ?? null;
 
   if (satellite) {
     const entry = NAMED_SATELLITES.find((named) => namedSatelliteBodyId(named.id) === body.id);
@@ -241,6 +246,29 @@ function craftFromData(body: BodyDefinition, coverage: Coverage | null): Descrip
         'The ellipse drawn is the two-body orbit it is on at this instant, worked out again as it moves — not the path ' +
         'it will trace: Earth’s equatorial bulge turns a low orbit’s plane by several degrees a day, and the ellipse ' +
         'follows that as it happens.',
+    });
+  } else if (site !== null) {
+    // A craft on another body's ground (catalog SURFACE_CRAFT, core/surface.ts): no ephemeris,
+    // a place on the ground turned with its host.
+    points.push({
+      title: 'Where it is',
+      text:
+        (site.kind === 'traverse'
+          ? 'Where NASA’s mission map (MMGIS) puts the end of each of its drives — latitude, longitude and heading, ' +
+            'planetocentric — held from the sol of that drive until the next: never in between, since the file says ' +
+            'where it stopped, not the way it went. Not JPL Horizons, whose files do not follow the rover’s drives.'
+          : `At its published coordinates, ${Math.abs(site.latitudeDeg)}° ${site.latitudeDeg < 0 ? 'S' : 'N'}, ` +
+            `${site.longitudeDeg}° E, planetocentric; it has not moved since it landed.`) +
+        ' It is placed on its planet’s reference ellipsoid and turned every frame by the same IAU rotation the planet is ' +
+        `drawn with, so it cannot drift off its ground. It is there from its landing on ${dateInWords(Date.parse(site.landingUtc) / 86_400_000 + 2440587.5)}.`,
+    });
+    points.push({
+      title: 'The ground under it',
+      text:
+        'The ellipsoid itself, with no terrain: real ground is above or below it. The planet is drawn as a sphere of flat ' +
+        'faces that sag kilometres inside the ellipsoid, so within ' +
+        `${PATCH_SHOWN_KM} km of the craft a patch of the true ellipsoid ${PATCH_HALF_WIDTH_DEG * 2}° across is drawn under it, ` +
+        'with the same map and the same light.',
     });
   } else if (body.horizonsId !== '') {
     const about =
@@ -316,7 +344,18 @@ function craftFromData(body: BodyDefinition, coverage: Coverage | null): Descrip
         : `${formatMetres(body.radiusEquatorialKm * 2000)} across at its widest, deployed: the panel’s Span, and what the camera frames it by.`,
   });
 
-  if (shape !== null) {
+  if (shape !== null && site !== null) {
+    points.push({
+      title: 'Which way it faces',
+      text:
+        'Deck to the zenith, perpendicular to the ellipsoid, not tilted with the real slope it stands on; ' +
+        (site.kind === 'traverse'
+          ? 'its front along the heading NASA’s traverse gives for each stop, which is measured.'
+          : site.headingDeg === null
+            ? 'its heading is not published, so it is drawn facing north.'
+            : `its front at ${site.headingDeg}° from north, as published.`),
+    });
+  } else if (shape !== null) {
     points.push({
       title: 'Which way it faces',
       text:
@@ -325,7 +364,16 @@ function craftFromData(body: BodyDefinition, coverage: Coverage | null): Descrip
     });
   }
 
-  if (!satellite) {
+  if (site !== null) {
+    if (site.kind === 'traverse') {
+      points.push({
+        title: 'Its tracks',
+        text:
+          'In the Trails layer: a white line through every stop so far, draped on the ellipsoid. It joins where the drives ended; the drives ' +
+          'themselves went their own way between them.',
+      });
+    }
+  } else if (!satellite) {
     const around = body.parent === null ? 'the Sun' : body.parent === 'earth' ? 'Earth' : 'what it orbits';
     points.push({
       title: 'Its trail',

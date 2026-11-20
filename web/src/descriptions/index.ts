@@ -40,12 +40,24 @@ import { CRAB_NEBULA } from './crabNebula.ts';
 import { LANIAKEA } from './laniakea.ts';
 import { MILKY_WAY } from './milkyWay.ts';
 import { CMB } from './cmb.ts';
+import { LEVEL_DESCRIPTIONS } from './levels.ts';
 import { ALPHA_CENTAURI_A, ALPHA_CENTAURI_B } from './alphaCentauri.ts';
 import { BETELGEUSE } from './betelgeuse.ts';
 import { POLARIS } from './polaris.ts';
 import { PROXIMA_CENTAURI } from './proximaCentauri.ts';
 import { SGR_A_STAR } from './sgrAStar.ts';
 import { SIRIUS_A, SIRIUS_B } from './sirius.ts';
+import { MARS_PATHFINDER } from './sites/marsPathfinder.ts';
+import { VIKING_LANDER_1 } from './sites/vikingLander1.ts';
+import { VIKING_LANDER_2 } from './sites/vikingLander2.ts';
+import { OPPORTUNITY } from './sites/opportunity.ts';
+import { PHOENIX } from './sites/phoenix.ts';
+import { SPIRIT } from './sites/spirit.ts';
+import { TIANWEN_1 } from './sites/tianwen1.ts';
+import { CURIOSITY } from './sites/curiosity.ts';
+import { INSIGHT } from './sites/insight.ts';
+import { PERSEVERANCE } from './sites/perseverance.ts';
+import { MOON_SITES } from './sites/moonSites.ts';
 import { starBodyFacts } from '../core/starBodies.ts';
 import type { Description } from './types.ts';
 
@@ -67,9 +79,15 @@ const FAR: readonly Description[] = [MILKY_WAY, ANDROMEDA, LMC, SMC, ORION_NEBUL
  */
 const STARS: readonly Description[] = [ALPHA_CENTAURI_A, ALPHA_CENTAURI_B, PROXIMA_CENTAURI, SIRIUS_A, SIRIUS_B, BETELGEUSE, POLARIS, SGR_A_STAR];
 
+/**
+ * The landing sites with descriptions (core/landingSites.ts): places on the ground, made bodies;
+ * and the craft standing on Mars (catalog SURFACE_CRAFT), Curiosity, Perseverance and InSight.
+ */
+const SITES: readonly Description[] = [VIKING_LANDER_1, VIKING_LANDER_2, MARS_PATHFINDER, SPIRIT, OPPORTUNITY, PHOENIX, TIANWEN_1, CURIOSITY, PERSEVERANCE, INSIGHT, ...MOON_SITES];
+
 /** Every body with a description, by id. Written one at a time; the panel offers it where there is one. */
 export const DESCRIPTIONS: ReadonlyMap<BodyId, Description> = new Map(
-  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT, ...FAR, ...STARS].map((description) => [description.id, description]),
+  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT, ...FAR, ...LEVEL_DESCRIPTIONS, ...STARS, ...SITES].map((description) => [description.id, description]),
 );
 
 /** The description of the catalogue star known by any of `designations` ("HIP 27989", "alf CMa B"), or null. */

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -8,6 +8,8 @@ import { NAMED_SATELLITES } from '@sss/tools/satellites/named';
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
 import { blackHoleDefinition, SGR_A_ID, SGR_A_MASS_SUN } from '../core/blackHoles.ts';
+import { landingSiteOf, landingSiteRegion } from '../core/landingSites.ts';
+import { regionDefinition } from '../core/regions.ts';
 import { namedSatelliteBodyId, satelliteDefinition } from '../core/satelliteBodies.ts';
 import { starBodyDefinition, starBodyId } from '../core/starBodies.ts';
 import { drawnFromData } from './generated.ts';
@@ -31,6 +33,9 @@ function bodyOf(id: BodyId): BodyDefinition {
   // A catalogue star, made a body at run time from its record (starBodies.ts), and a black hole.
   if (DESCRIPTIONS.get(id)?.catalogueStar !== undefined) return starBodyDefinition(starBodyId(0, 0), id, 0.65);
   if (id === SGR_A_ID) return blackHoleDefinition(SGR_A_ID, 'Sgr A*', SGR_A_MASS_SUN);
+  // A landing site, made a body at run time from its entry (core/landingSites.ts).
+  const site = landingSiteOf(id);
+  if (site !== null) return regionDefinition(landingSiteRegion(site));
   // A place made a body at run time from its own catalogue -- a galaxy, a nebula, a remnant, a
   // structure: what generated.ts reads of it is its id and its kind.
   const place = PLACE_KINDS.find(([prefix]) => id.startsWith(prefix));
@@ -76,6 +81,17 @@ describe('the descriptions', () => {
     });
   }
 
+  it('shows every landing site with a page in photographs, each credited in public/photos/CREDITS.md', () => {
+    const credits = readFileSync(PUBLIC + 'photos/CREDITS.md', 'utf-8');
+    for (const description of DESCRIPTIONS.values()) {
+      if (landingSiteOf(description.id) === null) continue;
+      expect(description.photos.length, description.id).toBeGreaterThan(0);
+      for (const photo of description.photos) {
+        expect(credits, photo.file).toContain(`\`${photo.file.replace(/^photos\//, '')}\``);
+      }
+    }
+  });
+
   it('says how the Sun is drawn from its own data: its radius and its turn', () => {
     const points = drawnFromData(getBody('sun'));
     expect(points.find((point) => point.title === 'Its size and shape')?.text).toContain('695,700 km');
@@ -94,6 +110,19 @@ describe('the descriptions', () => {
     expect(points.find((point) => point.title === 'Its size')?.text).toContain('13 m');
     expect(points.find((point) => point.title === 'Which way it faces')?.text).toContain('Dish to Earth');
     expect(points.some((point) => point.title === 'Its trail')).toBe(true);
+  });
+
+  it('says how a craft on Mars is drawn: on the ellipsoid from NASA’s traverse or its fixed site, never from Horizons', () => {
+    const rover = drawnFromData(getBody('curiosity'));
+    const where = rover.find((point) => point.title === 'Where it is')?.text ?? '';
+    expect(where).toContain('MMGIS');
+    expect(where).not.toMatch(/spacecraft -76/);
+    expect(rover.some((point) => point.title === 'Its tracks')).toBe(true);
+    expect(rover.some((point) => point.title === 'Its trail')).toBe(false);
+    const lander = drawnFromData(getBody('insight'));
+    expect(lander.find((point) => point.title === 'Where it is')?.text).toContain('4.502384° N');
+    expect(lander.find((point) => point.title === 'Which way it faces')?.text).toContain('facing north');
+    expect(lander.some((point) => point.title === 'Its tracks')).toBe(false);
   });
 
   it('says how a galaxy, a nebula and a remnant are drawn from their catalogues, never as a sphere with a map', () => {
