@@ -217,6 +217,7 @@ export function App() {
   const [distanceMode, setDistanceMode] = useState<DistanceMode>('center');
 
   const focus = useViewStore((state) => state.focus);
+  const selectedLevel = useViewStore((state) => state.selectedLevel);
   const setFocus = useViewStore((state) => state.setFocus);
   const requestFraming = useViewStore((state) => state.requestFraming);
   const layers = useViewStore((state) => state.layers);
@@ -855,6 +856,7 @@ export function App() {
           <BodyPicker
             store={store}
             focus={focus}
+            selectedLevel={selectedLevel}
             onFocus={focusFromPicker}
             visibleKinds={visibleKinds}
             clock={clock}

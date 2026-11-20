@@ -19,8 +19,11 @@ import {
   LOCAL_GROUP_FRAMING_KM,
   NEIGHBOURHOOD_FRAMING_KM,
   OBSERVABLE_UNIVERSE_FRAMING_KM,
+  SOLAR_SYSTEM_FRAMING_KM,
+  SOLAR_SYSTEM_VIEW,
 } from '../../scene/scale.ts';
 import { OBSERVABLE_UNIVERSE_VIEW } from '../../scene/supergalactic.ts';
+import type { LevelId } from '../../state/levels.ts';
 import type { FramingView } from '../../state/store.ts';
 import { useViewStore } from '../../state/store.ts';
 import { anchorId } from './nav.ts';
@@ -150,12 +153,14 @@ const n = (value: number, digits = 0) =>
 const round = (value: number, significant = 2) => Number(value.toPrecision(significant));
 
 /** A jump to the app's own view of a shell: what the breadcrumb does. */
-function goTo(focus: BodyId, km?: number, view?: FramingView): void {
+function goTo(focus: BodyId, km?: number, view?: FramingView, level?: LevelId): void {
   const state = useViewStore.getState();
   if (km !== undefined) {
     state.requestFraming(km, view);
   }
   state.setFocus(focus);
+  // A shell that is one of the breadcrumb's levels is selected as its crumb selects it (state/levels.ts).
+  if (level !== undefined) state.selectLevel(level);
   state.closePanel();
   renderDemand.request();
 }
@@ -291,7 +296,7 @@ export const addressSection: AboutSection = {
             of the ground.
             <Cite k="archinal2018" />
           </Shell>
-          <Shell id="solar-system" number={2} name="The Solar System" size="planets to 30 AU; the Sun’s wind to about 120 AU" go={() => goTo('sun')}>
+          <Shell id="solar-system" number={2} name="The Solar System" size="planets to 30 AU; the Sun’s wind to about 120 AU" go={() => goTo('sun', SOLAR_SYSTEM_FRAMING_KM, SOLAR_SYSTEM_VIEW, 'solar-system')}>
             Earth is the third planet, 1 AU from the Sun. Neptune, the last, is 30 AU out; the Sun’s wind blows a
             bubble, the heliosphere, that Voyager 1 left in August 2012 at 121.6 AU.
             <Cite k="stone2013" /> The Sun’s pull reaches much further, through the hypothesised Oort cloud.
@@ -301,7 +306,7 @@ export const addressSection: AboutSection = {
             number={3}
             name="The Solar Neighbourhood and the Local Bubble"
             size="about 1,000 light years across"
-            go={() => goTo('sun', NEIGHBOURHOOD_FRAMING_KM)}
+            go={() => goTo('sun', NEIGHBOURHOOD_FRAMING_KM, undefined, 'solar-neighbourhood')}
           >
             The nearest star, Proxima Centauri, is 4.2 light years away. We sit near the middle of the Local Bubble,
             a cavity of thin, hot gas some 1,000 light years wide blown out by supernovae over the last 14 million
@@ -320,7 +325,7 @@ export const addressSection: AboutSection = {
             number={5}
             name="The Milky Way"
             size={`${Math.round(discShare * 100)}% of its disc’s stars within ${n(round(discLy))} light years of the centre`}
-            go={() => goTo('sun', GALAXY_FRAMING_KM, GALAXY_VIEW)}
+            go={() => goTo('sun', GALAXY_FRAMING_KM, GALAXY_VIEW, 'milky-way')}
           >
             The Sun is {n(round(centreLy))} light years from the centre (GRAVITY’s {n(SGR_A_DISTANCE_PC / 1000, 2)}{' '}
             kpc)
@@ -334,7 +339,7 @@ export const addressSection: AboutSection = {
             number={6}
             name="The Local Group"
             size="about 10 million light years across"
-            go={() => goTo('sun', LOCAL_GROUP_FRAMING_KM, LOCAL_GROUP_VIEW)}
+            go={() => goTo('sun', LOCAL_GROUP_FRAMING_KM, LOCAL_GROUP_VIEW, 'local-group')}
           >
             One of its two giants is ours. The other, Andromeda, is {n(round(m31Ly / 1e6))} million light years away
             <Cite k="li2021" />; around the two, Triangulum and about a hundred dwarfs.
@@ -366,7 +371,7 @@ export const addressSection: AboutSection = {
             number={10}
             name="The observable universe"
             size={`${n(round(observableLy / 1e9, 3), 1)} billion light years in radius`}
-            go={() => goTo('sun', OBSERVABLE_UNIVERSE_FRAMING_KM, OBSERVABLE_UNIVERSE_VIEW)}
+            go={() => goTo('sun', OBSERVABLE_UNIVERSE_FRAMING_KM, OBSERVABLE_UNIVERSE_VIEW, 'observable-universe')}
           >
             Everything whose light has had time to reach us, in Planck 2018’s cosmology.
             <Cite k="planck2020params" /> We are at its centre, because everyone is at the centre of their own. What

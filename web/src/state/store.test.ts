@@ -20,7 +20,9 @@ beforeEach(() => {
     layers: { ...INITIAL.layers },
     lighting: 'natural',
     openPanel: null,
+    reading: null,
     zoomImpulse: 1,
+    selectedLevel: null,
   });
 });
 
@@ -190,5 +192,60 @@ describe('view store', () => {
     useViewStore.getState().setFocus('sun');
     expect(useViewStore.getState().refocus).toBe(before);
     expect(useViewStore.getState().consumeFramingRequest()).toEqual({ km: 1e9, view: null });
+  });
+});
+
+// The breadcrumb's levels selected as bodies are (Maxi, 2026-11-20: "toqué Milky Way pero me pone
+// read about the Sun"): a level crumb selects its level about its centre, and any body chosen,
+// however it is chosen, clears it -- all of them go through setFocus.
+describe('the level selected', () => {
+  it('is the level a crumb selects, the focus its centre', () => {
+    useViewStore.getState().setFocus('sun');
+    useViewStore.getState().selectLevel('milky-way');
+    expect(useViewStore.getState().selectedLevel).toBe('milky-way');
+    expect(useViewStore.getState().focus).toBe('sun');
+  });
+
+  it('is cleared by a body chosen', () => {
+    useViewStore.getState().selectLevel('local-group');
+    useViewStore.getState().setFocus('earth');
+    expect(useViewStore.getState().selectedLevel).toBeNull();
+  });
+
+  it('is cleared by its centre chosen as a body, as the Sun from the planets’ list', () => {
+    useViewStore.getState().consumeFramingRequest();
+    useViewStore.getState().setFocus('sun');
+    useViewStore.getState().selectLevel('solar-system');
+    useViewStore.getState().setFocus('sun');
+    expect(useViewStore.getState().selectedLevel).toBeNull();
+  });
+
+  it('is cleared with a framing waiting, as a go-there asks for one', () => {
+    useViewStore.getState().selectLevel('observable-universe');
+    useViewStore.getState().requestFraming(1e9);
+    useViewStore.getState().setFocus('sun');
+    expect(useViewStore.getState().selectedLevel).toBeNull();
+    useViewStore.getState().consumeFramingRequest();
+  });
+
+  it('is selected after the focus, so a crumb’s own focus does not clear it', () => {
+    useViewStore.getState().setFocus('earth');
+    useViewStore.getState().setFocus('sun');
+    useViewStore.getState().selectLevel('solar-neighbourhood');
+    expect(useViewStore.getState().selectedLevel).toBe('solar-neighbourhood');
+  });
+
+  it('takes the place of a description open, with its own panel', () => {
+    useViewStore.getState().readAbout(null);
+    expect(useViewStore.getState().openPanel).toBe('description');
+    useViewStore.getState().selectLevel('milky-way');
+    expect(useViewStore.getState().openPanel).toBe('body');
+    expect(useViewStore.getState().reading).toBeNull();
+  });
+
+  it('leaves the panels as they are otherwise', () => {
+    useViewStore.getState().togglePanel('layers');
+    useViewStore.getState().selectLevel('milky-way');
+    expect(useViewStore.getState().openPanel).toBe('layers');
   });
 });

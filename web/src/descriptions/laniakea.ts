@@ -1,3 +1,4 @@
+import { LANIAKEA_DESCRIPTION_ID } from './subjects.ts';
 import type { Description } from './types.ts';
 
 /**
@@ -8,7 +9,7 @@ import type { Description } from './types.ts';
  * made once Laniakea's catalogue has loaded.
  */
 export const LANIAKEA: Description = {
-  id: 'structure-laniakea-supercluster',
+  id: LANIAKEA_DESCRIPTION_ID,
   lead: [
     'Laniakea is Hawaiian for “immense heaven”. It is the name given in 2014 to the vast region of the universe we live in: some hundred thousand galaxies, ours among them, across 500 million light years. It has no edge you could see. Its border is drawn the way a watershed is on a map of mountains — not by where things are, but by which way they are flowing.',
     'Every galaxy is carried away from every other by the expansion of the universe. On top of that, gravity pulls each one toward where matter is densest, and those extra motions can be measured: from a galaxy’s redshift one gets its total speed away from us, from an independent distance — the brightness of its pulsating stars, its supernovae, how fast its disc spins — how much of that is the expansion, and what is left over is its own motion. Mapped across thousands of galaxies, those motions run like streams down valleys. Laniakea is the basin in which they all drain toward the same place.',

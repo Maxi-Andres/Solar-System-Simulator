@@ -5,6 +5,7 @@ import type { CmbColours } from '../scene/cmb.ts';
 import { PHYSICAL_LIGHTING } from '../scene/shading.ts';
 import { ALL_BELT_FAMILIES, toggledFamily } from '../core/belt.ts';
 import { ALL_SATELLITE_CHIPS, toggledChip } from '../core/satelliteGroups.ts';
+import type { LevelId } from './levels.ts';
 import { readStoredInteger, writeStoredInteger } from './persisted.ts';
 
 /**
@@ -410,6 +411,13 @@ export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'rea
 
 export interface ViewState {
   readonly focus: BodyId;
+  /**
+   * The breadcrumb's level selected, if one is (levels.ts): its panel is the info panel's and the
+   * breadcrumb ends at it, while `focus` stays what the camera orbits -- its centre. Set only by
+   * the level crumbs (selectLevel), after they set the focus; cleared by every focus chosen,
+   * however it is chosen, since all of them go through setFocus. Null while a body is selected.
+   */
+  readonly selectedLevel: LevelId | null;
   readonly layers: LayerState;
   readonly lighting: LightingMode;
   readonly openPanel: PanelId | null;
@@ -474,16 +482,16 @@ export interface ViewState {
    * SolarSystemWatch: while it is, the nebulae and supernova remnants are not drawn.
    */
   readonly inSolarSystem: boolean;
-  /**
-   * The description of what the view is of when that is no body -- the Milky Way, the CMB
-   * (scene/inSolarSystem.ts viewSubject) -- offered by the Sun's panel; null otherwise.
-   */
-  readonly viewSubject: BodyId | null;
 
+  /** Chooses a body: clears any level selected. */
   readonly setFocus: (id: BodyId) => void;
+  /**
+   * Selects a breadcrumb level, its centre already the focus: called after setFocus, which clears
+   * it. A description open is left for the level's panel.
+   */
+  readonly selectLevel: (level: LevelId) => void;
   readonly toggleLayer: (id: LayerId) => void;
   readonly setInSolarSystem: (inside: boolean) => void;
-  readonly setViewSubject: (subject: BodyId | null) => void;
   readonly setLayer: (id: LayerId, on: boolean) => void;
   readonly setLighting: (mode: LightingMode) => void;
   readonly setBeltTiers: (tiers: number) => void;
@@ -529,20 +537,41 @@ export const useViewStore = create<ViewState>((set, get) => ({
   satelliteChips: readStoredInteger(SATELLITE_CHIPS_KEY, ALL_SATELLITE_CHIPS, 0) & ALL_SATELLITE_CHIPS,
   cmbColours: readStoredInteger(CMB_COLOURS_KEY, 0, 0) === 1 ? 'planck' : 'true',
   inSolarSystem: true,
-  viewSubject: null,
+  selectedLevel: null,
 
   setFocus: (id) => {
     const state = get();
+    // A body chosen, whichever way: no level is selected any more.
     if (id === state.focus) {
-      // Chosen again -- the breadcrumb's Solar System with the Sun in focus from 36 billion
-      // light years out: framed again, as a new focus is, unless a framing already waits.
-      if (state.framingRequestKm !== null) return;
+      // Chosen again -- the Sun from the Observable Universe's view, 36 billion light years
+      // out: framed again, as a new focus is, unless a framing already waits.
+      if (state.framingRequestKm !== null) {
+        set({ selectedLevel: null });
+        return;
+      }
       const own = focusFraming?.(id) ?? null;
-      set(own === null ? { refocus: state.refocus + 1 } : { framingRequestKm: own.km, framingView: own.view });
+      set(
+        own === null
+          ? { refocus: state.refocus + 1, selectedLevel: null }
+          : { framingRequestKm: own.km, framingView: own.view, selectedLevel: null },
+      );
       return;
     }
     const own = state.framingRequestKm === null ? (focusFraming?.(id) ?? null) : null;
-    set(own === null ? { focus: id } : { focus: id, framingRequestKm: own.km, framingView: own.view });
+    set(
+      own === null
+        ? { focus: id, selectedLevel: null }
+        : { focus: id, framingRequestKm: own.km, framingView: own.view, selectedLevel: null },
+    );
+  },
+
+  selectLevel: (level) => {
+    set((state) => ({
+      selectedLevel: level,
+      // Reading the body's description, the level's panel takes its place: it is what was chosen.
+      openPanel: state.openPanel === 'description' ? 'body' : state.openPanel,
+      reading: null,
+    }));
   },
 
   toggleLayer: (id) => {
@@ -551,10 +580,6 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setInSolarSystem: (inside) => {
     set({ inSolarSystem: inside });
-  },
-
-  setViewSubject: (subject) => {
-    set({ viewSubject: subject });
   },
 
   setLayer: (id, on) => {

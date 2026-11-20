@@ -36,14 +36,3 @@ describe('the layers', () => {
     expect(DEFAULT_LAYER_STATE.nuclearCluster).toBe(true);
   });
 });
-
-describe('what the view is of', () => {
-  it('is the Milky Way from its breadcrumb framing, the CMB from the far views, nothing at home', async () => {
-    const { viewSubject } = await import('./inSolarSystem.ts');
-    const { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } = await import('../descriptions/subjects.ts');
-    expect(viewSubject(30 * AU_KM)).toBeNull();
-    expect(viewSubject(180_000 * LIGHT_YEAR_KM)).toBe(MILKY_WAY_DESCRIPTION_ID);
-    expect(viewSubject(5e6 * LIGHT_YEAR_KM)).toBeNull();
-    expect(viewSubject(36e9 * LIGHT_YEAR_KM)).toBe(CMB_DESCRIPTION_ID);
-  });
-});

@@ -1,4 +1,5 @@
 import type { Vec3 } from '../core/vec3.ts';
+import type { FramingView } from '../state/store.ts';
 
 /**
  * Turning real kilometres into something a GPU can draw.
@@ -260,6 +261,36 @@ export const NEARBY_UNIVERSE_FRAMING_KM = 1.5e9 * LIGHT_YEAR_KM;
  * 23.5 degrees at 16:9, is 78,000 ly from here -- the whole disc, edge to edge.
  */
 export const GALAXY_FRAMING_KM = 180_000 * LIGHT_YEAR_KM;
+
+/** Neptune's orbit's semi-major axis, AU: JPL's Keplerian elements for 1800-2050 (Standish), 30.06992. */
+export const NEPTUNE_ORBIT_AU = 30.07;
+
+/**
+ * Where the breadcrumb's Solar System puts the camera, km from the Sun: the frame's half-height
+ * there 1.5 times Neptune's orbit, 45 AU -- 188 AU out at 27 degrees. Seen from 30 degrees above
+ * the ecliptic (SOLAR_SYSTEM_VIEW) Neptune's orbit is an ellipse 30 AU wide and 15 high, so it is
+ * whole on any screen from square to 16:9 with room about it, and so are Pluto's, Haumea's and
+ * Makemake's out to 53 AU across a 16:9 frame's 80 AU half-width; only Eris's 97 AU aphelion runs
+ * off it. The Solar System's names do not fold from here (LabelProjector: its 50 AU are some 600
+ * pixels on a 1080-pixel screen, folded under 24), and the inner planets are the crowd about the
+ * Sun they are, Mars 18 pixels from it.
+ */
+export const SOLAR_SYSTEM_FRAMING_KM = (1.5 * NEPTUNE_ORBIT_AU * AU_KM) / Math.tan(((FOV_DEG / 2) * Math.PI) / 180);
+
+/** The elevation SOLAR_SYSTEM_VIEW looks down from, degrees above the ecliptic. */
+export const SOLAR_SYSTEM_VIEW_ELEVATION_DEG = 30;
+
+/**
+ * Where the breadcrumb's Solar System looks from: 30 degrees above the ecliptic, as NASA Eyes
+ * shows it, from ecliptic longitude 270 -- the vernal equinox's direction running left to right
+ * across the frame -- with ecliptic north up. Steep enough that the orbits open into ellipses
+ * that do not cross one another, shallow enough that the system reads as a disc. Scene z is
+ * ecliptic north (orientation.ts).
+ */
+export const SOLAR_SYSTEM_VIEW: FramingView = (() => {
+  const elevation = (SOLAR_SYSTEM_VIEW_ELEVATION_DEG * Math.PI) / 180;
+  return { direction: [0, -Math.cos(elevation), Math.sin(elevation)], up: [0, 0, 1] };
+})();
 
 /**
  * Where the Solar System ends, for the breadcrumb and the scale's levels: the camera this

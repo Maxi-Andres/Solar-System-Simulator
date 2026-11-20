@@ -36,6 +36,7 @@ import {
   OBSERVABLE_UNIVERSE_VIEW,
   VIRGO_VIEW,
 } from '../../scene/supergalactic.ts';
+import type { LevelId } from '../../state/levels.ts';
 import { useViewStore, type FramingView, type LayerId } from '../../state/store.ts';
 
 /**
@@ -153,7 +154,19 @@ interface Arrival {
   readonly id: BodyId;
   readonly km?: number;
   readonly view?: FramingView | undefined;
+  /** For one of the breadcrumb's views, its level, selected as its crumb selects it (state/levels.ts). */
+  readonly level?: LevelId;
 }
+
+/** The breadcrumb's level each view is of. */
+const VIEW_LEVELS: Readonly<Record<ShowMeView, LevelId>> = {
+  neighbourhood: 'solar-neighbourhood',
+  galaxy: 'milky-way',
+  'local-group': 'local-group',
+  'local-volume': 'local-volume',
+  'nearby-universe': 'nearby-universe',
+  'observable-universe': 'observable-universe',
+};
 
 function hasBody(store: EphemerisStore, id: BodyId): boolean {
   return store.bodies.some((body) => body.id === id);
@@ -189,7 +202,12 @@ function arrival(target: ShowMeTarget, store: EphemerisStore): Arrival | null {
         : { id: made.host, km: systemFramingKm(made.system), view: systemView(made.system, made.host) };
     }
     case 'view':
-      return { id: 'sun', km: SHOW_ME_VIEWS[target.view].km, view: SHOW_ME_VIEWS[target.view].view };
+      return {
+        id: 'sun',
+        km: SHOW_ME_VIEWS[target.view].km,
+        view: SHOW_ME_VIEWS[target.view].view,
+        level: VIEW_LEVELS[target.view],
+      };
     case 'structure': {
       const id = structureBodyId({ name: target.name });
       if (!hasBody(store, id)) return null;
@@ -258,6 +276,8 @@ function go(target: ShowMeTarget, store: EphemerisStore, to: Arrival): void {
   // Asked for before the focus moves, so the camera rig takes it with the new focus.
   if (to.km !== undefined) state.requestFraming(to.km, to.view);
   state.setFocus(to.id);
+  // A view is of its level, not of the Sun at its centre; anything else, setFocus has cleared it.
+  if (to.level !== undefined) state.selectLevel(to.level);
   renderDemand.request();
 }
 

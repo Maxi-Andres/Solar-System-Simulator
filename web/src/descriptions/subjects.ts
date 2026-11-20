@@ -5,3 +5,22 @@
  */
 export const MILKY_WAY_DESCRIPTION_ID = 'milky-way';
 export const CMB_DESCRIPTION_ID = 'cosmic-microwave-background';
+
+/**
+ * The breadcrumb's other levels (state/levels.ts), each offered by its panel (LevelFacts.tsx)
+ * once its description is written: reserved here so the pages, when they come, need only use
+ * them. Until the Observable Universe's exists, its panel offers the CMB's.
+ */
+export const SOLAR_SYSTEM_DESCRIPTION_ID = 'solar-system';
+export const SOLAR_NEIGHBOURHOOD_DESCRIPTION_ID = 'solar-neighbourhood';
+export const LOCAL_GROUP_DESCRIPTION_ID = 'local-group';
+export const LOCAL_VOLUME_DESCRIPTION_ID = 'local-volume';
+export const VIRGO_CLUSTER_DESCRIPTION_ID = 'virgo-cluster';
+export const NEARBY_UNIVERSE_DESCRIPTION_ID = 'nearby-universe';
+export const OBSERVABLE_UNIVERSE_DESCRIPTION_ID = 'observable-universe';
+
+/**
+ * Laniakea's is a body's -- the structure "Laniakea Supercluster" (laniakea.ts), its level's
+ * centre -- and is offered by its level's panel too.
+ */
+export const LANIAKEA_DESCRIPTION_ID = 'structure-laniakea-supercluster';

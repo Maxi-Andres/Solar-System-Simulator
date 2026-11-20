@@ -18,6 +18,12 @@ const WITH_THE: ReadonlySet<string> = new Set([
   'Laniakea Supercluster',
   'Milky Way',
   'cosmic microwave background',
+  // The breadcrumb's levels (state/levels.ts).
+  'Solar System',
+  'Solar Neighbourhood',
+  'Local Volume',
+  'Nearby Universe',
+  'observable universe',
 ]);
 
 /**

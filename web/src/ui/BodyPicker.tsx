@@ -30,6 +30,8 @@ import {
   NEARBY_UNIVERSE_FRAMING_KM,
   NEIGHBOURHOOD_FRAMING_KM,
   OBSERVABLE_UNIVERSE_FRAMING_KM,
+  SOLAR_SYSTEM_FRAMING_KM,
+  SOLAR_SYSTEM_VIEW,
   VIRGO_FRAMING_KM,
 } from '../scene/scale.ts';
 import {
@@ -59,7 +61,8 @@ import type { LaniakeaLandmark } from '@sss/tools/types';
 import { ensureGalaxyBody, galaxyBodyId, galaxyOf, GIANTS } from '../core/localGroup.ts';
 import { virgoCentre, volumeRegion, type LocalVolumeArchive, type VolumeRegion } from '../core/localVolume.ts';
 import type { LazySource } from '../core/satellites.ts';
-import { useViewStore } from '../state/store.ts';
+import { crumbShown, LEVELS, type LevelId } from '../state/levels.ts';
+import { useViewStore, type FramingView } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
@@ -75,7 +78,17 @@ import { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/su
  * starts unfolded, because those are the moons you are most likely to want next.
  *
  * Every tier of the breadcrumb is itself a way up: from Io, "Jupiter" goes to Jupiter,
- * "Solar System" to the Sun.
+ * "Solar System" to the Solar System.
+ *
+ * **A level crumb selects its level** (state/levels.ts; Maxi, 2026-11-20): Solar System, Solar
+ * Neighbourhood, Milky Way, Local Group, Local Volume or Virgo Cluster, Laniakea or Nearby
+ * Universe, Observable Universe. The camera takes the level's framing about its centre -- the
+ * Sun, M87, Laniakea's attractor -- which becomes the focus it orbits, and the level is what is
+ * selected: the info panel is its own (LevelFacts.tsx), with its description, and the breadcrumb
+ * ends at it, marked current, what is below it not shown. Any body chosen afterwards clears it
+ * (store.ts setFocus). The Solar System's view is new with this: the planets' orbits whole, from
+ * 30 degrees above the ecliptic (scale.ts SOLAR_SYSTEM_FRAMING_KM), its crumb, selected,
+ * dropping down its bodies as the focus's own does.
  *
  * Two levels sit above the Solar System since the light years (step D1). **Solar
  * Neighbourhood** goes to the Sun and stands the camera fifty light years out, among the
@@ -144,6 +157,8 @@ const ACCENT = '#3ddc84';
 export interface BodyPickerProps {
   readonly store: EphemerisStore;
   readonly focus: BodyId;
+  /** The breadcrumb's level selected, if one is (state/levels.ts): the breadcrumb ends at it. */
+  readonly selectedLevel: LevelId | null;
   readonly onFocus: (id: BodyId) => void;
   /** Body kinds switched on in the layers panel; the list shows only those. */
   readonly visibleKinds: ReadonlySet<string>;
@@ -216,9 +231,40 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   return isCatalogueStar(body) ? 'none' : 'solar-system';
 }
 
+/** The levels centred on the Sun: all but the Virgo Cluster, about M87, and Laniakea, about its attractor. */
+export type SunLevel = Exclude<LevelId, 'virgo-cluster' | 'laniakea'>;
+
+/** Where each level centred on the Sun is seen from: its crumb's framing (scene/scale.ts). */
+export const SUN_LEVEL_FRAMINGS: Readonly<Record<SunLevel, { readonly km: number; readonly view?: FramingView }>> = {
+  // The whole of the planets' orbits, from 30 degrees above the ecliptic.
+  'solar-system': { km: SOLAR_SYSTEM_FRAMING_KM, view: SOLAR_SYSTEM_VIEW },
+  'solar-neighbourhood': { km: NEIGHBOURHOOD_FRAMING_KM },
+  'milky-way': { km: GALAXY_FRAMING_KM, view: GALAXY_VIEW },
+  'local-group': { km: LOCAL_GROUP_FRAMING_KM, view: LOCAL_GROUP_VIEW },
+  'local-volume': { km: LOCAL_VOLUME_FRAMING_KM, view: LOCAL_VOLUME_VIEW },
+  'nearby-universe': { km: NEARBY_UNIVERSE_FRAMING_KM, view: NEARBY_UNIVERSE_VIEW },
+  'observable-universe': { km: OBSERVABLE_UNIVERSE_FRAMING_KM, view: OBSERVABLE_UNIVERSE_VIEW },
+};
+
+/**
+ * A level crumb's going: its framing asked for before the focus moves, so the camera rig takes it
+ * with the new focus; the Sun, its centre, focused -- which clears any level selected (store.ts
+ * setFocus) -- and then the level selected, so the panel and the breadcrumb's end are its own.
+ */
+export function goToLevel(level: SunLevel, onFocus: (id: BodyId) => void): void {
+  const { km, view } = SUN_LEVEL_FRAMINGS[level];
+  const state = useViewStore.getState();
+  state.requestFraming(km, view);
+  onFocus('sun');
+  useViewStore.getState().selectLevel(level);
+  // With the Sun already in focus nothing else changed, and nothing else asks for a frame.
+  renderDemand.request();
+}
+
 export function BodyPicker({
   store,
   focus,
+  selectedLevel,
   onFocus,
   visibleKinds,
   clock,
@@ -270,28 +316,21 @@ export function BodyPicker({
   const menu = crumbMenuFor(focusBody);
   const inSolarSystem = menu === 'solar-system';
   const requestFraming = useViewStore((state) => state.requestFraming);
-  const toNeighbourhood = (): void => {
-    // Asked for before the focus moves, so the camera rig takes it with the new focus.
-    requestFraming(NEIGHBOURHOOD_FRAMING_KM);
-    onFocus('sun');
-    // With the Sun already in focus nothing else changed, and nothing else asks for a frame.
-    renderDemand.request();
+  // A level crumb selects its level (state/levels.ts); see goToLevel.
+  const selectLevel = useViewStore((state) => state.selectLevel);
+  const toLevel = (level: SunLevel): void => {
+    goToLevel(level, onFocus);
+    setOpen(false);
   };
-  const toGalaxy = (): void => {
-    requestFraming(GALAXY_FRAMING_KM, GALAXY_VIEW);
-    onFocus('sun');
-    renderDemand.request();
-  };
-  const toLocalGroup = (): void => {
-    requestFraming(LOCAL_GROUP_FRAMING_KM, LOCAL_GROUP_VIEW);
-    onFocus('sun');
-    renderDemand.request();
-  };
+  // Where the breadcrumb ends, with a level selected: no separator after its crumb.
+  const endsAt = (tier: number): boolean => selectedLevel !== null && LEVELS[selectedLevel].tier === tier;
+  const toSolarSystem = (): void => toLevel('solar-system');
+  const toNeighbourhood = (): void => toLevel('solar-neighbourhood');
+  const toGalaxy = (): void => toLevel('milky-way');
+  const toLocalGroup = (): void => toLevel('local-group');
   const toLocalVolume = (): void => {
     void localVolume.request();
-    requestFraming(LOCAL_VOLUME_FRAMING_KM, LOCAL_VOLUME_VIEW);
-    onFocus('sun');
-    renderDemand.request();
+    toLevel('local-volume');
   };
   // The Virgo Cluster: M87, made a body if it is not one yet (it is, once loaded: App.tsx).
   const toVirgo = (): void => {
@@ -304,11 +343,17 @@ export function BodyPicker({
       const id = ensureGalaxyBody(store, archive.galaxies[k]!);
       requestFraming(VIRGO_FRAMING_KM, VIRGO_VIEW);
       onFocus(id);
+      selectLevel('virgo-cluster');
       renderDemand.request();
     });
   };
   // Laniakea: its attractor, the structures made bodies first if the catalogue has only now come.
-  const toStructure = (choose: (c: LaniakeaCatalogue) => LaniakeaLandmark | null, km?: number, view?: typeof LANIAKEA_VIEW): void => {
+  const toStructure = (
+    choose: (c: LaniakeaCatalogue) => LaniakeaLandmark | null,
+    km?: number,
+    view?: typeof LANIAKEA_VIEW,
+    level?: LevelId,
+  ): void => {
     void laniakea.request().then(() => {
       const c = laniakea.value;
       const landmark = c === null ? null : choose(c);
@@ -320,23 +365,21 @@ export function BodyPicker({
         requestFraming(km, view);
       }
       onFocus(structureBodyId(landmark));
+      if (level !== undefined) selectLevel(level);
       renderDemand.request();
     });
   };
-  const toLaniakea = (): void => toStructure(laniakeaLandmark, LANIAKEA_FRAMING_KM, LANIAKEA_VIEW);
+  const toLaniakea = (): void => toStructure(laniakeaLandmark, LANIAKEA_FRAMING_KM, LANIAKEA_VIEW, 'laniakea');
   const toNearbyUniverse = (): void => {
     void laniakea.request();
-    requestFraming(NEARBY_UNIVERSE_FRAMING_KM, NEARBY_UNIVERSE_VIEW);
-    onFocus('sun');
-    renderDemand.request();
+    toLevel('nearby-universe');
   };
+  // The crumb above the Local Volume: Laniakea, or the Nearby Universe past its basin -- and as
+  // selected, whatever the focus: Laniakea's attractor is itself outside Laniakea's list.
+  const showNearby = selectedLevel === 'nearby-universe' || (selectedLevel !== 'laniakea' && beyondLaniakea);
   // The observable universe: the Sun from 36 billion ly, and the record-holders under its caret.
   const recordHolder = recordHolderOf(focus);
-  const toObservableUniverse = (): void => {
-    requestFraming(OBSERVABLE_UNIVERSE_FRAMING_KM, OBSERVABLE_UNIVERSE_VIEW);
-    onFocus('sun');
-    renderDemand.request();
-  };
+  const toObservableUniverse = (): void => toLevel('observable-universe');
   const [universeOpen, setUniverseOpen] = useState(false);
   // Laniakea's structures, under its caret.
   const [laniakeaOpen, setLaniakeaOpen] = useState(false);
@@ -449,7 +492,9 @@ export function BodyPicker({
           flexWrap: 'wrap',
         }}
       >
-        <Crumb onClick={toObservableUniverse} outer>
+        {/* A level selected is where the breadcrumb ends, marked as the focus is otherwise: what is
+            below it is not shown (state/levels.ts crumbShown). */}
+        <Crumb onClick={toObservableUniverse} outer current={selectedLevel === 'observable-universe'}>
           Observable Universe
         </Crumb>
         <button
@@ -463,11 +508,15 @@ export function BodyPicker({
         >
           <Caret open={universeOpen} />
         </button>
-        <Separator />
-        {recordHolder === null && (
+        {!endsAt(0) && <Separator />}
+        {recordHolder === null && crumbShown(1, selectedLevel) && (
           <>
-            <Crumb onClick={beyondLaniakea ? toNearbyUniverse : toLaniakea} outer>
-              {beyondLaniakea ? 'Nearby Universe' : 'Laniakea'}
+            <Crumb
+              onClick={showNearby ? toNearbyUniverse : toLaniakea}
+              outer
+              current={selectedLevel === (showNearby ? 'nearby-universe' : 'laniakea')}
+            >
+              {showNearby ? 'Nearby Universe' : 'Laniakea'}
             </Crumb>
             <button
               type="button"
@@ -480,12 +529,16 @@ export function BodyPicker({
             >
               <Caret open={laniakeaOpen} />
             </button>
-            <Separator />
+            {!endsAt(1) && <Separator />}
           </>
         )}
-        {!deep && (
+        {!deep && crumbShown(2, selectedLevel) && (
           <>
-            <Crumb onClick={region === 'virgo' ? toVirgo : toLocalVolume} outer>
+            <Crumb
+              onClick={region === 'virgo' ? toVirgo : toLocalVolume}
+              outer
+              current={selectedLevel === (region === 'virgo' ? 'virgo-cluster' : 'local-volume')}
+            >
               {region === 'virgo' ? 'Virgo Cluster' : 'Local Volume'}
             </Crumb>
             <button
@@ -499,12 +552,12 @@ export function BodyPicker({
             >
               <Caret open={volumeOpen} />
             </button>
-            <Separator />
+            {!endsAt(2) && <Separator />}
           </>
         )}
-        {region === null && !deep && (
+        {region === null && !deep && crumbShown(3, selectedLevel) && (
           <>
-            <Crumb onClick={toLocalGroup} outer>
+            <Crumb onClick={toLocalGroup} outer current={selectedLevel === 'local-group'}>
               Local Group
             </Crumb>
             <button
@@ -518,12 +571,12 @@ export function BodyPicker({
             >
               <Caret open={galaxiesOpen} />
             </button>
-            <Separator />
+            {!endsAt(3) && <Separator />}
           </>
         )}
-        {!inOtherGalaxy && (
+        {!inOtherGalaxy && crumbShown(4, selectedLevel) && (
           <>
-            <Crumb onClick={toGalaxy} outer>
+            <Crumb onClick={toGalaxy} outer current={selectedLevel === 'milky-way'}>
               Milky Way
             </Crumb>
             <button
@@ -537,12 +590,12 @@ export function BodyPicker({
             >
               <Caret open={blackHolesOpen} />
             </button>
-            <Separator />
+            {!endsAt(4) && <Separator />}
           </>
         )}
-        {blackHoleSystem === null && !inGalaxy && !inOtherGalaxy && (
+        {blackHoleSystem === null && !inGalaxy && !inOtherGalaxy && crumbShown(5, selectedLevel) && (
           <>
-            <Crumb onClick={toNeighbourhood} outer>
+            <Crumb onClick={toNeighbourhood} outer current={selectedLevel === 'solar-neighbourhood'}>
               Solar Neighbourhood
             </Crumb>
             <button
@@ -556,37 +609,52 @@ export function BodyPicker({
             >
               <Caret open={systemsOpen} />
             </button>
-            <Separator />
+            {!endsAt(5) && <Separator />}
           </>
         )}
-        {inSolarSystem && (
+        {/* The Solar System selected: its crumb ends the breadcrumb and drops down its bodies,
+            as the focus's own crumb does. */}
+        {inSolarSystem && selectedLevel === 'solar-system' && (
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-current="location"
+            onClick={() => only('bodies')}
+            style={{ ...crumbStyle, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            Solar System
+            <Caret open={open} />
+          </button>
+        )}
+        {inSolarSystem && selectedLevel === null && (
           <>
-            <Crumb onClick={() => onFocus('sun')}>Solar System</Crumb>
+            <Crumb onClick={toSolarSystem}>Solar System</Crumb>
             <Separator />
           </>
         )}
-        {inAlphaCen && alphaCen !== null && (
+        {selectedLevel === null && inAlphaCen && alphaCen !== null && (
           <>
             <Crumb onClick={() => alphaCen.go('A', ALPHA_CEN_FRAMING_KM)}>{ALPHA_CEN_SYSTEM}</Crumb>
             <Separator />
           </>
         )}
         {/* The system, unless it is called by the name of the star in focus. */}
-        {planetSystem !== null && planetSystems !== null && planetSystem.name !== focusBody.name && (
+        {selectedLevel === null && planetSystem !== null && planetSystems !== null && planetSystem.name !== focusBody.name && (
           <>
             <Crumb onClick={() => planetSystems.go(planetSystem.key)}>{planetSystem.name}</Crumb>
             <Separator />
           </>
         )}
         {/* A planet's star, unless the system is called by the star's own name. */}
-        {parent !== null && !(planetSystem !== null && parent.name === planetSystem.name) && (
+        {selectedLevel === null && parent !== null && !(planetSystem !== null && parent.name === planetSystem.name) && (
           <>
             <Crumb onClick={() => onFocus(parent.id)}>{parent.name}</Crumb>
             <Separator />
           </>
         )}
         {/* The focus: dropping down the system it is in, or, a place on its own, only its name. */}
-        {menu === 'none' ? (
+        {selectedLevel !== null ? null : menu === 'none' ? (
           <span aria-current="location" style={{ ...crumbStyle, color: '#fff', cursor: 'default' }}>
             {focusBody.name}
           </span>
@@ -632,7 +700,7 @@ export function BodyPicker({
                 }
           }
           onSolarSystem={() => {
-            onFocus('sun');
+            toSolarSystem();
             setSystemsOpen(false);
           }}
           onAlphaCen={
@@ -739,8 +807,7 @@ export function BodyPicker({
           active={blackHoleSystem?.id ?? null}
           inSolarSystem={inSolarSystem}
           onSolarSystem={() => {
-            onFocus('sun');
-            renderDemand.request();
+            toSolarSystem();
             setBlackHolesOpen(false);
           }}
           onNeighbourhood={() => {
@@ -800,17 +867,25 @@ const crumbStyle: React.CSSProperties = {
 /** The levels above the Solar System, a shade quieter than the ones you move between most. */
 const OUTER_CRUMB = '#8e8e8e';
 
+/** A crumb; `current`, the level selected, where the breadcrumb ends (state/levels.ts). */
 function Crumb({
   children,
   onClick,
   outer = false,
+  current = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   outer?: boolean;
+  current?: boolean;
 }) {
   return (
-    <button type="button" onClick={onClick} style={outer ? { ...crumbStyle, color: OUTER_CRUMB } : crumbStyle}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={current ? 'location' : undefined}
+      style={current ? { ...crumbStyle, color: '#fff' } : outer ? { ...crumbStyle, color: OUTER_CRUMB } : crumbStyle}
+    >
       {children}
     </button>
   );
