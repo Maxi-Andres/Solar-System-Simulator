@@ -35,7 +35,12 @@ export interface DescriptionPhoto {
   readonly height: number;
   readonly title: string;
   readonly caption: string;
-  /** 'true': as a camera sees it; 'tinted': one band shown in a colour; 'false': bands mapped to colours. */
+  /**
+   * 'true': as a camera or an eye sees it (black and white included); 'tinted': visible light
+   * given a colour it does not have, as a solar filter's orange; 'false': light no eye can see
+   * (ultraviolet, infrared, radar) shown in colours, or bands mapped to other colours, or
+   * colour enhanced.
+   */
   readonly colour: 'true' | 'tinted' | 'false';
   readonly credit: string;
   readonly licence: string;

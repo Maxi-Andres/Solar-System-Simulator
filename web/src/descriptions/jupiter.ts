@@ -93,8 +93,8 @@ export const JUPITER: Description = {
       height: 520,
       title: 'The same pole in infrared, 2 February 2017',
       caption:
-        'The same day, Juno’s infrared mapper saw the heat coming up through the clouds at a wavelength of 5 microns: a cyclone at the pole with five around it. Bright is warm, where the clouds are thin; dark is cold, thick cloud. One band, shown in a scale of colours. Cropped here from the published image.',
-      colour: 'tinted',
+        'The same day, Juno’s infrared mapper saw the heat coming up through the clouds at a wavelength of 5 microns: a cyclone at the pole with five around it. Bright is warm, where the clouds are thin; dark is cold, thick cloud. Light no eye can see, one band shown in a scale of colours. Cropped here from the published image.',
+      colour: 'false',
       credit: 'NASA/JPL-Caltech/SwRI/ASI/INAF/JIRAM',
       licence: 'NASA media, not copyrighted',
       date: '2017-02-02',

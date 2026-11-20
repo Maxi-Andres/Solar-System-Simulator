@@ -685,7 +685,8 @@ export const estimatedSection: AboutSection = {
           <Item title="Pluto’s south">
             Pluto’s southern hemisphere is invented. New Horizons could not photograph it — it was in polar
             winter during the 2015 flyby — so it is filled with the average colour of the rest rather than
-            left black. Nothing south of about 40°S on Pluto is an observation.
+            left black. The fill begins near 33°S at most longitudes, though real data reach about 55°S at a
+            few; nothing in the fill is an observation.
             <Why>a black cap reads as a bug rather than as missing data.</Why>
           </Item>
           <Item title="Deimos">

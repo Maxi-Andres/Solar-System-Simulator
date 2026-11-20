@@ -594,6 +594,15 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** Names said with "the" before them, in the way into a description. */
+const WITH_THE: ReadonlySet<string> = new Set([
+  'Sun',
+  'Moon',
+  'James Webb Space Telescope',
+  'Hubble Space Telescope',
+  'International Space Station',
+]);
+
 /** The way into the body's description (DescriptionView): what it is, its photos, what is measured and what is not. */
 function ReadMore({ name }: { name: string }) {
   const togglePanel = useViewStore((state) => state.togglePanel);
@@ -616,7 +625,7 @@ function ReadMore({ name }: { name: string }) {
         textAlign: 'left',
       }}
     >
-      Read about {name === 'Sun' || name === 'Moon' ? `the ${name}` : name} →
+      Read about {WITH_THE.has(name) ? `the ${name}` : name} →
     </button>
   );
 }

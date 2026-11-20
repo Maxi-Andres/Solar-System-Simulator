@@ -99,7 +99,7 @@ based on NASA elevation and imagery data, with colour and detail added by the au
 so they are illustrative composites rather than cartographic products.
 
 **Pluto** is the New Horizons global colour mosaic (PIA11707), assembled from
-Ralph/MVIC imagery taken during the July 2015 flyby and draped on a LORRI base map.
+Ralph/MVIC colour imagery taken during the July 2015 flyby.
 NASA material is public domain; the courtesy line is
 **NASA/Johns Hopkins University Applied Physics Laboratory/Southwest Research
 Institute**. Solar System Scope has no Pluto map, and this is better data anyway. It
@@ -107,13 +107,13 @@ was downscaled from 5926 x 2963 to 2048 x 1024 to match the rest of the set.
 
 **Part of Pluto is invented, and it has to be said plainly.** New Horizons flew past in
 July 2015, when Pluto's southern hemisphere was in polar winter — unlit, and therefore
-unphotographable. The original mosaic is black from about 36 S to the pole, 30% of the
-image. Rendering that as a black cap reads as a bug rather than as missing data, so it
+unphotographable. The original mosaic is black from about 33 S to the pole at most
+longitudes, though real data reach about 55 S at a few. Rendering that as a black cap reads as a bug rather than as missing data, so it
 is filled with **rgb(135, 112, 104)**, the average colour of the mapped part, with the
 boundary relaxed over a few dozen pixels so there is no seam. Reproduce it by masking
 every pixel below luminance 12, setting it to the mean of the rest, and running 40
 iterations of a 3x3 average over the masked pixels only, wrapping in longitude and
-clamping at the poles. Nothing south of about 40 S on Pluto is observation.
+clamping at the poles. Nothing in the fill is observation.
 
 ## The moons
 
@@ -178,7 +178,7 @@ registered, and the info panel says why.
 
 The two Dawn mosaics, from its High Altitude Mapping Orbits: Ceres in August to October
 2015 at 140 m a pixel, Vesta in September to November 2011 at 60 m. Framing Camera images
-assembled by **DLR** (Roatsch et al., Planet. Space Sci. 125, 103, 2016, for Ceres;
+assembled by **DLR** (Roatsch et al., Planet. Space Sci. 129, 103, 2016, for Ceres;
 Roatsch et al., Planet. Space Sci. 73, 283, 2012, for Vesta). NASA and USGS products are
 in the public domain; the credit Dawn asks for is **NASA/JPL-Caltech/UCLA/MPS/DLR/IDA**,
 and USGS asks that the authors be cited. Both are clear filter, so greyscale, like the

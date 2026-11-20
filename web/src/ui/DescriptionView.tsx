@@ -65,7 +65,8 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [opened, togglePanel]);
 
-  const generated = useMemo(() => drawnFromData(body), [body]);
+  // A craft's path says which dates it runs between; a planet's coverage is not quoted.
+  const generated = useMemo(() => drawnFromData(body, store.coverage(focus)), [body, store, focus]);
   // True colour first, then tinted, then false: what an eye would see before the conventions.
   const photos = useMemo(
     () => [...(description?.photos ?? [])].sort((a, b) => COLOUR_ORDER[a.colour] - COLOUR_ORDER[b.colour]),
