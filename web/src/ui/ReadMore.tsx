@@ -21,6 +21,19 @@ const WITH_THE: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Kinds of name an English speaker puts "the" before: a nebula, a cloud, a cluster, a wall, a
+ * telescope, a meteor shower… -- the Coalsack, the Hyades, the Perseids. A name already starting
+ * with "the" is left alone.
+ */
+const THE_BY_ENDING =
+  /(Nebula|Cloud|Clouds|Cluster|Supercluster|Void|Wall|Stream|Bubble|Bubbles|Superbubble|Loop|Arc|Ring|Wave|Bridge|Arm|Sheet|Group|Galaxy|Observatory|Telescope|Station|Belt|Coalsack|Hyades|Pleiades|ids|ds)$/;
+
+export function spokenName(name: string): string {
+  if (/^the/i.test(name)) return name;
+  return WITH_THE.has(name) || THE_BY_ENDING.test(name) ? `the ${name}` : name;
+}
+
+/**
  * The way into a description (DescriptionView): what it is, its photos, what is measured and
  * what is not. The focused body's, from its panel; or, with `about`, one of what is no body --
  * the Milky Way's, the CMB's -- from wherever it is reached.
@@ -49,7 +62,7 @@ export function ReadMore({ name, about = null, onRead }: { name: string; about?:
         textAlign: 'left',
       }}
     >
-      Read about {WITH_THE.has(name) ? `the ${name}` : name} →
+      Read about {spokenName(name)} →
     </button>
   );
 }

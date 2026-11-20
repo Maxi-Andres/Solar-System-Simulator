@@ -1,4 +1,5 @@
-import type { BodyId } from '@sss/tools/types';
+import type { BodyDefinition, BodyId } from '@sss/tools/types';
+
 
 import { CALLISTO } from './callisto.ts';
 import { EARTH } from './earth.ts';
@@ -80,6 +81,12 @@ export function descriptionByDesignations(designations: readonly string[]): Desc
  * A body's description, by its id: the one entry point. A catalogue star made a body
  * (`star-<tier>-<index>`) has no fixed id, so it is looked up by the designations it carries.
  */
-export function descriptionOf(id: BodyId): Description | null {
+/**
+ * A body's description, if it has one: only what is worth a page of its own has one, written
+ * and checked by hand (Maxi, 2026-11-20: "todo lo que es así automático no me gusta, quiero
+ * cosas de calidad"); a kind of thing is explained by the glossary's "what is this?". `body` is
+ * accepted so the panels can pass it, and unused.
+ */
+export function descriptionOf(id: BodyId, _body: BodyDefinition | null = null): Description | null {
   return DESCRIPTIONS.get(id) ?? descriptionByDesignations(starBodyFacts(id)?.designations ?? []);
 }

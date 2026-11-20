@@ -141,7 +141,7 @@ export function GalaxyPanel({
           {galaxy.ambiguous ? 'galaxy or star cluster' : 'galaxy'}
         </span>
       </div>
-      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
+      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {galaxy.otherNames.length > 0 && <Row label="Also">{galaxy.otherNames.join(' · ')}</Row>}

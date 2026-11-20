@@ -70,7 +70,7 @@ export function StructurePanel({
           {structureKindLabel(landmark.kind)}
         </span>
       </div>
-      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
+      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {landmark.otherNames.length > 0 && <Row label="Also">{landmark.otherNames.slice(0, 3).join(' · ')}</Row>}

@@ -11,6 +11,7 @@ import { NAMED_WINDOW_DAYS } from '../core/satellites.ts';
 import { ESA_MODEL_CREDIT, MODEL_REQUEST_PX } from '../scene/craftModels.ts';
 import { facingRule } from '../ui/facing.ts';
 import { blackHoleFromData, isCatalogueStarBody, starFromData } from './starsFromData.ts';
+import { beyondFromData } from './beyondFromData.ts';
 import type { DescriptionPoint } from './types.ts';
 
 /**
@@ -42,6 +43,18 @@ export const TEXTURE_CREDITS: Readonly<Record<string, string>> = {
   'pluto.jpg': 'NASA/JHUAPL/SwRI, New Horizons’ global colour mosaic PIA11707, its unlit south filled (public domain)',
   'charon.jpg': 'USGS Astrogeology, New Horizons’ LORRI/MVIC global mosaic, its unlit south filled (public domain)',
   'ceres.jpg': 'NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, Dawn’s clear-filter mosaic assembled by DLR, its gaps filled (public domain)',
+  'vesta.jpg': 'NASA/JPL-Caltech/UCLA/MPS/DLR/IDA and USGS Astrogeology, Dawn’s clear-filter global mosaic, its unlit north filled (public domain)',
+  'phobos.jpg': 'USGS Astrogeology, the Mars Express SRC and Viking global mosaic (public domain)',
+  'mimas.jpg': 'NASA/JPL-Caltech/Space Science Institute, Cassini’s global map PIA17214 (public domain)',
+  'tethys.jpg': 'USGS Astrogeology, Cassini’s global mosaic (public domain)',
+  'dione.jpg': 'USGS Astrogeology, the Cassini–Voyager global mosaic (public domain)',
+  'rhea.jpg': 'USGS Astrogeology, the Cassini–Voyager global mosaic (public domain)',
+  'iapetus.jpg': 'USGS Astrogeology, the Cassini–Voyager global mosaic (public domain)',
+  'miranda.jpg': 'USGS (T. Becker) from Voyager 2, via NASA 3D Resources, its unlit north filled (public domain)',
+  'ariel.jpg': 'USGS (T. Becker) from Voyager 2, via NASA 3D Resources, its unlit north filled (public domain)',
+  'umbriel.jpg': 'USGS (T. Becker) from Voyager 2, via NASA 3D Resources, its unlit north filled (public domain)',
+  'titania.jpg': 'USGS (T. Becker) from Voyager 2, via NASA 3D Resources, its unlit north filled (public domain)',
+  'oberon.jpg': 'USGS (T. Becker) from Voyager 2, via NASA 3D Resources, its unlit north filled (public domain)',
 };
 
 const formatKm = (km: number): string => `${Math.round(km).toLocaleString('en-US')} km`;
@@ -49,6 +62,9 @@ const formatKm = (km: number): string => `${Math.round(km).toLocaleString('en-US
 export function drawnFromData(body: BodyDefinition, coverage: Coverage | null = null): DescriptionPoint[] {
   // A spacecraft or an Earth satellite is not a sphere with a map: see craftFromData.
   if (body.kind === 'spacecraft' || body.kind === 'satellite') return craftFromData(body, coverage);
+  // Nor a pulsar, a cluster, a mark, a cloud, a planet of another star, a record-holder: beyondFromData.ts.
+  const beyond = beyondFromData(body);
+  if (beyond !== null) return beyond;
   // Nor is a galaxy, a nebula, a remnant or a structure: a place of no surface (deepSkyFromData).
   if (DEEP_SKY_KINDS.has(body.kind)) return deepSkyFromData(body);
   // Nor is a catalogue star, or a black hole: see starsFromData.ts.
@@ -77,7 +93,8 @@ export function drawnFromData(body: BodyDefinition, coverage: Coverage | null = 
     // it. A small body about the Sun is JPL's own orbit solution for it, integrated by Horizons
     // with the planets pulling on it; for Eris and Haumea that solution is the system's
     // barycentre (moons/minorPlanetMoons.ts).
-    const smallBody = body.kind === 'dwarf-planet' || body.kind === 'asteroid';
+    // A famous comet too (famousComets.ts): JPL's own solution, with the push of its outgassing.
+    const smallBody = body.kind === 'dwarf-planet' || body.kind === 'asteroid' || body.kind === 'comet';
     const ephemeris =
       body.id === 'moon'
         ? 'DE441, which carries the Moon along with the Sun and planets'
@@ -118,14 +135,21 @@ export function drawnFromData(body: BodyDefinition, coverage: Coverage | null = 
     title: 'Its size and shape',
     // A body whose size is measured but whose shape cannot be placed (shapeDrawn false) is a
     // marker, not a sphere or an ellipsoid: see the scene's `sized`.
+    // A body whose size nobody has measured (radiusPublished false: most small moons, the belt
+    // and cloud bodies made from search, the sednoids) is a marker, and its radius only frames the
+    // camera; a region (regions.ts) is a place, of no size at all.
     text:
-      body.shapeDrawn === false
-        ? `A marker only, not a body: its size is measured${axes === undefined ? '' : ` — semi-axes ${axes} km`} — but its shape is not drawn, so the panel gives its dimensions instead.`
-        : round
-          ? `A sphere of radius ${formatKm(body.radiusEquatorialKm)}, its real size, never enlarged.`
-          : axes !== undefined
-            ? `An ellipsoid with three different semi-axes, ${axes} km.`
-            : `An ellipsoid, ${formatKm(body.radiusEquatorialKm)} at the equator and ${formatKm(body.radiusPolarKm)} at the poles.`,
+      body.kind === 'region'
+        ? 'A mark, not a body: it is a place, not an object, and has no size; the camera keeps a nominal distance from it.'
+        : body.radiusPublished === false
+          ? 'A marker only: its size has not been measured, so nothing is drawn its size, and the distance the camera keeps from it is nominal, not a measurement.'
+          : body.shapeDrawn === false
+            ? `A marker only, not a body: its size is measured${axes === undefined ? '' : ` — semi-axes ${axes} km`} — but its shape is not drawn, so the panel gives its dimensions instead.`
+            : round
+              ? `A sphere of radius ${formatKm(body.radiusEquatorialKm)}, its real size, never enlarged.`
+              : axes !== undefined
+                ? `An ellipsoid with three different semi-axes, ${axes} km.`
+                : `An ellipsoid, ${formatKm(body.radiusEquatorialKm)} at the equator and ${formatKm(body.radiusPolarKm)} at the poles.`,
   });
 
   if (body.rotation !== null && body.rotationPeriodHours !== null) {
@@ -405,7 +429,7 @@ function galaxyFromData(galaxy: LocalGroupGalaxy): DescriptionPoint[] {
       title: 'How bright',
       text:
         `Its measured visual magnitude, ${Number(galaxy.vMag.toFixed(2))} once the dimming by our own galaxy’s dust is taken off, ` +
-        `at its distance: ${Number((luminosity / 1e9).toPrecision(2))} billion times the Sun’s light in V, all of it in what is drawn.`,
+        `at its distance: ${luminosity >= 1e9 ? `${Number((luminosity / 1e9).toPrecision(2))} billion` : luminosity >= 1e6 ? `${Number((luminosity / 1e6).toPrecision(2))} million` : Number(luminosity.toPrecision(2)).toLocaleString('en-US')} times the Sun’s light in V, all of it in what is drawn.`,
     });
   }
   const model = galaxy.model;
@@ -451,6 +475,11 @@ function galaxyFromData(galaxy: LocalGroupGalaxy): DescriptionPoint[] {
   return points;
 }
 
+/** A distance method after "from": "the Gaia parallaxes of …", and not "the the parallax of its pulsar" or "the its central star's". */
+export function theMethod(method: string): string {
+  return /^(the|its|a|an)\b/.test(method) ? method : `the ${method}`;
+}
+
 function nebulaFromData(nebula: Nebula): DescriptionPoint[] {
   const [major, minor] = nebula.sizeArcmin;
   const radiusPc = nebulaRadiusKm(nebula) / PARSEC_KM;
@@ -458,7 +487,7 @@ function nebulaFromData(nebula: Nebula): DescriptionPoint[] {
     {
       title: 'Where it is',
       text:
-        `${distanceInWords(nebula.distancePc, nebula.distanceUpPc, nebula.distanceDownPc)} from the Sun, from the ${nebula.distanceMethod}: ` +
+        `${distanceInWords(nebula.distancePc, nebula.distanceUpPc, nebula.distanceDownPc)} from the Sun, from ${theMethod(nebula.distanceMethod)}: ` +
         `${nebula.reference}.${nebula.note === null ? '' : ` ${nebula.note}`} It stands still.`,
     },
     {
@@ -478,7 +507,7 @@ function remnantFromData(remnant: SupernovaRemnant): DescriptionPoint[] {
     {
       title: 'Where it is',
       text:
-        `${distanceInWords(remnant.distancePc, remnant.distanceUpPc, remnant.distanceDownPc)} from the Sun, from the ${remnant.distanceMethod}: ` +
+        `${distanceInWords(remnant.distancePc, remnant.distanceUpPc, remnant.distanceDownPc)} from the Sun, from ${theMethod(remnant.distanceMethod)}: ` +
         `${remnant.reference}. On the sky where Green’s catalogue of Galactic supernova remnants puts it, ${remnant.green}.` +
         `${remnant.note === null ? '' : ` ${remnant.note}`} It stands still: its expansion is not drawn.`,
     },

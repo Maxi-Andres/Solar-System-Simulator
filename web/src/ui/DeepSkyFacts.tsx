@@ -7,7 +7,9 @@ import { flybyOfNotable } from '../core/stellarFlybys.ts';
 import { formatGalaxyDistance } from '../scene/LocalGroup.tsx';
 import { PARSEC_KM } from '../scene/scale.ts';
 import { FlybyFacts } from './FlybyFacts.tsx';
+import { descriptionOf } from '../descriptions/index.ts';
 import { Panel } from './Panel.tsx';
+import { ReadMore } from './ReadMore.tsx';
 import { formatStarDistance } from './StarFacts.tsx';
 
 /**
@@ -43,6 +45,7 @@ export function DeepSkyPanel({
           {mark.type}
         </span>
       </div>
+      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         <Row label="Messier">{`M${mark.m}`}</Row>
@@ -102,6 +105,7 @@ function NotableStarPanel({
           {star.type}
         </span>
       </div>
+      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {star.aliases.length > 0 && <Row label="Also">{star.aliases.join(' · ')}</Row>}

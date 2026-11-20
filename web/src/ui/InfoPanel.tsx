@@ -76,7 +76,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   }
   // A record-holder is a structure by kind (recordHolders.ts), with facts of its own.
   if (body.kind === 'structure' && recordHolderOf(focus) !== null) {
-    return <RecordHolderPanel focus={focus} onClose={closePanel} />;
+    return <RecordHolderPanel focus={focus} body={body} onClose={closePanel} />;
   }
   if (body.kind === 'structure') {
     return <StructurePanel store={store} focus={focus} jd={jd} distanceMode={distanceMode} onClose={closePanel} />;
@@ -102,7 +102,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
           </span>
           <WhatIs term="star" kind="star" />
         </div>
-        {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
+        {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
         <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
           <StarFacts id={focus} jd={jd} stars3d={stars3d} />
@@ -142,7 +142,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         </span>
         <WhatIs term={focus === 'sun' ? 'sun' : KIND_TERM[body.kind]} kind={body.kind.replace('-', ' ')} />
       </div>
-      {descriptionOf(focus) !== null && <ReadMore name={body.name} />}
+      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
 
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
 
