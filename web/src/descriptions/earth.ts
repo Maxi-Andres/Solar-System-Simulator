@@ -174,6 +174,11 @@ export const EARTH: Description = {
       text: 'The IAU’s model includes the slow drift of Earth’s axis, precession, so over centuries the pole moves against the stars here as it does.',
       cite: ['archinal2018'],
     },
+    {
+      title: 'The Moon’s shadow',
+      text: 'In a solar eclipse the Moon’s shadow crosses it where and when it really does: a dark umbra a few hundred kilometres across at most, inside a penumbra thousands wide, from the real sizes and distances of the Sun and the Moon and how much of the Sun’s limb-darkened disc the Moon leaves showing. The clouds and the sky darken with the ground. For the total eclipse of 12 August 2026 the umbra lands within 5 km of NASA’s central line over Greenland, Iceland and the Atlantic; its path comes out 300 km wide where NASA’s is 294, the difference being the radii each takes for the Sun and the Moon.',
+      cite: ['se20260812'],
+    },
   ],
   measured: [
     {
@@ -268,8 +273,8 @@ export const EARTH: Description = {
       text: 'The sky scatters light once only, with no dust or haze in it and no bending of light. So there is none of the white haze low in a real sky, twilight past the terminator comes out about six times too faint and too red, and the Sun sets about half a degree early.',
     },
     {
-      title: 'Eclipses',
-      text: 'The Moon’s shadow on Earth in a solar eclipse is not drawn, nor Earth’s shadow on the Moon.',
+      title: 'The red light in its shadow',
+      text: 'Earth’s shadow on the Moon is drawn; the sunlight its air bends into that shadow, which turns an eclipsed Moon copper, is not. And in the Moon’s umbra the city lights stay off: they follow the Sun’s height, not its light.',
     },
     {
       title: 'The magnetosphere as it is today',
@@ -315,6 +320,11 @@ export const EARTH: Description = {
     },
   ],
   sources: [
+    {
+      key: 'se20260812',
+      text: 'Espenak, F., Total Solar Eclipse of 2026 Aug 12: path of totality, NASA Goddard Space Flight Center',
+      url: 'https://eclipse.gsfc.nasa.gov/SEpath/SEpath2001/SE2026Aug12Tpath.html',
+    },
     {
       key: 'nssdcEarth',
       text: 'Williams, D. R. 2024, Earth Fact Sheet, NASA Space Science Data Coordinated Archive',

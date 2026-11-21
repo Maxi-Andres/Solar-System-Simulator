@@ -191,6 +191,41 @@ export const REFERENCE_GROUPS: readonly ReferenceGroup[] = [
     ],
   },
   {
+    id: 'eclipses',
+    label: 'Eclipses',
+    refs: [
+      {
+        key: 'espenakSE2026',
+        who: 'Espenak (NASA GSFC)',
+        title: 'Total Solar Eclipse of 2026 Aug 12: path table and Besselian elements',
+        link: 'https://eclipse.gsfc.nasa.gov/SEpath/SEpath2001/SE2026Aug12Tpath.html',
+        use: 'the umbra’s track and width, and the shadow axis, against which the shadow is checked',
+      },
+      {
+        key: 'espenakLE',
+        who: 'Espenak (EclipseWise)',
+        title: 'Total Lunar Eclipses of 2025 Sep 07 and 2026 Mar 03',
+        link: 'https://www.eclipsewise.com/lunar/LEprime/2001-2100/LE2025Sep07Tprime.html',
+        use: 'the umbra’s radius and the contact times, against which Earth’s shadow is checked',
+      },
+      {
+        key: 'heraldSinnott2014',
+        who: 'Herald & Sinnott 2014',
+        title: 'Analysis of lunar crater timings, 1842–2011',
+        where: 'J. Br. Astron. Assoc. 124',
+        link: 'https://www.eclipsewise.com/lunar/LEhelp/LEshadow2.html',
+        use: 'the 87 km of Earth’s air that block grazing sunlight',
+      },
+      {
+        key: 'svs5604',
+        who: 'NASA Scientific Visualization Studio 2026',
+        title: 'March 3, 2026 Total Lunar Eclipse: Shadow View',
+        link: 'https://svs.gsfc.nasa.gov/5604',
+        use: 'how dim the totally eclipsed Moon is: 10 or more f-stops',
+      },
+    ],
+  },
+  {
     id: 'planet-looks',
     label: 'Planets’ colours, rings and clouds',
     refs: [

@@ -134,6 +134,10 @@ export const EUROPA: Description = {
       title: 'Lighting',
       text: 'In Natural lighting, the default, its night side is black. Shadow and Flood lighting fill it in so it can be read; neither is what an eye would see.',
     },
+    {
+      title: 'Shadows',
+      text: 'Europa passes through Jupiter’s shadow on every orbit and goes dark there, and its own shadow crosses Jupiter’s clouds when it passes in front of the Sun. In the seasons every six years when Jupiter’s equator is edge-on to the Sun, the moons can shadow one another too, and that is drawn as well.',
+    },
   ],
   measured: [
     {
@@ -214,10 +218,6 @@ export const EUROPA: Description = {
       title: 'The ocean',
       text: 'Not drawn, and nothing would show it: it lies tens of kilometres under the ice.',
       cite: ['levin2025'],
-    },
-    {
-      title: 'Jupiter’s shadow',
-      text: 'Not drawn. Europa passes through Jupiter’s shadow on every orbit; here it stays lit. Its own shadow on Jupiter is not drawn either: nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
     {
       title: 'Its relief',

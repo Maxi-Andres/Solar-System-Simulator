@@ -158,6 +158,11 @@ export const MOON: Description = {
       text: 'Sixteen places where craft came down, from Surveyor 1 and the six Apollo landings to Chang’e 6 and Blue Ghost 1 — each where an orbiter’s camera later found the hardware, not where the mission aimed. LRO’s narrow-angle camera places most of them to a few metres, Apollo 11’s to 0.3 m, and a few of the newest to tens or hundreds of metres. Named once the Moon is large on screen, and only on the side facing the camera; the Landing Sites layer is on by default.',
       cite: ['wagner2017'],
     },
+    {
+      title: 'Eclipses',
+      text: 'Earth’s shadow falls on it when it really does, from the real sizes and distances of the Sun and Earth: a dark umbra where Earth hides the whole Sun, inside a penumbra where it hides part, shading by how much of the Sun’s limb-darkened disc is left. Earth occludes with 87 km of air added, the height below which its atmosphere stops grazing sunlight, as measured from the times the shadow’s edge crossed craters. For the total eclipses of 7 September 2025 and 3 March 2026 the umbra comes out within 0.0001° of the size EclipseWise gives, and totality begins and ends within 25 and 40 seconds of their times. In a solar eclipse its own shadow crosses Earth.',
+      cite: ['heraldSinnott2014', 'le20250907', 'le20260303'],
+    },
   ],
   measured: [
     {
@@ -240,9 +245,9 @@ export const MOON: Description = {
       cite: ['goode2001'],
     },
     {
-      title: 'Eclipses',
-      text: 'The Sun, Earth and Moon line up exactly when they really do, because their positions are JPL’s; but neither Earth nor the Moon casts a shadow on the other here. During a lunar eclipse the Moon stays fully lit, and during a solar eclipse no shadow crosses the Earth.',
-      cite: ['de440'],
+      title: 'Its copper colour in eclipse',
+      text: 'Not drawn: in totality the Moon goes black here. What lights it red is sunlight bent into Earth’s shadow by the atmosphere — every sunrise and sunset on Earth at once — and the totally eclipsed Moon is 10 or more f-stops dimmer than the full Moon. At the one exposure the scene is drawn at, which shows the lit Moon mid-grey, that is black; the photograph above is a far longer exposure. Earth’s shadow is also round here, where Earth’s flattening makes the real one slightly narrower pole to pole, so totality comes out 25 to 50 seconds longer than predicted.',
+      cite: ['svs5604'],
     },
     {
       title: 'The poles in colour',
@@ -283,6 +288,26 @@ export const MOON: Description = {
     },
   ],
   sources: [
+    {
+      key: 'heraldSinnott2014',
+      text: 'Herald, D., & Sinnott, R. W. 2014, Analysis of lunar crater timings, 1842–2011, J. Br. Astron. Assoc. 124; as applied in Espenak’s predictions',
+      url: 'https://www.eclipsewise.com/lunar/LEhelp/LEshadow2.html',
+    },
+    {
+      key: 'le20250907',
+      text: 'Espenak, F., Total Lunar Eclipse of 2025 Sep 07, EclipseWise',
+      url: 'https://www.eclipsewise.com/lunar/LEprime/2001-2100/LE2025Sep07Tprime.html',
+    },
+    {
+      key: 'le20260303',
+      text: 'Espenak, F., Total Lunar Eclipse of 2026 Mar 03, EclipseWise',
+      url: 'https://www.eclipsewise.com/lunar/LEprime/2001-2100/LE2026Mar03Tprime.html',
+    },
+    {
+      key: 'svs5604',
+      text: 'Wright, E., March 3, 2026 Total Lunar Eclipse: Shadow View, NASA Scientific Visualization Studio',
+      url: 'https://svs.gsfc.nasa.gov/5604',
+    },
     {
       key: 'nssdc',
       text: 'Williams, D. R., Moon Fact Sheet, NASA Space Science Data Coordinated Archive',

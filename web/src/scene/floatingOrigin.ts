@@ -34,6 +34,8 @@ export interface RebasedBody {
   readonly distanceKm: number;
   /** Speed relative to the focused body, in km/s. */
   readonly speedKmS: number;
+  /** Velocity relative to the focused body, km/s: the same state's, kept for eclipses. */
+  readonly velocityKmS: Vec3;
   /** True when this position came from Keplerian propagation. */
   readonly approximate: boolean;
 }
@@ -82,6 +84,7 @@ export function rebaseFrame(
       positionKm: state.position,
       distanceKm: Math.hypot(state.position.x, state.position.y, state.position.z),
       speedKmS: Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z),
+      velocityKmS: state.velocity,
       approximate: state.approximate,
     });
   }

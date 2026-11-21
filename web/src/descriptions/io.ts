@@ -162,6 +162,11 @@ export const IO: Description = {
       title: 'Lighting',
       text: 'In Natural lighting, the default, its night side is black. Shadow and Flood lighting fill it in so it can be read; neither is what an eye would see.',
     },
+    {
+      title: 'Jupiter’s shadow',
+      text: 'Io orbits almost exactly in Jupiter’s equator and passes through Jupiter’s shadow on every orbit, every 1.77 days: it goes dark there, fading through the penumbra on the way in and out. Its own shadow falls on Jupiter’s clouds when it passes in front of the Sun, as in the Cassini photograph above, a black core about 3,000 km across.',
+      cite: ['nssdcJovian', 'pia02860'],
+    },
   ],
   measured: [
     {
@@ -237,11 +242,6 @@ export const IO: Description = {
       title: 'Its plumes and glowing lava',
       text: 'Not drawn. The plumes rise hundreds of kilometres and are seen against space at the edge of the disc; the hottest lava glows on the night side, as in the New Horizons pictures above. Here Io is a solid map, and its night side is dark.',
       cite: ['spencer2007'],
-    },
-    {
-      title: 'Jupiter’s shadow',
-      text: 'Not drawn. Io orbits almost exactly in Jupiter’s equator and passes through Jupiter’s shadow on every orbit, every 1.77 days; here it stays lit. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings, so its own shadow on Jupiter, in the Cassini photograph above, is missing too.',
-      cite: ['nssdcJovian', 'pia02860'],
     },
     {
       title: 'The torus',

@@ -740,6 +740,13 @@ export const estimatedSection: AboutSection = {
             opacity is read as an optical depth rather than straight off the file, since what the composite
             measures is how much cloud is in the column and not how much light gets through it.
           </Item>
+          <Item title="The edge of its shadow">
+            How high Earth’s air blocks grazing sunlight changes with weather and volcanic dust, from eclipse to
+            eclipse. Its shadow on the Moon is drawn with one mean, 87 km, fitted to 94 eclipses, on a round
+            Earth: the real shadow is 0.3% narrower pole to pole, which makes totality here run 25 to 50
+            seconds longer than predicted
+            <Cite k={['heraldSinnott2014', 'espenakLE']} />.
+          </Item>
           <Item title="Land and water">
             Earth’s land/water mask is derived rather than published — from the flat colour NASA fills deep
             water with in one of its maps, read as a coverage fraction so the shoreline is not drawn as the

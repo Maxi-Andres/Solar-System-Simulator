@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { POINT_LIGHT_HOOK } from './ringShadow.ts';
+import { ECLIPSE_GLSL, eclipseUniforms } from './eclipseShadow.ts';
 
 /**
  * Earth's atmosphere: Rayleigh single scattering, ray-marched, and ozone's absorption.
@@ -571,6 +572,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
 
   ${ATMOSPHERIC_EXTINCTION_GLSL}
+  ${ECLIPSE_GLSL}
 
   uniform vec3 uCameraLocal;
   uniform vec3 uSunLocal;
@@ -671,9 +673,14 @@ const FRAGMENT_SHADER = /* glsl */ `
       float cosSun = dot(up, uSunLocal);
       float sunDepth = chapmanColumn(altitude, cosSun);
       float ozoneSunDepth = ozoneColumn(altitude, cosSun);
+      // And anything else in the way: the Moon, in a solar eclipse, darkens the air over
+      // its shadow as well as the ground. Sample by sample, so the sky over the umbra
+      // still sees the sunlit air around it. The uniforms are in this shader's own frame
+      // and unit, planet radii from the centre (eclipseShadow.ts).
       scattered += density
         * exp(-uBeta * (viewDepth + sunDepth) - uOzone * (ozoneViewDepth + ozoneSunDepth))
-        * step;
+        * step
+        * eclipseSunlight(p);
     }
 
     float cosTheta = dot(direction, uSunLocal);
@@ -723,6 +730,8 @@ export function atmosphereMaterial(): THREE.ShaderMaterial {
       uFlattening: { value: 1 },
       uSunIntensity: { value: 1 },
       uFade: { value: 1 },
+      // Filled each frame from Earth's own, turned into this frame (SolarSystem.tsx).
+      ...eclipseUniforms(),
     },
     transparent: true,
     blending: THREE.CustomBlending,

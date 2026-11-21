@@ -132,6 +132,10 @@ export const GANYMEDE: Description = {
       title: 'Lighting',
       text: 'In Natural lighting, the default, its night side is black. Shadow and Flood lighting fill it in so it can be read; neither is what an eye would see.',
     },
+    {
+      title: 'Shadows',
+      text: 'Ganymede passes through Jupiter’s shadow on every orbit and goes dark there. Its own shadow on Jupiter is the largest of the four moons’: a black core about 3,500 km across, where Ganymede hides the whole Sun, in a grey penumbra.',
+    },
   ],
   measured: [
     {
@@ -197,10 +201,6 @@ export const GANYMEDE: Description = {
       title: 'Its magnetosphere and auroras',
       text: 'Not drawn: the app models a magnetosphere and auroras only for Earth.',
       cite: ['kivelson1996', 'saur2015'],
-    },
-    {
-      title: 'Jupiter’s shadow',
-      text: 'Not drawn. Ganymede passes through Jupiter’s shadow on every orbit; here it stays lit. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
     {
       title: 'Its relief',

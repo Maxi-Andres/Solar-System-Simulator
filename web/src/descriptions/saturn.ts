@@ -137,6 +137,10 @@ export const SATURN: Description = {
       text: 'On JPL’s trajectory from the start of the app’s window, ten years before its data was built, to its last plunge into Saturn on 15 September 2017.',
       cite: ['de440', 'spilker2019'],
     },
+    {
+      title: 'Moons’ shadows',
+      text: 'A moon’s shadow falls on Saturn’s clouds when the moon passes in front of the Sun, as Tethys’s does in the photograph above, and Saturn’s shadow darkens a moon that passes through it.',
+    },
   ],
   measured: [
     {
@@ -228,8 +232,8 @@ export const SATURN: Description = {
       cite: ['godfrey1988', 'sanchezLavega2011'],
     },
     {
-      title: 'Moons’ shadows',
-      text: 'A moon’s shadow on Saturn or on the rings, as Tethys’s in the photograph above, is not drawn: only Saturn and its rings shadow each other here.',
+      title: 'Moons’ shadows on the rings',
+      text: 'Not drawn: a moon’s shadow on the rings, and the rings’ shadow on a moon.',
     },
     {
       title: 'Its magnetosphere and auroras',

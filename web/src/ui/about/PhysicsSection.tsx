@@ -46,6 +46,7 @@ export const physicsSection: AboutSection = {
     { id: 'sun', label: 'The Sun’s light' },
     { id: 'earth', label: 'Earth’s air and sea' },
     { id: 'saturn', label: 'Saturn’s shadows' },
+    { id: 'eclipses', label: 'Eclipses' },
     { id: 'satellites', label: 'Satellites: SGP4' },
     { id: 'lagrange', label: 'Lagrange points' },
     { id: 'black-holes', label: 'Black holes' },
@@ -734,6 +735,88 @@ export const physicsSection: AboutSection = {
             path — so the band sweeps across the planet over its 29.5-year year and swaps hemispheres at
             equinox. How dark it gets is calibrated rather than derived: the light reaching a shadowed point
             indirectly is one constant standing in for ringshine and diffuse transmission.
+          </Item>
+        </Items>
+
+        <Sub section="physics" id="eclipses">
+          Eclipses
+        </Sub>
+        <Equation
+          title="The Sun’s disc, partly covered"
+          cite={['espenakSE2026', 'espenakLE']}
+          code="web/src/scene/eclipseShadow.ts"
+          math={math(
+            lines(
+              row(
+                mi('L'),
+                mo('='),
+                mn('1'),
+                mo('−'),
+                frac(
+                  row(
+                    sub(mo('Σ'), mi('k')),
+                    sub(mi('I'), mi('k')),
+                    paren(
+                      mi('A'),
+                      paren(sub(mi('r'), mi('k'))),
+                      mo('−'),
+                      mi('A'),
+                      paren(sub(mi('r'), row(mi('k'), mo('−'), mn('1')))),
+                    ),
+                  ),
+                  row(mi('π'), sup(mi('a'), mn('2')), paren(t('1 − u / 3'))),
+                ),
+              ),
+              row(
+                mi('A'),
+                paren(mi('r')),
+                mo('='),
+                sup(mi('r'), mn('2')),
+                paren(mi('α'), mo('−'), frac(mn('1'), mn('2')), fn('sin'), mn('2'), mi('α')),
+                mo('+'),
+                sup(mi('b'), mn('2')),
+                paren(mi('β'), mo('−'), frac(mn('1'), mn('2')), fn('sin'), mn('2'), mi('β')),
+                gap(),
+                t('cos α ='),
+                frac(t('c^2 + r^2 − b^2'), t('2 c r')),
+              ),
+            ),
+          )}
+          symbols={
+            <>
+              L the share of sunlight reaching a point; a = asin(R☉/d☉) the Sun’s angular radius from there, b
+              the occluder’s and c the angle between their centres (β the same with r and b swapped); A(r) the
+              area of the Sun’s disc out to radius r that the occluder covers; I<sub>k</sub> the mean
+              brightness of ring k of the disc under the limb darkening the star discs use, u = 0.6, over six
+              rings narrower toward the edge.
+            </>
+          }
+        >
+          Every body lit by the Sun can be shadowed by its planet, its moons and its sibling moons: the Moon on
+          Earth, Earth on the Moon, the Galilean moons on Jupiter and Jupiter on them. Per point, the visible
+          part of the Sun’s disc — full sunlight outside the penumbra, none in the umbra, and between them the
+          lens where the two discs overlap, weighted by the darker limb. Nothing is a drawn edge: the umbra is
+          the size the real radii and distances give. The four bodies that could cover most of the Sun are
+          picked each frame, in float64, and most frames there are none.
+        </Equation>
+        <Items>
+          <Item title="Earth’s air in its shadow">
+            Earth shadows with 87 km of air added: below that height its atmosphere stops grazing sunlight,
+            as found from 22,539 timings of the shadow’s edge crossing lunar craters
+            <Cite k="heraldSinnott2014" />.
+          </Item>
+          <Item title="Where the occluder was">
+            The light reaching a point passed the occluder a moment earlier — 1.3 s from the Moon to Earth —
+            so the occluder is taken where it was then. The Moon moves 30 km/s with Earth: without this the
+            umbra fell 30 km off NASA’s track, and totality came 40 seconds late.
+          </Item>
+          <Item title="Checked against eclipses">
+            The total solar eclipse of 12 August 2026: the shadow’s axis within a kilometre of NASA’s
+            Besselian elements, the umbra on the ground within 5 km of their central line. The lunar eclipses
+            of 7 September 2025 and 3 March 2026: the umbra’s radius within 0.0001° of EclipseWise’s,
+            totality starting and ending within 25 and 40 seconds. Ganymede’s shadow on Jupiter reaches the
+            limb within half a minute of the published times
+            <Cite k={['espenakSE2026', 'espenakLE']} />.
           </Item>
         </Items>
 

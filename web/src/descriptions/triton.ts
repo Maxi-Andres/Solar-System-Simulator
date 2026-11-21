@@ -144,6 +144,10 @@ export const TRITON: Description = {
       text: 'The map’s average, read as how much light the surface reflects, is 0.33; the Moon’s map averages 0.48. Triton really reflects about six times as much light as the Moon — geometric albedo 0.72 against 0.12 — so beside the Moon it is drawn several times too dark. Worked out here from the two maps’ pixels and the fact sheets.',
       cite: ['nssdcNeptunian', 'nssdcMoon'],
     },
+    {
+      title: 'Shadows',
+      text: 'When Triton passes through Neptune’s shadow it goes dark here, and when it passes in front of the Sun its shadow falls on Neptune, both from the real sizes and distances.',
+    },
   ],
   measured: [
     {
@@ -224,10 +228,6 @@ export const TRITON: Description = {
       title: 'Its geysers and atmosphere',
       text: 'Not drawn: the plumes, their drifting clouds, and the thin haze Voyager saw at the limb.',
       cite: ['soderblom1990', 'smith1989'],
-    },
-    {
-      title: 'Neptune’s shadow',
-      text: 'Not drawn: nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings, so Triton stays lit when it passes behind Neptune.',
     },
     {
       title: 'Its relief',

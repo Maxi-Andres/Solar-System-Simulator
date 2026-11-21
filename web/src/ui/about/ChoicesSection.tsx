@@ -59,6 +59,11 @@ export const choicesSection: AboutSection = {
               mistakes it for the truth.
             </Why>
           </Item>
+          <Item title="White sunlight">
+            Sunlight is white: the Sun is the white point, as the eye adapts to it, and each map is its body’s
+            colour in sunlight. It was a cream tint, never measured, that took a quarter off every map’s blue —
+            Neptune came out grey.
+          </Item>
           <Item title="Dots for populations">
             Asteroids, comets and Earth satellites are dots of a pixel or so whatever their distance — a map
             of where they are, not what an eye would see.{' '}
@@ -239,6 +244,19 @@ export const choicesSection: AboutSection = {
               A city seen from orbit is about five orders of magnitude fainter than the same ground at noon;
               scaled honestly against the daylit side, every one of them would be black.
             </Why>
+          </Item>
+          <Item title="The eclipsed Moon is black">
+            In totality the Moon goes black: the red light Earth’s air bends into its shadow is not drawn.
+            <Why>
+              The totally eclipsed Moon is ten or more f-stops dimmer than the full Moon{' '}
+              <Cite k="svs5604" />, and at the one exposure the scene is drawn at, which shows the lit Moon
+              mid-grey, even a hundredth of its light is black. It could be drawn brighter, as the city lights
+              are, but its colour would be invented too: how red and how dark it gets changes from eclipse to
+              eclipse with the dust in the air.
+            </Why>
+          </Item>
+          <Item title="A hidden body casts no shadow">
+            A moon switched off in the layers panel is not drawn, and neither is its shadow.
           </Item>
           <Item title="A less saturated map">
             Earth’s surface map is drawn 30% less saturated than the file it comes from. How much to take off

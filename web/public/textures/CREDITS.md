@@ -274,6 +274,14 @@ filled cap, not a gap. Saved as single-channel JPEG at quality 85: Ceres 754 KB,
      the one above; 1.6% of the pixels clip.
   3. Saved as JPEG at quality 90, 4:4:4.
 
+  **Drawn under white light.** The app's sunlight was a cream `#fff6e0` until this map
+  showed it: it took a quarter off the blue, and Neptune rendered grey-cyan, linear
+  (0.75, 0.99, 1) at mid-disc in Natural lighting. Under white sunlight it renders
+  (0.52-0.63, 0.81-0.87, 1), against (0.56, 0.84, 1) sampled from Irwin et al.'s
+  true-colour figure, and Uranus (0.71, 0.97, 1) against their (0.77, 0.99, 1). Nearest the
+  sub-solar point the filmic tone curve still pales both toward white; that is the app's
+  exposure, the same for every body.
+
   Its contrast is the illustrative map's, from Voyager's stretched frames, not
   measured; its Great Dark Spot is 1989's, which was gone by 1994. The pixels are where
   they were, so its longitude origin is the illustrative map's, and

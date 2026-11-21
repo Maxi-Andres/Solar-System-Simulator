@@ -130,6 +130,11 @@ export const JUPITER: Description = {
       title: 'Lighting',
       text: 'In Natural lighting, the default, the night side is black. Shadow and Flood lighting fill it in so it can be read; neither is what an eye would see.',
     },
+    {
+      title: 'Moons’ shadows',
+      text: 'When a moon passes between Jupiter and the Sun its shadow falls on the clouds, as in the Hubble photograph above: a black core where the moon hides the whole Sun, in a grey ring where it hides part. Their sizes come from the real distances, so the farther the moon, the smaller the core and the wider the ring: Io’s umbra is about 3,000 km across, Callisto’s 1,600 km inside a penumbra 8,000 km wide. Ganymede’s shadow reaching the limb on 14 January 2026 comes within 15 seconds of the published minute.',
+      cite: ['astronomy20260113'],
+    },
   ],
   measured: [
     {
@@ -212,10 +217,6 @@ export const JUPITER: Description = {
       cite: ['simon2018'],
     },
     {
-      title: 'Moons’ shadows',
-      text: 'When a moon passes in front of Jupiter its shadow falls on the clouds as a black dot, as in the Hubble photograph above. Nothing here casts a shadow on another body except the ringed planets — Saturn, Uranus, Neptune — and their rings, so these transits are not drawn.',
-    },
-    {
       title: 'Its rings',
       text: 'Not drawn: they are dust with an optical depth of a few millionths at most, invisible unless lit from behind.',
       cite: ['nssdcJupiterRings'],
@@ -259,6 +260,11 @@ export const JUPITER: Description = {
     },
   ],
   sources: [
+    {
+      key: 'astronomy20260113',
+      text: 'The Sky Today on Tuesday, January 13: Ganymede’s turn to transit, Astronomy',
+      url: 'https://www.astronomy.com/observing/the-sky-today-tuesday-january-13-2026/',
+    },
     {
       key: 'nssdcJupiter',
       text: 'Williams, D. R., Jupiter Fact Sheet, NASA Space Science Data Coordinated Archive',

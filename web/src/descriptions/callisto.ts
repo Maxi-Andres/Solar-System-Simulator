@@ -127,6 +127,10 @@ export const CALLISTO: Description = {
       title: 'Lighting',
       text: 'In Natural lighting, the default, its night side is black. Shadow and Flood lighting fill it in so it can be read; neither is what an eye would see.',
     },
+    {
+      title: 'Shadows',
+      text: 'Callisto goes dark when it passes through Jupiter’s shadow — which, so far out, it misses altogether for years at a time, whenever Jupiter’s pole is tipped toward or away from the Sun. Its own shadow on Jupiter is the softest of the four moons’: a black core about 1,600 km across in a grey penumbra 8,000 km wide.',
+    },
   ],
   measured: [
     {
@@ -187,10 +191,6 @@ export const CALLISTO: Description = {
       title: 'Its relief',
       text: 'Not drawn: the rings of Valhalla and the crater rims are a picture on a smooth sphere, and cast no shadows.',
       cite: ['pia01649'],
-    },
-    {
-      title: 'Jupiter’s shadow',
-      text: 'Not drawn: when Callisto passes through Jupiter’s shadow it stays lit here. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
   ],
   misconceptions: [

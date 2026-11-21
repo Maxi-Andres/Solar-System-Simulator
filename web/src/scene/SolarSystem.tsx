@@ -36,6 +36,13 @@ import { drawnTexture } from './drawnTexture.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
 import { ringFlatRadianceFactor, ringShadowSettings, ringStripTexture } from './ringBands.ts';
 import { applyRingShadow, type RingShadowUniforms } from './ringShadow.ts';
+import {
+  applyEclipseShadow,
+  EclipseSelector,
+  mayShadow,
+  occludingRadiusKm,
+  type EclipseUniforms,
+} from './eclipseShadow.ts';
 import { LIGHTING } from './shading.ts';
 import {
   glareLevel,
@@ -92,6 +99,7 @@ import { PATCH_SHOWN_KM, SurfaceGround } from './surfaceGround.ts';
 import {
   angularRadiusPixels,
   focusOrbitOpacity,
+  KM_PER_UNIT,
   kmToUnits,
   markerOpacity,
   meshOpacity,
@@ -208,6 +216,8 @@ interface EarthHandles {
   readonly deckRadiusKm: number;
   /** The sky, on a shell of its own outside everything else. */
   readonly atmosphere: THREE.Mesh;
+  /** The sky's eclipse uniforms: Earth's own, in the shell's frame and in planet radii. */
+  readonly skyEclipse: EclipseUniforms;
   /**
    * Until the cloud map arrives the deck is an opaque white sphere that would swallow
    * the planet, so it stays hidden rather than starting transparent: the alpha lives
@@ -263,6 +273,13 @@ interface BodyHandles {
   ringRequested: boolean;
   /** Uniforms for the shadow the rings throw back onto the planet, if it has any. */
   readonly ringShadow: RingShadowUniforms | null;
+  /**
+   * Other bodies' shadows on this one, for a body lit by the Sun and drawn as a sphere;
+   * null for everything else. See eclipseShadow.ts.
+   */
+  readonly eclipse: EclipseSelector | null;
+  /** The bodies that may shadow this one: its planet, its moons, its sibling moons. */
+  eclipseCandidates: readonly BodyHandles[];
   /** Night lights, clouds and oceans. Non-null for exactly one body. */
   readonly earth: EarthHandles | null;
   /**
@@ -503,6 +520,10 @@ export function SolarSystem({
       // Another star with a measured radius gets a disc of its own (starDisc.ts): its
       // blackbody colour at full brightness, limb-darkened.
       const otherStar = definition.kind === 'star' && definition.id !== 'sun';
+      // A planet of another star -- its parent a star, where the Sun's planets have none --
+      // whether its size is measured or estimated: lit by its own star.
+      const exoplanet =
+        definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null);
       const geometry = sharedSphere
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
@@ -529,9 +550,7 @@ export function SolarSystem({
             : new THREE.MeshBasicMaterial({
                 color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
               })
-          : // A planet of another star -- its parent a star, where the Sun's planets have
-            // none -- whether its size is measured or estimated: lit by its own star.
-            definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null)
+          : exoplanet
             ? exoplanetMaterial(definition.color)
             : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
@@ -587,6 +606,16 @@ export function SolarSystem({
       marker.frustumCulled = false;
       group.add(marker);
 
+      // Shadowed by its planet and moons: a body of the Sun's lit by it and drawn as a
+      // sphere. The patch goes on last, after whatever else the material carries.
+      const eclipse =
+        material instanceof THREE.MeshStandardMaterial &&
+        !sharedSphere &&
+        !exoplanet &&
+        definition.kind !== 'spacecraft'
+          ? new EclipseSelector()
+          : null;
+
       let earth: EarthHandles | null = null;
       if (definition.id === EARTH_ID) {
         const uniforms = earthExtrasUniforms(definition.radiusEquatorialKm);
@@ -611,6 +640,10 @@ export function SolarSystem({
         // The map is a column depth, not a transparency. Reading it as one left the
         // deck thin and gauzy; see earthExtras.ts.
         applyCloudDensity(cloudMaterial, definition.radiusEquatorialKm);
+        // The Moon's shadow darkens the clouds as it does the ground: Earth's own uniforms.
+        if (eclipse !== null) {
+          applyEclipseShadow(cloudMaterial, eclipse.uniforms);
+        }
         const cloud = new THREE.Mesh(
           // Four times the planet's tessellation, and that is a correctness
           // requirement rather than polish: at 64 segments a chord sags 7.7 km inside
@@ -656,6 +689,8 @@ export function SolarSystem({
           cloudMaterial,
           deckRadiusKm,
           atmosphere,
+          // atmosphereMaterial gives the sky these uniforms; this is the same objects, typed.
+          skyEclipse: sky.uniforms as unknown as EclipseUniforms,
           cloudReady: false,
           nightRequested: false,
           waterRequested: false,
@@ -716,6 +751,10 @@ export function SolarSystem({
         // whether Saturn is on screen; the group's position already decides that.
         ring.frustumCulled = false;
         group.add(ring);
+      }
+
+      if (eclipse !== null) {
+        applyEclipseShadow(material as THREE.MeshStandardMaterial, eclipse.uniforms);
       }
 
       let orbit: OrbitLine | null = null;
@@ -798,6 +837,8 @@ export function SolarSystem({
         trajectory: null,
         ring,
         ringShadow,
+        eclipse,
+        eclipseCandidates: [],
         earth,
         glare,
         requestedFile: null,
@@ -815,7 +856,7 @@ export function SolarSystem({
       };
     };
     void version;
-    return store.bodies.map((definition) => {
+    const built = store.bodies.map((definition) => {
       const cached = handleCache.get(definition.id);
       if (cached !== undefined) {
         return cached;
@@ -824,6 +865,15 @@ export function SolarSystem({
       handleCache.set(definition.id, handle);
       return handle;
     });
+    // Who may shadow whom, settled once per catalog rather than looked for each frame.
+    for (const handle of built) {
+      if (handle.eclipse !== null) {
+        handle.eclipseCandidates = built.filter(
+          (other) => other.eclipse !== null && mayShadow(handle.definition, other.definition),
+        );
+      }
+    }
+    return built;
   }, [store, version, handleCache]);
   // Orbits made after the first render -- a small moon's, once focused -- hang here.
   const lateOrbits = useMemo(() => new THREE.Group(), []);
@@ -861,6 +911,7 @@ export function SolarSystem({
     );
     sharedFrame.snapshot = snapshot;
     const focusRadiusKm = store.body(focus).radiusEquatorialKm;
+    const sunRadiusKm = store.body('sun').radiusEquatorialKm;
 
     // Orbits live in the Sun's frame, so they follow the Sun's rebased position.
     const sun = snapshot.bodies.get('sun');
@@ -1242,6 +1293,49 @@ export function SolarSystem({
       meshMaterial.transparent = sphereOpacity < 1;
       meshMaterial.opacity = sphereOpacity;
 
+      // The bodies whose shadows can reach this one this frame, relative to it in float64
+      // km and handed over as small numbers. Most frames there are none, and the shader
+      // stops at the count. See eclipseShadow.ts.
+      const eclipse = handle.eclipse;
+      if (eclipse !== null) {
+        eclipse.uniforms.uEclipseCount.value = 0;
+        if (handle.mesh.visible && sun !== undefined) {
+          const here = rebased.positionKm;
+          // Velocities about the barycentre: the snapshot's are about the focus.
+          const frameVx = focusInRoot?.velocity.x ?? 0;
+          const frameVy = focusInRoot?.velocity.y ?? 0;
+          const frameVz = focusInRoot?.velocity.z ?? 0;
+          eclipse.begin(
+            handle.definition.radiusEquatorialKm,
+            sun.positionKm.x - here.x,
+            sun.positionKm.y - here.y,
+            sun.positionKm.z - here.z,
+            sun.velocityKmS.x + frameVx,
+            sun.velocityKmS.y + frameVy,
+            sun.velocityKmS.z + frameVz,
+            sunRadiusKm,
+            KM_PER_UNIT,
+          );
+          eclipse.uniforms.uEclipseCentre.value.copy(handle.group.position);
+          for (const other of handle.eclipseCandidates) {
+            const there = snapshot.bodies.get(other.definition.id);
+            // A body switched off in the layers panel is not drawn, and neither is its shadow.
+            if (there === undefined || !isShown(other.definition, visibleKinds)) {
+              continue;
+            }
+            eclipse.offer(
+              there.positionKm.x - here.x,
+              there.positionKm.y - here.y,
+              there.positionKm.z - here.z,
+              there.velocityKmS.x + frameVx,
+              there.velocityKmS.y + frameVy,
+              there.velocityKmS.z + frameVz,
+              occludingRadiusKm(other.definition),
+            );
+          }
+        }
+      }
+
       if (handle.ring !== null && handle.definition.rings !== null && sun !== undefined) {
         // Tied to the sphere's own fade rather than the ring's larger angular size,
         // so the two appear and disappear together. The alternative -- fading the
@@ -1351,6 +1445,12 @@ export function SolarSystem({
           sky.uSunLocal!.value.copy(scratchSun);
           sky.uSunIntensity!.value = LIGHTING[lighting].sun;
           sky.uFade!.value = sphereOpacity;
+          // The same occluders, in the shell's frame: turned into Earth's and in its radii.
+          handle.eclipse?.copyTransformed(
+            earth.skyEclipse,
+            scratchQuaternion.copy(handle.mesh.quaternion).invert(),
+            KM_PER_UNIT / handle.definition.radiusEquatorialKm,
+          );
           // The camera in the same frame and the same units the shell is built in:
           // planet radii, measured from the planet's centre.
           sky.uCameraLocal!.value
@@ -1671,7 +1771,12 @@ export function SolarSystem({
         intensity={LIGHTING[lighting].sun}
         distance={0}
         decay={0}
-        color="#fff6e0"
+        // White. Every map is the colour its body is in sunlight -- Neptune's and Mars's
+        // checked against photometry white-balanced to the Sun (textures/CREDITS.md) -- so
+        // tinting the light as well would count the Sun's colour twice. It was a cream
+        // #fff6e0, which took a quarter off every map's blue: Neptune came out grey-cyan,
+        // Uranus greener than blue, where Irwin et al. 2024's true colour has both blue-white.
+        color="#ffffff"
       />
       <ambientLight intensity={LIGHTING[lighting].ambient} />
 
