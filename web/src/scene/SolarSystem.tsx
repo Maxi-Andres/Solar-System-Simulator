@@ -1,4 +1,4 @@
-import type { BodyDefinition, BodyId, CraftShape, TextureSetId } from '@sss/tools/types';
+import type { BodyDefinition, BodyId, CraftShape } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -31,14 +31,11 @@ import { markerTexture } from './markerTexture.ts';
 import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
+import { cloudTopDriftDeg, cloudTopMapOffset } from './cloudRotation.ts';
+import { drawnTexture } from './drawnTexture.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
-import {
-  applyRingShadow,
-  SHADOW_FLOOR,
-  SHADOW_OPACITY_EXPONENT,
-  SHADOW_OPACITY_GAIN,
-  type RingShadowUniforms,
-} from './ringShadow.ts';
+import { ringFlatRadianceFactor, ringShadowSettings, ringStripTexture } from './ringBands.ts';
+import { applyRingShadow, type RingShadowUniforms } from './ringShadow.ts';
 import { LIGHTING } from './shading.ts';
 import {
   glareLevel,
@@ -165,17 +162,6 @@ const SPHERE_SEGMENTS = 64;
  */
 const SMALL_MOON_SPHERE = new THREE.SphereGeometry(1, 32, 16);
 
-/**
- * Which of the catalog's surface-map sets is drawn.
- *
- * A picker for this existed briefly and was removed by request: the true-colour set
- * changes only three bodies and the comparison was not worth a permanent control. Both
- * sets are still in the catalog and both are still pixel-checked by
- * textureAlignment.test.ts, so flipping this constant is the whole of re-enabling it,
- * and restoring the picker means putting `textureSet` back in the view store and the
- * selector back in LightingPanel.
- */
-const ACTIVE_TEXTURE_SET: TextureSetId = 'illustrative';
 
 /**
  * On-screen radius, in pixels, at which a body's surface map is worth fetching.
@@ -258,7 +244,7 @@ interface BodyHandles {
    */
   readonly trajectoryGroup: THREE.Group | null;
   trajectory: TrajectoryLine | TableTrail | null;
-  /** Ring system mesh, for the one body here that has one. */
+  /** Ring system mesh, for the bodies here that have one: Saturn, Uranus and Neptune. */
   readonly ring: THREE.Mesh | null;
   /**
    * Texture bookkeeping, so a map is fetched once per file and the orientation always
@@ -323,7 +309,7 @@ interface BodyHandles {
  * the material, or the incoming one before any has arrived. See the orientation call.
  */
 function meshMapOriginDeg(handle: BodyHandles): number {
-  const variant = handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null;
+  const variant = drawnTexture(handle.definition);
   return handle.shownFile === null ? (variant?.longitudeOriginDeg ?? 0) : handle.shownOriginDeg;
 }
 
@@ -437,7 +423,10 @@ function releaseUnusedDetail(handle: BodyHandles, nowMs: number): void {
       handle.ringShadow.uRingShadowMap.value = null;
       handle.ringShadow.uRingShadowStrength.value = 0;
     }
-    releaseBodyTexture(handle.definition.rings.texture);
+    // A measured strip is the app's own and kept (ringBands.ts); only a fetched map is let go.
+    if (handle.definition.rings.texture !== null) {
+      releaseBodyTexture(handle.definition.rings.texture);
+    }
     handle.ringRequested = false;
   }
 
@@ -677,6 +666,7 @@ export function SolarSystem({
       let ring: THREE.Mesh | null = null;
       let ringShadow: RingShadowUniforms | null = null;
       if (definition.rings !== null) {
+        const shadowSettings = ringShadowSettings(definition.rings);
         // The planet learns to be shadowed by its own rings. Only the bodies that have
         // rings pay for it: everything else keeps the stock material and its cached
         // program.
@@ -689,9 +679,11 @@ export function SolarSystem({
           // than appearing between one frame and the next.
           uRingShadowStrength: { value: 0 },
           uRingShadowMaxAlpha: { value: MAX_RING_ALPHA },
-          uRingShadowFloor: { value: SHADOW_FLOOR },
-          uRingShadowExponent: { value: SHADOW_OPACITY_EXPONENT },
-          uRingShadowGain: { value: SHADOW_OPACITY_GAIN },
+          // Saturn's corrections to an artist's opacity; none for a strip made from
+          // measured depths (ringBands.ts).
+          uRingShadowFloor: { value: shadowSettings.floor },
+          uRingShadowExponent: { value: shadowSettings.exponent },
+          uRingShadowGain: { value: shadowSettings.gain },
         };
         // Safe: only lit bodies get a Standard material, and only a planet has rings.
         applyRingShadow(
@@ -712,6 +704,8 @@ export function SolarSystem({
         // the shadow it throws across its rings.
         ringSurface.uniforms.uEquatorialRadius!.value = kmToUnits(definition.radiusEquatorialKm);
         ringSurface.uniforms.uPolarRadius!.value = kmToUnits(definition.radiusPolarKm);
+        // Saturn's calibrated brightness, or measured rings' as dark as their particles are.
+        ringSurface.uniforms.uFlatRadianceFactor!.value = ringFlatRadianceFactor(definition.rings);
 
         ring = new THREE.Mesh(
           ringGeometry(definition.rings.innerRadiusKm, definition.rings.outerRadiusKm),
@@ -941,7 +935,7 @@ export function SolarSystem({
       // does not show. See shapeModels.ts.
       const shapeModel = handle.definition.shapeModel ?? null;
       const variant =
-        shapeModel === null ? (handle.definition.textures?.[ACTIVE_TEXTURE_SET] ?? null) : null;
+        shapeModel === null ? drawnTexture(handle.definition) : null;
 
       // Point the axis where the IAU says it points and turn the body so the image
       // lands where the image belongs. One assignment carrying the axial tilt, the
@@ -961,6 +955,16 @@ export function SolarSystem({
               : handle.shownOriginDeg,
           ),
         );
+      }
+
+      // Venus's map is its cloud tops, and they super-rotate: slid westward round the body
+      // once in 4.45 days while the body itself keeps its IAU frame. See cloudRotation.ts.
+      const cloudDrift = cloudTopDriftDeg(handle.definition, jd);
+      if (cloudDrift !== null) {
+        const map = (handle.mesh.material as THREE.MeshStandardMaterial).map;
+        if (map !== null) {
+          map.offset.x = cloudTopMapOffset(cloudDrift);
+        }
       }
 
       // Distance from the camera, not from the focus: what the camera sees is what
@@ -1287,7 +1291,17 @@ export function SolarSystem({
           handle.ringShadow.uRingShadowSunLocal.value.copy(scratchSun);
         }
 
-        if (!handle.ringRequested && pixelRadius >= TEXTURE_REQUEST_PX) {
+        if (!handle.ringRequested && pixelRadius >= TEXTURE_REQUEST_PX && handle.definition.rings.texture === null) {
+          // Measured rings: their strip is made here, at once, from their radii and depths.
+          handle.ringRequested = true;
+          const strip = ringStripTexture(handle.definition.rings);
+          uniforms.uMap!.value = strip;
+          if (handle.ringShadow !== null) {
+            handle.ringShadow.uRingShadowMap.value = strip;
+            handle.ringShadow.uRingShadowStrength.value = 1;
+          }
+        }
+        if (!handle.ringRequested && pixelRadius >= TEXTURE_REQUEST_PX && handle.definition.rings.texture !== null) {
           handle.ringRequested = true;
           void loadBodyTexture(handle.definition.rings.texture, {
             anisotropy: gl.capabilities.getMaxAnisotropy(),

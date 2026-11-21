@@ -118,7 +118,7 @@ const EJECTA_RED: readonly Line[] = [
  * The Crab's filaments: hydrogen's lines with [N II], [S II], [O I] and [O III] in the same
  * filaments (Davidson & Fesen 1985), not apart -- so their red and green add, to orange.
  */
-const CRAB_FILAMENTS: readonly Line[] = [...RADIATIVE_RED, [630.0, 0.15], [636.4, 0.05], ...OXYGEN_III];
+export const CRAB_FILAMENTS: readonly Line[] = [...RADIATIVE_RED, [630.0, 0.15], [636.4, 0.05], ...OXYGEN_III];
 
 /**
  * A spectrum's colour: its lines through the CIE 1931 functions to linear sRGB, out-of-gamut

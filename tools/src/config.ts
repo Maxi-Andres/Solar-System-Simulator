@@ -462,6 +462,30 @@ export const STARS3D_INFO_FILE = 'stars3d.json';
 export const STARS3D_NAMES_FILE = 'names.json';
 
 /**
+ * The IAU's constellation boundaries as Delporte (1930) drew them, in B1875: Davenhall &
+ * Leggett's Catalogue of Constellation Boundary Data (1989; CDS VI/49), the file Bill J. Gray
+ * prepared in 2007 with each border's neighbour on the far side (constbnd.dat). The CfA's
+ * VizieR mirror first, which answered on 2026-11-21 while Strasbourg's archive returned its
+ * "page unavailable" to a plain request, then Strasbourg's.
+ */
+export const CONSTELLATION_BOUNDARY_URLS: readonly string[] = [
+  'https://vizier.cfa.harvard.edu/ftp/cats/VI/49/constbnd.dat',
+  'https://cdsarc.cds.unistra.fr/ftp/VI/49/constbnd.dat',
+];
+
+/**
+ * The traditional figures and where to write each name: d3-celestial's data (Olaf Frohn,
+ * BSD 3-Clause), its lines after the IAU's charts (made with Sky & Telescope), pinned to one
+ * commit so a rebuild reads the same figures.
+ */
+export const D3_CELESTIAL_COMMIT = '7e720a3de062059d4c5400a379146a601d9010e0';
+export const CONSTELLATION_LINES_URL = `https://raw.githubusercontent.com/ofrohn/d3-celestial/${D3_CELESTIAL_COMMIT}/data/constellations.lines.json`;
+export const CONSTELLATION_NAMES_URL = `https://raw.githubusercontent.com/ofrohn/d3-celestial/${D3_CELESTIAL_COMMIT}/data/constellations.json`;
+
+/** The output file. */
+export const CONSTELLATIONS_FILE = 'constellations.json';
+
+/**
  * The Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren 1991, CDS V/50),
  * for Bayer and Flamsteed designations: neither Hipparcos nor Gaia carries them. Read as
  * the fixed-width file CDS publishes, over plain HTTP from its archive rather than

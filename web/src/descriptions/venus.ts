@@ -135,9 +135,9 @@ export const VENUS: Description = {
       cite: ['titov2018'],
     },
     {
-      title: 'Clouds that turn with the ground',
-      text: 'The map is fixed to the planet, so it turns once in 243 days, backwards. The real cloud tops go round in about four days, some sixty times faster than the ground beneath them; here they do not.',
-      cite: ['margot2021', 'sanchezlavega2017'],
+      title: 'Clouds that outrun the ground',
+      text: 'The planet turns by the IAU’s model, once in 243 days, backwards, and its longitudes and its pole are that model’s. Its map, being the cloud tops, does not turn with it: the map slides round it westward — the way it spins — at 100 m/s, the wind at the cloud tops 70 km up, once round the ground in 4.45 days, once round the stars in 4.37. That is the equator’s wind, and the map turns as one piece: the real clouds keep near 100 m/s out to about 50° north and south, so in angle those latitudes go round faster, and the polar clouds slower, which a rigid map cannot show. Where its clouds stand at a given moment is not a measurement: the map is no particular day’s.',
+      cite: ['margot2021', 'sanchezlavega2017', 'horinouchi2020'],
     },
     {
       title: 'Backwards, or upside down',
@@ -312,6 +312,11 @@ export const VENUS: Description = {
       key: 'sanchezlavega2017',
       text: 'Sánchez-Lavega, A., et al. 2017, The Atmospheric Dynamics of Venus, Space Sci. Rev. 212, 1541',
       url: 'https://doi.org/10.1007/s11214-017-0389-x',
+    },
+    {
+      key: 'horinouchi2020',
+      text: 'Horinouchi, T., et al. 2020, How waves and turbulence maintain the super-rotation of Venus’ atmosphere, Science 368, 405',
+      url: 'https://doi.org/10.1126/science.aaz4439',
     },
     {
       key: 'titov2018',

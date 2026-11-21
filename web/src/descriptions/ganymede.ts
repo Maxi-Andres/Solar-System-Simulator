@@ -200,7 +200,7 @@ export const GANYMEDE: Description = {
     },
     {
       title: 'Jupiter’s shadow',
-      text: 'Not drawn. Ganymede passes through Jupiter’s shadow on every orbit; here it stays lit. Nothing in the app casts a shadow on another body except Saturn and its rings.',
+      text: 'Not drawn. Ganymede passes through Jupiter’s shadow on every orbit; here it stays lit. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
     {
       title: 'Its relief',

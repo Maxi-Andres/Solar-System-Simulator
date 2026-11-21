@@ -12,7 +12,7 @@ import { FAR_BODIES } from './farBodies.ts';
 import { EARTH_COMPANIONS } from './earthCompanions.ts';
 import { MINOR_PLANET_MOONS } from './moons/minorPlanetMoons.ts';
 import { FAMOUS_COMETS } from './famousComets.ts';
-import type { BodyDefinition, CraftShape, SurfaceSite, TextureSetId } from './types.ts';
+import type { BodyDefinition, CraftShape, RingSystem, SurfaceSite, TextureSetId } from './types.ts';
 
 /**
  * Body catalog: the Sun, the eight planets, Pluto, the named small bodies (smallBodies.ts),
@@ -136,7 +136,7 @@ export const SUN_CENTER = '500@10';
  *
  *   body      illustrative (SSS)   NASA alternative   better
  *   Mars                   60.8%              49.4%   NASA
- *   Neptune                67.6%              47.7%   NASA
+ *   Neptune                67.6%              47.7%   neither (see below)
  *   Earth                  52.6%     64.2% (Blue Marble)   Blue Marble, calibrated
  *   Venus                  44.3%              92.7%   SSS (NASA's is radar, tinted)
  *   Jupiter                14.0%              64.7%   SSS (NASA's is enhanced)
@@ -148,6 +148,16 @@ export const SUN_CENTER = '500@10';
  *
  * So `photometric` differs on three bodies out of ten. Presenting it as a complete
  * true-colour set would be the dishonest move; the UI states the count.
+ *
+ * **Neptune's is made here, not found.** NASA's alternative was pale, and painted: swirls
+ * Neptune does not have, a black strip along its south edge, and three times too dark. So
+ * Neptune's true-colour map keeps the illustrative map's Voyager 2 clouds and takes its
+ * colour and brightness from photometry instead -- see CREDITS.md and
+ * textureAlignment.test.ts, which recomputes the colour and measures the file against it.
+ *
+ * **Which is drawn is per body** (web/src/scene/drawnTexture.ts): Mars and Neptune from this
+ * set, everything else from the illustrative one. Earth stays illustrative: Blue Marble's
+ * oceans carry painted sea-floor relief and its land December's snow all year.
  */
 export const TEXTURE_SETS: readonly {
   readonly id: TextureSetId;
@@ -166,10 +176,10 @@ export const TEXTURE_SETS: readonly {
     id: 'photometric',
     label: 'True colour',
     description:
-      'A calibrated or mission product wherever one has been published, which is ' +
-      'Earth, Mars and Neptune. The other seven keep the illustrative map because no ' +
-      'better source exists -- the NASA maps of Venus, Jupiter and Saturn are more ' +
-      'enhanced, not less.',
+      'Differs on Earth, Mars and Neptune: a calibrated or mission product for Earth and ' +
+      'Mars, and for Neptune the illustrative map in its measured colour. The other seven ' +
+      'keep the illustrative map because no better source exists -- the NASA maps of ' +
+      'Venus, Jupiter and Saturn are more enhanced, not less.',
   },
 ];
 
@@ -181,6 +191,89 @@ export function bodiesDifferingBySet(): readonly string[] {
       body.textures.illustrative.file !== body.textures.photometric.file,
   ).map((body) => body.id);
 }
+
+/**
+ * Uranus's rings, as measured: their radii, widths and equivalent depths, drawn into a strip
+ * in the app (web/src/scene/ringBands.ts) rather than from a picture.
+ *
+ * The nine Earth found by stellar occultation in 1977-78 -- 6, 5, 4, alpha, beta, eta, gamma,
+ * delta, epsilon -- the lambda ring and the broad dusty zeta Voyager 2 added in 1986, and the
+ * broad faint components beside eta and delta. Radii of 6 to epsilon and lambda: Esposito et
+ * al. 2002; their widths (a narrow ring's width varies round it; the mean of the published
+ * range is used): Karkoschka 2001; equivalent depths: de Pater et al. 2013; zeta and its inward
+ * extensions, as Keck saw them in 2004: de Pater et al. 2006. All as tabulated in "Rings of
+ * Uranus" (Wikipedia), checked against the papers' values where those were to hand.
+ *
+ * **Drawn circular.** Most of them are not quite: epsilon's eccentricity is 0.0079 (French et
+ * al. 1991), so it lies 406 km nearer Uranus at one end than the other and is 19.7 km wide
+ * there, 96.4 km at the far end. The ring model is an annulus of one radial strip, which has
+ * no room for a ring off-centre; each ring is drawn at its semi-major axis and mean width.
+ *
+ * **Not drawn: nu and mu**, the two outer dusty rings Hubble found in 2003 (Showalter &
+ * Lissauer 2006), at 66,100-69,900 and 86,000-103,000 km. Their optical depths are 5e-6 and
+ * 9e-6 -- seen face-on, they let through all but a hundred-thousandth of the light -- and
+ * reaching them would double the strip's span, halving the resolution of the rings that do
+ * show. Nor 1986U2R: de Pater et al. 2006 identify it with zeta, which has moved since.
+ *
+ * Their particles are about as dark as anything in the Solar System: geometric albedo about
+ * 0.05 at most, Bond albedo under 0.02 (Ockert et al. 1987, J. Geophys. Res. 92, 14969).
+ */
+const URANUS_RINGS: RingSystem = {
+  texture: null,
+  innerRadiusKm: 26840,
+  outerRadiusKm: 51200,
+  bands: [
+    { name: 'zeta (inner extension, zeta cc)', radiusKm: 30865, widthKm: 8050, equivalentDepthKm: 0.8 },
+    { name: 'zeta (inner extension, zeta c)', radiusKm: 36370, widthKm: 2960, equivalentDepthKm: 1.5 },
+    { name: 'zeta', radiusKm: 39600, widthKm: 3500, equivalentDepthKm: 1 },
+    { name: '6', radiusKm: 41837, widthKm: 1.9, equivalentDepthKm: 0.41 },
+    { name: '5', radiusKm: 42234, widthKm: 3.4, equivalentDepthKm: 0.91 },
+    { name: '4', radiusKm: 42570, widthKm: 3.4, equivalentDepthKm: 0.71 },
+    { name: 'alpha', radiusKm: 44718, widthKm: 7.4, equivalentDepthKm: 3.39 },
+    { name: 'beta', radiusKm: 45661, widthKm: 8.75, equivalentDepthKm: 2.14 },
+    { name: 'eta', radiusKm: 47175, widthKm: 2.3, equivalentDepthKm: 0.42 },
+    // Its broad component, 40 km wide just outside it.
+    { name: 'eta (broad component)', radiusKm: 47196, widthKm: 40, equivalentDepthKm: 0.85 },
+    { name: 'gamma', radiusKm: 47627, widthKm: 4.15, equivalentDepthKm: 3.3 },
+    // Its broad component, 10-12 km wide just inside it.
+    { name: 'delta (broad component)', radiusKm: 48292, widthKm: 11, equivalentDepthKm: 0.3 },
+    { name: 'delta', radiusKm: 48300, widthKm: 5.1, equivalentDepthKm: 2.2 },
+    { name: 'lambda', radiusKm: 50023, widthKm: 1.5, equivalentDepthKm: 0.2 },
+    { name: 'epsilon', radiusKm: 51149, widthKm: 58.05, equivalentDepthKm: 47 },
+  ],
+  particleAlbedo: 0.05,
+};
+
+/**
+ * Neptune's rings, as Voyager 2 measured them in 1989 (Smith et al. 1989; the optical depths
+ * of Le Verrier and Adams from its photopolarimeter, Horn et al. 1990), drawn as Uranus's are.
+ *
+ * **Not drawn: Arago**, a brightening at Lassell's outer edge under 100 km wide, whose depth
+ * is not measured. **Nor the Adams ring's arcs** -- Fraternite, Egalite, Liberte, Courage --
+ * five clumps within 40 degrees of its circumference where it is three to eight times
+ * denser. They are the famous thing about these rings, and placing them is not done yet.
+ * Their mean motion is known to about a ten-thousandth of a degree a day, which carried
+ * from the last published positions to now would do; but they change from year to year
+ * (Courage jumped 8 degrees forward; Liberte had almost gone by 2003: de Pater et al.
+ * 2005), so they need the latest positions in their own longitude system, which have not
+ * been brought in. Drawn at a guessed place they would be a picture, not a measurement, so
+ * the ring is drawn as it is outside them.
+ *
+ * Their particles are as dark as Uranus's: geometric albedo about 0.05 (Smith et al. 1989).
+ */
+const NEPTUNE_RINGS: RingSystem = {
+  texture: null,
+  innerRadiusKm: 40900,
+  outerRadiusKm: 62960,
+  bands: [
+    { name: 'Galle', radiusKm: 41900, widthKm: 2000, equivalentDepthKm: 0.15 },
+    { name: 'Le Verrier', radiusKm: 53200, widthKm: 113, equivalentDepthKm: 0.7 },
+    { name: 'Lassell', radiusKm: 55200, widthKm: 4000, equivalentDepthKm: 0.4 },
+    // 15 to 50 km wide; 0.011 deep outside the arcs.
+    { name: 'Adams', radiusKm: 62932, widthKm: 35, equivalentDepthKm: 0.4 },
+  ],
+  particleAlbedo: 0.05,
+};
 
 /** A sub-day sample spacing, written the way it is measured. */
 function minutes(count: number): number {
@@ -2748,7 +2841,7 @@ export const CATALOG: readonly BodyDefinition[] = [
     textures: {
       illustrative: { file: 'mars.jpg', longitudeOriginDeg: 180 },
       // NASA 3D Resources, Viking-derived. Butterscotch rather than orange-red, which is the
-      // colour Mars actually is.
+      // colour Mars actually is. The one drawn (web/src/scene/drawnTexture.ts).
       photometric: { file: 'mars-photometric.jpg', longitudeOriginDeg: 180 },
     },
     rings: null,
@@ -2855,6 +2948,8 @@ export const CATALOG: readonly BodyDefinition[] = [
       texture: 'saturn-rings.png',
       innerRadiusKm: 69942,
       outerRadiusKm: 141880,
+      bands: [],
+      particleAlbedo: null,
     },
     mission: null,
   },
@@ -2894,7 +2989,7 @@ export const CATALOG: readonly BodyDefinition[] = [
       // featureless disc.
       photometric: { file: 'uranus.jpg', longitudeOriginDeg: 180 },
     },
-    rings: null,
+    rings: URANUS_RINGS,
     mission: null,
   },
   {
@@ -2963,11 +3058,13 @@ export const CATALOG: readonly BodyDefinition[] = [
     drawOrbit: true,
     textures: {
       illustrative: { file: 'neptune.jpg', longitudeOriginDeg: 180 },
-      // NASA 3D Resources. Pale blue-green, the direction Irwin et al. 2024 established when
-      // they reprocessed the contrast-stretched Voyager 2 imagery.
-      photometric: { file: 'neptune-photometric.jpg', longitudeOriginDeg: 180 },
+      // The illustrative map's Voyager 2 clouds, in Neptune's measured colour and brightness:
+      // every pixel the disc's colour, from Mallama et al. 2017's band albedos, times its own
+      // brightness against the map's mean (web/public/textures/CREDITS.md). Pale blue, a little
+      // bluer than Uranus, as Irwin et al. 2024 found. Same pixels' places, so the same origin.
+      photometric: { file: 'neptune-truecolour.jpg', longitudeOriginDeg: 180 },
     },
-    rings: null,
+    rings: NEPTUNE_RINGS,
     mission: null,
   },
   {

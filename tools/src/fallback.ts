@@ -4,6 +4,7 @@ import { join, relative, resolve, isAbsolute } from 'node:path';
 
 import { githubWarning } from './annotate.ts';
 import {
+  CONSTELLATIONS_FILE,
   EXOPLANETS_FILE,
   GLOBULAR_CLUSTERS_FILE,
   LANIAKEA_DIR,
@@ -57,6 +58,9 @@ export const DATA_PRODUCTS = {
   // their anomalies are for, and the app propagates from there.
   belt: { name: 'the asteroid belt and the comets', paths: ['belt'], complete: ['belt/belt.json', 'belt/comets.json'] },
   pulsars: { name: 'the pulsars', paths: [PULSARS_FILE], complete: [PULSARS_FILE] },
+  // Its figures are matched against the sky the stars read: when that fails, so do they, and both
+  // fall back. A positions-only file, so an older copy beside newer stars is still right.
+  constellations: { name: 'the constellations', paths: [CONSTELLATIONS_FILE], complete: [CONSTELLATIONS_FILE] },
   globularClusters: { name: 'the globular clusters', paths: [GLOBULAR_CLUSTERS_FILE], complete: [GLOBULAR_CLUSTERS_FILE] },
   localGroup: { name: 'the Local Group', paths: [LOCAL_GROUP_FILE], complete: [LOCAL_GROUP_FILE] },
   localVolume: { name: 'the Local Volume', paths: [LOCAL_VOLUME_FILE], complete: [LOCAL_VOLUME_FILE] },

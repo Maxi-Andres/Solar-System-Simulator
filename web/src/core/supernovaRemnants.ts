@@ -88,11 +88,13 @@ export interface RemnantMap {
    */
   readonly continuum: { readonly file: string; readonly colour: readonly [number, number, number] } | null;
   /**
-   * Whose colour it is drawn in: the photograph's own, or -- a grey map, of a picture in light
+   * Whose colour it is drawn in: the photograph's own; or -- a grey map, of a picture in light
    * the eye does not see (X-rays, near-infrared) -- the colour of the remnant's visible lines
-   * (RemnantEmission), the picture giving only where the light is and how much.
+   * (RemnantEmission), the picture giving only where the light is and how much; or -- the
+   * Crab's, a picture whose three filters were each put in a colour not their own -- its
+   * filters unmixed into its lines' and its synchrotron's own colours (scene/crabFilters.ts).
    */
-  readonly colour: 'photograph' | 'lines';
+  readonly colour: 'photograph' | 'lines' | 'filters';
   /** Where its light is in depth, where that is measured (RemnantPoints); null where it is modelled. */
   readonly points: RemnantPoints | null;
   /** What light it shows, the credit its source asks for, the licence and the page. */
@@ -169,7 +171,9 @@ export const SUPERNOVA_REMNANTS: readonly SupernovaRemnant[] = [
       halfArcmin: 4,
       reachArcmin: 4.83,
       continuum: { file: 'crab-continuum.png', colour: [0.0749, 0.8143, 1] },
-      colour: 'photograph',
+      // ESO's red is [S II], its green the broad R band -- H-alpha drawn green -- and its blue
+      // the B band: unmixed into true colour (scene/crabFilters.ts).
+      colour: 'filters',
       points: null,
       light: 'visible, three filters (VLT FORS2)',
       credit: 'ESO',

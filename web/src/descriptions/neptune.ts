@@ -130,14 +130,19 @@ export const NEPTUNE: Description = {
   ],
   drawnHere: [
     {
-      title: 'Too blue, and too dark',
-      text: 'The map drawn is an illustrative one in the deep blue of the Voyager-era pictures, with the Great Dark Spot of 1989 painted on. That blue is the stretched one: in true colour Neptune is pale and only a little bluer than Uranus. The map is also far too dark — its average brightness is 0.085, a sixth of Uranus’s map, where the two planets really reflect almost the same share of sunlight, geometric albedos 0.44 and 0.49.',
-      cite: ['irwin2024', 'nssdc', 'nssdcuranus'],
+      title: 'Its map, in its true colour',
+      text: 'Voyager 2’s clouds of 1989, in Neptune’s measured colour and brightness. The map is the illustrative one — its bands, its bright clouds and the Great Dark Spot are Voyager’s — but that map is the stretched deep blue, and a quarter as bright as Neptune is. So its colour was replaced: every pixel is Neptune’s disc colour times its own brightness against the map’s average, its bright clouds white. The colour is worked out from Neptune’s measured geometric albedo in ten bands, put through the eye’s colour response under sunlight — the way Irwin et al. made its true colour from its spectra — and comes out a pale blue, a little bluer than Uranus. Its average brightness is now 0.42, near its geometric albedo of 0.44 and Uranus’s 0.49, where it was 0.12.',
+      cite: ['mallama2017', 'irwin2024', 'smith1989', 'nssdcuranus'],
     },
     {
-      title: 'A better map, not shown',
-      text: 'The repository also holds NASA’s pale blue-green map of Neptune, closer to the true colour Irwin et al. established. It belongs to a second, true-colour set of maps that is not switched on, because that set changes only three bodies.',
-      cite: ['irwin2024'],
+      title: 'Why not NASA’s pale map',
+      text: 'A second, pale blue-green map of Neptune from NASA was in the repository. It is painted: turbulent swirls Neptune does not have, a black strip along its southern edge, and still three times too dark. Its colour was the right direction; its clouds were not Neptune’s.',
+      cite: ['smith1989'],
+    },
+    {
+      title: 'Its rings',
+      text: 'Drawn from their measurements, not a picture: Galle, Le Verrier, Lassell and Adams, each at its radius and width and as opaque as Voyager 2 measured it, in Neptune’s equatorial plane. They are faint past seeing: Adams, the densest outside its arcs, blocks 1.1% of the light crossing it face-on, the broad Galle and Lassell a hundredth of a percent. Their particles are as dark as Uranus’s, geometric albedo about 0.05, so they are drawn an eleventh as bright as Saturn’s; like Saturn’s, at a brightness that does not change with the angles of the Sun and the camera.',
+      cite: ['smith1989', 'horn1990'],
     },
     {
       title: 'Turning with its clouds',
@@ -236,8 +241,13 @@ export const NEPTUNE: Description = {
       cite: ['nssdc', 'karkoschka2011'],
     },
     {
-      title: 'Its rings',
-      text: 'Not drawn: rings are drawn only for Saturn so far. Neptune’s are real and measured, and very faint.',
+      title: 'The Adams ring’s arcs',
+      text: 'Not drawn yet. Five clumps — Fraternité, Égalité 1 and 2, Liberté, Courage — within 40° of the Adams ring, three to eight times denser than the rest of it, moving round with it. Their rate is known well; their places are not fixed: since Voyager, Courage has jumped 8° ahead and Liberté had nearly faded by 2003. Placing them needs their latest measured longitudes, which have not been brought in; drawn at a guessed place they would be a picture, not a measurement. Arago, a brightening at Lassell’s outer edge whose depth is not measured, is not drawn either.',
+      cite: ['smith1989', 'depater2005'],
+    },
+    {
+      title: 'Its rings from behind',
+      text: 'Not drawn as they look. They are mostly dust, and dust shines many times brighter seen towards the Sun — Voyager 2 saw them best looking back. Here their brightness does not change with the angle, so from behind Neptune they are as faint as from in front.',
       cite: ['smith1989'],
     },
     {
@@ -298,6 +308,19 @@ export const NEPTUNE: Description = {
       key: 'irwin2024',
       text: 'Irwin, P. G. J., et al. 2024, Modelling the seasonal cycle of Uranus’s colour and magnitude, and comparison with Neptune, MNRAS 527, 11521',
       url: 'https://doi.org/10.1093/mnras/stad3761',
+    },
+    {
+      key: 'mallama2017',
+      text: 'Mallama, A., Krobusek, B., & Pavlov, H. 2017, Comprehensive wide-band magnitudes and albedos for the planets, with applications to exo-planets and Planet Nine, Icarus 282, 19',
+      url: 'https://arxiv.org/abs/1609.05048',
+    },
+    {
+      key: 'horn1990',
+      text: 'Horn, L. J., Hui, J., Lane, A. L., & Colwell, J. E. 1990, Observations of Neptunian rings by Voyager photopolarimeter experiment, Geophys. Res. Lett. 17, 1745',
+    },
+    {
+      key: 'depater2005',
+      text: 'de Pater, I., et al. 2005, The dynamic neptunian ring arcs: evidence for a gradual disappearance of Liberté and resonant jump of Courage, Icarus 174, 263',
     },
     {
       key: 'irwin2022',

@@ -108,6 +108,17 @@ export const measuredSection: AboutSection = {
             </Xref>
             .
           </Item>
+          <Item>
+            Neptune’s colour and brightness: its geometric albedo in ten bands
+            <Cite k="mallama2017" />, through the eye under sunlight — pale blue, a little bluer than Uranus
+            <Cite k="irwin2024" />, and 0.42 bright where its old map was 0.12.
+          </Item>
+          <Item>
+            Uranus’s and Neptune’s rings: each at its measured radius and width, as opaque as its measured
+            optical depth
+            <Cite k={['esposito2002', 'karkoschka2001', 'dePater2013', 'dePater2006', 'smith1989', 'horn1990']} />
+            , in its planet’s equatorial plane — Uranus’s standing nearly upright to its orbit.
+          </Item>
         </Items>
 
         <Sub section="measured" id="small-bodies">

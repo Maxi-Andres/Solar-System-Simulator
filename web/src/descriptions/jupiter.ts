@@ -213,7 +213,7 @@ export const JUPITER: Description = {
     },
     {
       title: 'Moons’ shadows',
-      text: 'When a moon passes in front of Jupiter its shadow falls on the clouds as a black dot, as in the Hubble photograph above. Nothing here casts a shadow on another body except Saturn’s rings and Saturn, so these transits are not drawn.',
+      text: 'When a moon passes in front of Jupiter its shadow falls on the clouds as a black dot, as in the Hubble photograph above. Nothing here casts a shadow on another body except the ringed planets — Saturn, Uranus, Neptune — and their rings, so these transits are not drawn.',
     },
     {
       title: 'Its rings',

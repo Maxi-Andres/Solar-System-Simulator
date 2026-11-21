@@ -49,7 +49,7 @@ export const HAUMEA: Description = {
     },
     {
       title: 'No ring, no map',
-      text: 'The ring is not drawn: rings are drawn only for Saturn so far. There is no map, because nothing has ever shown Haumea’s surface.',
+      text: 'The ring is not drawn: rings are drawn only for Saturn, Uranus and Neptune so far. There is no map, because nothing has ever shown Haumea’s surface.',
       cite: ['ortiz2017'],
     },
   ],

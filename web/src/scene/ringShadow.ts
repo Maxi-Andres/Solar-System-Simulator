@@ -219,18 +219,18 @@ float ringShadowTransmission() {
   }
 
   float t = -vRingShadowPosition.y / sunY;
-  if (t <= 0.0) {
-    return 1.0;
-  }
-
   vec2 crossing = vRingShadowPosition.xz + t * uRingShadowSunLocal.xz;
   float radius = length(crossing);
-  if (radius < uRingShadowInner || radius > uRingShadowOuter) {
+  float u = (radius - uRingShadowInner) / (uRingShadowOuter - uRingShadowInner);
+  // Read before any branch that differs from pixel to pixel: the mipmap level comes from how
+  // fast u changes across the screen, which is undefined inside such a branch. Uranus's rings
+  // are a few km wide, under a pixel across the planet, and read at the finest level they came
+  // out as dotted lines instead of the faint continuous shadows they are.
+  float alphaNormal = min(texture2D(uRingShadowMap, vec2(u, 0.5)).a, uRingShadowMaxAlpha);
+
+  if (t <= 0.0 || radius < uRingShadowInner || radius > uRingShadowOuter) {
     return 1.0;
   }
-
-  float u = (radius - uRingShadowInner) / (uRingShadowOuter - uRingShadowInner);
-  float alphaNormal = min(texture2D(uRingShadowMap, vec2(u, 0.5)).a, uRingShadowMaxAlpha);
 
   // Face-on, not along the slant path, and corrected toward a real optical depth: the
   // map is an artist's opacity and over-states everything sparse. Between them those

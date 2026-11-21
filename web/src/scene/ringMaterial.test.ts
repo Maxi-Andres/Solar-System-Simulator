@@ -317,7 +317,7 @@ describe('the shader participates in the scene it is drawn into', () => {
 /** The shipped ring map, read at module scope so the describe body stays sync. */
 const ringPng = PNG.sync.read(
   await readFile(
-    join(import.meta.dirname, '../../public/textures', getBody('saturn').rings!.texture),
+    join(import.meta.dirname, '../../public/textures', getBody('saturn').rings!.texture!),
   ),
 );
 

@@ -911,14 +911,15 @@ Override with `VITE_BASE` if the repo is renamed, or set it to `/` for a user si
 
 ## Surface maps
 
-What ships is the **Solar System Scope** set (CC BY 4.0) for the Sun and eight planets,
-plus NASA's New Horizons mosaic for Pluto. These are composites: NASA imagery with
-colour and contrast added by their authors, so they read more vividly than a camera
+What ships is mostly the **Solar System Scope** set (CC BY 4.0) for the Sun and the
+planets, plus NASA's New Horizons mosaic for Pluto. These are composites: NASA imagery
+with colour and contrast added by their authors, so they read more vividly than a camera
 would.
 
-A **true-colour** alternative also lives in `web/public/textures/`, unused for now.
-`ACTIVE_TEXTURE_SET` in `web/src/scene/SolarSystem.tsx` selects between them; there is
-no in-app picker.
+A **true-colour** alternative also lives in `web/public/textures/`, and is drawn for
+Mars (NASA's Viking map) and Neptune (Solar System Scope's map recoloured to Neptune's
+measured colour; see CREDITS.md there). `web/src/scene/drawnTexture.ts` chooses body by
+body; there is no in-app picker.
 
 It covers **three bodies out of ten** — Earth, Mars and Neptune — and that is the state
 of what has been published rather than a limit on the search. NASA's Venus map is the

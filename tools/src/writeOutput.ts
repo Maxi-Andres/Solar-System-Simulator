@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   BELT_NAMES_FILE,
   COMETS_INFO_FILE,
+  CONSTELLATIONS_FILE,
   COSMIC_WEB_DIR,
   COSMIC_WEB_INFO_FILE,
   EXOPLANETS_FILE,
@@ -35,6 +36,7 @@ import {
   type Stars3dBuild,
 } from './stars/build3d.ts';
 import type {
+  ConstellationCatalog,
   ExoplanetCatalog,
   BeltInfo,
   BodyDefinition,
@@ -316,6 +318,15 @@ export async function writeExoplanets(catalog: ExoplanetCatalog, outputDir = OUT
 export async function writePulsars(catalog: PulsarCatalog, outputDir = OUTPUT_DIR): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   await writeCompactJson(join(outputDir, PULSARS_FILE), catalog);
+}
+
+/**
+ * The constellations, as constellations.json (ConstellationCatalog): their boundaries, names and
+ * figures, about 75 KB. Takes the directory, because `pnpm fetch:constellations` regenerates it alone.
+ */
+export async function writeConstellations(catalog: ConstellationCatalog, outputDir = OUTPUT_DIR): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  await writeCompactJson(join(outputDir, CONSTELLATIONS_FILE), catalog);
 }
 
 /** The globular clusters, as globular-clusters.json (GlobularClusterCatalog): 160-odd entries, a few tens of KB. */

@@ -132,8 +132,9 @@ export const MARS: Description = {
   ],
   drawnHere: [
     {
-      title: 'An illustrative map',
-      text: 'The map drawn is Solar System Scope’s, built on NASA imagery with colour and contrast added by its authors: more orange than Mars is. A truer map — NASA’s, from Viking, the butterscotch-brown Mars actually is — is in the app’s files but not shown, because the illustrative set is used for every planet so they read alike. It is static: no dust storm, no cloud and no change of the polar caps with the seasons.',
+      title: 'A map from Viking',
+      text: 'The map drawn is NASA’s, from the Viking orbiters’ colour mosaics: the butterscotch-brown Mars is, not the orange-red of the illustrative map it replaced. Checked against Mars’s measured brightness in ten colour bands, put through the eye’s colour response under sunlight, its average brightness is right to 5%, and it is still a little redder than the whole disc measures — its green 0.8 and its blue 0.6 of what the disc gives against its red, where the illustrative map’s were 0.35 and 0.33. Part of that is real, since the disc’s light includes the haze, clouds and frost a map of the ground leaves out, so the map is not adjusted to it. It is static: no dust storm, no cloud and no change of the polar caps with the seasons.',
+      cite: ['mallama2017'],
     },
     {
       title: 'No air',
@@ -289,6 +290,11 @@ export const MARS: Description = {
       key: 'nssdcMars',
       text: 'Williams, D. R., Mars Fact Sheet, NASA Space Science Data Coordinated Archive',
       url: 'https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html',
+    },
+    {
+      key: 'mallama2017',
+      text: 'Mallama, A., Krobusek, B., & Pavlov, H. 2017, Comprehensive wide-band magnitudes and albedos for the planets, with applications to exo-planets and Planet Nine, Icarus 282, 19',
+      url: 'https://arxiv.org/abs/1609.05048',
     },
     {
       key: 'nssdcEarth',

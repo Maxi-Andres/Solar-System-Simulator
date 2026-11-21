@@ -17,7 +17,7 @@ export const choicesSection: AboutSection = {
     { id: 'sun', label: 'The Sun' },
     { id: 'stars', label: 'Stars' },
     { id: 'colours', label: 'Colours that mean something' },
-    { id: 'saturn', label: 'Saturn’s rings' },
+    { id: 'saturn', label: 'Rings and clouds' },
     { id: 'earth', label: 'Earth' },
     { id: 'surroundings', label: 'The Sun’s surroundings' },
     { id: 'black-holes', label: 'Black holes' },
@@ -145,6 +145,21 @@ export const choicesSection: AboutSection = {
             faint: a map, not a view, dimmed where the dots crowd. Off, the stars are only what an eye would
             see from where the camera is.
           </Item>
+          <Item title="Constellations: the borders are the IAU’s, the figures a convention">
+            The Constellations layer, off at first, draws three things. The boundaries are official: Delporte’s
+            of 1930 for the IAU, along meridians and parallels of B1875 <Cite k={['delporte1930', 'davenhallLeggett1989']} />,
+            moved to J2000 by the IAU 1976 precession <Cite k="lieske1977" /> — so the parallels are drawn
+            slightly curved, as they now are. The names are the IAU’s; where each is written is a choice. The
+            stick figures are not anyone’s standard: no body ever fixed which stars to join, and every atlas
+            joins them its own way. These are d3-celestial’s, drawn after the IAU’s charts{' '}
+            <Cite k="d3celestial" />, each line ending on a catalogue star found by its Hipparcos number, so it
+            moves with that star. Drawn on the sky at infinity, and only from within 1,000 AU of the Sun, gone
+            by 10,000.
+            <Why>
+              a constellation is a line-up seen from here: its stars lie at very different distances, and from
+              10,000 AU out the nearest of them, Rigil Kentaurus, is already 2° from where the figure has it.
+            </Why>
+          </Item>
           <Item title="No photographic Milky Way">
             A photographic Milky Way panorama was tried behind the stars and taken out again. It was correctly
             placed — on the galactic frame, checked against Sagittarius A*, Andromeda and both Magellanic
@@ -176,7 +191,7 @@ export const choicesSection: AboutSection = {
         </Items>
 
         <Sub section="choices" id="saturn">
-          Saturn’s rings
+          Rings and clouds
         </Sub>
         <Items>
           <Item title="Constant brightness">
@@ -188,6 +203,23 @@ export const choicesSection: AboutSection = {
               edge-on, where the reference images do not brighten at all. Getting it right needs a measured
               particle phase curve and a proper multiple-scattering solution, which is a project of its own.
             </Why>
+          </Item>
+          <Item title="Uranus’s and Neptune’s rings: Saturn’s brightness, scaled">
+            Drawn the same way, at Saturn’s calibrated brightness times their particles’ reflectivity against
+            Saturn’s — geometric albedo 0.05 against 0.55 <Cite k={['ockert1987', 'smith1989']} />, an
+            eleventh. So they are dark lines across their planets and all but invisible against space, as in a
+            photograph; the dust that brightens looking towards the Sun does not.
+          </Item>
+          <Item title="Venus’s clouds, one rigid deck">
+            Venus’s map is its cloud tops, slid westward round the planet at the equator’s cloud-top wind,
+            100 m/s <Cite k={['sanchezLavega2017', 'horinouchi2020']} /> — once round in 4.45 days — while the
+            planet keeps its 243-day IAU rotation. One rate for the whole map: the real clouds keep that speed
+            to about 50° and slow towards the poles. Where they stand on a given day is no observation.
+          </Item>
+          <Item title="Neptune’s colour, made">
+            Neptune’s map is recoloured here: the disc’s colour from photometry
+            <Cite k="mallama2017" />, the clouds’ brightness from the illustrative map. NASA’s pale map was
+            painted, so it was not used.
           </Item>
         </Items>
 

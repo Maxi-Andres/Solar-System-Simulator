@@ -403,6 +403,16 @@ function GlossaryText() {
           A planet of another star. More than 6,000 are confirmed, most found by the dip in light as one crosses its
           star or by the wobble it gives the star; only a few dozen have been photographed.
         </Term>
+        <Term
+          id="constellation"
+          title="Constellation"
+          app={<>The <Layer>Constellations</Layer> layer, off at first: borders, names and figures, from near the Sun.</>}
+        >
+          One of the 88 regions the IAU divides the sky into, with borders fixed in 1930, so that every star and
+          galaxy lies in exactly one. The figures drawn through the brightest stars — the hunter, the bears — are
+          far older and official nowhere: every atlas draws them its own way. A constellation is a line-up seen
+          from here, not a group: Orion’s brightest stars lie from about 250 to well over 1,000 light years away.
+        </Term>
         <Term id="dwarf" title="“Dwarf”: one word, six things">
           A <em>dwarf star</em> is just a main-sequence star (the Sun is a yellow dwarf); a <em>red dwarf</em> is
           the smallest kind of those. A <em>white dwarf</em> is a dead star’s core. A <em>brown dwarf</em>, 13 to

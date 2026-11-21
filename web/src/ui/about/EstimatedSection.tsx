@@ -465,11 +465,23 @@ export const estimatedSection: AboutSection = {
             fainter and fewer than the X-rays.
           </Item>
           <Item title="Its colour, where the picture is a photograph">
-            The Crab’s, Kepler’s, the Cygnus Loop’s and IC 443’s colours are their photographs’, and those are
-            set by their filters, not the eye: the Crab’s ESO picture, in a sulphur-line filter with broad red and
-            blue ones, is nearest true colour; Kepler’s Hubble mosaic is in its makers’ choice of narrow filters;
+            Kepler’s, the Cygnus Loop’s and IC 443’s colours are their photographs’, and those are set by their
+            filters, not the eye: Kepler’s Hubble mosaic is in its makers’ choice of narrow filters;
             the Cygnus Loop’s and IC 443’s are two photographic plates, red and blue, the green between them made
             up, balanced so that the stars come out white.
+          </Item>
+          <Item title="The Crab, unmixed into its own colours">
+            ESO’s picture of the Crab put [S II] in red, the broad R band — mostly hydrogen’s red H-alpha — in
+            green and the B band in blue. Each pixel is unmixed: its synchrotron share drawn in the synchrotron’s
+            own bluish white, from its power-law spectrum
+            <Cite k="veronCettyWoltjer1993" />; red as [S II], green less red as H-alpha’s group, each in its
+            line’s colour. Green is scaled against blue by the synchrotron, red against green so that overall
+            [S II] has the share of the lines the filaments’ spectrum gives
+            <Cite k="davidsonFesen1985" />. [O III] at 500.7 nm is in none of the filters: its total goes with
+            H-alpha’s at the filaments’ ratio, a tenth of it on the filaments and the rest spread round them, as
+            Hubble found it <Cite k="sankrit1998" /> — a faint teal haze; how far it is spread is a choice. So the
+            filaments are red to pink on a bluish-white glow, faint in the middle, where the lines are a small part
+            of the light. One gain keeps the picture’s total light.
           </Item>
           <Item title="What the pictures leave in or out">
             Their stars are taken out — the app draws stars from its own catalogues — at the positions Gaia and
@@ -671,6 +683,13 @@ export const estimatedSection: AboutSection = {
             bodies a feature can sit about 3° from its true latitude on Saturn, the worst, and 2° on Jupiter;
             on Mars it is 0.2° and on Earth 0.1°.
           </Item>
+          <Item title="Mars and Neptune, in truer colour">
+            Mars is NASA’s Viking map, butterscotch: its brightness within 5% of the disc’s measured one
+            <Cite k="mallama2017" />, still a little redder than the disc, whose light includes haze and frost.
+            Neptune is the illustrative map’s Voyager clouds in Neptune’s measured colour — every pixel that
+            colour times its own brightness against the mean — so its contrast and its 1989 Great Dark Spot are
+            still Voyager’s, not today’s.
+          </Item>
           <Item title="Grey moons">
             The moons are mostly grey, because that is how they were mapped: Galileo, Cassini and Voyager
             photographed them through clear filters, and the colour versions that exist are enhanced into the
@@ -692,6 +711,14 @@ export const estimatedSection: AboutSection = {
           <Item title="Deimos">
             Deimos has no map. The only global one cannot be placed — its two sources disagree about where
             longitude zero is — so it is drawn in flat colour rather than possibly half a turn wrong.
+          </Item>
+          <Item title="Uranus’s and Neptune’s rings, as circles">
+            Drawn circular at their mean radius and width. Uranus’s ε ring is 0.0079 eccentric
+            <Cite k="french1991" /> — 406 km off-centre, 20 to 96 km wide — and the rest off by tens of
+            kilometres. Not drawn: Uranus’s dusty ν and μ, 5 and 9 millionths deep
+            <Cite k="showalterLissauer2006" />; Neptune’s Arago, unmeasured; and the Adams ring’s arcs, which
+            change year to year and have not been placed
+            <Cite k="dePater2005" />.
           </Item>
           <Item title="Saturn’s ring map">
             Saturn’s rings are at real radii, lying in its real equatorial plane — which is why they open and

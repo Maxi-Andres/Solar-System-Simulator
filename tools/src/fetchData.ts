@@ -113,6 +113,7 @@ import { loadLocalGroup } from './localGroup/fetchLocalGroup.ts';
 import { describeLocalGroup } from './localGroup/nearbyGalaxies.ts';
 import { loadLocalVolume } from './localVolume/fetchLocalVolume.ts';
 import { describeLocalVolume } from './localVolume/localVolume.ts';
+import { loadConstellations } from './constellations/fetchConstellations.ts';
 import { loadLaniakea } from './laniakea/fetchLaniakea.ts';
 import { describeLaniakea } from './laniakea/laniakea.ts';
 import { describePulsars } from './pulsars/buildPulsars.ts';
@@ -139,6 +140,7 @@ import {
   prepareOutputDir,
   writeBelt,
   writeCatalog,
+  writeConstellations,
   writeSatellites,
   writeElements,
   writeExoplanets,
@@ -715,9 +717,13 @@ async function main(): Promise<void> {
   // HyperLEDA queries and the CF4 grids after them, handed both, to leave out what
   // local-group.json and local-volume.json draw -- HyperLEDA is not optional there, a third
   // of its galaxies having no other photometry.
+  //
+  // The constellations' three small files (constellations/) too, their figures matched against
+  // the sky as it is read: when the sky fails, they fail with it.
   const localGroupRead = loadLocalGroup();
   const localVolumeRead = loadLocalVolume(localGroupRead);
-  const [natural, starsOutcome, beltOutcome, cometsOutcome, satellites, archiveOutcome, pulsarsOutcome, clustersOutcome, localGroupOutcome, localVolumeOutcome, laniakeaOutcome] = await Promise.all([
+  const skyRead = loadSky();
+  const [natural, starsOutcome, beltOutcome, cometsOutcome, satellites, archiveOutcome, pulsarsOutcome, clustersOutcome, localGroupOutcome, localVolumeOutcome, laniakeaOutcome, constellationsOutcome] = await Promise.all([
     mapWithConcurrency(
       CATALOG.filter(
         (body) =>
@@ -727,7 +733,7 @@ async function main(): Promise<void> {
       MAX_CONCURRENT_REQUESTS,
       (body) => fetchBody(body, epoch),
     ),
-    settle(loadSky().then(async (sky) => ({ sky, ...(await loadStars3d(sky)) }))),
+    settle(skyRead.then(async (sky) => ({ sky, ...(await loadStars3d(sky)) }))),
     settle(
       fetchBelt(
         () =>
@@ -750,6 +756,7 @@ async function main(): Promise<void> {
     settle(localGroupRead),
     settle(localVolumeRead),
     settle(loadLaniakea(localGroupRead, localVolumeRead)),
+    settle(loadConstellations(skyRead)),
   ]);
 
   // Each catalogue's value, or null with its failure noted, to be decided below.
@@ -771,6 +778,7 @@ async function main(): Promise<void> {
   const localGroup = take(DATA_PRODUCTS.localGroup, localGroupOutcome);
   const localVolume = take(DATA_PRODUCTS.localVolume, localVolumeOutcome);
   const laniakea = take(DATA_PRODUCTS.laniakea, laniakeaOutcome);
+  const constellations = take(DATA_PRODUCTS.constellations, constellationsOutcome);
   // Decided now, before the small bodies, the craft and the moons below -- most of the run's
   // time: one that will fail for want of a fallback fails at once. The rest are copied once
   // the data directory has been emptied, below.
@@ -1015,6 +1023,9 @@ async function main(): Promise<void> {
   }
   if (laniakea !== null) {
     await writeLaniakea(laniakea.output);
+  }
+  if (constellations !== null) {
+    await writeConstellations(constellations.catalog);
   }
   // Every catalogue that failed, from the last good data, each with a warning. planFallbacks
   // put one here only when its copy is there, so the directory is not null.

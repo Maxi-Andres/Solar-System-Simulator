@@ -117,6 +117,11 @@ export const URANUS: Description = {
       cite: ['archinal2018', 'lamy2025'],
     },
     {
+      title: 'Its rings',
+      text: 'Drawn from their measurements, not a picture: each ring at its radius, its mean width, and as opaque as its measured optical depth — the nine found from Earth (6, 5, 4, α, β, η, γ, δ, ε), λ, the broad faint parts beside η and δ, and the dusty ζ reaching in towards the clouds, 26,840 to 51,200 km from the centre. They lie in its equatorial plane, so they stand nearly upright to its orbit and turn with its pole. Their particles are about as dark as coal, geometric albedo about 0.05, so they are drawn an eleventh as bright as Saturn’s: against black space they all but vanish, as they do in a photograph, and across the planet they show as thin dark lines; their shadows fall on it as thin dark bands. The densest, ε, blocks 56% of the light that crosses it face-on; the others a tenth to a half, over a few kilometres each.',
+      cite: ['esposito2002', 'karkoschka2001', 'depater2013', 'depater2006', 'ockert1987'],
+    },
+    {
       title: 'Its moons',
       text: 'Miranda, Ariel, Umbriel, Titania and Oberon are drawn as bodies, each on JPL’s orbit and turned by the IAU’s model, with Voyager 2’s maps of their southern halves; their northern halves were in darkness in 1986 and are filled with an average. Its small moons are in the Small Moons layer, off by default.',
       cite: ['archinal2018', 'voyager2'],
@@ -198,9 +203,19 @@ export const URANUS: Description = {
       cite: ['sromovsky2015', 'hubble2022'],
     },
     {
-      title: 'Its rings',
-      text: 'Not drawn. They are real and measured — thirteen of them, narrow and nearly black — but the app draws rings only for Saturn so far.',
-      cite: ['elliot1977', 'showalter2006'],
+      title: 'The ε ring’s oval',
+      text: 'Not drawn: every ring is drawn as a circle. ε is the most eccentric, 0.0079 — it lies 406 km nearer Uranus at one end than the other, and is 20 km wide there and 96 km at the far end, as it swings round. Its mean width, 58 km, is drawn all the way round. The others are off-centre by tens of kilometres, a few times their own width.',
+      cite: ['french1991'],
+    },
+    {
+      title: 'Its two outer rings, ν and μ',
+      text: 'Not drawn. Hubble found them in 2003, at 66,100–69,900 and 86,000–103,000 km, and they let through all but a hundred-thousandth of the light — optical depths of 5 and 9 millionths. They are seen only in long exposures, looking back towards the Sun or in infrared; drawn, they would double the span the rings are drawn over and halve the detail of the ones that show.',
+      cite: ['showalter2006'],
+    },
+    {
+      title: 'Its rings’ glow',
+      text: 'Their brightness does not change with the angles of the Sun and the camera, as Saturn’s does not here. Real dust rings brighten many times seen against the Sun — Voyager 2’s look back from beyond Uranus showed dust between the rings that no picture from the sunward side had — so from behind the planet the faint ones are fainter here than they would be.',
+      cite: ['karkoschka2001', 'depater2006'],
     },
     {
       title: 'Its newest moon',
@@ -300,6 +315,33 @@ export const URANUS: Description = {
       key: 'elliot1977',
       text: 'Elliot, J. L., Dunham, E., & Mink, D. 1977, The rings of Uranus, Nature 267, 328',
       url: 'https://doi.org/10.1038/267328a0',
+    },
+    {
+      key: 'esposito2002',
+      text: 'Esposito, L. W. 2002, Planetary rings, Rep. Prog. Phys. 65, 1741',
+      url: 'https://doi.org/10.1088/0034-4885/65/12/201',
+    },
+    {
+      key: 'karkoschka2001',
+      text: 'Karkoschka, E. 2001, Comprehensive Photometry of the Rings and 16 Satellites of Uranus with the Hubble Space Telescope, Icarus 151, 51',
+      url: 'https://doi.org/10.1006/icar.2001.6596',
+    },
+    {
+      key: 'depater2013',
+      text: 'de Pater, I., et al. 2013, Keck and VLT AO observations and models of the uranian rings during the 2007 ring plane crossings, Icarus 226, 1399',
+    },
+    {
+      key: 'depater2006',
+      text: 'de Pater, I., Gibbard, S. G., & Hammel, H. B. 2006, Evolution of the dusty rings of Uranus, Icarus 180, 186',
+      url: 'https://doi.org/10.1016/j.icarus.2005.08.011',
+    },
+    {
+      key: 'french1991',
+      text: 'French, R. G., Nicholson, P. D., Porco, C. C., & Marouf, E. A. 1991, Dynamics and structure of the Uranian rings, in Uranus, ed. J. T. Bergstralh, E. D. Miner & M. S. Matthews (Univ. Arizona Press), 327',
+    },
+    {
+      key: 'ockert1987',
+      text: 'Ockert, M. E., Cuzzi, J. N., Porco, C. C., & Johnson, T. V. 1987, Uranian ring photometry: Results from Voyager 2, J. Geophys. Res. 92, 14969',
     },
     {
       key: 'showalter2006',

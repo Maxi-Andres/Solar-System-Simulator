@@ -35,12 +35,14 @@ export class SceneLabels {
 
   /**
    * `canvas` is the renderer's (useThree().gl.domElement): the names go in a layer beside it.
-   * `key` keeps them apart from every other poster's on the board.
+   * `key` keeps them apart from every other poster's on the board. `rank` as a body's label's
+   * (LabelProjector labelRank): 1, a moon's, unless the names should yield to more.
    */
   constructor(
     canvas: HTMLCanvasElement,
     names: readonly string[],
     private readonly key: string,
+    private readonly rank = 1,
   ) {
     const host = canvas.parentElement?.parentElement ?? canvas.parentElement ?? null;
     if (host === null || typeof document === 'undefined') {
@@ -80,9 +82,16 @@ export class SceneLabels {
   /**
    * Puts name `index` centred on `point` (scene units, camera-relative as the scene is) at
    * `opacity`, and posts it to the declutter pass; hidden where the point is off screen or
-   * behind the camera, or the opacity is nothing.
+   * behind the camera, or the opacity is nothing. `importance` orders names within the rank.
    */
-  place(index: number, point: THREE.Vector3, camera: THREE.Camera, size: { width: number; height: number }, opacity: number): boolean {
+  place(
+    index: number,
+    point: THREE.Vector3,
+    camera: THREE.Camera,
+    size: { width: number; height: number },
+    opacity: number,
+    importance = 0,
+  ): boolean {
     const element = this.elements[index];
     if (element === undefined) return false;
     if (opacity <= 0.01) {
@@ -109,8 +118,8 @@ export class SceneLabels {
       dy: 0,
       width: box.width,
       height: box.height,
-      rank: 1,
-      importance: 0,
+      rank: this.rank,
+      importance,
       marked: false,
     });
     return true;

@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 
 import { GLOW_OUTPUT_GLSL } from './glowBuffer.ts';
+import {
+  CRAB_SULPHUR_SCALE,
+  CRAB_TRUE_COLOUR_GAIN,
+  crabUnmixing,
+  OXYGEN_COMPACT_SHARE,
+  OXYGEN_DIFFUSE_LEVELS,
+} from './crabFilters.ts';
 
 import { skyAxes } from '../core/exoplanets.ts';
 import {
@@ -55,7 +62,9 @@ import {
  * For the Crab the photograph holds both: the synchrotron's smooth blue and the filaments'
  * lines. Its preparation (web/public/remnants/CREDITS.md) finds the synchrotron's colour in
  * the photograph itself -- the bluest bright pixels at its middle -- and takes from each pixel
- * the most of that colour it holds (a second, grey map); the rest is the filaments'.
+ * the most of that colour it holds (a second, grey map); the rest is the filaments'. Neither is
+ * drawn in the picture's colours, which are its filters' (H-alpha green): both are unmixed
+ * into their own (crabFilters.ts).
  *
  * ## Where the depth is measured
  *
@@ -320,6 +329,29 @@ ${GLOW_OUTPUT_GLSL}
   // The synchrotron's colour in the photograph, and whether it has any.
   uniform vec3 uSynchrotron;
   uniform float uHasContinuum;
+  // A picture whose filters are unmixed into its lines' own colours (crabFilters.ts): red's
+  // and green's scales; the colours of a unit of [S II], of H-alpha's group, of the [O III]
+  // that goes with it, and of the synchrotron, the gain in them; and how much of the [O III]
+  // is on the filaments, the rest read this many mipmap levels coarser.
+  uniform float uFilters;
+  uniform vec2 uFilterScale;
+  uniform vec3 uSulphurColour;
+  uniform vec3 uRedColour;
+  uniform vec3 uOxygenColour;
+  uniform vec3 uSynchrotronColour;
+  uniform float uOxygenCompact;
+  uniform float uOxygenLevels;
+
+  // A pixel's lines as (sulphur, H-alpha's group), at a level of detail (crabFilters.ts
+  // filamentLines).
+  vec2 filamentLines(vec2 uv, float lod) {
+    vec3 photo = textureLod(uMap, uv, lod).rgb;
+    float share = textureLod(uContinuum, uv, lod).r;
+    vec3 lines = max(photo - share * uSynchrotron, vec3(0.0));
+    float green = lines.g * uFilterScale.y;
+    float sulphur = min(lines.r * uFilterScale.x, green);
+    return vec2(sulphur, green - sulphur);
+  }
   // A grey map's colours, its lines' (remnantVolume.ts): the second in a share of the gas, by
   // noise, as the model draws them; a photograph has its own.
   uniform float uLines;
@@ -351,6 +383,24 @@ ${GLOW_OUTPUT_GLSL}
     vec3 sky = vec3(dot(p, uEast), dot(p, uNorth), dot(p, uAway));
     vec2 uv = vec2(0.5 - 0.5 * sky.x / uMapHalf, 0.5 + 0.5 * sky.y / uMapHalf);
     if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) return vec3(0.0);
+    vec2 weights = texture(uDepth, sky / (2.0 * uReach) + 0.5).rg;
+    if (uFilters > 0.5) {
+      // The picture's three filters unmixed: what is left after the synchrotron is lines --
+      // red [S II], green the R band's lines, so green less red H-alpha's group -- and each,
+      // and the synchrotron, drawn in its own colour; the [O III], in no filter, mostly
+      // diffuse, read from a coarser level (crabFilters.ts trueColour).
+      vec2 fine = filamentLines(uv, lod);
+      vec2 coarse = filamentLines(uv, lod + uOxygenLevels);
+      float oxygen = uOxygenCompact * fine.y + (1.0 - uOxygenCompact) * coarse.y;
+      vec3 synchrotronLight = textureLod(uContinuum, uv, lod).r * uSynchrotronColour;
+      vec3 light = min(
+        fine.x * uSulphurColour + fine.y * uRedColour + oxygen * uOxygenColour + synchrotronLight,
+        vec3(0.97)
+      );
+      vec3 lightColumn = -log(1.0 - light);
+      vec3 lightShare = clamp(synchrotronLight / max(light, vec3(1e-4)), 0.0, 1.0);
+      return lightColumn * mix(vec3(weights.r), vec3(weights.g), lightShare);
+    }
     vec3 tint = vec3(1.0);
     if (uLines > 0.5) {
       float second = smoothstep(0.3, 0.7, texture(uNoise, p * 0.8 + uSeed).b + (uShareB - 0.5));
@@ -361,7 +411,6 @@ ${GLOW_OUTPUT_GLSL}
     // What the column must add to, for 1 - e^-sum to give back that light -- which the glow's
     // composite encodes for the display (glowBuffer.ts glowDisplay), giving back the pixel.
     vec3 column = -log(1.0 - shown);
-    vec2 weights = texture(uDepth, sky / (2.0 * uReach) + 0.5).rg;
     if (uHasContinuum < 0.5) return column * weights.r;
     vec3 continuum = textureLod(uContinuum, uv, lod).r * uSynchrotron;
     vec3 share = clamp(continuum / max(shown, vec3(1e-4)), 0.0, 1.0);
@@ -483,6 +532,11 @@ export function remnantMapMaterial(
   }
   const synchrotron = map.continuum?.colour ?? [0, 0, 0];
   const look = remnantLook(remnant.emission);
+  // Unmixed only where there is a synchrotron share to take off first: the Crab's.
+  const filters = map.colour === 'filters' && map.continuum !== null;
+  const unmixing = crabUnmixing();
+  const gained = (c: readonly number[]) =>
+    new THREE.Vector3(c[0]! * CRAB_TRUE_COLOUR_GAIN, c[1]! * CRAB_TRUE_COLOUR_GAIN, c[2]! * CRAB_TRUE_COLOUR_GAIN);
   return new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: loadTexture(map.file, onLoad) },
@@ -496,6 +550,14 @@ export function remnantMapMaterial(
       uReach: { value: reach },
       uSynchrotron: { value: new THREE.Vector3(...synchrotron) },
       uHasContinuum: { value: map.continuum === null ? 0 : 1 },
+      uFilters: { value: filters ? 1 : 0 },
+      uFilterScale: { value: new THREE.Vector2(1 / CRAB_SULPHUR_SCALE, 1 / unmixing.greenScale) },
+      uSulphurColour: { value: gained(unmixing.sulphur) },
+      uRedColour: { value: gained(unmixing.red) },
+      uOxygenColour: { value: gained(unmixing.oxygen) },
+      uOxygenCompact: { value: OXYGEN_COMPACT_SHARE },
+      uOxygenLevels: { value: OXYGEN_DIFFUSE_LEVELS },
+      uSynchrotronColour: { value: gained(unmixing.synchrotron) },
       uLines: { value: map.colour === 'lines' ? 1 : 0 },
       uColourA: { value: new THREE.Vector3(...look.colourA) },
       uColourB: { value: new THREE.Vector3(...look.colourB) },

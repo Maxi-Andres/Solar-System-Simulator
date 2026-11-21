@@ -9,6 +9,7 @@ import { structureOf } from '../core/structures.ts';
 import { remnantOf, remnantRadiusKm, type SupernovaRemnant } from '../core/supernovaRemnants.ts';
 import { NAMED_WINDOW_DAYS } from '../core/satellites.ts';
 import { ESA_MODEL_CREDIT, MODEL_REQUEST_PX } from '../scene/craftModels.ts';
+import { drawnTexture } from '../scene/drawnTexture.ts';
 import { PATCH_HALF_WIDTH_DEG, PATCH_SHOWN_KM } from '../scene/surfaceGround.ts';
 import { facingRule } from '../ui/facing.ts';
 import { blackHoleFromData, isCatalogueStarBody, starFromData } from './starsFromData.ts';
@@ -33,6 +34,8 @@ export const TEXTURE_CREDITS: Readonly<Record<string, string>> = {
   'saturn.jpg': 'Solar System Scope (CC BY 4.0)',
   'uranus.jpg': 'Solar System Scope (CC BY 4.0)',
   'neptune.jpg': 'Solar System Scope (CC BY 4.0)',
+  'mars-photometric.jpg': 'NASA 3D Resources, from Viking (public domain)',
+  'neptune-truecolour.jpg': 'Solar System Scope (CC BY 4.0), recoloured here to Neptune’s measured colour',
   'moon.jpg': 'NASA’s Scientific Visualization Studio, from LRO’s wide-angle camera (public domain)',
   'io.jpg': 'USGS Astrogeology, Galileo colour merged onto the Voyager–Galileo global mosaic (public domain)',
   'europa.jpg': 'USGS Astrogeology, the Voyager–Galileo global mosaic (public domain)',
@@ -168,9 +171,8 @@ export function drawnFromData(body: BodyDefinition, coverage: Coverage | null = 
     });
   }
 
-  // The illustrative set is the one drawn (ACTIVE_TEXTURE_SET in scene/SolarSystem.tsx); the
-  // photometric files of Earth, Mars and Neptune are in the repository but not shown.
-  const map = body.textures?.illustrative?.file ?? body.textures?.photometric?.file ?? null;
+  // The map actually drawn: chosen body by body (scene/drawnTexture.ts).
+  const map = drawnTexture(body)?.file ?? null;
   if (map !== null) {
     points.push({
       title: 'Its surface map',

@@ -102,13 +102,18 @@ export const CRAB_NEBULA: Description = {
   ],
   drawnHere: [
     {
-      title: 'In the photograph’s colours, which are false',
-      text: 'Its light is ESO’s VLT picture, its stars taken out and its sky taken off, and it keeps that picture’s colours: so the filaments’ hydrogen is green, as there, though hydrogen glows red. The smooth blue of the synchrotron is split from the filaments by its colour, the bluest bright pixels at the middle.',
-      cite: ['esovlt'],
+      title: 'In its own colours, unmixed from the photograph’s',
+      text: 'Its light is ESO’s VLT picture, its stars taken out and its sky taken off — but not in that picture’s colours, which are its three filters’: [S II] put in red, the broad R band (mostly hydrogen’s H-alpha) in green, the B band in blue. Each pixel is unmixed instead. Its synchrotron share, found by its colour (the bluest bright pixels at the middle), is drawn in the synchrotron’s own colour, a bluish white, from its measured power-law spectrum. What is left is the filaments’ lines: the red filter is [S II], and the green less the red is H-alpha with [N II] and [O I]. Green is scaled against blue by how much of the power law each filter passes; red against green so that over the whole picture [S II] is the share of those lines the filaments’ spectrum gives, which leaves it varying pixel to pixel as the picture says. Then [S II] is drawn deep red, and H-alpha’s group, with H-beta, red going pink, so the filaments are red to pink over the synchrotron’s bluish white. The lines are about 12% of its visible light — and less to the eye than to a camera, since the eye is twelve times less sensitive at H-alpha’s 656 nm than at 555 nm — so in the bright middle the filaments are faint against the glow, and stand out at the edges, where the synchrotron thins. One gain keeps the picture’s total light.',
+      cite: ['esovlt', 'veroncetty1993', 'davidsonfesen1985'],
+    },
+    {
+      title: 'Its [O III], spread',
+      text: 'Partly a choice. None of the picture’s three filters passes [O III]’s 500.7 nm, so where it is, pixel by pixel, is not in the picture. Its total goes with H-alpha’s, as strong, at the filaments’ typical ratio. Where it goes is measured in kind: Hubble found only about a tenth of the Crab’s [O III] in compact structures, against four-fifths of its [O I] — it is a diffuse glow and a skin round the nebula, not the filaments’ colour. So a tenth rides on the filaments, and the rest is spread over about a quarter of an arcminute round them, a faint teal haze; how far it is spread is the choice. To the eye 500.7 nm is four times brighter than H-alpha, so laid on the filaments it had turned them a pale teal, which no colour photograph of the Crab shows. H-alpha’s group is drawn in one proportion of hydrogen, nitrogen and oxygen, though only its sum is measured.',
+      cite: ['davidsonfesen1985', 'sankrit1998'],
     },
     {
       title: 'Where its two lights lie in depth',
-      text: 'Nothing measures how deep along the line of sight each part lies. The synchrotron fills the volume, most at its middle, since the pulsar’s wind fills it; the filaments’ light is put at the shell, on its near or far side as noise decides. From Earth the sum is the photograph; from the side, its depth is a model’s.',
+      text: 'Nothing measures how deep along the line of sight each part lies. The synchrotron fills the volume, most at its middle, since the pulsar’s wind fills it; the filaments’ light is put at the shell, on its near or far side as noise decides. From Earth the sum is the photograph unmixed into true colour; from the side, its depth is a model’s.',
       cite: ['hester2008'],
     },
     {
@@ -202,7 +207,7 @@ export const CRAB_NEBULA: Description = {
     },
     {
       title: 'Its famous colours are not its own',
-      text: 'Most of its famous pictures assign colours to filters for single elements or to infrared and X-rays; the one this app is drawn from shows hydrogen in green.',
+      text: 'Most of its famous pictures assign colours to filters for single elements or to infrared and X-rays; the one this app is drawn from shows hydrogen in green. In its own light the synchrotron glow is a bluish white and the filaments red to pink, which is how it is drawn here.',
       cite: ['esovlt', 'esahubble2005'],
     },
   ],
@@ -246,6 +251,20 @@ export const CRAB_NEBULA: Description = {
       key: 'weisskopf2013',
       text: 'Weisskopf, M. C. 2013, Observations of the Crab Nebula with the Chandra X-Ray Observatory, PoS(INTEGRAL 2012)004',
       url: 'https://pos.sissa.it/176/004/',
+    },
+    {
+      key: 'veroncetty1993',
+      text: 'Véron-Cetty, M.-P., & Woltjer, L. 1993, Spectrophotometry of the continuum in the Crab nebula, A&A 270, 370',
+    },
+    {
+      key: 'davidsonfesen1985',
+      text: 'Davidson, K., & Fesen, R. A. 1985, Recent developments concerning the Crab Nebula, ARA&A 23, 119',
+      url: 'https://doi.org/10.1146/annurev.aa.23.090185.001003',
+    },
+    {
+      key: 'sankrit1998',
+      text: 'Sankrit, R., Hester, J. J., Scowen, P. A., et al. 1998, WFPC2 studies of the Crab Nebula. II. Ionization structure of the Crab filaments, ApJ 504, 344',
+      url: 'https://doi.org/10.1086/306078',
     },
     {
       key: 'esovlt',

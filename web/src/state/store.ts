@@ -235,7 +235,10 @@ export const LAYERS: readonly LayerDefinition[] = [
   // S-stars and young stars can be seen without it. On, as the galaxy's model is: the light
   // is real and there to see, only no star of it is a particular one (see DEFAULT_LAYER_STATE).
   { id: 'nuclearCluster', label: 'Nuclear Cluster Model', hint: 'Stars round the central black hole. A model.', pending: null },
-  { id: 'constellations', label: 'Constellations', hint: 'Constellation lines.', pending: 'Phase D' },
+  // The IAU's 88 as seen from the Sun (core/constellations.ts): the official boundaries, the
+  // names, and the traditional figures -- a convention, no standard's -- drawn on the sky only
+  // near the Sun, where the stars line up as these shapes.
+  { id: 'constellations', label: 'Constellations', hint: 'The IAU’s 88: official borders, traditional figures. Seen from the Sun.', pending: null },
 
   { id: 'spacecraft', label: 'Spacecraft', hint: 'Probes and missions, on their real paths.', pending: null },
   // Earth's satellites from CelesTrak (Phase C): a hundred named ones as bodies, and tens
@@ -375,6 +378,7 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   nuclearCluster: true,
   spacecraft: true,
   satellites: false,
+  // Off: the figures are a human convention, and the borders are lines no one sees.
   constellations: false,
   trails: true,
   orbits: true,

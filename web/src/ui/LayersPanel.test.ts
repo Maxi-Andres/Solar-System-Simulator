@@ -31,11 +31,11 @@ describe('the panel sections', () => {
 
   it('count what is on of what exists yet', () => {
     const models = LAYER_GROUPS.find((group) => group.id === 'models')!;
-    // Constellations is still to come, so it is not counted.
-    expect(groupCount(models, DEFAULT_LAYER_STATE)).toEqual({ on: 1, of: models.layers.length - 1 });
+    // Every layer of the group exists now, the Constellations included, so all are counted.
+    expect(groupCount(models, DEFAULT_LAYER_STATE)).toEqual({ on: 1, of: models.layers.length });
     expect(groupCount(models, { ...DEFAULT_LAYER_STATE, heliosphere: true })).toEqual({
       on: 2,
-      of: models.layers.length - 1,
+      of: models.layers.length,
     });
   });
 });

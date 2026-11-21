@@ -46,7 +46,9 @@ const variants = CATALOG.flatMap((body) =>
  */
 const surfaceMaps = [...new Set(variants.map((v) => v.file))];
 const ringMaps = [
-  ...new Set(CATALOG.flatMap((body) => (body.rings === null ? [] : [body.rings.texture]))),
+  ...new Set(
+    CATALOG.flatMap((body) => (body.rings === null || body.rings.texture === null ? [] : [body.rings.texture])),
+  ),
 ];
 
 /**
@@ -71,10 +73,13 @@ describe('the texture files', () => {
     for (const file of ringMaps) {
       expect(files).toContain(file);
     }
-    // One body with rings, and a test that says so: Jupiter, Uranus and Neptune all
-    // have real ring systems, and all three are far too faint to draw at true
-    // brightness. Saturn's are the only ones this catalog claims.
+    // One ring map, Saturn's. Uranus's and Neptune's rings are drawn from their measured
+    // radii and depths, a strip made in the app (ringBands.ts), and need no file; Jupiter's
+    // are not drawn.
     expect(ringMaps).toEqual(['saturn-rings.png']);
+    expect(
+      CATALOG.filter((body) => body.rings !== null && body.rings.texture === null).map((body) => body.id),
+    ).toEqual(['uranus', 'neptune']);
   });
 
   it("gives Earth's extras files that exist", () => {

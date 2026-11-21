@@ -189,14 +189,14 @@ Where things come from:
 - [x] 2011 QF99 (Uranus trojan): belt, `687170 (2011 QF99)`.
 - [x] Umbriel: body.
 - [x] Oberon: body.
-- [x] Uranus: body.
+- [x] Uranus: body, and its rings from their measured radii and depths (`web/src/scene/ringBands.ts`); not ν and μ.
 - [x] Ariel: body.
 - [x] Titania: body.
 - [x] Triton: body.
 - [~] Neptune trojans: in the belt (385571 Otrera and the rest, class TNO), not set apart.
 - [x] ʻOumuamua: body, `1I/ʻOumuamua (A/2017 U1)`, on its hyperbola (`farBodies.ts`); a marker,
   its size unmeasured.
-- [x] Neptune: body.
+- [x] Neptune: body, and its rings from their measured radii and depths; not the Adams arcs or Arago.
 
 ## The Kuiper belt and the heliosphere (to about 1,000 AU)
 

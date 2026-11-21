@@ -240,7 +240,7 @@ export const IO: Description = {
     },
     {
       title: 'Jupiter’s shadow',
-      text: 'Not drawn. Io orbits almost exactly in Jupiter’s equator and passes through Jupiter’s shadow on every orbit, every 1.77 days; here it stays lit. Nothing in the app casts a shadow on another body except Saturn and its rings, so its own shadow on Jupiter, in the Cassini photograph above, is missing too.',
+      text: 'Not drawn. Io orbits almost exactly in Jupiter’s equator and passes through Jupiter’s shadow on every orbit, every 1.77 days; here it stays lit. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings, so its own shadow on Jupiter, in the Cassini photograph above, is missing too.',
       cite: ['nssdcJovian', 'pia02860'],
     },
     {

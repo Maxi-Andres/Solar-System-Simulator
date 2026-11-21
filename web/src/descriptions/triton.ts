@@ -227,7 +227,7 @@ export const TRITON: Description = {
     },
     {
       title: 'Neptune’s shadow',
-      text: 'Not drawn: nothing in the app casts a shadow on another body except Saturn and its rings, so Triton stays lit when it passes behind Neptune.',
+      text: 'Not drawn: nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings, so Triton stays lit when it passes behind Neptune.',
     },
     {
       title: 'Its relief',

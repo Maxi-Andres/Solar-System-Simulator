@@ -89,6 +89,12 @@ export const sourcesSection: AboutSection = {
           <Strong>International Meteor Organization</Strong>’s 2026 working list, with speeds and parents
           from the <Strong>IAU Meteor Data Center</Strong>, written into the code.
         </Prose>
+        <Prose>
+          The constellations’ boundaries are the IAU’s, from Davenhall &amp; Leggett’s{' '}
+          <Strong>Catalogue of Constellation Boundary Data</Strong> (CDS VI/49) in B1875, precessed to J2000
+          when the data is built; their figures and name positions are <Strong>d3-celestial</Strong>’s, each
+          figure’s vertex matched to its star in the sky above, by Hipparcos number.
+        </Prose>
 
         {REFERENCE_GROUPS.map((group) => (
           <div key={group.id}>
@@ -149,6 +155,15 @@ export const sourcesSection: AboutSection = {
             Jürgen Rendtel, https://www.imo.net; the IAU Meteor Data Center, https://www.ta3.sk/IAUC22DB/MDC2022/
             (Jenniskens et al. 2020, Planetary and Space Science 182, 104821; Jopek &amp; Kaňuchová 2017,
             Planetary and Space Science 143, 3), as its maintainers ask it to be cited.
+          </Item>
+          <Item>
+            Constellation boundaries: Davenhall, A. C., &amp; Leggett, S. K. 1989, Catalogue of Constellation
+            Boundary Data (Royal Observatory Edinburgh), CDS VI/49, after Delporte, E. 1930, Délimitation
+            scientifique des constellations (IAU); constbnd.dat prepared by Bill J. Gray (Project Pluto), 2007;
+            via VizieR (CDS, Strasbourg). Constellation figures and name positions: d3-celestial, Copyright (c)
+            2015, Olaf Frohn, BSD 3-Clause (https://github.com/ofrohn/d3-celestial), its lines after the IAU’s
+            charts made with Sky &amp; Telescope; the licence’s full text travels with the data, in
+            constellations.json.
           </Item>
           <Item>
             This research has made use of the NASA Exoplanet Archive, which is operated by the California

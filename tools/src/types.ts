@@ -83,12 +83,40 @@ export interface TextureVariant {
  * place.
  */
 export interface RingSystem {
-  /** File name under web/public/textures/. Needs an alpha channel. */
-  readonly texture: string;
-  /** Radius at the left edge of the image, km. */
+  /**
+   * File name under web/public/textures/, with an alpha channel: a picture of the rings.
+   * Null where the rings are drawn from `bands` instead -- the strip made in the app
+   * (web/src/scene/ringBands.ts) from the rings' measured radii, widths and depths.
+   */
+  readonly texture: string | null;
+  /** Radius at the left edge of the strip, km. */
   readonly innerRadiusKm: number;
-  /** Radius at the right edge of the image, km. */
+  /** Radius at the right edge of the strip, km. */
   readonly outerRadiusKm: number;
+  /** The measured rings the strip is made from; empty where it is a picture. */
+  readonly bands: readonly RingBand[];
+  /**
+   * The ring particles' geometric albedo, which sets how bright measured rings are drawn
+   * against Saturn's (ringBands.ts); null for a picture, whose brightness is calibrated.
+   */
+  readonly particleAlbedo: number | null;
+}
+
+/**
+ * One ring as it is measured: where, how wide, and how much it blocks.
+ *
+ * Drawn circular, at `radiusKm`, `widthKm` wide, with a normal optical depth of
+ * `equivalentDepthKm / widthKm` -- the equivalent depth (optical depth summed across the
+ * ring) is what occultations measure best, a narrow ring's width and peak depth less well.
+ */
+export interface RingBand {
+  readonly name: string;
+  /** Its mean radius -- a narrow ring's semi-major axis, a broad one's middle -- km. */
+  readonly radiusKm: number;
+  /** Radial width, km: a narrow ring's mean, a broad one's extent. */
+  readonly widthKm: number;
+  /** Normal optical depth integrated across the ring, km. */
+  readonly equivalentDepthKm: number;
 }
 
 /**
@@ -2565,4 +2593,51 @@ export interface CosmicWebInfo {
   readonly checks: Readonly<Record<string, { readonly passed: boolean; readonly value: number; readonly note: string }>>;
   /** What each catalogue covers, and where the map is empty because the surveys stop. */
   readonly coverage: readonly string[];
+}
+
+/**
+ * `constellations.json`: the IAU's 88 constellations as seen from the Solar System
+ * (constellations/). Their official boundaries, precessed from B1875 to J2000; their names, at
+ * a point chosen to write each one; and the traditional stick figures, which are a convention
+ * and not the IAU's -- every vertex a catalogue star, found in the app's own sky.
+ */
+export interface ConstellationCatalog {
+  readonly sources: {
+    readonly boundaries: string;
+    readonly figures: string;
+    readonly queriedAt: string;
+  };
+  /** The credit lines and licences the sources ask for, word for word. */
+  readonly credits: readonly string[];
+  /** Frame and epoch of every position: ICRS (the J2000 equator, to well under an arcsecond). */
+  readonly frame: string;
+  /**
+   * The boundaries, each a polyline as flat [ra, dec, ra, dec, ...], degrees. Every border
+   * between two constellations once, split where it bends, with points along the arcs of the
+   * B1875 parallels that precession curves.
+   */
+  readonly boundaries: readonly (readonly number[])[];
+  /** The figures' stars, each once: entry k of every column is star k. */
+  readonly stars: {
+    /** Its Hipparcos number; null for a vertex no catalogue star was found at (none, as built). */
+    readonly hip: readonly (number | null)[];
+    /** ICRS at J2000, degrees, as the sky catalogue (stars.json) has it. */
+    readonly ra: readonly number[];
+    readonly dec: readonly number[];
+    /** Proper motion, mas/yr: in right ascension times cos(dec), and in declination. */
+    readonly pmRa: readonly number[];
+    readonly pmDec: readonly number[];
+    /** V magnitude; null where unmatched. */
+    readonly mag: readonly (number | null)[];
+  };
+  readonly constellations: readonly {
+    /** The IAU's three-letter abbreviation: "And", "CMa", "UMi". */
+    readonly abbr: string;
+    /** Its Latin name, and where it is written: two for Serpens, Caput and Cauda. */
+    readonly labels: readonly { readonly name: string; readonly ra: number; readonly dec: number }[];
+    /** 1 the largest and brightest, 3 the faintest (d3-celestial's ranking). */
+    readonly rank: number;
+    /** The figure, polylines of indices into `stars`. */
+    readonly figure: readonly (readonly number[])[];
+  }[];
 }

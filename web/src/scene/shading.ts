@@ -129,15 +129,17 @@ export function visibleTerminatorDeg(
 /**
  * Mean linear albedo of each body's surface map.
  *
- * Measured from the shipped images, sRGB mean luminance converted to linear. They span
+ * Measured from the drawn images, sRGB mean luminance converted to linear. They span
  * a factor of four, Earth darkest and Venus brightest, which is why the terminator has
  * to be checked across the range rather than on one body.
  */
 export const MAP_ALBEDO: Readonly<Record<string, number>> = {
   earth: 0.126,
   pluto: 0.088,
-  mars: 0.19,
-  neptune: 0.085,
+  // The true-colour maps drawn for these two (drawnTexture.ts). Neptune's was 0.085 on the
+  // illustrative map, a fifth of its geometric albedo.
+  mars: 0.17,
+  neptune: 0.39,
   mercury: 0.211,
   jupiter: 0.36,
   saturn: 0.54,

@@ -217,7 +217,7 @@ export const EUROPA: Description = {
     },
     {
       title: 'Jupiter’s shadow',
-      text: 'Not drawn. Europa passes through Jupiter’s shadow on every orbit; here it stays lit. Its own shadow on Jupiter is not drawn either: nothing in the app casts a shadow on another body except Saturn and its rings.',
+      text: 'Not drawn. Europa passes through Jupiter’s shadow on every orbit; here it stays lit. Its own shadow on Jupiter is not drawn either: nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
     {
       title: 'Its relief',

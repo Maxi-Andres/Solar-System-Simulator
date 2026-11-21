@@ -10,6 +10,8 @@ import type { BodyDefinition, TextureSetId, TextureVariant } from '@sss/tools/ty
 import { J2000_JD } from '../core/time.ts';
 import { add, scale, type Vec3 } from '../core/vec3.ts';
 import { bodyOrientation, longitudeDirection, poleDirection } from './orientation.ts';
+import { cieX, cieY, cieZ, planckSpectralRadiance } from './blackbody.ts';
+import { drawnTexture } from './drawnTexture.ts';
 
 /**
  * Does the map land where the map says it lands?
@@ -563,5 +565,148 @@ describe('the catalog says where every image starts', () => {
     ).map((body) => body.id);
 
     expect(differing).toEqual(['earth', 'mars', 'neptune']);
+  });
+});
+
+/**
+ * Neptune's true-colour map is made here (CREDITS.md), so the making is checked: its colour
+ * recomputed from the photometry it came from, and its clouds where the map they came from
+ * has them.
+ */
+describe('Neptune is drawn in its measured colour', () => {
+  /** Mallama, Krobusek & Pavlov 2017, Icarus 282, 19, Table 7: [band centre nm, geometric albedo]. */
+  const MALLAMA_2017: Readonly<Record<string, readonly (readonly [number, number])[]>> = {
+    //          U            B            V            R            RC           IC           u'           g'           r'           i'
+    neptune: [[360, 0.578], [445, 0.562], [551, 0.442], [700, 0.181], [658, 0.226], [806, 0.072], [355, 0.564], [477, 0.533], [623, 0.307], [763, 0.101]],
+    uranus: [[360, 0.502], [445, 0.561], [551, 0.488], [700, 0.202], [658, 0.264], [806, 0.089], [355, 0.541], [477, 0.559], [623, 0.355], [763, 0.12]],
+  };
+
+  /** The disc's colour under white sunlight, linear sRGB: the band albedos joined by straight lines, through the eye. */
+  function discColour(points: readonly (readonly [number, number])[]): [number, number, number] {
+    const sorted = [...points].sort((a, b) => a[0] - b[0]);
+    const albedo = (nm: number): number => {
+      if (nm <= sorted[0]![0]) return sorted[0]![1];
+      for (let i = 1; i < sorted.length; i += 1) {
+        const [x1, y1] = sorted[i]!;
+        if (nm <= x1) {
+          const [x0, y0] = sorted[i - 1]!;
+          return y0 + ((y1 - y0) * (nm - x0)) / (x1 - x0);
+        }
+      }
+      return sorted[sorted.length - 1]![1];
+    };
+    const toRgb = (reflect: (nm: number) => number): [number, number, number] => {
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (let nm = 360; nm <= 830; nm += 1) {
+        const light = planckSpectralRadiance(nm, 5772) * reflect(nm);
+        x += light * cieX(nm);
+        y += light * cieY(nm);
+        z += light * cieZ(nm);
+      }
+      return [
+        3.2406 * x - 1.5372 * y - 0.4986 * z,
+        -0.9689 * x + 1.8758 * y + 0.0415 * z,
+        0.0557 * x - 0.204 * y + 1.057 * z,
+      ];
+    };
+    const lit = toRgb(albedo);
+    const sun = toRgb(() => 1);
+    return [lit[0] / sun[0], lit[1] / sun[1], lit[2] / sun[2]];
+  }
+
+  const linear = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+
+  /** A map's mean linear colour, each row weighted by the area it covers on the sphere. */
+  async function meanColour(file: string): Promise<[number, number, number]> {
+    const { width, height, data } = await image(file);
+    const sum = [0, 0, 0];
+    let weights = 0;
+    for (let row = 0; row < height; row += 1) {
+      const weight = Math.cos((0.5 - (row + 0.5) / height) * Math.PI);
+      for (let col = 0; col < width; col += 1) {
+        const at = (row * width + col) * 4;
+        for (let c = 0; c < 3; c += 1) sum[c] = sum[c]! + weight * linear(data[at + c]!);
+        weights += weight;
+      }
+    }
+    return [sum[0]! / weights, sum[1]! / weights, sum[2]! / weights];
+  }
+
+  it('draws Neptune and Mars from the true-colour set, and everything else from the illustrative one', () => {
+    expect(drawnTexture(getBody('neptune'))?.file).toBe('neptune-truecolour.jpg');
+    expect(drawnTexture(getBody('mars'))?.file).toBe('mars-photometric.jpg');
+    expect(drawnTexture(getBody('earth'))?.file).toBe('earth.jpg');
+    expect(drawnTexture(getBody('uranus'))?.file).toBe('uranus.jpg');
+  });
+
+  it('computes Neptune a little bluer than Uranus and close to it, as Irwin et al. 2024 found', () => {
+    const neptune = discColour(MALLAMA_2017.neptune!);
+    const uranus = discColour(MALLAMA_2017.uranus!);
+
+    expect(neptune[0]).toBeCloseTo(0.283, 2);
+    expect(neptune[1]).toBeCloseTo(0.45, 2);
+    expect(neptune[2]).toBeCloseTo(0.569, 2);
+    // Bluer: less red and green for the same blue.
+    expect(neptune[0] / neptune[2]).toBeLessThan(uranus[0] / uranus[2]);
+    expect(neptune[1] / neptune[2]).toBeLessThan(uranus[1] / uranus[2]);
+    // Close: no channel more than 15% apart.
+    for (let c = 0; c < 3; c += 1) expect(Math.abs(neptune[c]! / uranus[c]! - 1)).toBeLessThan(0.15);
+  });
+
+  it('has the file’s mean colour be that colour', async () => {
+    const target = discColour(MALLAMA_2017.neptune!);
+    const mean = await meanColour('neptune-truecolour.jpg');
+
+    for (let c = 0; c < 3; c += 1) {
+      expect(mean[c]! / target[c]!, `channel ${c}: ${mean[c]} against ${target[c]}`).toBeCloseTo(1, 1);
+      expect(Math.abs(mean[c]! / target[c]! - 1)).toBeLessThan(0.01);
+    }
+  });
+
+  it('keeps Voyager’s clouds where the illustrative map has them', async () => {
+    // Luminance, sampled across both files at the same places: the recolouring keeps each
+    // pixel's brightness against the mean, so the two patterns are the same pattern.
+    const a = await image('neptune.jpg');
+    const b = await image('neptune-truecolour.jpg');
+    expect([b.width, b.height]).toEqual([a.width, a.height]);
+    const lum = (img: DecodedImage, at: number) =>
+      0.2126 * linear(img.data[at]!) + 0.7152 * linear(img.data[at + 1]!) + 0.0722 * linear(img.data[at + 2]!);
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let row = 4; row < a.height; row += 8) {
+      for (let col = 4; col < a.width; col += 8) {
+        const at = (row * a.width + col) * 4;
+        xs.push(lum(a, at));
+        ys.push(lum(b, at));
+      }
+    }
+    const mean = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
+    const mx = mean(xs);
+    const my = mean(ys);
+    let sxy = 0;
+    let sxx = 0;
+    let syy = 0;
+    for (let i = 0; i < xs.length; i += 1) {
+      sxy += (xs[i]! - mx) * (ys[i]! - my);
+      sxx += (xs[i]! - mx) ** 2;
+      syy += (ys[i]! - my) ** 2;
+    }
+    expect(sxy / Math.sqrt(sxx * syy)).toBeGreaterThan(0.97);
+  });
+
+  it('draws Neptune about as bright as its albedo, where the illustrative map was a quarter of it', async () => {
+    const luminance = ([r, g, b]: [number, number, number]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const drawn = luminance(await meanColour('neptune-truecolour.jpg'));
+    const before = luminance(await meanColour('neptune.jpg'));
+
+    // Mallama's V-band geometric albedo, 0.442.
+    expect(drawn).toBeGreaterThan(0.4);
+    expect(drawn).toBeLessThan(0.45);
+    expect(before).toBeLessThan(0.15);
   });
 });

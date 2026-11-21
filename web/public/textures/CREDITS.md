@@ -11,20 +11,22 @@ Every map is equirectangular with north at the top and longitude increasing east
 Resolution varies by source, and is left at whatever the source published: upscaling
 would invent detail the data does not have.
 
-## Two sets, one of them unused
+## Two sets, chosen body by body
 
 There is no single source that is both complete and photometric, so both live here and
-`ACTIVE_TEXTURE_SET` in `web/src/scene/SolarSystem.tsx` chooses. There is no in-app
-picker: one existed briefly and was removed, since the true-colour set changes only
-three bodies and the comparison did not earn a permanent control.
+`web/src/scene/drawnTexture.ts` chooses, body by body. There is no in-app picker: one
+existed briefly and was removed, since the true-colour set changes only three bodies and
+the comparison did not earn a permanent control.
 
 - **Illustrative** — Solar System Scope throughout. NASA imagery with colour and
-  contrast added by its authors. Complete, vivid, and not a measurement. **This is what
-  currently ships.**
+  contrast added by its authors. Complete, vivid, and not a measurement. **Drawn for
+  every body but Mars and Neptune.**
 - **True colour** — a calibrated or mission product wherever one has been published.
-  That is **three bodies**: Earth, Mars and Neptune. The other seven fall back to their
-  illustrative map, and the reason is recorded per body in `tools/src/catalog.ts`.
-  Present in the repository, not currently drawn.
+  That is **three bodies**: Earth, Mars and Neptune, Neptune's made here (below). The
+  other seven fall back to their illustrative map, and the reason is recorded per body
+  in `tools/src/catalog.ts`. **Drawn for Mars and Neptune.** Earth's is not: Blue
+  Marble's colour is calibrated, but this file paints shaded sea-floor relief into the
+  oceans and keeps December's snow all year.
 
 Why only three, when NASA publishes maps of more than that: for **Venus** NASA's map is
 the Magellan *radar* mosaic tinted orange, at 93% mean saturation against the
@@ -62,7 +64,7 @@ to prove the check still has teeth.
 | `pluto.jpg` | Pluto | [NASA/JHUAPL/SwRI, PIA11707](https://images.nasa.gov/details/PIA11707) | Public domain |
 | `earth-photometric.jpg` | Earth | [NASA Blue Marble Next Generation](https://visibleearth.nasa.gov/images/73909/december-blue-marble-next-generation-w-topography-and-bathymetry) | Public domain |
 | `mars-photometric.jpg` | Mars | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
-| `neptune-photometric.jpg` | Neptune | [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources) | Public domain |
+| `neptune-truecolour.jpg` | Neptune | [Solar System Scope](https://www.solarsystemscope.com/textures/), recoloured here (below) | CC BY 4.0, adapted |
 | `saturn-rings.png` | Saturn's rings | [Solar System Scope](https://www.solarsystemscope.com/textures/) | CC BY 4.0 |
 | `earth-night.jpg` | Earth, city lights | [NASA Earth Observatory, Earth at Night 2012 (VIIRS DNB)](https://visibleearth.nasa.gov/images/79765/night-lights-2012-flat-map) | Public domain |
 | `earth-clouds.jpg` | Earth, cloud deck | [NASA Visible Earth, Blue Marble clouds (MODIS)](https://visibleearth.nasa.gov/images/57747/blue-marble-clouds) | Public domain |
@@ -247,13 +249,36 @@ filled cap, not a gap. Saved as single-channel JPEG at quality 85: Ceres 754 KB,
   useful signal for spotting enhancement, never a definition of truth.
 - **`mars-photometric.jpg`** — NASA 3D Resources, Viking-derived, 1440 x 720.
   Butterscotch rather than orange-red, which is the colour Mars actually is.
-- **`neptune-photometric.jpg`** — NASA 3D Resources, 720 x 360. Pale blue-green. The
-  familiar deep blue is an artifact of contrast-stretched Voyager 2 imagery; the 2024
-  Oxford reprocessing (Irwin et al.) showed the real Neptune is much closer to Uranus.
-  This map is in that direction, at 48% saturation against the illustrative 68%.
-  Neptune is featureless enough that its longitude origin cannot be verified from the
-  pixels, so it inherits its source family's convention — noted here because it is the
-  one map whose alignment rests on inference rather than measurement.
+- **`neptune-truecolour.jpg`** — Solar System Scope's `neptune.jpg`, recoloured here.
+  It replaced NASA 3D Resources' 720 x 360 Neptune, which was pale but painted: turbulent
+  swirls Neptune does not have, a black strip along its southern edge, and a mean linear
+  brightness of 0.17 where Neptune's geometric albedo is 0.44. The illustrative map's
+  clouds are Voyager 2's, so they were kept and only its colour and brightness replaced:
+
+  1. **The colour**, from photometry. Mallama, Krobusek & Pavlov 2017 (Icarus 282, 19),
+     Table 7, give Neptune's geometric albedo band by band: U 0.578, B 0.562, V 0.442,
+     R 0.181, R<sub>C</sub> 0.226, I<sub>C</sub> 0.072, and Sloan u′ 0.564, g′ 0.533,
+     r′ 0.307, i′ 0.101 (Johnson I and Sloan z′ lie past the eye). Placed at the bands'
+     centres (360, 445, 551, 700, 658, 806, 355, 477, 623 and 763 nm) and joined by
+     straight lines, that is a reflectance spectrum; under sunlight (a 5,772 K
+     blackbody) through the CIE 1931 observer (`web/src/scene/blackbody.ts`'s fits) to
+     linear sRGB, divided by the same for sunlight alone — the app's sunlight is white —
+     it is **(0.283, 0.450, 0.569)**. That is the way Irwin et al. 2024 (MNRAS 527,
+     11521) made Neptune's true colour from its spectra, at ten points instead of a
+     thousand. Uranus the same way is (0.330, 0.495, 0.568): Neptune a little bluer, as
+     they found, and much nearer Uranus than Voyager's stretched blue.
+  2. **The clouds**, from the illustrative map: each pixel's linear luminance against the
+     map's area-weighted mean, times that colour, and clipped at white — so its bright
+     clouds come out white, as methane-ice clouds are, and its dark spots darker in the
+     same hue. The colour was scaled by up to 0.4% so the mean *after* clipping is still
+     the one above; 1.6% of the pixels clip.
+  3. Saved as JPEG at quality 90, 4:4:4.
+
+  Its contrast is the illustrative map's, from Voyager's stretched frames, not
+  measured; its Great Dark Spot is 1989's, which was gone by 1994. The pixels are where
+  they were, so its longitude origin is the illustrative map's, and
+  `textureAlignment.test.ts` checks both: that the file's mean colour is the one
+  computed, and that its features are where the illustrative map has them.
 
 ## The ring map
 

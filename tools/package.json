@@ -28,6 +28,7 @@
     "fetch:cosmic-web": "node --max-old-space-size=6144 src/cosmicWeb/fetchCosmicWeb.ts",
     "fetch:quasars": "node --max-old-space-size=4096 src/quasars/fetchQuasars.ts",
     "fetch:photos": "node src/photos/fetchPhotos.ts",
+    "fetch:constellations": "node src/constellations/fetchConstellations.ts",
     "prepare:cmb": "node src/cmb/prepareCmb.ts",
     "prepare:local-ism": "node src/localInterstellar/prepareLocalInterstellar.ts",
     "prepare:streams": "node src/streams/prepareStreams.ts",

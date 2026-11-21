@@ -190,7 +190,7 @@ export const CALLISTO: Description = {
     },
     {
       title: 'Jupiter’s shadow',
-      text: 'Not drawn: when Callisto passes through Jupiter’s shadow it stays lit here. Nothing in the app casts a shadow on another body except Saturn and its rings.',
+      text: 'Not drawn: when Callisto passes through Jupiter’s shadow it stays lit here. Nothing in the app casts a shadow on another body except Saturn, Uranus and Neptune and their rings.',
     },
   ],
   misconceptions: [

@@ -26,6 +26,7 @@ import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { BlackHoleLens } from './BlackHoleLens.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
+import { Constellations } from './Constellations.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { Pulsars } from './Pulsars.tsx';
@@ -454,6 +455,8 @@ export function SolarSystemCanvas({
       <Magnetosphere store={store} clock={clock} focus={focus} />
       <Aurora store={store} clock={clock} focus={focus} />
       <MeteorShowers store={store} clock={clock} focus={focus} />
+      {/* Its names posted before LabelProjector's declutter, which runs after it. */}
+      <Constellations store={store} clock={clock} focus={focus} />
       <SolarSystemWatch store={store} clock={clock} focus={focus} />
       <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
       <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />

@@ -133,7 +133,7 @@ describe('the rings lie in the equatorial plane', () => {
 
 /** The shipped ring image, read at module scope so the describe body stays sync. */
 const png = PNG.sync.read(
-  await readFile(join(import.meta.dirname, '../../public/textures', rings.texture)),
+  await readFile(join(import.meta.dirname, '../../public/textures', rings.texture!)),
 );
 
 describe('the texture calibration, re-derived from the shipped image', () => {
