@@ -5,7 +5,6 @@ import {
   FLATTENING,
   LAW_EDGE_PC,
   massDensity,
-  sampleMagnitudeLimit,
   type NuclearClusterSample,
 } from './nuclearCluster.ts';
 import { DWARF_ROWS, EVOLVED_ROWS, LF_STEP, STARS_PER_SOLAR_MASS } from './nuclearClusterPopulation.ts';
@@ -129,12 +128,6 @@ export const POPULATION_COLOUR_INDEX = (() => {
 /** The luminosity density at ellipsoidal radius m, solar V luminosities per cubic parsec. */
 export function luminosityDensity(m: number): number {
   return massDensity(m) * LIGHT_PER_SOLAR_MASS;
-}
-
-/** The faintest M_V drawn as a star at a point `distancePc` from the camera and `radiusPc` from the hole. */
-export function drawnLimit(distancePc: number, radiusPc: number, cameraLimitAt10Pc: number, sampled: boolean): number {
-  const fromCamera = cameraLimitAt10Pc - 5 * (Math.log10(Math.max(distancePc, 1e-9)) - 1);
-  return sampled ? Math.min(fromCamera, sampleMagnitudeLimit(Math.max(radiusPc, 1e-9))) : -Infinity;
 }
 
 /** Steps along each line of sight, in the shader as here. */

@@ -145,11 +145,6 @@ export function ageGyr(c: Cosmology = PLANCK18): number {
   return lookbackTimeGyr(Infinity, c);
 }
 
-/** The universe's age when light from redshift z left, billions of years. */
-export function ageAtGyr(z: number, c: Cosmology = PLANCK18): number {
-  return ageGyr(c) - lookbackTimeGyr(z, c);
-}
-
 /**
  * The comoving distance to the cosmic event horizon, Mpc: the farthest place light sent today
  * will ever reach, with a cosmological constant -- the integral from a = 1 to infinity of

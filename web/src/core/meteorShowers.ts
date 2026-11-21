@@ -3,7 +3,7 @@ import type { BodyId } from '@sss/tools/types';
 import { equatorialToEcliptic } from '../scene/orientation.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { registerRegion, regionDefinition, regionOf, type Region, type RegionFact } from './regions.ts';
-import { add, normalize, scale, vec3, type StateVector, type Vec3 } from './vec3.ts';
+import { add, scale, vec3, type StateVector, type Vec3 } from './vec3.ts';
 
 /**
  * The major annual meteor showers: where Earth crosses each one's stream of dust, and the stream
@@ -325,11 +325,6 @@ export function ensureMeteorShowers(store: EphemerisStore): void {
       options: { exact: true },
     })),
   );
-}
-
-/** Unit vector, for tests and the scene: the meteoroids' direction of travel at the crossing. */
-export function streamDirection(shower: MeteorShower, earth: StateVector): Vec3 {
-  return normalize(streamState(shower, earth).velocity);
 }
 
 /**

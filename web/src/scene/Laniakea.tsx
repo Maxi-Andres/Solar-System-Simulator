@@ -11,7 +11,6 @@ import {
   structureOf,
   FIELD_GALAXY_REACH,
   laniakeaGalaxy,
-  laniakeaKey,
   laniakeaNames,
   luminosityOf,
   transformPoint,
@@ -150,14 +149,12 @@ export const LANIAKEA_FROM_LY = 30e6;
 export const VOLUMES_MOST = 192;
 
 /**
- * An outline's opacity where its surface is seen edge-on, and through its face: a basin's, and
- * a void's fainter. Seen face-on a surface is almost nothing, so where a basin wraps round the
- * camera it does not fill the frame; its rim is the line it draws.
+ * An outline's opacity where its surface is seen edge-on, and through its face: a basin's.
+ * Seen face-on a surface is almost nothing, so where a basin wraps round the camera it does
+ * not fill the frame; its rim is the line it draws.
  */
 export const BASIN_RIM = 0.12;
 export const BASIN_FACE = 0.006;
-export const VOID_RIM = 0.09;
-export const VOID_FACE = 0.003;
 /**
  * A basin's outline seen from inside it, its share: from within, its rim wraps the sky in
  * long arcs that say nothing of its shape, so it is drawn this much as strong there.
@@ -167,10 +164,9 @@ export const OUTLINE_INSIDE = 0.25;
 /**
  * How near the camera a surface fades out, pc: gone within half of it, whole past it. A
  * surface beside the camera is seen edge-on across half the frame, a sweep that says nothing
- * of the basin's shape: a basin's within 60 Mpc, a void's within 10.
+ * of the basin's shape: a basin's within 60 Mpc.
  */
 export const BASIN_NEAR_PC = 60e6;
-export const VOID_NEAR_PC = 10e6;
 /**
  * A wall's line fades as the camera comes within this of it, pc, gone at half of it: the CfA2
  * wall's line runs 23 Mpc behind the Coma Cluster, across the frame of any view of it.
@@ -1750,9 +1746,4 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   }, [marks, gl, camera, names]);
 
   return <primitive object={group} />;
-}
-
-/** A galaxy's body id from its record, as laniakea.ts keys it. */
-export function laniakeaBodyId(k: number): BodyId {
-  return `galaxy-${laniakeaKey(k)}`;
 }

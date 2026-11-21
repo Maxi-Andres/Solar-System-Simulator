@@ -1,6 +1,6 @@
 import type { BodyDefinition, BodyId, CraftShape } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -105,6 +105,7 @@ import {
   meshOpacity,
   pixelsToWorldSize,
 } from './scale.ts';
+import { disposeOwnResources, neverDrawnAsSphere, NOT_A_SPHERE_KINDS, staleIds } from './bodyHandles.ts';
 
 /**
  * The scene graph, driven imperatively.
@@ -170,6 +171,17 @@ const SPHERE_SEGMENTS = 64;
  */
 const SMALL_MOON_SPHERE = new THREE.SphereGeometry(1, 32, 16);
 
+/**
+ * The material of every body never drawn as a sphere (bodyHandles.ts), with
+ * SMALL_MOON_SPHERE as its geometry: its mesh is never shown, so one stands for all.
+ */
+const NEVER_DRAWN_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+/** What a handle shares with others, and so is never freed with it. */
+const SHARED_RESOURCES: ReadonlySet<THREE.BufferGeometry | THREE.Material> = new Set([
+  SMALL_MOON_SPHERE,
+  NEVER_DRAWN_MATERIAL,
+]);
 
 /**
  * On-screen radius, in pixels, at which a body's surface map is worth fetching.
@@ -319,6 +331,8 @@ interface BodyHandles {
    * came, once its stops have arrived. See surfaceGround.ts.
    */
   surfaceGround: SurfaceGround | null;
+  /** Set once the body has left the store and its handle been freed: see disposeHandle. */
+  disposed: boolean;
 }
 
 /**
@@ -359,7 +373,14 @@ function requestCraftShape(handle: BodyHandles, shape: CraftShape, pixelRadius: 
   }
   const model = shape.model;
   loadCraftModel(model, shape.metresPerUnit, shape.pivot)
-    .then((object) => attach(object, craftModelTriangles(model)))
+    .then((object) => {
+      // The body left the store while its model was on its way.
+      if (handle.disposed) {
+        releaseCraftModel(model);
+        return;
+      }
+      attach(object, craftModelTriangles(model));
+    })
     .catch((error: unknown) => {
       handle.craftShapeRequested = false;
       console.error(`Could not load the model of ${handle.definition.id}`, error);
@@ -378,6 +399,10 @@ function requestBodyShape(handle: BodyHandles, pixelRadius: number, anisotropy: 
   handle.bodyShapeRequested = true;
   loadShapeModel(handle.definition, anisotropy)
     .then((loaded) => {
+      if (handle.disposed) {
+        releaseShapeModel(loaded);
+        return;
+      }
       loaded.object.visible = false;
       handle.group.add(loaded.object);
       handle.bodyShape = loaded;
@@ -471,6 +496,34 @@ function releaseUnusedDetail(handle: BodyHandles, nowMs: number): void {
   }
 }
 
+/**
+ * Frees everything a handle holds once its body has left the store -- a searched asteroid,
+ * a comet, a satellite or a catalogue star past its LRU turn (removePropagatedBody). React
+ * has already taken its group and lines out of the scene; this gives back their memory.
+ */
+function disposeHandle(handle: BodyHandles, lateOrbits: THREE.Group): void {
+  handle.disposed = true;
+  // Its model, shape and maps, through their caches' counts, as if small for ever.
+  releaseUnusedDetail(handle, Infinity);
+  if (handle.orbit !== null) {
+    lateOrbits.remove(handle.orbit.line);
+    handle.orbit.dispose();
+    handle.orbit = null;
+  }
+  if (handle.trajectory !== null) {
+    handle.trajectory.dispose();
+    handle.trajectory = null;
+  }
+  if (handle.surfaceGround !== null) {
+    // Out of the group first: its patch wears the host's material, which stays.
+    handle.group.remove(handle.surfaceGround.object);
+    handle.surfaceGround.dispose();
+    handle.surfaceGround = null;
+  }
+  // The sphere, its own material, the marker's sprite material, any ring, glare, cloud deck.
+  disposeOwnResources(handle.group, SHARED_RESOURCES);
+}
+
 /** How long a frame may spend building craft trails before leaving the rest to the next, ms. */
 const TRAIL_BUILD_MS = 6;
 
@@ -513,6 +566,12 @@ export function SolarSystem({
       // And a catalogue star made a body (see starBodies.ts): no catalogue it comes from
       // publishes a radius, so it is never drawn as a sphere either -- the star renderer
       // draws its light.
+      // And so does every body never drawn as a sphere at all, with one material for all of
+      // them (bodyHandles.ts): some 400 nebulae, galaxies, regions, craft and unmeasured
+      // bodies each had a 64-segment sphere and a lit material of their own -- 35 MB of
+      // vertex arrays, measured.
+      // Not a ringed one, though: its rings patch the sphere's material for their shadow.
+      const neverSphere = neverDrawnAsSphere(definition) && definition.rings === null;
       const sharedSphere =
         smallMoon ||
         definition.kind === 'satellite' ||
@@ -524,7 +583,7 @@ export function SolarSystem({
       // whether its size is measured or estimated: lit by its own star.
       const exoplanet =
         definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null);
-      const geometry = sharedSphere
+      const geometry = sharedSphere || neverSphere
         ? SMALL_MOON_SPHERE
         : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
@@ -537,8 +596,9 @@ export function SolarSystem({
       // A black hole (blackHoles.ts) gives no light and takes none: black, unlit -- a sphere
       // of its horizon, scaled each frame to its shadow (see drawnRadiusKm below). A neutron
       // star (pulsars.ts) gives its own: unlit, in its blackbody colour at full brightness.
-      const material =
-        definition.kind === 'black-hole'
+      const material = neverSphere
+        ? NEVER_DRAWN_MATERIAL
+        : definition.kind === 'black-hole'
           ? new THREE.MeshBasicMaterial({ color: 0x000000 })
           : definition.kind === 'neutron-star'
           ? new THREE.MeshBasicMaterial({ color: definition.color })
@@ -581,7 +641,7 @@ export function SolarSystem({
         definition.radiusPolarKm / definition.radiusEquatorialKm,
         triaxial === null ? 1 : triaxial[1] / triaxial[0],
       );
-      if (sharedSphere) {
+      if (sharedSphere || neverSphere) {
         mesh.scale.multiplyScalar(radiusUnits);
       }
       group.add(mesh);
@@ -608,8 +668,13 @@ export function SolarSystem({
 
       // Shadowed by its planet and moons: a body of the Sun's lit by it and drawn as a
       // sphere. The patch goes on last, after whatever else the material carries.
+      // A body never drawn as a sphere still casts its shadow as it did when it had a
+      // lit material of its own: the shared one is not patched (below), but the selector
+      // is what makes it a candidate occluder of its planet and siblings.
+      const sunlitKind =
+        definition.kind !== 'black-hole' && definition.kind !== 'neutron-star' && definition.kind !== 'star';
       const eclipse =
-        material instanceof THREE.MeshStandardMaterial &&
+        (neverSphere ? sunlitKind : material instanceof THREE.MeshStandardMaterial) &&
         !sharedSphere &&
         !exoplanet &&
         definition.kind !== 'spacecraft'
@@ -753,7 +818,7 @@ export function SolarSystem({
         group.add(ring);
       }
 
-      if (eclipse !== null) {
+      if (eclipse !== null && !neverSphere) {
         applyEclipseShadow(material as THREE.MeshStandardMaterial, eclipse.uniforms);
       }
 
@@ -853,6 +918,7 @@ export function SolarSystem({
         bodyShape: null,
         bodyShapeRequested: false,
         surfaceGround: null,
+        disposed: false,
       };
     };
     void version;
@@ -868,8 +934,13 @@ export function SolarSystem({
     // Who may shadow whom, settled once per catalog rather than looked for each frame.
     for (const handle of built) {
       if (handle.eclipse !== null) {
+        // Only what is drawn as a sphere casts a shadow: a landing site's 1-km point, a craft, a
+        // moon of unmeasured size would otherwise darken its planet with a disc nobody sees.
         handle.eclipseCandidates = built.filter(
-          (other) => other.eclipse !== null && mayShadow(handle.definition, other.definition),
+          (other) =>
+            other.eclipse !== null &&
+            !neverDrawnAsSphere(other.definition) &&
+            mayShadow(handle.definition, other.definition),
         );
       }
     }
@@ -877,6 +948,15 @@ export function SolarSystem({
   }, [store, version, handleCache]);
   // Orbits made after the first render -- a small moon's, once focused -- hang here.
   const lateOrbits = useMemo(() => new THREE.Group(), []);
+  // A body taken out of the store (removePropagatedBody) leaves its handle in the cache;
+  // once React has committed the scene without it, its memory is given back. After the
+  // commit, not while building, so no frame draws a freed handle.
+  useEffect(() => {
+    for (const id of staleIds(handleCache.keys(), handles.map((handle) => handle.definition.id))) {
+      disposeHandle(handleCache.get(id)!, lateOrbits);
+      handleCache.delete(id);
+    }
+  }, [handles, handleCache, lateOrbits]);
   const handleById = useMemo(
     () => new Map(handles.map((handle) => [handle.definition.id, handle] as const)),
     [handles],
@@ -1281,12 +1361,7 @@ export function SolarSystem({
       handle.mesh.visible =
         sphereOpacity > 0.005 &&
         !lensState.drawnByLens.has(handle.definition.id) &&
-        handle.definition.kind !== 'globular-cluster' &&
-        handle.definition.kind !== 'supernova-remnant' &&
-        handle.definition.kind !== 'nebula' &&
-        handle.definition.kind !== 'deep-sky' &&
-        handle.definition.kind !== 'galaxy' &&
-        handle.definition.kind !== 'structure';
+        !NOT_A_SPHERE_KINDS.has(handle.definition.kind);
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;
@@ -1542,8 +1617,10 @@ export function SolarSystem({
       // again only if the selected set asks for a different file. Until it arrives
       // whatever is already there keeps showing -- the flat colour on first approach,
       // or the previous set's map when switching -- so nothing ever blanks out.
+      // Never on the shared material of the bodies not drawn as spheres.
       if (
         variant !== null &&
+        meshMaterial !== NEVER_DRAWN_MATERIAL &&
         handle.requestedFile !== variant.file &&
         pixelRadius >= TEXTURE_REQUEST_PX
       ) {

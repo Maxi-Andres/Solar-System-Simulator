@@ -119,8 +119,7 @@ export function supergalacticDirection(lDeg: number, bDeg: number): Vec3 {
 export const SHEET_POLE = supergalacticDirection(241.74, 82.05);
 /** The Sun's height above the Sheet's mid-plane, pc (McCall 2014). */
 export const SUN_ABOVE_SHEET_PC = 129_000;
-/** The giants' scatter about it, pc, and their 3-sigma edge from the Council's centre, pc. */
-export const SHEET_THICKNESS_PC = 233_000;
+/** The giants' 3-sigma edge from the Council's centre, pc. */
 export const SHEET_EDGE_PC = 5.2 * MPC;
 /** McCall's rotated Sheet coordinates: his x axis turned this far clockwise about the pole. */
 const SHEET_ROTATION_DEG = 107;

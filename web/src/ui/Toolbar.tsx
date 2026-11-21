@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { useViewStore, type PanelId } from '../state/store.ts';
+import { useViewStore } from '../state/store.ts';
 
 /**
  * The vertical toolbar on the right, matching the NASA Eyes layout: info, layers,
@@ -231,13 +231,3 @@ function ToolButton({ title, onClick, active = false, bare = false, children }: 
     </button>
   );
 }
-
-/** Panel ids the toolbar can open, exported for the panel container to switch on. */
-export const TOOLBAR_PANELS: readonly PanelId[] = [
-  'search',
-  'about',
-  'body',
-  'layers',
-  'lighting',
-  'readout',
-];

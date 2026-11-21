@@ -73,7 +73,6 @@ export const SUN_W_KM_S = 7.25;
 /** The halo's R200 and M200 (Cautun et al. 2020): kpc and solar masses. */
 export const HALO_R200_KPC = 218;
 export const HALO_M200_SUN = 1.08e12;
-export const HALO_REFERENCE = 'Cautun et al. 2020, MNRAS 494, 4291';
 
 type V3 = [number, number, number];
 

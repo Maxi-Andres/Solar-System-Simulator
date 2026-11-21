@@ -525,11 +525,6 @@ export function laniakeaCatalogue(): LaniakeaCatalogue | null {
   return readCatalogue;
 }
 
-/** For the tests: as if it had been read. */
-export function setLaniakeaCatalogue(c: LaniakeaCatalogue | null): void {
-  readCatalogue = c;
-}
-
 /**
  * laniakea.json, then galaxies.bin, basins.bin and flows.bin together, each streamed into one
  * buffer of the size laniakea.json gives. No laniakea.json: no G3 data published, nothing drawn.

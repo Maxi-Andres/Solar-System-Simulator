@@ -36,17 +36,13 @@ import type { StateVector, Vec3 } from './vec3.ts';
  *   is drawn in the colour its 3D star's photometry gives, as every star is.
  */
 
-const DEG = Math.PI / 180;
 const AU_KM = 149_597_870.7;
 
 export const SIRIUS_A_MASS_SUN = 2.063;
 export const SIRIUS_B_MASS_SUN = 1.018;
 export const SIRIUS_A_RADIUS_SUN = 1.7144;
 export const SIRIUS_B_RADIUS_SUN = 0.008098;
-export const SIRIUS_A_TEMPERATURE_K = 9845;
-export const SIRIUS_B_TEMPERATURE_K = 25_369;
 export const SIRIUS_PARALLAX_MAS = 378.9;
-export const SIRIUS_REFERENCE = 'Bond et al. 2017, ApJ 840, 70';
 
 /** Bond et al. 2017 Table 4: B about A. */
 export const SIRIUS_ORBIT = {
@@ -202,10 +198,4 @@ export const SIRIUS_FRACTION_B = FRACTION_B;
 export function siriusSeparationArcsec(jd: number): number {
   const sky = skyOrbitState(SIRIUS_SKY_ORBIT, jd).position;
   return (Math.hypot(sky.east, sky.north) / AU_KM) * (SIRIUS_PARALLAX_MAS / 1000);
-}
-
-/** Its position angle, degrees east of north. */
-export function siriusPositionAngleDeg(jd: number): number {
-  const sky = skyOrbitState(SIRIUS_SKY_ORBIT, jd).position;
-  return ((Math.atan2(sky.east, sky.north) / DEG) % 360 + 360) % 360;
 }

@@ -8,6 +8,13 @@ name: Deploy to GitHub Pages
 # there are always years of exact coverage ahead. Nothing degrades in between — DE441
 # is a deterministic integration, so a deploy today already carries correct positions
 # through 2031 — but the cron means the window never quietly drifts toward its edge.
+#
+# Which is also why a push that changes only the app need not fetch anything. Its data
+# would come out the same as the last full run's -- the data is made by tools/ alone --
+# except for a window centred on today rather than on last Monday, and that window has
+# years of exact coverage either way. So such a push takes the last full run's data and
+# the newest satellites, and is tested and built in minutes rather than an hour and a
+# half (see "Choose the run" for what counts). The Monday run stays the full refresh.
 on:
   push:
     branches: [main]
@@ -53,19 +60,11 @@ jobs:
       - name: Type-check
         run: pnpm typecheck
 
-      # The daily satellite run is the only one that does not fetch everything.
-      - name: Choose the run
-        id: mode
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "30 6 * * *" ]; then
-            echo "satellites_only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "satellites_only=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # The daily run: everything but the satellites from the last full run. Its data is
       # saved below under a key per run; the newest one matching the prefix comes back.
-      # A full run restores it too, as the last good data to fall back on (next step).
+      # A full run restores it too, as the last good data to fall back on (below), and a
+      # code-only push publishes it. Before choosing the run: the key says which commit
+      # the data was made from.
       - name: Restore the last full run's data
         id: restore
         uses: actions/cache/restore@v6
@@ -74,6 +73,61 @@ jobs:
           key: deploy-data-none
           restore-keys: |
             deploy-data-
+
+      # Two runs do not fetch everything, and both take the restored data and leave it
+      # unsaved (satellites_only):
+      #  - the daily satellite run, which fetches the satellites;
+      #  - a code-only push (code_only): one where nothing the data is made from changed
+      #    since the commit the restored data was made from -- tools/, the lockfile, the
+      #    workspace, the root scripts, or this file. It fetches nothing: the newest
+      #    satellites, the daily run's or the full run's, come from their own cache.
+      # Compared with the data's own commit, named in its key, not with the push's parent
+      # (github.event.before): a full run that failed, or a push still queued behind one,
+      # would otherwise let the next push publish data older than its tools. A first push,
+      # a force push whose old commit is gone, data saved before keys carried a commit, or
+      # no data at all: a full run. The cost of a code-only deploy is the ephemeris window
+      # of the last full run -- at most a week off centre, of a window years long.
+      - name: Choose the run
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DATA_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+        run: |
+          satellites_only=false
+          code_only=false
+          if [ "$EVENT" = "schedule" ] && [ "$SCHEDULE" = "30 6 * * *" ]; then
+            satellites_only=true
+          elif [ "$EVENT" = "push" ]; then
+            source_sha="${DATA_KEY##*-}"
+            if [[ "$DATA_KEY" =~ ^deploy-data-[0-9]+-[0-9a-f]{40}$ ]] \
+              && git fetch --no-tags --quiet --depth=1 origin "$source_sha" \
+              && changed="$(git diff --name-only "$source_sha" HEAD)"; then
+              if printf '%s\n' "$changed" | grep -qE '^(tools/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/deploy\.yml$)'; then
+                echo "What the data is made from changed since $source_sha: a full run."
+              else
+                echo "Nothing the data is made from changed since $source_sha: its data is published."
+                satellites_only=true
+                code_only=true
+              fi
+            else
+              echo "No saved data from a commit to compare with (key: '$DATA_KEY'): a full run."
+            fi
+          fi
+          echo "satellites_only=$satellites_only" >> "$GITHUB_OUTPUT"
+          echo "code_only=$code_only" >> "$GITHUB_OUTPUT"
+
+      # A code-only push: the satellites the site has now, saved by the latest daily or
+      # full run, over the full run's (a week old by Sunday, and their elements fitted
+      # for three days either side). None saved yet: the full run's stay.
+      - name: Restore the newest satellites
+        if: steps.mode.outputs.code_only == 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: web/public/data/satellites
+          key: deploy-satellites-none
+          restore-keys: |
+            deploy-satellites-
 
       # A full run fetches everything afresh, but a catalogue whose host is down on the day
       # (VizieR, HyperLEDA, CDS, the Gaia archive, the CosmicFlows page -- one of them, most
@@ -232,19 +286,39 @@ jobs:
         if: steps.quasars.outcome == 'failure'
         run: echo "::warning title=Quasars not built::pnpm fetch:quasars failed; this deploy has no Quasars or SZ Clusters layers. Its log says why."
 
+      # Keyed by the commit it was made from too, which "Choose the run" reads back.
       - name: Save the data for the daily satellite runs
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         uses: actions/cache/save@v6
         with:
           path: web/public/data
-          key: deploy-data-${{ github.run_id }}
+          key: deploy-data-${{ github.run_id }}-${{ github.sha }}
+
+      # The satellites alone as well, for a code-only push (see "Restore the newest
+      # satellites"); the daily run saves its own the same way.
+      - name: Save the full run's satellites
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: web/public/data/satellites
+          key: deploy-satellites-${{ github.run_id }}
 
       # The daily run's whole job: today's elements over yesterday's. If CelesTrak refuses
       # (it answers 403 to a group fetched again before it updates, and runners share
       # addresses), the run fails here and publishes nothing: yesterday's site stays up.
+      # Not on a code-only push, which fetches nothing.
       - name: Fetch Earth satellites from CelesTrak
-        if: steps.mode.outputs.satellites_only == 'true' && steps.restore.outputs.cache-matched-key != ''
+        if: steps.mode.outputs.satellites_only == 'true' && steps.mode.outputs.code_only != 'true' && steps.restore.outputs.cache-matched-key != ''
         run: pnpm fetch:satellites
+
+      - name: Save the daily run's satellites
+        if: steps.mode.outputs.satellites_only == 'true' && steps.mode.outputs.code_only != 'true' && steps.restore.outputs.cache-matched-key != ''
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: web/public/data/satellites
+          key: deploy-satellites-${{ github.run_id }}
 
       # Runs after the fetch so the integration tests have real data to check
       # against. They verify the published numbers against JPL's own values.

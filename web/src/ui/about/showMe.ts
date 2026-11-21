@@ -437,9 +437,3 @@ export function showMe(target: ShowMeTarget, store: EphemerisStore, sources: Sho
   // Loaded already but not yet registered (a planetary system registered with no new body).
   check();
 }
-
-/** Ends any wait in progress; for tests. */
-export function cancelShowMe(): void {
-  stopWaiting?.();
-  stopWaiting = null;
-}
