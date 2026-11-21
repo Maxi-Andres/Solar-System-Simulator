@@ -416,7 +416,7 @@ export function NuclearCluster({ catalog, store, clock, focus, showModel }: Nucl
   useFrame(({ camera, gl }) => {
     const jd = clock.tdbJulianDay;
     const hole = store.isPropagatedBody(SGR_A_ID) ? store.stateRelativeTo(SGR_A_ID, focus, jd) : null;
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     if (hole === null || sun === null) {
       group.visible = false;
       return;

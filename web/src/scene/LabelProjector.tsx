@@ -153,34 +153,141 @@ export function declutterLabels(
   const placed: LabelCandidate[] = [];
   const half = (label: LabelCandidate) => (label.height ?? LABEL_HEIGHT_PX) / 2;
   const middle = (label: LabelCandidate) => label.y + (label.dy ?? 0);
+  // The placed labels by the grid cells they reach (see GRID_CELL_PX), so a candidate is
+  // tested against its neighbours rather than every label placed before it. Each placed label
+  // is filed under the cells of the rectangle holding its box and its marker's widest reach;
+  // a candidate looks in the cells of the rectangle holding its own padded box and marker
+  // reach. Any two that collide share a point of those, hence a cell, so the same labels win
+  // as when each was tested against all. One with a number the grid cannot file -- not
+  // finite, or absurdly far off screen -- is tested against all, both ways.
+  const count = ordered.length;
+  // Each placed label's numbers, worked out once rather than at every test against it.
+  const placedX = new Float64Array(count);
+  const placedY = new Float64Array(count);
+  const placedLeft = new Float64Array(count);
+  const placedRight = new Float64Array(count);
+  const placedTop = new Float64Array(count);
+  const placedBottom = new Float64Array(count);
+  const placedMarked = new Uint8Array(count);
+  const seen = new Int32Array(count);
+  const grid = new Map<number, number[]>();
+  const unfiled: number[] = [];
+  let pass = 0;
   for (const candidate of ordered) {
     const holding = held.has(candidate.id);
     const padding = holding ? 0 : LABEL_PADDING_PX;
     const markerGap = holding ? DECLUTTER_PX * HELD_MARKER_FRACTION : DECLUTTER_PX;
-    const left = candidate.x + candidate.offset - padding;
-    const right = candidate.x + candidate.offset + candidate.width + padding;
+    const x = candidate.x;
+    const y = candidate.y;
+    const marked = candidate.marked !== false;
+    const boxLeft = x + candidate.offset;
+    const boxRight = x + candidate.offset + candidate.width;
+    const boxTop = middle(candidate) - half(candidate);
+    const boxBottom = middle(candidate) + half(candidate);
+    const left = x + candidate.offset - padding;
+    const right = x + candidate.offset + candidate.width + padding;
     const top = middle(candidate) - half(candidate) - padding;
     const bottom = middle(candidate) + half(candidate) + padding;
-    const collides = placed.some((other) => {
-      const markersTouch =
-        candidate.marked !== false &&
-        other.marked !== false &&
-        Math.abs(other.x - candidate.x) < markerGap &&
-        Math.abs(other.y - candidate.y) < markerGap;
-      const otherLeft = other.x + other.offset;
-      const boxesTouch =
-        left < otherLeft + other.width &&
-        otherLeft < right &&
-        top < middle(other) + half(other) &&
-        middle(other) - half(other) < bottom;
-      return markersTouch || boxesTouch;
-    });
-    if (!collides) {
-      placed.push(candidate);
+    /** The test of every pair, as it always was. */
+    const touches = (index: number): boolean =>
+      (marked &&
+        placedMarked[index] === 1 &&
+        Math.abs(placedX[index]! - x) < markerGap &&
+        Math.abs(placedY[index]! - y) < markerGap) ||
+      (left < placedRight[index]! && placedLeft[index]! < right && top < placedBottom[index]! && placedTop[index]! < bottom);
+
+    let collides = false;
+    const reachLeft = Math.min(left, right, x - markerGap);
+    const reachRight = Math.max(left, right, x + markerGap);
+    const reachTop = Math.min(top, bottom, y - markerGap);
+    const reachBottom = Math.max(top, bottom, y + markerGap);
+    if (fileable(reachLeft, reachRight, reachTop, reachBottom)) {
+      pass += 1;
+      for (let u = 0; u < unfiled.length && !collides; u += 1) {
+        collides = touches(unfiled[u]!);
+      }
+      const columnTo = Math.floor(reachRight / GRID_CELL_PX);
+      const rowFrom = Math.floor(reachTop / GRID_CELL_PX);
+      const rowTo = Math.floor(reachBottom / GRID_CELL_PX);
+      for (let column = Math.floor(reachLeft / GRID_CELL_PX); column <= columnTo && !collides; column += 1) {
+        for (let row = rowFrom; row <= rowTo && !collides; row += 1) {
+          const cell = grid.get(column * GRID_ROW + row);
+          if (cell === undefined) continue;
+          for (let c = 0; c < cell.length; c += 1) {
+            const index = cell[c]!;
+            if (seen[index] !== pass) {
+              seen[index] = pass;
+              if (touches(index)) {
+                collides = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      for (let index = 0; index < placed.length && !collides; index += 1) {
+        collides = touches(index);
+      }
+    }
+    if (collides) {
+      continue;
+    }
+    const index = placed.length;
+    placed.push(candidate);
+    placedX[index] = x;
+    placedY[index] = y;
+    placedLeft[index] = boxLeft;
+    placedRight[index] = boxRight;
+    placedTop[index] = boxTop;
+    placedBottom[index] = boxBottom;
+    placedMarked[index] = marked ? 1 : 0;
+    const fileLeft = Math.min(boxLeft, boxRight, x - DECLUTTER_PX);
+    const fileRight = Math.max(boxLeft, boxRight, x + DECLUTTER_PX);
+    const fileTop = Math.min(boxTop, boxBottom, y - DECLUTTER_PX);
+    const fileBottom = Math.max(boxTop, boxBottom, y + DECLUTTER_PX);
+    if (!fileable(fileLeft, fileRight, fileTop, fileBottom)) {
+      unfiled.push(index);
+      continue;
+    }
+    const columnTo = Math.floor(fileRight / GRID_CELL_PX);
+    const rowFrom = Math.floor(fileTop / GRID_CELL_PX);
+    const rowTo = Math.floor(fileBottom / GRID_CELL_PX);
+    for (let column = Math.floor(fileLeft / GRID_CELL_PX); column <= columnTo; column += 1) {
+      for (let row = rowFrom; row <= rowTo; row += 1) {
+        const key = column * GRID_ROW + row;
+        const cell = grid.get(key);
+        if (cell === undefined) {
+          grid.set(key, [index]);
+        } else {
+          cell.push(index);
+        }
+      }
     }
   }
   return placed;
 }
+
+/** Side of declutterLabels' grid cells, pixels: a marker's reach and more, most of a name. */
+const GRID_CELL_PX = 96;
+/**
+ * Beyond this many pixels from the screen's corner a label is not filed in the grid: past
+ * it a cell's index loses its integer steps long before the doubles run out.
+ */
+const GRID_LIMIT_PX = 1e7;
+/** Cells per row of keys: more than twice GRID_LIMIT_PX / GRID_CELL_PX, so keys never meet. */
+const GRID_ROW = 1 << 20;
+
+/** True when a box can be filed in the grid: every side finite and within GRID_LIMIT_PX. */
+function fileable(a: number, b: number, c: number, d: number): boolean {
+  return (
+    Math.abs(a) <= GRID_LIMIT_PX &&
+    Math.abs(b) <= GRID_LIMIT_PX &&
+    Math.abs(c) <= GRID_LIMIT_PX &&
+    Math.abs(d) <= GRID_LIMIT_PX
+  );
+}
+
 
 /**
  * Label precedence: the Sun, planets and dwarf planets first, then moons and asteroids,
@@ -198,11 +305,33 @@ const SOLAR_SYSTEM_EXTENT_KM = 50 * 149_597_870.7;
 /** Alpha Centauri's: Proxima's distance from the pair, 13,000 AU. */
 const ALPHA_CEN_EXTENT_KM = 13_000 * 149_597_870.7;
 
+/** Each galaxy's luminosity, worked out once rather than per label per frame. */
+const luminosities = new WeakMap<object, number>();
+
 /** A body's importance among its rank: a galaxy's luminosity, solar V; any other's none. */
 function labelImportance(id: BodyId): number {
   const galaxy = galaxyOf(id);
-  return galaxy === null ? 0 : (galaxyLuminosity(galaxy) ?? 0);
+  if (galaxy === null) {
+    return 0;
+  }
+  let luminosity = luminosities.get(galaxy);
+  if (luminosity === undefined) {
+    luminosity = galaxyLuminosity(galaxy) ?? 0;
+    luminosities.set(galaxy, luminosity);
+  }
+  return luminosity;
 }
+
+/** Each black hole's system as the set its names fold from (blackHoles.ts); fixed data. */
+const BLACK_HOLE_MEMBERS: readonly ReadonlySet<BodyId>[] = BLACK_HOLE_SYSTEMS.map(
+  (system) => new Set([system.id, system.companion]),
+);
+
+/**
+ * Where each label's transform last put it, so a label that has not moved is not written
+ * again: a style write is a trip through the style system even with the same value.
+ */
+const placedAt = new WeakMap<HTMLElement, { x: number; y: number }>();
 
 export function labelRank(kind: string, parent: BodyId | null): number {
   // A region (regions.ts) is a place, not a body: never ahead of one in the declutter. Nor a
@@ -524,9 +653,9 @@ export function LabelProjector({
       }
     }
     // A black hole and the star about it fold onto the black hole likewise (blackHoles.ts).
-    for (const system of BLACK_HOLE_SYSTEMS) {
-      fold(new Set([system.id, system.companion]), system.id, system.extentKm, system.name);
-    }
+    BLACK_HOLE_SYSTEMS.forEach((system, index) => {
+      fold(BLACK_HOLE_MEMBERS[index]!, system.id, system.extentKm, system.name);
+    });
     if (systems.a !== null && !fold(systems.alphaCen, systems.a, ALPHA_CEN_EXTENT_KM, ALPHA_CEN_SYSTEM) && systems.b !== null) {
       const a = projected.find((entry) => entry.id === systems.a);
       const b = projected.find((entry) => entry.id === systems.b);
@@ -595,9 +724,17 @@ export function LabelProjector({
       if (element.style.display !== 'block') {
         element.style.display = 'block';
       }
-      element.style.transform = `translate(${candidate.x + candidate.offset}px, ${
-        candidate.y
-      }px) translateY(-50%)`;
+      const x = candidate.x + candidate.offset;
+      const last = placedAt.get(element);
+      if (last === undefined || last.x !== x || last.y !== candidate.y || element.style.transform === '') {
+        element.style.transform = `translate(${x}px, ${candidate.y}px) translateY(-50%)`;
+        if (last === undefined) {
+          placedAt.set(element, { x, y: candidate.y });
+        } else {
+          last.x = x;
+          last.y = candidate.y;
+        }
+      }
     }
 
     for (const [id, element] of map) {

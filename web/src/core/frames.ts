@@ -1,6 +1,6 @@
 import type { BodyDefinition, BodyId } from '@sss/tools/types';
 
-import { addStates, subtractStates, ZERO_STATE, type StateVector } from './vec3.ts';
+import { addStates, ZERO_STATE, type StateVector } from './vec3.ts';
 
 /**
  * The reference-frame tree.
@@ -24,6 +24,8 @@ export class FrameTree {
   readonly #bodies: ReadonlyMap<BodyId, BodyDefinition>;
   /** Root-ward chain for each body, nearest parent first. Precomputed once. */
   readonly #ancestry: ReadonlyMap<BodyId, readonly BodyId[]>;
+  /** Each body followed by its ancestry: the links a state is summed over. Precomputed once. */
+  readonly #chains: ReadonlyMap<BodyId, readonly BodyId[]>;
 
   constructor(bodies: readonly BodyDefinition[]) {
     const byId = new Map<BodyId, BodyDefinition>();
@@ -58,6 +60,7 @@ export class FrameTree {
 
     this.#bodies = byId;
     this.#ancestry = ancestry;
+    this.#chains = new Map([...ancestry].map(([id, chain]) => [id, [id, ...chain]]));
   }
 
   get bodies(): readonly BodyDefinition[] {
@@ -79,6 +82,15 @@ export class FrameTree {
   /** The chain of parents from this body up to the root, nearest first. */
   ancestorsOf(id: BodyId): readonly BodyId[] {
     const chain = this.#ancestry.get(id);
+    if (!chain) {
+      throw new Error(`Unknown body: ${id}`);
+    }
+    return chain;
+  }
+
+  /** The body itself, then its parents up to the root, nearest first. */
+  chainOf(id: BodyId): readonly BodyId[] {
+    const chain = this.#chains.get(id);
     if (!chain) {
       throw new Error(`Unknown body: ${id}`);
     }
@@ -129,39 +141,81 @@ export class FrameTree {
       return ZERO_STATE;
     }
 
-    const targetChain = [id, ...this.ancestorsOf(id)];
-    const observerChain = [observerId, ...this.ancestorsOf(observerId)];
-    const observerSet = new Set(observerChain);
+    // The rebase asks this for every body on screen every frame, so it walks the
+    // precomputed chains in place instead of building arrays and a set per call. The sums
+    // are the same additions in the same order, from zero, so the result is bit-identical.
+    const targetChain = this.chainOf(id);
+    const observerChain = this.chainOf(observerId);
+    const { targetLinks, observerLinks } = sharedSplit(targetChain, observerChain);
 
-    // Nearest frame both bodies are expressed in, walking up from the target.
-    const commonIndex = targetChain.findIndex((frame) => observerSet.has(frame));
-
-    // No shared ancestor other than the root: sum each side to the root.
-    const targetLinks = commonIndex === -1 ? targetChain : targetChain.slice(0, commonIndex);
-    const commonFrame = commonIndex === -1 ? null : (targetChain[commonIndex] ?? null);
-    const observerLinks =
-      commonFrame === null
-        ? observerChain
-        : observerChain.slice(0, observerChain.indexOf(commonFrame));
-
-    const sum = (links: readonly BodyId[]): StateVector | null => {
-      let total = ZERO_STATE;
-      for (const link of links) {
-        const state = provider(link);
-        if (state === null) {
-          return null;
-        }
-        total = addStates(total, state);
+    let tpx = 0;
+    let tpy = 0;
+    let tpz = 0;
+    let tvx = 0;
+    let tvy = 0;
+    let tvz = 0;
+    let targetMissing = false;
+    for (let index = 0; index < targetLinks; index += 1) {
+      const state = provider(targetChain[index]!);
+      if (state === null) {
+        targetMissing = true;
+        break;
       }
-      return total;
-    };
-
-    const targetState = sum(targetLinks);
-    const observerState = sum(observerLinks);
-    if (targetState === null || observerState === null) {
+      tpx += state.position.x;
+      tpy += state.position.y;
+      tpz += state.position.z;
+      tvx += state.velocity.x;
+      tvy += state.velocity.y;
+      tvz += state.velocity.z;
+    }
+    let opx = 0;
+    let opy = 0;
+    let opz = 0;
+    let ovx = 0;
+    let ovy = 0;
+    let ovz = 0;
+    for (let index = 0; index < observerLinks; index += 1) {
+      const state = provider(observerChain[index]!);
+      if (state === null) {
+        return null;
+      }
+      opx += state.position.x;
+      opy += state.position.y;
+      opz += state.position.z;
+      ovx += state.velocity.x;
+      ovy += state.velocity.y;
+      ovz += state.velocity.z;
+    }
+    if (targetMissing) {
       return null;
     }
-
-    return subtractStates(targetState, observerState);
+    return {
+      position: { x: tpx - opx, y: tpy - opy, z: tpz - opz },
+      velocity: { x: tvx - ovx, y: tvy - ovy, z: tvz - ovz },
+    };
   }
+}
+
+/** Scratch for sharedSplit's answer, which is read before the next call. */
+const SPLIT = { targetLinks: 0, observerLinks: 0 };
+
+/**
+ * How many links of each chain lie below the nearest frame both share: all of each when
+ * they share none but the root. Chains are a few links long, so a linear scan beats a set.
+ */
+export function sharedSplit(
+  targetChain: readonly BodyId[],
+  observerChain: readonly BodyId[],
+): { readonly targetLinks: number; readonly observerLinks: number } {
+  SPLIT.targetLinks = targetChain.length;
+  SPLIT.observerLinks = observerChain.length;
+  for (let index = 0; index < targetChain.length; index += 1) {
+    const shared = observerChain.indexOf(targetChain[index]!);
+    if (shared >= 0) {
+      SPLIT.targetLinks = index;
+      SPLIT.observerLinks = shared;
+      break;
+    }
+  }
+  return SPLIT;
 }

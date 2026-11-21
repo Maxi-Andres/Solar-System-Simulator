@@ -276,11 +276,25 @@ filled cap, not a gap. Saved as single-channel JPEG at quality 85: Ceres 754 KB,
 
   **Drawn under white light.** The app's sunlight was a cream `#fff6e0` until this map
   showed it: it took a quarter off the blue, and Neptune rendered grey-cyan, linear
-  (0.75, 0.99, 1) at mid-disc in Natural lighting. Under white sunlight it renders
-  (0.52-0.63, 0.81-0.87, 1), against (0.56, 0.84, 1) sampled from Irwin et al.'s
-  true-colour figure, and Uranus (0.71, 0.97, 1) against their (0.77, 0.99, 1). Nearest the
-  sub-solar point the filmic tone curve still pales both toward white; that is the app's
-  exposure, the same for every body.
+  (0.75, 0.99, 1) at mid-disc in Natural lighting.
+
+  **Drawn a little bluer than the file, on screen only.** Even under white light the
+  filmic tone curve (three.js's ACES, which mixes the channels before compressing them)
+  greys a bright disc. Measured in a headless screenshot of the fully lit disc, Natural
+  lighting, median over 0.3 to 0.6 of the radius from the centre: Neptune rendered sRGB
+  (185, 205, 213), against (176, 208, 224) over the same radii of Neptune's disc in Irwin et
+  al.'s true-colour figure (`web/public/photos/neptune/voyager-true-colour-large.webp`). So
+  the material multiplies this map by a per-channel gain, in linear light,
+  **(0.76, 1.02, 1.21)** (`MAP_COLOUR_GAIN` in `web/src/scene/drawnTexture.ts`). It was
+  solved, through three.js's ACES fit, for Irwin et al.'s chromaticity at those radii with
+  the map's linear luminance (0.2126 R + 0.7152 G + 0.0722 B) held fixed, so the brightness
+  is still the albedo's; the file itself is unchanged and keeps the colour of step 1. The
+  render after: (171, 205, 219), HSV saturation 0.22 where the figure's is 0.21 and the
+  render's was 0.13. It is a compensation for the display, not a measurement. Its bright
+  clouds, white in the file, take the same gain, and nearest the sub-solar point the disc
+  still pales toward white. Uranus needs none: it renders (184, 209, 211) over the same
+  radii, linear R : G : B 0.74 : 0.98 : 1 against Irwin et al.'s 0.77 : 0.99 : 1 — their
+  hue, not paler, only darker than their figure's stretch.
 
   Its contrast is the illustrative map's, from Voyager's stretched frames, not
   measured; its Great Dark Spot is 1989's, which was gone by 1994. The pixels are where

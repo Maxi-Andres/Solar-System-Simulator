@@ -231,7 +231,7 @@ export function FarLandmarks({ store, clock, focus }: FarLandmarksProps) {
   );
 
   useFrame(({ camera, gl: renderer }) => {
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     const fade = visible && sun !== null ? recordHoldersFade(Math.hypot(camera.position.x * KM_PER_UNIT - sun.position.x, camera.position.y * KM_PER_UNIT - sun.position.y, camera.position.z * KM_PER_UNIT - sun.position.z)) : 0;
     built.group.visible = fade > 0;
     if (sun === null || fade <= 0) return;

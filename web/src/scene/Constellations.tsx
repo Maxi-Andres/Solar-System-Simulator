@@ -127,7 +127,7 @@ export function Constellations({ store, clock, focus }: { store: EphemerisStore;
 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
-    const sun = visible ? store.stateRelativeTo('sun', focus, jd) : null;
+    const sun = visible ? store.sunFromFocus(focus, jd) : null;
     const fade =
       sun === null
         ? 0

@@ -179,7 +179,7 @@ export function DistanceRings({
   useFrame(() => {
     const elements = labels.current;
     const sun =
-      visible || censusVisible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+      visible || censusVisible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       group.visible = false;
       for (const element of elements) {

@@ -218,7 +218,7 @@ export function ensureLagrangePoints(store: EphemerisStore): void {
 
   const moonAboutEarth = (jd: number): StateVector | null => store.stateRelativeTo('moon', 'earth', jd);
   const earthAboutSun = (jd: number): StateVector | null => {
-    const sun = store.stateRelativeTo('sun', 'earth', jd);
+    const sun = store.sunFromFocus('earth', jd);
     return sun === null ? null : negate(sun);
   };
   // The Earth-Moon barycentre about Earth: the Moon's share of their separation.

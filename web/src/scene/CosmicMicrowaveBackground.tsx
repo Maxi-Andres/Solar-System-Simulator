@@ -211,7 +211,7 @@ export function CosmicMicrowaveBackground({
 
   useFrame(() => {
     const element = label.current;
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       mesh.visible = false;
       hide(element);

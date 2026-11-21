@@ -120,7 +120,7 @@ export function InterstellarClouds({ store, clock, focus, visible, showIcons }: 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
     const fov = (camera as THREE.PerspectiveCamera).fov;
-    const sun = visible ? store.stateRelativeTo('sun', focus, jd) : null;
+    const sun = visible ? store.sunFromFocus(focus, jd) : null;
     for (const { cloud, ring, radiusKm } of drawn.rings) {
       const state =
         sun === null || !showIcons ? null : store.stateRelativeTo(interstellarCloudBodyId(cloud), focus, jd);

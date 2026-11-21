@@ -6,6 +6,7 @@ import {
   nearestBodyTolerance,
   positionAt,
   simplifyPath,
+  splitPath,
   type PositionAt,
   type ToleranceAt,
 } from './paths.ts';
@@ -252,5 +253,81 @@ describe('nearestBodyTolerance', () => {
   it('falls back to the floor when nothing has a position', () => {
     const tolerance = nearestBodyTolerance([() => null], () => [0, 0, 0], 1e-4, 1);
     expect(tolerance(0, [1e9, 0, 0])).toBe(1);
+  });
+});
+
+describe('splitPath', () => {
+  const full = sampleTable(circle(1.5e8, 365.25), 0, 400, 1440);
+  const flat: ToleranceAt = () => 1;
+  const path = simplifyPath(full, [], flat);
+  // A gap put in by hand, as a seam would: the split must carry it to the right piece.
+  const gapped: PathTable = { ...path, gaps: [3, 17, path.count - 2] };
+  const pieces = splitPath(gapped, 10);
+
+  /** The pieces joined back, each shared boundary sample kept once. */
+  function join(parts: readonly PathTable[]): PathTable {
+    const keep = <T>(column: (part: PathTable) => readonly T[]) =>
+      parts.flatMap((part, index) => (index === 0 ? column(part) : column(part).slice(1)));
+    let offset = 0;
+    const gaps: number[] = [];
+    for (const part of parts) {
+      gaps.push(...part.gaps.map((gap) => gap + offset));
+      offset += part.count - 1;
+    }
+    return {
+      ...parts[0]!,
+      count: offset + 1,
+      t: keep((part) => part.t),
+      x: keep((part) => part.x),
+      y: keep((part) => part.y),
+      z: keep((part) => part.z),
+      vx: keep((part) => part.vx),
+      vy: keep((part) => part.vy),
+      vz: keep((part) => part.vz),
+      toleranceKm: parts.flatMap((part) => part.toleranceKm),
+      gaps,
+    };
+  }
+
+  it('cuts a long path into pieces that share their boundary samples', () => {
+    expect(path.count).toBeGreaterThan(30);
+    expect(pieces.length).toBe(Math.ceil((path.count - 1) / 9));
+    for (const [index, piece] of pieces.entries()) {
+      expect(piece.count).toBeLessThanOrEqual(10);
+      expect(piece.toleranceKm).toHaveLength(piece.count - 1);
+      const next = pieces[index + 1];
+      if (next !== undefined) {
+        expect(next.t[0]).toBe(piece.t.at(-1));
+        expect(next.x[0]).toBe(piece.x.at(-1));
+      }
+    }
+  });
+
+  it('joins back into the path, to the last digit and with every gap in its place', () => {
+    expect(join(pieces)).toEqual(gapped);
+  });
+
+  it('leaves every piece within tolerance of the full table over its own span', () => {
+    for (const piece of pieces) {
+      const startJd = piece.t[0]!;
+      const stopJd = piece.t.at(-1)!;
+      const inside = full.t.flatMap((jd, k) => (jd >= startJd && jd <= stopJd ? [k] : []));
+      const span: VectorTable = {
+        ...full,
+        count: inside.length,
+        t: inside.map((k) => full.t[k]!),
+        x: inside.map((k) => full.x[k]!),
+        y: inside.map((k) => full.y[k]!),
+        z: inside.map((k) => full.z[k]!),
+        vx: inside.map((k) => full.vx[k]!),
+        vy: inside.map((k) => full.vy[k]!),
+        vz: inside.map((k) => full.vz[k]!),
+      };
+      expect(worstMiss(span, piece, flat)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('leaves a short path whole', () => {
+    expect(splitPath(path, path.count)).toEqual([path]);
   });
 });

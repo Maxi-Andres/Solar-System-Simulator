@@ -733,7 +733,7 @@ export interface Manifest {
   readonly tables: Readonly<Record<BodyId, TableInfo>>;
   /**
    * The drawable trajectory of every spacecraft, keyed by body; nothing else has one.
-   * Each entry's samples are in `paths/<id>.json`. See PathTable.
+   * Each entry's samples are in `paths/<id>.json`, or in its pieces. See PathTable.
    */
   readonly paths: Readonly<Record<BodyId, PathInfo>>;
   /**
@@ -798,8 +798,8 @@ export interface Seam {
 /** A spacecraft's drawable trajectory: what is in its path file, and how it was cut. */
 export interface PathInfo {
   /**
-   * Samples in `paths/<id>.json`; null when there is no such file, and the trail is
-   * drawn from the craft's own table instead.
+   * Samples in the path (`paths/<id>.json`, or its pieces: see `chunks`); null when there
+   * is no path file, and the trail is drawn from the craft's own table instead.
    *
    * A close orbiter goes round thousands of times in its window, so its path cannot be
    * light: MRO's kept 26,739 of its 26,740 samples, Odyssey's 3.4 MB of them, and
@@ -816,6 +816,13 @@ export interface PathInfo {
   readonly floorKm: number;
   /** Every jump in the craft's path, in time order. */
   readonly seams: readonly Seam[];
+  /**
+   * The path's pieces, as `paths/<id>/<index>.json` -- one entry per file, in time order,
+   * neighbours sharing their boundary sample (see splitPath in paths.ts) -- so a trail
+   * fetches only the stretch it draws. Absent in data from before the pieces, whose path
+   * is the one file `paths/<id>.json`; never present when `count` is null.
+   */
+  readonly chunks?: readonly ChunkInfo[];
 }
 
 /**
@@ -854,11 +861,19 @@ export interface TableInfo {
   readonly chunks: readonly ChunkInfo[] | null;
 }
 
-/** One file of a chunked vector table. */
+/** One file of a chunked vector table, or one piece of a path. */
 export interface ChunkInfo {
   readonly startJd: number;
   readonly stopJd: number;
   readonly count: number;
+  /**
+   * The furthest any of the chunk's samples is from its table's centre, km, rounded up: for
+   * a spacecraft about a planet or a moon only. It bounds the craft's orbit before the chunk
+   * is fetched, so the app can tell that the craft would be hidden on its planet -- as a
+   * moon is, by its orbit's size on screen -- and fetch nothing for it. Absent elsewhere,
+   * and in data from before it; the app then fetches the chunk to find out.
+   */
+  readonly reachKm?: number;
 }
 
 /**
@@ -869,6 +884,9 @@ export interface ChunkInfo {
  * decisions about how a magnitude becomes a pixel live in the renderer, where they can
  * be read as numbers, and not in the data.
  */
+/** One column of the star catalogue: see StarCatalog.ra. */
+export type StarColumn = readonly number[] | Float64Array;
+
 export interface StarCatalog {
   /**
    * Where the stars came from, in the order they were taken.
@@ -903,18 +921,24 @@ export interface StarCatalog {
     readonly noPosition: number;
     readonly noColorIndex: number;
   };
-  /** Right ascension, degrees, ICRS at J2000. */
-  readonly ra: readonly number[];
+  /**
+   * Right ascension, degrees, ICRS at J2000.
+   *
+   * Each column is an array in stars.json, and a Float64Array -- the same values -- once the
+   * app has read it: it parses the file off the main thread and is handed the columns
+   * without a copy (web/src/core/starCatalog.ts).
+   */
+  readonly ra: StarColumn;
   /** Declination, degrees, ICRS at J2000. */
-  readonly dec: readonly number[];
+  readonly dec: StarColumn;
   /** Johnson V magnitude. */
-  readonly mag: readonly number[];
+  readonly mag: StarColumn;
   /** Johnson B-V colour index. */
-  readonly bv: readonly number[];
+  readonly bv: StarColumn;
   /** Proper motion in right ascension, already multiplied by cos(dec). mas/yr. */
-  readonly pmRa: readonly number[];
+  readonly pmRa: StarColumn;
   /** Proper motion in declination, mas/yr. */
-  readonly pmDec: readonly number[];
+  readonly pmDec: StarColumn;
 }
 
 /**

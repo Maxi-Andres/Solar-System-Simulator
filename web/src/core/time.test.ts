@@ -182,6 +182,19 @@ describe('SimClock', () => {
     expect(clock.tdbJulianDay).toBe(utcToTdb(utcJd));
   });
 
+  it('works TDB out again whenever the instant moves, and only then', () => {
+    const clock = new SimClock(new Date('2026-08-24T00:00:00Z'));
+    const first = clock.tdbJulianDay;
+    expect(clock.tdbJulianDay).toBe(first);
+    clock.setDate(new Date('1999-01-01T00:00:00Z'));
+    expect(clock.tdbJulianDay).toBe(utcToTdb(dateToJulianDay(new Date('1999-01-01T00:00:00Z'))));
+    clock.setRate(3600);
+    clock.tick(0.5);
+    expect(clock.tdbJulianDay).toBe(utcToTdb(dateToJulianDay(new Date('1999-01-01T00:30:00Z'))));
+    clock.goLive(new Date('2026-08-24T00:00:00Z'));
+    expect(clock.tdbJulianDay).toBe(first);
+  });
+
   it('exposes its instant as a number that changes exactly when the instant does', () => {
     // The frame loop redraws on a change of this, so it must hold still while paused and
     // move on a date typed in, which happens between ticks.

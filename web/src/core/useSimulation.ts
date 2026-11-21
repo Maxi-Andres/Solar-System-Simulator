@@ -204,8 +204,13 @@ export function useSimulation(refreshHz = 10): Simulation {
     // one artifact, so a missing star catalogue means the generator did not finish --
     // which is exactly what the error screen is for.
     Promise.all([
-      loadEphemerisStore(renderingFetcher, base),
-      loadStarCatalog(renderingFetcher, base),
+      // The planets' chunks at the clock's instant, read as the manifest arrives.
+      loadEphemerisStore(renderingFetcher, base, () => clockRef.current!.tdbJulianDay),
+      // Parsed in a worker (starCatalog.ts), so not through renderingFetcher: the frame it
+      // makes possible is asked for here.
+      loadStarCatalog(renderingFetcher, base).finally(() => {
+        renderDemand.request();
+      }),
     ])
       .then(([loadedStore, loadedStars]) => {
         if (!cancelled) {

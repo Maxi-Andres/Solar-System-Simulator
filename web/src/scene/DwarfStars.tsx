@@ -168,7 +168,7 @@ export function DwarfStars({ source, catalog, store, clock, focus, visible }: Dw
 
   useFrame(({ camera, gl }) => {
     const jd = clock.tdbJulianDay;
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     const hide = (): void => {
       group.visible = false;
       dwarfStarsDrawn.key = null;

@@ -169,6 +169,9 @@ export class SimClock {
   #rate = 1;
   /** Simulated time, as milliseconds since the Unix epoch (UTC). */
   #epochMs: number;
+  /** tdbJulianDay's last answer, and the epochMs it was for. */
+  #tdbEpochMs = Number.NaN;
+  #tdb = Number.NaN;
 
   constructor(now: Date = new Date()) {
     this.#epochMs = now.getTime();
@@ -204,7 +207,13 @@ export class SimClock {
 
   /** Current simulated instant as a TDB Julian day, ready for an ephemeris lookup. */
   get tdbJulianDay(): number {
-    return utcToTdb(this.#epochMs / MS_PER_DAY + UNIX_EPOCH_JD);
+    // Read some forty times a frame, by every layer that places something; the leap-second
+    // scan and the TDB term are worked out once per instant the clock shows.
+    if (this.#tdbEpochMs !== this.#epochMs) {
+      this.#tdbEpochMs = this.#epochMs;
+      this.#tdb = utcToTdb(this.#epochMs / MS_PER_DAY + UNIX_EPOCH_JD);
+    }
+    return this.#tdb;
   }
 
   /** Snaps back to real time and keeps tracking it. */

@@ -118,7 +118,7 @@ export function GalacticBubbles({ store, clock, focus, visible, showLabels }: Fe
 
   const point = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       built.group.visible = false;
       labels.hideAll();

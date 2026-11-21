@@ -15,6 +15,7 @@ import { rebaseVisibleFrame } from '../scene/satellites.ts';
 import {
   EphemerisStore,
   loadEphemerisData,
+  startupBodies,
   type EphemerisData,
   type Fetcher,
 } from './ephemerisStore.ts';
@@ -98,7 +99,9 @@ describeWithData('the moons against JPL Horizons', () => {
     if (!store.isExactAt(CAPTURE_JD, ['io'])) {
       return;
     }
-    await store.whenLoadedAt(CAPTURE_JD, ['io']);
+    // Io's chunk, and the Sun's and Jupiter's: the planets' tables are in chunks too, which
+    // the app waits for at its clock before the first frame (loadEphemerisStore).
+    await store.whenLoadedAt(CAPTURE_JD, ['io', ...startupBodies(store.bodies)]);
     const state = store.stateInRoot('io', CAPTURE_JD);
 
     // Io relative to Jupiter is good to kilometres; this is off by 585 km, and all of
@@ -140,16 +143,22 @@ function chunkedPrimaries(store: EphemerisStore, kind: string): string[] {
 }
 
 describeWithData('a moon whose data has not arrived', () => {
-  it('is absent rather than approximate while its chunk is on the way', () => {
-    // A loader that never answers: the state of the first frame after startup.
-    const pending = new EphemerisStore({ ...data!, loadChunk: () => new Promise(() => {}) });
+  it('is absent rather than approximate while its chunk is on the way', async () => {
+    // The state of the first frame after startup: the planets' and the Moon's chunks at
+    // the clock are here -- the app waits for them -- and nothing else ever answers.
+    const startup = new Set(startupBodies(data!.bodies));
+    const pending = new EphemerisStore({
+      ...data!,
+      loadChunk: (id, index) => (startup.has(id) ? data!.loadChunk!(id, index) : new Promise(() => {})),
+    });
     const jd = CAPTURE_JD;
     if (!pending.isExactAt(jd, ['io'])) {
       return;
     }
+    await pending.whenLoadedAt(jd, [...startup]);
 
     expect(pending.stateRelativeTo('io', 'jupiter', jd)).toBeNull();
-    // The Moon ships whole with the planets, so it is there from the first frame.
+    // The Moon comes with the planets, so it is there from the first frame.
     expect(pending.stateRelativeTo('moon', 'earth', jd)).not.toBeNull();
   });
 
@@ -184,13 +193,19 @@ describeWithData('a moon whose data has not arrived', () => {
     const withoutMoons = bodiesToResolve(counting, new Set(['star', 'planet', 'dwarf-planet']), 'sun');
     rebaseFrame(counting, 'sun', jd, withoutMoons);
     expect(moonsAmong(counting, requested)).toEqual([]);
-    // What is asked for is the dwarf planets' own chunks, one each, and nothing else.
-    expect([...requested].sort()).toEqual(chunkedPrimaries(counting, 'dwarf-planet'));
+    // What is asked for is the chunk at the clock of each of the dwarf planets and, where
+    // their tables are in chunks, the Sun's and the planets' -- one each, and nothing else.
+    const chunked = (id: string) => (counting.manifest.tables[id]?.chunks ?? null) !== null;
+    const startup = startupBodies(counting.bodies).filter((id) => chunked(id) && withoutMoons.has(id));
+    expect([...requested].sort()).toEqual([...new Set([...chunkedPrimaries(counting, 'dwarf-planet'), ...startup])].sort());
 
     const withMoons = bodiesToResolve(counting, new Set(['star', 'planet', 'dwarf-planet', 'moon']), 'sun');
     rebaseFrame(counting, 'sun', jd, withMoons);
-    // One per short-window moon: the Moon ships whole and needs no fetch.
-    expect(moonsAmong(counting, requested)).toHaveLength(20);
+    // One per moon in chunks: the twenty short-window moons, and the Moon where its table
+    // is in chunks too.
+    const moons = moonsAmong(counting, [...withMoons]).filter(chunked);
+    expect(moons.length).toBeGreaterThanOrEqual(20);
+    expect(moonsAmong(counting, requested).sort()).toEqual(moons.sort());
   });
 
   it('fetches a moon only once its system has opened up on screen', () => {

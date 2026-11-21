@@ -247,7 +247,7 @@ export function CometField({ source, store, clock, focus, visible, sharedFrame }
       shared !== null && shared.focus === focus && shared.jd === jd
         ? shared.bodies.get('sun')?.positionKm
         : undefined;
-    sun ??= store.stateRelativeTo('sun', focus, jd)?.position;
+    sun ??= store.sunFromFocus(focus, jd)?.position;
     built.points.visible = sun !== undefined;
     if (sun === undefined) {
       return;

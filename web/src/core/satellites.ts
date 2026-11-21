@@ -1,7 +1,8 @@
 import type { NamedSatellite, SatelliteInfo, SatelliteNames, SgpSatellite } from '@sss/tools/types';
 
-import type { BeltFetchers } from './belt.ts';
-import { normalizeName } from './search.ts';
+import { httpBeltFetchers, type BeltFetchers } from './belt.ts';
+import { satelliteNamesInWorker } from './nameSearch.ts';
+import { normalizeName } from './normalizeName.ts';
 import type { Searchable } from './beltNames.ts';
 import { RETRY_AFTER_MS } from './chunkedTable.ts';
 import { tracked, wantLoading } from './loading.ts';
@@ -379,9 +380,26 @@ export async function loadSatelliteNames(
   info: SatelliteInfo,
   basePath = '/',
 ): Promise<SatelliteNameIndex> {
-  const raw = await fetchers.json(`${basePath}data/satellites/${info.names.file}`);
-  if (raw === null) {
-    throw new Error(`satellites.json names ${info.names.file}, which is not there.`);
+  const path = `${basePath}data/satellites/${info.names.file}`;
+  const here = async (): Promise<SatelliteNameIndex> => {
+    const raw = await fetchers.json(path);
+    if (raw === null) {
+      throw new Error(`satellites.json names ${info.names.file}, which is not there.`);
+    }
+    return indexSatelliteNames(parseSatelliteNames(raw, info.bulk.count));
+  };
+  // Over HTTP, read and searched in a worker where there is one (nameSearch.ts): its columns
+  // fill at the entries searches return, and a NORAD number is looked up there too.
+  if (fetchers === httpBeltFetchers) {
+    const remote = await satelliteNamesInWorker(path, info.bulk.count, here, (names): SatelliteNameIndex => ({
+      names: names as unknown as SatelliteNames,
+      display: [],
+      designation: [],
+      byNorad: new Map(),
+    }));
+    if (remote !== null) {
+      return remote;
+    }
   }
-  return indexSatelliteNames(parseSatelliteNames(raw, info.bulk.count));
+  return here();
 }

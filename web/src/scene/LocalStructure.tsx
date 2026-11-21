@@ -127,7 +127,7 @@ export function LocalStructure({ store, clock, focus, visible, showLabels }: Fea
   );
 
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     const labels = state.labels;
     if (sun === null) {
       state.group.visible = false;

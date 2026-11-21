@@ -484,7 +484,7 @@ export function SkyVolume({ galaxyKey, store, clock, focus, visible }: SkyVolume
   }, [wanted, galaxy, uniforms, mesh]);
 
   useFrame(({ camera, gl }) => {
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null || !visible || galaxy === null) {
       group.visible = false;
       return;

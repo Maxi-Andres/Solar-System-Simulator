@@ -210,6 +210,12 @@ export function longitudeDirection(
   return normalize(rotateAbout(node, pole, angle));
 }
 
+/** Scratch for the orientations below, which run per body per frame and must not allocate. */
+const scratchBasis = new THREE.Matrix4();
+const scratchX = new THREE.Vector3();
+const scratchY = new THREE.Vector3();
+const scratchZ = new THREE.Vector3();
+
 /**
  * The body's orientation as a quaternion, ready to assign to a mesh.
  *
@@ -242,6 +248,8 @@ export function bodyOrientation(
   jdTdb: number,
   body: BodyDefinition,
   textureLongitudeOriginDeg: number,
+  /** Written and returned; a mesh's own quaternion, so a frame allocates nothing. */
+  out = new THREE.Quaternion(),
 ): THREE.Quaternion {
   const pole = poleDirection(jdTdb, body);
   const imageStart = longitudeDirection(jdTdb, body, textureLongitudeOriginDeg);
@@ -249,18 +257,13 @@ export function bodyOrientation(
   // east about the pole lands on exactly this.
   const east = cross(pole, imageStart);
 
-  const basis = new THREE.Matrix4().makeBasis(
-    new THREE.Vector3(-imageStart.x, -imageStart.y, -imageStart.z),
-    new THREE.Vector3(pole.x, pole.y, pole.z),
-    new THREE.Vector3(east.x, east.y, east.z),
+  scratchBasis.makeBasis(
+    scratchX.set(-imageStart.x, -imageStart.y, -imageStart.z),
+    scratchY.set(pole.x, pole.y, pole.z),
+    scratchZ.set(east.x, east.y, east.z),
   );
-  return new THREE.Quaternion().setFromRotationMatrix(basis);
+  return out.setFromRotationMatrix(scratchBasis);
 }
-
-const scratchBasis = new THREE.Matrix4();
-const scratchX = new THREE.Vector3();
-const scratchY = new THREE.Vector3();
-const scratchZ = new THREE.Vector3();
 
 /**
  * The orientation of a body drawn from its shape model rather than a sphere.

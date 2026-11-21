@@ -143,7 +143,7 @@ export function AlphaCentauriOrbits({ store, clock, focus, stars3d, visible }: A
   );
 
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       group.visible = false;
       return;

@@ -261,7 +261,7 @@ export function SolarSystemCanvas({
     () => ({
       radius: kmToUnits(MAX_VIEW_DISTANCE_KM),
       centre: (out: { set: (x: number, y: number, z: number) => unknown }): boolean => {
-        const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+        const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
         if (sun === null) return false;
         out.set(kmToUnits(sun.position.x), kmToUnits(sun.position.y), kmToUnits(sun.position.z));
         return true;

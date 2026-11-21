@@ -296,7 +296,7 @@ export const RENDER_SPARSITY = 1.336;
  * view, so the answer is comparable with a number counted off a screenshot.
  */
 export function skyCoverageFraction(
-  magnitudes: readonly number[],
+  magnitudes: Iterable<number>,
   coefficients: readonly [number, number],
   displayLevel: number,
   pixelsPerDegree: number,

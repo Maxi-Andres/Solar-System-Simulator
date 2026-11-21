@@ -190,7 +190,7 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
       return;
     }
     const jd = clock.tdbJulianDay;
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     if (!visible || sun === null) {
       group.visible = false;
       frame.current.fade = 0;

@@ -1412,7 +1412,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   const resolved = useMemo(() => ({ k: [] as number[], px: [] as number[] }), []);
 
   useFrame(({ camera: frameCamera, gl: renderer }) => {
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null) {
       group.visible = false;
       frame.current.markFade = 0;

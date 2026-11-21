@@ -23,7 +23,7 @@ export function SolarSystemWatch({
 }) {
   const { camera } = useThree();
   useFrame(() => {
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null) return;
     const fromSunKm = Math.hypot(
       camera.position.x * KM_PER_UNIT - sun.position.x,

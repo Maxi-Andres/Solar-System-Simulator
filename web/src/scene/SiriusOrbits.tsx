@@ -72,7 +72,7 @@ export function SiriusOrbits({ store, clock, focus, visible }: SiriusOrbitsProps
   }, [group, pair]);
 
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       group.visible = false;
       return;

@@ -172,7 +172,7 @@ export function Streams({ store, clock, focus, visible, showLabels }: FeaturePro
 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
-    const sun = visible ? store.stateRelativeTo('sun', focus, jd) : null;
+    const sun = visible ? store.sunFromFocus(focus, jd) : null;
     const unitsPerPc = PARSEC_KM / KM_PER_UNIT;
     let fade = 0;
     if (sun !== null) {

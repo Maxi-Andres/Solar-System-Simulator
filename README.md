@@ -139,9 +139,10 @@ web/public/data/
 ├─ manifest.json          # generation time, frame, window, and each body's coverage
 ├─ bodies.json            # the catalog: radii, GM, rotation, color, parent
 ├─ stars.json             # 46,071 stars: ra, dec, V, B−V, proper motion
-├─ vectors/<id>.json      # state vectors, column-wise: t, x, y, z, vx, vy, vz
-├─ vectors/<id>/<n>.json  # the same, split into ~1500-sample chunks (fast moons, long spacecraft paths)
-├─ paths/<id>.json        # a spacecraft's trajectory: a subset of its own samples, for drawing
+├─ vectors/<id>/<n>.json  # state vectors, column-wise (t, x, y, z, vx, vy, vz), in chunks: 365 samples
+│                         # for the Sun, planets, Pluto and Moon, 300 for craft, ~1500 for fast moons
+├─ paths/<id>/<n>.json    # a spacecraft's trajectory, a subset of its own samples for drawing, in
+│                         # pieces of 500 (data before 2026-11-21: vectors/<id>.json, paths/<id>.json)
 ├─ surface/<id>.json      # a craft on Mars: where each drive ended, and from when
 ├─ small-moons/<planet>.json  # a planet's small moons, fetched when its system is entered
 ├─ belt/belt.json         # the asteroid belt: source, tiers, reference instant, classes
@@ -939,20 +940,28 @@ Full per-file sources, licences and longitude conventions in
 
 ## Page weight
 
-About **1.72 MB gzipped** on first load: 296 KB of application, 938 KB of
-ephemerides and 484 KB of sky. GitHub Pages serves both compressed, so the 2.2 MB of
-JSON on disk is not what crosses the wire. The Moon is 244 KB of that, shipped with the
-planets because at one sample a day its twenty years are cheap.
+The default view's data, measured 2026-11-21: **1.1 MB gzipped** of ephemerides and
+trails (2.7 MB of JSON on disk; GitHub Pages serves it compressed) and 0.5 MB of sky,
+beside the application's 0.6 MB. It was 4.2 MB of ephemerides and trails before that day
+(10.2 MB of JSON), almost all of it bytes nothing on screen used:
+
+| | before | after |
+|---|---|---|
+| The Sun, planets, Pluto and the Moon | 2.1 MB, whole tables | 0.4 MB, the chunk of each at the clock |
+| Spacecraft positions | 4.5 MB, 54 chunks of 1500 samples | 0.9 MB, 41 chunks of 300 |
+| Spacecraft trails | 3.0 MB, 35 whole paths | 0.9 MB, the 38 pieces the trails are in |
+
+(Raw bytes.) The planets are still waited for before the first frame, but only their
+chunk at the clock. The craft about Mars and the Moon, hidden on their planets from
+the default view, fetch nothing: each chunk's reach about its planet is in the manifest,
+so the app knows they would be hidden without fetching them. BepiColombo's trail was a
+1.53 MB file, its months circling Mercury after the build; its three months before the
+build are two pieces. The sky's 1.5 MB of JSON is parsed in a worker, off the main thread.
 
 The other twenty moons are **not** part of it. Their tables are split into chunks of
 about 1500 samples — 51 KB each, compressed — and a chunk is fetched only once its moon's
 system has opened up on screen: from the default view of the Sun, not one. Approaching
 Jupiter costs its four moons' chunks, about 200 KB; Saturn's seven, about 350 KB.
-
-The spacecraft add **nothing** to it: every craft's table ships in chunks of at most
-1500 samples, fetched as the clock reaches them, even the Voyagers' single one. A craft
-is drawn from anywhere, so one chunk of each arrives in the first moments rather than
-before the first frame. Their trails come the same way.
 
 The surface maps are **not** part of that. Each is fetched only when its body grows past
 about six pixels on screen, so looking at the Solar System from outside costs nothing,
@@ -963,10 +972,10 @@ screen. They bring the committed texture set to 12.4 MB.
 
 | Connection | First load |
 |---|---|
-| Fibre / good wifi (50 Mbps) | 0.28 s |
-| Typical broadband (20 Mbps) | 0.7 s |
-| 4G mobile (10 Mbps) | 1.4 s |
-| 3G mobile (1.6 Mbps) | 8.6 s |
+| Fibre / good wifi (50 Mbps) | 0.35 s |
+| Typical broadband (20 Mbps) | 0.9 s |
+| 4G mobile (10 Mbps) | 1.8 s |
+| 3G mobile (1.6 Mbps) | 11 s |
 
 Everything is cached after the first visit, so this is a first-load cost only. The
 app waits for the planets and the Moon before rendering, since a partially-populated

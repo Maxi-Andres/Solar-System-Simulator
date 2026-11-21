@@ -151,10 +151,13 @@ describe('a surface craft in the store', () => {
     expect(place.longitudeDeg).toBeCloseTo(LON, 9);
   });
 
-  it('is nowhere before touchdown or after the data was built', () => {
+  it('is nowhere before touchdown, and past its last report stands where that left it', () => {
     expect(store.isCoveredAt('curiosity', LANDING - 0.01)).toBe(false);
     expect(store.localState('curiosity', LANDING - 0.01)).toBeNull();
-    expect(store.localState('curiosity', STOP + 0.01)).toBeNull();
+    // On the ground from touchdown on: past the data's last instant it is still there, at its
+    // last reported stop, rather than vanishing (ephemerisStore.isCoveredAt).
+    expect(store.isCoveredAt('curiosity', STOP + 0.01)).toBe(true);
+    expect(store.localState('curiosity', STOP + 0.01)).not.toBeNull();
     expect(store.surfaceStopAt('curiosity', JD - 20)?.index).toBe(0);
     expect(store.surfaceStopAt('curiosity', JD)?.index).toBe(1);
   });

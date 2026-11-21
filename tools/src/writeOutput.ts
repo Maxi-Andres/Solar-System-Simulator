@@ -114,49 +114,81 @@ function serializeTable(table: VectorTable): VectorTable {
   };
 }
 
-/** A table shipped whole, as vectors/<id>.json. */
-export async function writeVectors(table: VectorTable): Promise<void> {
-  await writeCompactJson(join(OUTPUT_DIR, 'vectors', `${table.id}.json`), serializeTable(table));
-}
-
 /**
- * One piece of a chunked table, as vectors/<id>/<index>.json.
+ * One piece of a table, as vectors/<id>/<index>.json.
  *
- * Same columns and rounding as a whole table, so the app reads either with the same
- * interpolator; the manifest says which bodies are split and where.
+ * Same columns and rounding as a whole table -- vectors/<id>.json, how data from before
+ * 2026-11-21 shipped the planets, and the app still reads -- so the app reads either with
+ * the same interpolator; the manifest says where each table is split.
  *
  * Returns the span the file actually covers, taken from the rounded times it was
  * written with. The app picks a chunk by that span and then searches the file's own
  * `t`, so the two must agree to the last digit or an instant on a boundary would fall
  * between them.
  */
-export async function writeVectorChunk(table: VectorTable, index: number): Promise<ChunkInfo> {
+export async function writeVectorChunk(
+  table: VectorTable,
+  index: number,
+  options: { readonly reach?: boolean } = {},
+): Promise<ChunkInfo> {
   const directory = join(OUTPUT_DIR, 'vectors', table.id);
   await mkdir(directory, { recursive: true });
   const serialized = serializeTable(table);
   await writeCompactJson(join(directory, `${index}.json`), serialized);
+  const info = chunkInfo(serialized, `${table.id} chunk ${index}`);
+  return options.reach === true ? { ...info, reachKm: reachKm(serialized) } : info;
+}
 
+/** The span and size of a written piece, from the rounded times it was written with. */
+function chunkInfo(serialized: VectorTable, name: string): ChunkInfo {
   const startJd = serialized.t[0];
   const stopJd = serialized.t.at(-1);
   if (startJd === undefined || stopJd === undefined) {
-    throw new Error(`${table.id} chunk ${index} is empty.`);
+    throw new Error(`${name} is empty.`);
   }
   return { startJd, stopJd, count: serialized.count };
 }
 
 /**
- * A spacecraft's trajectory, as paths/<id>.json.
+ * The furthest a table's samples are from its centre, km, rounded up: ChunkInfo.reachKm.
  *
- * Rounded exactly as the full table is, so every sample in it is, to the last digit, the
- * sample of the same instant in the craft's vector files.
+ * At the samples only. Between two of them a craft can swing a little further out than
+ * either, by at most the sag of its curve -- metres to a few kilometres at the spacing its
+ * kilometre tolerance allows, against orbits thousands of kilometres across -- and the app
+ * reads the reach against a dozen pixels, where that is nothing.
  */
-export async function writePath(path: PathTable): Promise<void> {
-  await writeCompactJson(join(OUTPUT_DIR, 'paths', `${path.id}.json`), {
+export function reachKm(table: VectorTable): number {
+  let furthest = 0;
+  for (let k = 0; k < table.count; k += 1) {
+    furthest = Math.max(furthest, Math.hypot(table.x[k]!, table.y[k]!, table.z[k]!));
+  }
+  return Math.ceil(furthest);
+}
+
+/**
+ * A spacecraft's trajectory, rounded exactly as the full table is, so every sample in it
+ * is, to the last digit, the sample of the same instant in the craft's vector files.
+ */
+function serializePath(path: PathTable): PathTable {
+  return {
     ...serializeTable(path),
     // A metre is far inside every tolerance here; the floor alone is a kilometre.
     toleranceKm: roundAll(path.toleranceKm, 3),
     gaps: path.gaps,
-  });
+  };
+}
+
+/**
+ * One piece of a spacecraft's path, as paths/<id>/<index>.json (see splitPath in
+ * paths.ts), rounded as serializePath says. Returns the span it covers, from the
+ * rounded times, as writeVectorChunk does and for the same reason.
+ */
+export async function writePathChunk(path: PathTable, index: number): Promise<ChunkInfo> {
+  const directory = join(OUTPUT_DIR, 'paths', path.id);
+  await mkdir(directory, { recursive: true });
+  const serialized = serializePath(path);
+  await writeCompactJson(join(directory, `${index}.json`), serialized);
+  return chunkInfo(serialized, `${path.id} path piece ${index}`);
 }
 
 /**
@@ -303,8 +335,13 @@ export async function writeCatalog(bodies: readonly BodyDefinition[]): Promise<v
   await writeJson(join(OUTPUT_DIR, 'bodies.json'), bodies);
 }
 
+/**
+ * The manifest, compact: it lists every chunk of every table and path -- some three
+ * thousand entries since the craft's chunks became small -- and the app reads it before
+ * anything else. Pretty-printed it was 77% larger for the same content.
+ */
 export async function writeManifest(manifest: Manifest): Promise<void> {
-  await writeJson(join(OUTPUT_DIR, 'manifest.json'), manifest);
+  await writeCompactJson(join(OUTPUT_DIR, 'manifest.json'), manifest);
 }
 
 /**

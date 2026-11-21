@@ -173,7 +173,7 @@ export function MeteorShowers({ store, clock, focus }: { store: EphemerisStore; 
 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
-    const sun = visible && store.tree.has('earth') ? store.stateRelativeTo('sun', focus, jd) : null;
+    const sun = visible && store.tree.has('earth') ? store.sunFromFocus(focus, jd) : null;
     parts.root.visible = sun !== null;
     if (sun === null) return;
     for (const shower of METEOR_SHOWERS) {

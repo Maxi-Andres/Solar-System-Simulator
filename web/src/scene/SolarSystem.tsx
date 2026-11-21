@@ -32,7 +32,7 @@ import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
 import { cloudTopDriftDeg, cloudTopMapOffset } from './cloudRotation.ts';
-import { drawnTexture } from './drawnTexture.ts';
+import { drawnTexture, mapColourGain } from './drawnTexture.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
 import { ringFlatRadianceFactor, ringShadowSettings, ringStripTexture } from './ringBands.ts';
 import { applyRingShadow, type RingShadowUniforms } from './ringShadow.ts';
@@ -1077,14 +1077,13 @@ export function SolarSystem({
       // It is a sphere in flat colour, so every orientation of it looks the same, and
       // that is exactly why none is invented for it.
       if (handle.definition.rotation !== null) {
-        handle.mesh.quaternion.copy(
-          bodyOrientation(
-            jd,
-            handle.definition,
-            handle.shownFile === null
-              ? (variant?.longitudeOriginDeg ?? 0)
-              : handle.shownOriginDeg,
-          ),
+        bodyOrientation(
+          jd,
+          handle.definition,
+          handle.shownFile === null
+            ? (variant?.longitudeOriginDeg ?? 0)
+            : handle.shownOriginDeg,
+          handle.mesh.quaternion,
         );
       }
 
@@ -1646,7 +1645,8 @@ export function SolarSystem({
                 .set(handle.definition.color)
                 .multiplyScalar(SUN_OVEREXPOSURE);
             } else {
-              meshMaterial.color.set('#ffffff');
+              // White, or a display compensation for the tone curve (drawnTexture.ts).
+              meshMaterial.color.setRGB(...mapColourGain(handle.definition));
             }
             meshMaterial.needsUpdate = true;
             handle.shownFile = wanted.file;
@@ -1756,6 +1756,11 @@ export function SolarSystem({
               return table === null ? null : tablePath(table, info.seams, info.floorKm);
             }, TRAIL_COLOR);
             handle.trajectoryGroup.add(handle.trajectory.object);
+          } else if (store.pathInPieces(id)) {
+            // A path in pieces: drawn like a table trail, from the pieces the turn is in, and
+            // nothing built ahead of the clock (see TableTrail's `ahead`).
+            handle.trajectory = new TableTrail((startJd, stopJd) => store.pathBetween(id, startJd, stopJd), TRAIL_COLOR, 0);
+            handle.trajectoryGroup.add(handle.trajectory.object);
           } else {
             const path = store.path(id);
             // TRAIL_BUILD_MS a frame, the rest the next: the thirty-odd lines built in one frame
@@ -1780,16 +1785,31 @@ export function SolarSystem({
           // it is the new orbit's turn.
           const center = parentId ?? 'sun';
           const relative = store.stateRelativeTo(id, center, jd);
-          const spanDays =
+          const period =
             relative === null
               ? null
               : orbitalPeriodDays(relative, store.body(center).gmBodyOnlyKm3S2);
-          handle.trajectory.update(
-            jd,
-            origin,
-            (time) => store.loadedLocalState(id, time)?.position ?? null,
-            spanDays,
-          );
+          // On no orbit -- Voyager, leaving -- the trail is the whole way it came, back to
+          // the path's start; a whole path file says that by itself.
+          const pieces = store.pathInPieces(id) ? store.pathInfo(id)!.chunks! : null;
+          const spanDays = period ?? (pieces === null ? null : Math.max(jd - pieces[0]!.startJd, 1e-9));
+          // A trail built from pieces is built on its first update: TRAIL_BUILD_MS of those a
+          // frame too, as for the whole paths above.
+          const unbuilt = handle.trajectory instanceof TableTrail && handle.trajectory.built.stopJd === -Infinity;
+          if (unbuilt && trailWorkMs >= TRAIL_BUILD_MS) {
+            trailsPutOff = true;
+          } else {
+            const started = unbuilt ? performance.now() : 0;
+            handle.trajectory.update(
+              jd,
+              origin,
+              (time) => store.loadedLocalState(id, time)?.position ?? null,
+              spanDays,
+            );
+            if (unbuilt) {
+              trailWorkMs += performance.now() - started;
+            }
+          }
         }
       }
     }

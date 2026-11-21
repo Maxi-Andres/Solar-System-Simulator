@@ -3,6 +3,7 @@ import type { BeltInfo, BeltNames } from '@sss/tools/types';
 import {
   beltTiers,
   decodeBeltRecords,
+  httpBeltFetchers,
   loadBeltInfo,
   RECORD_BYTES,
   RECORD_FLOATS,
@@ -10,7 +11,8 @@ import {
   type LoadedTier,
 } from './belt.ts';
 import { RETRY_AFTER_MS } from './chunkedTable.ts';
-import { normalizeName } from './search.ts';
+import { beltNamesInWorker } from './nameSearch.ts';
+import { normalizeName } from './normalizeName.ts';
 
 /**
  * The belt asteroids search can find by name (step B2c): `belt/names.json`, fetched the
@@ -485,17 +487,38 @@ export function prepareSearch(index: Searchable, deadline = Infinity): boolean {
   return prepare(index, deadline) !== null;
 }
 
-/** Reads belt.json and the names it points at; null where either is not there. */
+/**
+ * Reads belt.json and the names it points at; null where either is not there.
+ *
+ * Over HTTP, where there are workers, the names are read, made comparable and searched in
+ * one (nameSearch.ts): what comes back has its columns filled only at the entries searches
+ * return, and is searched through remoteNames. Otherwise, or if the worker cannot, here.
+ */
 export async function loadNameIndex(fetchers: BeltFetchers, basePath = '/'): Promise<NameIndex | null> {
   const info = await loadBeltInfo(fetchers, basePath);
   if (info?.names === undefined) {
     return null;
   }
-  const raw = await fetchers.json(`${basePath}data/belt/${info.names.file}`);
-  if (raw === null) {
-    throw new Error(`belt.json names ${info.names.file}, which is not there.`);
+  const path = `${basePath}data/belt/${info.names.file}`;
+  const here = async (): Promise<NameIndex> => {
+    const raw = await fetchers.json(path);
+    if (raw === null) {
+      throw new Error(`belt.json names ${info.names!.file}, which is not there.`);
+    }
+    return indexNames(info, parseBeltNames(raw, info));
+  };
+  if (fetchers === httpBeltFetchers) {
+    const remote = await beltNamesInWorker(path, info, here, (names): NameIndex => ({
+      info,
+      names: names as unknown as BeltNames,
+      display: [],
+      designation: [],
+    }));
+    if (remote !== null) {
+      return remote;
+    }
   }
-  return indexNames(info, parseBeltNames(raw, info));
+  return here();
 }
 
 /**

@@ -480,7 +480,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     skyMaterial.uniforms['uPixelRatio']!.value = pixelRatio;
 
     // The camera about the Sun, km, float64: the Sun is wherever the focus is not.
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     if (sun === null) {
       group.visible = false;
       sunPoints.visible = false;

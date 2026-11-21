@@ -268,7 +268,7 @@ export function AsteroidBelt({
       shared !== null && shared.focus === focus && shared.jd === jd
         ? shared.bodies.get('sun')?.positionKm
         : undefined;
-    sun ??= store.stateRelativeTo('sun', focus, jd)?.position;
+    sun ??= store.sunFromFocus(focus, jd)?.position;
     // With no Sun to hang it on, the belt is not drawn: the shader would put every
     // asteroid round the focus instead.
     built.material.visible = sun !== undefined;

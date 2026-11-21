@@ -52,12 +52,14 @@ export function satelliteVisibility(
 
   // The osculating semi-major axis is the orbit's size to well under a percent for
   // every moon here, which is far finer than a fade needs. Without elements, the
-  // moon's current distance from its planet stands in.
+  // moon's current distance from its planet stands in -- and for a craft not placed yet,
+  // the furthest it gets from its planet in the chunk it would be placed with (see
+  // EphemerisStore.reachKm): if the craft would be hidden even there, it is hidden.
   const own = snapshot.bodies.get(body.id);
   const orbitKm =
     store.elementsFor(body.id)?.semiMajorAxisKm ??
     (own === undefined
-      ? 0
+      ? (store.reachKm(body.id, snapshot.jd) ?? 0)
       : Math.hypot(
           own.positionKm.x - parent.positionKm.x,
           own.positionKm.y - parent.positionKm.y,
@@ -94,12 +96,14 @@ export interface SharedFrame {
 /**
  * One frame's rebased positions, resolving a moon only once it can be seen.
  *
- * Two passes. Everything that is not a moon is resolved first; that is enough to say,
- * from each moon's orbit size and its planet's distance, which moons are showing at all
- * -- and only those are then resolved. The distinction matters because resolving a
- * moon fetches its data: from the default view of the whole system not one moon is
- * visible, and without this the first frame would ask for twenty chunks, about a
- * megabyte, to draw nothing.
+ * Everything that is not a moon is resolved first; that is enough to say, from each
+ * moon's orbit size and its planet's distance, which moons are showing at all -- and only
+ * those are then resolved, and after them whatever circles them. The distinction matters
+ * because resolving a moon fetches its data: from the default view of the whole system
+ * not one moon is visible, and without this the first frame would ask for twenty chunks,
+ * about a megabyte, to draw nothing. A craft about a planet is a moon here when its reach
+ * is published (ChunkInfo.reachKm): the orbiters of Mars and the Moon were 1.9 MB of the
+ * default view's chunks on 2026-11-21, every one hidden on its planet.
  *
  * The focus and whatever it hangs off are always resolved, since they are the origin.
  */
@@ -119,29 +123,46 @@ export function rebaseVisibleFrame(
     const body = store.body(id);
     // A satellite with no elements -- JWST, which hangs off Earth -- has no orbit size to
     // judge by until it has a position, so it is resolved up front like a planet. Its
-    // current distance from its parent then stands in for the orbit.
-    if (body.parent === null || always.has(id) || store.elementsFor(id) === null) {
+    // current distance from its parent then stands in for the orbit. Not a craft whose
+    // reach is published with its chunks (ChunkInfo.reachKm): that bounds its orbit
+    // before anything is fetched, so it is judged like a moon -- and the orbiters of Mars
+    // and the Moon, hidden on their planets from the default view, fetch nothing for it.
+    if (
+      body.parent === null ||
+      always.has(id) ||
+      (store.elementsFor(id) === null && store.reachKm(id, jd) === null)
+    ) {
       primaries.add(id);
     } else {
       satellites.push(body);
     }
   }
 
-  const first = rebaseFrame(store, focus, jd, primaries);
-  const shown = new Set<BodyId>();
-  for (const body of satellites) {
-    if (satelliteVisibility(store, first, body, cameraUnits, viewportHeightPx, fovDeg) > 0) {
-      shown.add(body.id);
+  // Then the satellites, a level of the tree at a time: one about a moon -- LRO, whose
+  // Moon is itself a satellite -- is judged once its parent has been placed. Each that is
+  // hidden, or whose parent is, is not resolved at all.
+  let frame = rebaseFrame(store, focus, jd, primaries);
+  let waiting = satellites;
+  while (waiting.length > 0) {
+    const shown = new Set<BodyId>();
+    const later: BodyDefinition[] = [];
+    for (const body of waiting) {
+      if (!frame.bodies.has(body.parent!)) {
+        later.push(body);
+      } else if (satelliteVisibility(store, frame, body, cameraUnits, viewportHeightPx, fovDeg) > 0) {
+        shown.add(body.id);
+      }
     }
+    if (shown.size === 0) {
+      break;
+    }
+    const next = rebaseFrame(store, focus, jd, shown);
+    const bodies = new Map(frame.bodies);
+    for (const [id, rebased] of next.bodies) {
+      bodies.set(id, rebased);
+    }
+    frame = { ...frame, bodies, approximate: frame.approximate || next.approximate };
+    waiting = later;
   }
-  if (shown.size === 0) {
-    return first;
-  }
-
-  const second = rebaseFrame(store, focus, jd, shown);
-  const bodies = new Map(first.bodies);
-  for (const [id, rebased] of second.bodies) {
-    bodies.set(id, rebased);
-  }
-  return { ...first, bodies, approximate: first.approximate || second.approximate };
+  return frame;
 }

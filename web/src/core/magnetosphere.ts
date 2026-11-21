@@ -143,7 +143,7 @@ export function ensureMagnetosphereBodies(store: EphemerisStore): void {
       body: regionDefinition(regionOf(region.id)!),
       elements: null,
       state: (jd: number): StateVector | null => {
-        const sun = store.stateRelativeTo('sun', 'earth', jd);
+        const sun = store.sunFromFocus('earth', jd);
         if (sun === null) return null;
         const toward: Vec3 = normalize(sun.position);
         return { position: scale(toward, noseKm[region.id]!), velocity: { x: 0, y: 0, z: 0 } };

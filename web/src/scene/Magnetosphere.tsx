@@ -149,7 +149,7 @@ export function Magnetosphere({ store, clock, focus }: { store: EphemerisStore; 
   useFrame(() => {
     const jd = clock.tdbJulianDay;
     const earth = visible && store.tree.has('earth') ? store.stateRelativeTo('earth', focus, jd) : null;
-    const sun = earth === null ? null : store.stateRelativeTo('sun', 'earth', jd);
+    const sun = earth === null ? null : store.sunFromFocus('earth', jd);
     if (earth === null || sun === null) {
       parts.group.visible = false;
       hideLabel(labels.belts);

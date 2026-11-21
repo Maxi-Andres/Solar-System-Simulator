@@ -36,10 +36,11 @@ import {
   isSmallMoon,
   referenceFrames,
   todayUtcMidnight,
+  writeChunks,
   writePaths,
 } from './fetchData.ts';
-import type { BodyDefinition, BodyId, ChunkInfo, Manifest, OsculatingElements, SmallMoonBundle, VectorTable } from './types.ts';
-import { ELEMENTS_FILE, writeCatalog, writeElements, writeManifest, writeSmallMoonBundle, writeVectorChunk } from './writeOutput.ts';
+import type { BodyDefinition, BodyId, Manifest, OsculatingElements, SmallMoonBundle, VectorTable } from './types.ts';
+import { ELEMENTS_FILE, writeCatalog, writeElements, writeManifest, writeSmallMoonBundle } from './writeOutput.ts';
 
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
@@ -64,12 +65,15 @@ async function publishedTable(id: BodyId, manifest: Manifest): Promise<VectorTab
     info.chunks.map((_, index) => readJson<VectorTable>(join(OUTPUT_DIR, 'vectors', id, `${index}.json`))),
   );
   const first = parts[0]!;
-  const column = (key: 't' | 'x' | 'y' | 'z' | 'vx' | 'vy' | 'vz'): number[] => parts.flatMap((part) => part[key]);
+  // Neighbours share their boundary sample: kept once, or the joined table would hold two
+  // samples at one instant, and an interval of zero length between them.
+  const column = (key: 't' | 'x' | 'y' | 'z' | 'vx' | 'vy' | 'vz'): number[] =>
+    parts.flatMap((part, index) => (index === 0 ? part[key] : part[key].slice(1)));
   return {
     id,
     horizonsId: first.horizonsId,
     center: first.center,
-    count: parts.reduce((sum, part) => sum + part.count, 0),
+    count: parts.reduce((sum, part, index) => sum + part.count - (index === 0 ? 0 : 1), 0),
     t: column('t'),
     x: column('x'),
     y: column('y'),
@@ -163,11 +167,7 @@ async function main(): Promise<void> {
   const tables: Record<BodyId, Manifest['tables'][string]> = { ...manifest.tables };
   const elements = await publishedElements(manifest, startup);
   for (const result of results) {
-    const chunks: ChunkInfo[] = [];
-    for (const [index, part] of result.parts.entries()) {
-      chunks.push(await writeVectorChunk(part, index));
-    }
-    tables[result.body.id] = { startJd: chunks[0]!.startJd, stopJd: chunks.at(-1)!.stopJd, chunks };
+    tables[result.body.id] = await writeChunks(result.body, result.parts);
     if (result.elements !== null && !isSmallMoon(result.body)) {
       elements[result.body.id] = result.elements;
     }

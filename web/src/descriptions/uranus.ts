@@ -108,7 +108,7 @@ export const URANUS: Description = {
     },
     {
       title: 'Its map',
-      text: 'An illustrative map: smooth bands of pale cyan, darker towards the south, with no storm or cloud in it. Its average brightness, 0.51, is close to Uranus’s measured geometric albedo, 0.49, and its colour close to the pale green-blue of true-colour pictures; it is not a map of any day’s clouds.',
+      text: 'An illustrative map: smooth bands of pale cyan, darker towards the south, with no storm or cloud in it. Its average brightness, 0.51, is close to Uranus’s measured geometric albedo, 0.49, and its colour close to the pale green-blue of true-colour pictures; it is not a map of any day’s clouds. On the screen it shows the hue of Irwin et al.’s true-colour picture as it is, so unlike Neptune it needs no correction for the display’s tone curve.',
       cite: ['nssdc', 'irwin2024'],
     },
     {

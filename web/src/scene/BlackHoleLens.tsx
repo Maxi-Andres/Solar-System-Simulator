@@ -523,7 +523,7 @@ export function BlackHoleLens({ store, clock, focus }: { store: EphemerisStore; 
     if (visibility === 0) {
       return;
     }
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null) {
       uniforms['uGlow']!.value = 0;
       return;

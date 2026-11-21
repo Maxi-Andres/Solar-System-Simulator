@@ -153,9 +153,35 @@ export const SPACECRAFT_MIN_STEP_MINUTES = 1;
 /**
  * Largest spacecraft chunk, in samples. Every craft's table is split into chunks of about
  * this size -- one, for the Voyagers -- and fetched as the clock reaches them, like a
- * moon's. None is loaded before the first frame.
+ * moon's. None is loaded before the first frame. The small moons and the named small
+ * bodies are cut the same size.
+ *
+ * Three hundred, about 24 KB of JSON. It was 1500, 120 KB, and the first view -- which
+ * places every craft it shows at one instant, needing one sample either side of it --
+ * fetched 4.6 MB of chunks on 2026-11-21 to read a few hundred bytes of each. Smaller
+ * still would spend more on requests and manifest entries than on samples.
  */
-export const SPACECRAFT_CHUNK_SAMPLES = 1500;
+export const SPACECRAFT_CHUNK_SAMPLES = 300;
+
+/**
+ * Largest chunk of the tables that span the whole window -- the Sun, the planets, Pluto
+ * and the Moon -- in samples: a year of Mercury's and the Moon's daily samples, four of
+ * Earth's, about 32 KB of JSON each; the giant planets' whole twenty years fit in one.
+ *
+ * They shipped whole until 2026-11-21, 2.1 MB that the first view waited for to show one
+ * instant. Now the app waits only for the chunk of each that covers the clock (see
+ * loadEphemerisStore in the web app), about 300 KB.
+ */
+export const FULL_WINDOW_CHUNK_SAMPLES = 365;
+
+/**
+ * Largest piece of a spacecraft's path file, in samples: paths/<id>/<index>.json, about
+ * 50 KB each. A trail is one turn of the craft's orbit back from the clock, so the app
+ * fetches only the pieces that turn is in. BepiColombo's path was 1.53 MB in one file,
+ * 15,000 of its 15,700 samples for the months it circles Mercury after the build -- all of
+ * it fetched at startup to draw the three months before it.
+ */
+export const PATH_CHUNK_SAMPLES = 500;
 
 /**
  * How far a spacecraft's drawn line may stray from its path, as an angle seen from the

@@ -298,7 +298,7 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
   useFrame(() => {
     const jd = clock.tdbJulianDay;
     const fov = (camera as THREE.PerspectiveCamera).fov;
-    const sun = visible ? store.stateRelativeTo('sun', focus, jd) : null;
+    const sun = visible ? store.sunFromFocus(focus, jd) : null;
     // The view as the last frame drew it -- near enough to tell whether a nebula is in it -- by its
     // four sides only: the far plane is no limit for a volume drawn into the glow buffer.
     made.frustum.setFromProjectionMatrix(made.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));

@@ -7,6 +7,7 @@ import { describeWithData as withData } from './describeWithData.ts';
 
 import { loadEphemerisStore, type EphemerisStore, type Fetcher } from './ephemerisStore.ts';
 import { interpolateState } from './hermite.ts';
+import { joinPathPieces } from './pathPieces.ts';
 import type { Vec3 } from './vec3.ts';
 
 /**
@@ -51,6 +52,27 @@ async function fullTable(s: EphemerisStore, id: string): Promise<VectorTable> {
     }
   }
   return { ...parts[0]!, ...joined, count: joined.t!.length } as VectorTable;
+}
+
+/**
+ * A craft's path as written: its pieces joined (PathInfo.chunks), or the one file of data
+ * from before them. Joined, the pieces are checked below exactly as the whole file was.
+ */
+async function readPath(s: EphemerisStore, id: string): Promise<PathTable> {
+  const pieces = s.pathInfo(id)!.chunks;
+  if (pieces === undefined) {
+    return (await read(`data/paths/${id}.json`)) as PathTable;
+  }
+  const parts = await Promise.all(
+    pieces.map(async (_, index) => (await read(`data/paths/${id}/${index}.json`)) as PathTable),
+  );
+  for (const [index, part] of parts.entries()) {
+    // Each piece where the manifest says it is, the pieces meeting on a shared sample.
+    expect(part.t[0]).toBe(pieces[index]!.startJd);
+    expect(part.t.at(-1)).toBe(pieces[index]!.stopJd);
+    expect(part.count).toBe(pieces[index]!.count);
+  }
+  return joinPathPieces(parts);
 }
 
 describeWithData('spacecraft paths, as written', () => {
@@ -125,7 +147,7 @@ describeWithData('spacecraft paths, as written', () => {
 
   it.each(crafts)('%s: every sample is JPL’s, unchanged', async (id) => {
     const full = await fullTable(s, id);
-    const path = (await read(`data/paths/${id}.json`)) as PathTable;
+    const path = await readPath(s, id);
     let k = 0;
     for (let i = 0; i < path.count; i += 1) {
       while (full.t[k]! < path.t[i]!) {
@@ -144,7 +166,7 @@ describeWithData('spacecraft paths, as written', () => {
   });
 
   it.each(crafts)('%s: breaks exactly at the published seams', async (id) => {
-    const path = (await read(`data/paths/${id}.json`)) as PathTable;
+    const path = await readPath(s, id);
     const seams = s.pathInfo(id)!.seams;
     expect(path.gaps.map((i) => [path.t[i], path.t[i + 1]])).toEqual(
       seams.map((seam) => [seam.startJd, seam.stopJd]),
@@ -156,7 +178,7 @@ describeWithData('spacecraft paths, as written', () => {
     async (id) => {
       const info = s.pathInfo(id)!;
       const full = await fullTable(s, id);
-      const path = (await read(`data/paths/${id}.json`)) as PathTable;
+      const path = await readPath(s, id);
       const body = s.body(id);
       const gapStarts = new Set(path.gaps.map((i) => path.t[i]));
       const tables = await loadJoined();

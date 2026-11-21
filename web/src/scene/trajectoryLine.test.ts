@@ -581,4 +581,28 @@ describe('a trail drawn from the table', () => {
     trail.update(START, { x: 0, y: 0, z: 0 }, () => null, 1);
     expect(trail.object.visible).toBe(false);
   });
+  it('built from a path in pieces, asks for nothing ahead, and tessellates the same path once', () => {
+    const table = orbiterTable(10);
+    const path = stretchOf(table, START, START + 10)!;
+    const asked: [number, number][] = [];
+    const trail = new TableTrail(
+      (startJd, stopJd) => {
+        asked.push([startJd, stopJd]);
+        return path;
+      },
+      '#ffffff',
+      0,
+    );
+    const origin = { x: 0, y: 0, z: 0 };
+    trail.update(START + 2, origin, () => null, ORBITER_PERIOD_DAYS);
+    expect(asked[0]![1]).toBe(START + 2);
+    const position = linesOf(trail)[0].geometry.getAttribute('position') as THREE.BufferAttribute;
+    const version = position.version;
+    // The clock moves on: the stretch is asked for again, comes back the same, and the line
+    // is left as it is.
+    trail.update(START + 2.01, origin, () => null, ORBITER_PERIOD_DAYS);
+    expect(asked).toHaveLength(2);
+    expect(position.version).toBe(version);
+    expect(trail.object.visible).toBe(true);
+  });
 });

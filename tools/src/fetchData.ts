@@ -57,12 +57,14 @@ import { cometDesignations } from './famousComets.ts';
 import {
   BELT_MAGNITUDE_LIMIT,
   BELT_TIER_LIMITS,
+  FULL_WINDOW_CHUNK_SAMPLES,
   HORIZONS_API_URL,
   MAX_CONCURRENT_REQUESTS,
   MAX_SAMPLES_PER_REQUEST,
   OUT_UNITS,
   OUTPUT_DIR,
   PATH_ANGULAR_TOLERANCE,
+  PATH_CHUNK_SAMPLES,
   SPACECRAFT_ANGULAR_TOLERANCE,
   REF_PLANE,
   REF_SYSTEM,
@@ -104,6 +106,7 @@ import {
   type PositionAt,
   positionAt,
   simplifyPath,
+  splitPath,
 } from './paths.ts';
 import { ARCHIVE_ACKNOWLEDGEMENT, fetchArchive } from './exoplanets/archive.ts';
 import { buildExoplanets, describeExoplanets, starIdsFromBuild } from './exoplanets/buildExoplanets.ts';
@@ -153,12 +156,11 @@ import {
   writeSmallMoonBundle,
   writeManifest,
   serializeSeam,
-  writePath,
+  writePathChunk,
   writeStars,
   writeStars3d,
   writeSurface,
   writeVectorChunk,
-  writeVectors,
 } from './writeOutput.ts';
 
 export interface BodyResult {
@@ -520,6 +522,25 @@ async function fetchSurfaceCraft(body: BodyDefinition, epoch: Date): Promise<Sur
   return { body, track, info: { host: site.host, startJd, stopJd, count: track.count } };
 }
 
+/**
+ * A body's table written as `parts`, vectors/<id>/<index>.json, and its entry for the
+ * manifest. A craft about a planet or a moon has each chunk's reach published with it
+ * (ChunkInfo.reachKm), so the app need not fetch a chunk to learn the craft is hidden.
+ */
+export async function writeChunks(body: BodyDefinition, parts: readonly VectorTable[]): Promise<TableInfo> {
+  const reach = body.vectorWindow === 'mission' && body.parent !== null;
+  const chunks: ChunkInfo[] = [];
+  for (const [index, part] of parts.entries()) {
+    chunks.push(await writeVectorChunk(part, index, { reach }));
+  }
+  const first = chunks[0];
+  const last = chunks.at(-1);
+  if (first === undefined || last === undefined) {
+    throw new Error(`${body.id} produced no chunks.`);
+  }
+  return { startJd: first.startJd, stopJd: last.stopJd, chunks };
+}
+
 /** First and last instant of a table, or a loud failure if it has none. */
 function spanOf(table: VectorTable): { startJd: number; stopJd: number } {
   const startJd = table.t[0];
@@ -613,17 +634,23 @@ export async function writePaths(
       seams,
       nearestBodyTolerance(references, origin, PATH_ANGULAR_TOLERANCE, SPACECRAFT_TOLERANCE_KM),
     );
-    await writePath(path);
+    // In pieces, so a trail -- one turn back from the clock -- fetches only the stretch it
+    // draws. See PATH_CHUNK_SAMPLES.
+    const chunks: ChunkInfo[] = [];
+    for (const [index, piece] of splitPath(path, PATH_CHUNK_SAMPLES).entries()) {
+      chunks.push(await writePathChunk(piece, index));
+    }
     paths[body.id] = {
       count: path.count,
       angularTolerance: PATH_ANGULAR_TOLERANCE,
       floorKm: SPACECRAFT_TOLERANCE_KM,
       seams: seams.map(serializeSeam),
+      chunks,
     };
 
     console.log(
       `[fetch-data] ${body.name.padEnd(9)} path ${String(path.count).padStart(5)} of ` +
-        `${vectors.count} samples` +
+        `${vectors.count} samples in ${chunks.length} piece${chunks.length === 1 ? '' : 's'}` +
         (seams.length > 0 ? `, ${seams.length} seam${seams.length === 1 ? '' : 's'}` : ''),
     );
   }
@@ -944,28 +971,19 @@ async function main(): Promise<void> {
   const tables: Record<BodyId, TableInfo> = {};
   const elements: Record<BodyId, OsculatingElements> = {};
   for (const result of results) {
-    // A spacecraft is always chunked, even when one chunk holds all of it: a whole table
-    // is loaded before the first frame, and with forty craft that would be forty files
-    // the visitor waits for to see the Sun. A chunk arrives a frame or two after the
-    // craft is first wanted, which is all the delay there is.
-    if (result.body.vectorWindow === 'full' && result.body.sampling === undefined) {
-      await writeVectors(result.vectors);
-      tables[result.body.id] = { ...spanOf(result.vectors), chunks: null };
-    } else {
-      // Shipped as the pieces it was fetched in. Each is about 1500 samples -- Phobos
-      // is 47 of them -- and the app fetches only the one covering the instant it is
-      // drawing. A spacecraft's were cut from its finished table the same size.
-      const chunks: ChunkInfo[] = [];
-      for (const [index, part] of result.parts.entries()) {
-        chunks.push(await writeVectorChunk(part, index));
-      }
-      const first = chunks[0];
-      const last = chunks.at(-1);
-      if (first === undefined || last === undefined) {
-        throw new Error(`${result.body.id} produced no chunks.`);
-      }
-      tables[result.body.id] = { startJd: first.startJd, stopJd: last.stopJd, chunks };
-    }
+    // Every table is chunked, and the app fetches only the chunk covering the instant it
+    // is drawing. A fast moon's chunks are the pieces it was fetched in, about 1500 samples
+    // each -- Phobos is 47 of them -- a spacecraft's and a small body's are cut from the
+    // finished table (SPACECRAFT_CHUNK_SAMPLES), and the Sun's, the planets', Pluto's and
+    // the Moon's from theirs (FULL_WINDOW_CHUNK_SAMPLES). Those last shipped whole until
+    // 2026-11-21, 2.1 MB loaded before the first frame; the app now waits only for the
+    // chunk of each that covers its clock.
+    const parts =
+      result.body.vectorWindow === 'full' && result.body.sampling === undefined
+        ? splitTable(result.vectors, FULL_WINDOW_CHUNK_SAMPLES)
+        : result.parts;
+    const tableInfo = await writeChunks(result.body, parts);
+    tables[result.body.id] = tableInfo;
     // The small moons' go into their planet's bundle, below.
     if (result.elements !== null && !isSmallMoon(result.body)) {
       elements[result.body.id] = result.elements;

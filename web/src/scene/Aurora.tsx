@@ -241,7 +241,7 @@ export function Aurora({ store, clock, focus }: { store: EphemerisStore; clock: 
     const forecast = auroraForecast();
     const jd = clock.tdbJulianDay;
     const earth = forecast !== null && store.tree.has('earth') ? store.stateRelativeTo('earth', focus, jd) : null;
-    const sun = earth === null ? null : store.stateRelativeTo('sun', 'earth', jd);
+    const sun = earth === null ? null : store.sunFromFocus('earth', jd);
     if (forecast === null || earth === null || sun === null || !auroraShownAt(forecast, tdbToUtc(jd))) {
       mesh.visible = false;
       return;

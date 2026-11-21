@@ -1268,7 +1268,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
 
   useFrame(({ camera: frameCamera, gl: renderer }) => {
     const jd = clock.tdbJulianDay;
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     if (sun === null || !visible) {
       group.visible = false;
       frame.current.markFade = 0;

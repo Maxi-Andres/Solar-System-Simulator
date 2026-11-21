@@ -544,7 +544,7 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
   }, [group, galaxies, filaments]);
 
   useFrame(({ camera, gl: renderer }) => {
-    const sun = store.stateRelativeTo('sun', focus, clock.tdbJulianDay);
+    const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null) {
       group.visible = false;
       return;

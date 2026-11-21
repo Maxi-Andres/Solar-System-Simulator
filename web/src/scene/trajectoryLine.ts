@@ -656,7 +656,8 @@ export const TABLE_TRAIL_MARGIN = 0.25;
 export const TABLE_TRAIL_FALLBACK_DAYS = 1;
 
 /**
- * A trail drawn from the craft's own table, for a close orbiter with no path file.
+ * A trail drawn from the craft's own table, for a close orbiter with no path file -- or
+ * from the pieces of a path published in pieces (PathInfo.chunks), the same way.
  *
  * The same line as TrajectoryLine, built only over the stretch the trail covers -- one
  * turn, plus a margin -- and rebuilt as the clock moves on. See PathInfo.count in tools
@@ -680,11 +681,24 @@ export class TableTrail {
   #line: TrajectoryLine | null = null;
   #builtStart = Infinity;
   #builtStop = -Infinity;
+  /** What the line was last built from: the same path again is not tessellated again. */
+  #builtPath: PathTable | null = null;
   #fade = 1;
 
-  constructor(source: PathSource, color: string) {
+  /** How far ahead of the clock the line is built, as a fraction of the trail's span. */
+  readonly #ahead: number;
+
+  /**
+   * `ahead`: TABLE_TRAIL_MARGIN for a table, whose samples are here anyway. A path in
+   * pieces takes none: ahead of the clock is a stretch the trail does not draw, and building
+   * it would fetch it -- BepiColombo's three weeks after the build were three more pieces of
+   * its Mercury orbits. It is rebuilt every frame the clock moves instead, which costs
+   * nothing while the pieces stay the same (see #builtPath).
+   */
+  constructor(source: PathSource, color: string, ahead = TABLE_TRAIL_MARGIN) {
     this.#source = source;
     this.#color = color;
+    this.#ahead = ahead;
   }
 
   /** The stretch the current line was built for, days; empty before the first. */
@@ -701,7 +715,7 @@ export class TableTrail {
     const span = spanDays ?? TABLE_TRAIL_FALLBACK_DAYS;
     if (jd - span < this.#builtStart || jd > this.#builtStop) {
       const startJd = jd - span * (1 + TABLE_TRAIL_MARGIN);
-      const stopJd = jd + span * TABLE_TRAIL_MARGIN;
+      const stopJd = jd + span * this.#ahead;
       const path = this.#source(startJd, stopJd);
       if (path === null || path.count < 2) {
         // Not here yet: nothing rather than a trail of somewhere else.
@@ -712,9 +726,12 @@ export class TableTrail {
         this.#line = new TrajectoryLine(path, this.#color);
         this.#line.setFade(this.#fade);
         this.object.add(this.#line.object);
-      } else {
+      } else if (path !== this.#builtPath) {
+        // A path in pieces (EphemerisStore.pathBetween) is the same object while the trail
+        // stays inside the same pieces.
         this.#line.setPath(path);
       }
+      this.#builtPath = path;
       this.#builtStart = startJd;
       this.#builtStop = stopJd;
     }

@@ -76,7 +76,7 @@ export function StellarFlybys({ store, clock, focus }: StellarFlybysProps) {
   }, [group, lines]);
 
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       group.visible = false;
       return;

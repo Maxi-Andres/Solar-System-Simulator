@@ -132,3 +132,90 @@ describe('frame order', () => {
     expect(rig).toMatch(/\}, -1\);/);
   });
 });
+
+/**
+ * declutterLabels as it was before its grid: every candidate against every label placed.
+ * The grid must choose exactly these labels, in exactly this order.
+ */
+function declutterAgainstAll(candidates: readonly LabelCandidate[], focus: string, held: ReadonlySet<string>): LabelCandidate[] {
+  const ordered = [...candidates].sort((a, b) => {
+    if ((a.id === focus) !== (b.id === focus)) return a.id === focus ? -1 : 1;
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    if ((a.importance ?? 0) !== (b.importance ?? 0)) return (a.importance ?? 0) > (b.importance ?? 0) ? -1 : 1;
+    if (held.has(a.id) !== held.has(b.id)) return held.has(a.id) ? -1 : 1;
+    return a.depth - b.depth;
+  });
+  const placed: LabelCandidate[] = [];
+  const half = (label: LabelCandidate) => (label.height ?? 16) / 2;
+  const middle = (label: LabelCandidate) => label.y + (label.dy ?? 0);
+  for (const candidate of ordered) {
+    const holding = held.has(candidate.id);
+    const padding = holding ? 0 : 4;
+    const markerGap = holding ? 26 * 0.7 : 26;
+    const left = candidate.x + candidate.offset - padding;
+    const right = candidate.x + candidate.offset + candidate.width + padding;
+    const top = middle(candidate) - half(candidate) - padding;
+    const bottom = middle(candidate) + half(candidate) + padding;
+    const collides = placed.some((other) => {
+      const markersTouch =
+        candidate.marked !== false &&
+        other.marked !== false &&
+        Math.abs(other.x - candidate.x) < markerGap &&
+        Math.abs(other.y - candidate.y) < markerGap;
+      const otherLeft = other.x + other.offset;
+      const boxesTouch =
+        left < otherLeft + other.width &&
+        otherLeft < right &&
+        top < middle(other) + half(other) &&
+        middle(other) - half(other) < bottom;
+      return markersTouch || boxesTouch;
+    });
+    if (!collides) placed.push(candidate);
+  }
+  return placed;
+}
+
+describe('declutterLabels on its grid', () => {
+  /** A fixed pseudo-random sequence, so the same candidates every run. */
+  function random(seed: number): () => number {
+    let state = seed;
+    return () => {
+      state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return state / 2_147_483_648;
+    };
+  }
+
+  it('chooses exactly the labels testing each against all did, in the same order', () => {
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const next = random(seed);
+      const count = 50 + Math.floor(next() * 550);
+      const candidates: LabelCandidate[] = Array.from({ length: count }, (_, i) => {
+        const odd = next();
+        return {
+          id: `body-${i}`,
+          // Mostly on a 1920 x 1080 screen, crowded in places; some well off it, some on cell edges.
+          x: odd < 0.05 ? (next() - 0.5) * 1e6 : odd < 0.1 ? Math.round(next() * 30) * 64 : next() * 1920 * (seed % 3 === 0 ? 0.2 : 1),
+          y: odd < 0.05 ? (next() - 0.5) * 1e6 : odd < 0.1 ? Math.round(next() * 17) * 64 : next() * 1080 * (seed % 3 === 0 ? 0.2 : 1),
+          offset: next() < 0.1 ? -100 * next() : 14 + next() * 40,
+          width: 20 + next() * 200,
+          depth: next() * 1e6,
+          rank: Math.floor(next() * 3),
+          ...(next() < 0.2 ? { importance: Math.floor(next() * 4) * 1e9 } : {}),
+          ...(next() < 0.1 ? { height: 10 + next() * 20, dy: (next() - 0.5) * 40 } : {}),
+          ...(next() < 0.1 ? { marked: false } : {}),
+        };
+      });
+      // A few numbers the grid cannot file.
+      if (seed % 5 === 0) {
+        candidates.push({ id: 'nan', x: Number.NaN, y: 10, offset: 14, width: 50, depth: 1, rank: 0 });
+        candidates.push({ id: 'far', x: 1e12, y: 1e12, offset: 14, width: 50, depth: 1, rank: 0 });
+        candidates.push({ id: 'nan-offset', x: 500, y: 500, offset: Number.NaN, width: 50, depth: 0.5, rank: 0 });
+        candidates.push({ id: 'wide', x: 0, y: 300, offset: 0, width: Infinity, depth: 2, rank: 1 });
+      }
+      const held = new Set(candidates.filter(() => next() < 0.3).map((entry) => entry.id));
+      const focus = `body-${Math.floor(next() * count)}`;
+      const expected = declutterAgainstAll(candidates, focus, held).map((entry) => entry.id);
+      expect(declutterLabels(candidates, focus, held).map((entry) => entry.id)).toEqual(expected);
+    }
+  });
+});

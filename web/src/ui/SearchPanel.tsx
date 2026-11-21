@@ -9,8 +9,10 @@ import {
   searchNames,
   type NameIndex,
   type NameIndexSource,
+  type NameMatch,
   type Searchable,
 } from '../core/beltNames.ts';
+import { remoteNames } from '../core/nameSearch.ts';
 import { addCometBody, cometBodyId } from '../core/cometBodies.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -273,6 +275,11 @@ export function SearchPanel({
     () => (laniakeaCatalogue === null ? null : structureSearch(laniakeaCatalogue.info.landmarks)),
     [laniakeaCatalogue],
   );
+  // The three big indexes, searched in a worker where there is one (nameSearch.ts).
+  const beltMatches = useNameMatches(nameIndex, searched, NAME_LIMIT);
+  // "M102", disputed, is NGC 5866 by its name in the catalogue (messier.ts).
+  const laniakeaMatches = useNameMatches(laniakeaIndex?.search ?? null, messierSynonym(searched) ?? searched, GALAXY_LIMIT);
+  const bulkMatches = useNameMatches(bulkNames, searched, SATELLITE_LIMIT);
   // Which Archive host each 3D star is, by "tier:index", for a star found by its name.
   const hostOfStar = useMemo(() => {
     const map = new Map<string, number>();
@@ -329,7 +336,8 @@ export function SearchPanel({
       volumeArchive?.search,
       laniakeaIndex?.search,
       structureIndex,
-    ].filter((index): index is Searchable => index != null);
+      // The worker's are prepared there.
+    ].filter((index): index is Searchable => index != null && remoteNames(index) === null);
     let cancel = (): void => {};
     const step = (): void => {
       const deadline = performance.now() + PREPARE_SLICE_MS;
@@ -371,10 +379,10 @@ export function SearchPanel({
     const fromNames: Result[] =
       nameIndex === null
         ? []
-        : searchNames(nameIndex, searched, NAME_LIMIT)
+        : beltMatches.matches
             .filter(({ k }) => !store.isPropagatedBody(beltBodyId(nameIndex.names.tier[k]!, nameIndex.names.index[k]!)))
             .map(({ k }) => ({ kind: 'name', k }));
-    const fromSatellites = satelliteResults(store, searched, satelliteData, sgpIndex, bulkNames);
+    const fromSatellites = satelliteResults(store, searched, satelliteData, sgpIndex, bulkNames === null ? null : bulkMatches);
     // The stars, the Archive's and the pulsars are listed together, best match first, and in
     // that order where they match alike: "crab" finds the Crab Pulsar before Acrab.
     const scored = new Map<Result, number>();
@@ -439,8 +447,7 @@ export function SearchPanel({
     const fromLaniakea: Result[] =
       laniakeaIndex === null
         ? []
-        : // "M102", disputed, is NGC 5866 by its name in the catalogue (messier.ts).
-          searchNames(laniakeaIndex.search, messierSynonym(searched) ?? searched, GALAXY_LIMIT)
+        : laniakeaMatches.matches
             .filter(({ k }) => !bodiesListed.has(`galaxy-lk-${k}`))
             .map(({ k, score }) => scoredResult(scored, { kind: 'laniakea', k }, score));
     // A structure is a body once the catalogue is in, found by its name as one; by its other
@@ -492,6 +499,9 @@ export function SearchPanel({
     laniakeaIndex,
     laniakeaCatalogue,
     structureIndex,
+    beltMatches,
+    laniakeaMatches,
+    bulkMatches,
   ]);
 
   // A new query starts at the top.
@@ -962,6 +972,55 @@ function describeResult(
 
 const noSubscribe = (): (() => void) => () => {};
 
+/** An index's matches for a query, and the entry the query is the NORAD number of, if any. */
+interface NameMatches {
+  readonly matches: readonly NameMatch[];
+  readonly norad: number | null;
+}
+
+const NO_MATCHES: NameMatches = { matches: [], norad: null };
+
+/**
+ * searchNames of `index` for `query`: at once for an index searched here, and for one in the
+ * worker (nameSearch.ts) as soon as it answers -- until then the last answer it gave, so the
+ * list does not blink empty between keystrokes. The same matches either way.
+ */
+function useNameMatches(index: (Searchable & { readonly byNorad?: ReadonlyMap<number, number> }) | null, query: string, limit: number): NameMatches {
+  const remote = index === null ? null : remoteNames(index);
+  const here = useMemo((): NameMatches | null => {
+    if (index === null || remote !== null) {
+      return null;
+    }
+    const trimmed = query.trim();
+    const norad = index.byNorad !== undefined && /^\d+$/.test(trimmed) ? (index.byNorad.get(Number(trimmed)) ?? null) : null;
+    return { matches: searchNames(index, query, limit), norad };
+  }, [index, remote, query, limit]);
+  const [answer, setAnswer] = useState<{ readonly index: object; readonly found: NameMatches } | null>(null);
+  useEffect(() => {
+    if (index === null || remote === null) {
+      return;
+    }
+    let live = true;
+    remote
+      .search(query, limit)
+      .then(({ matches, norad }) => {
+        if (live) {
+          setAnswer({ index, found: { matches, norad } });
+        }
+      })
+      .catch((error: unknown) => {
+        console.error(`Could not search the ${remote.source} names`, error);
+      });
+    return () => {
+      live = false;
+    };
+  }, [index, remote, query, limit]);
+  if (here !== null) {
+    return here;
+  }
+  return answer !== null && answer.index === index ? answer.found : NO_MATCHES;
+}
+
 /** A result, its match's score kept beside it for the merge. */
 function scoredResult(scores: Map<Result, number>, result: Result, score: number): Result {
   scores.set(result, score);
@@ -989,7 +1048,8 @@ function satelliteResults(
   query: string,
   satellites: Satellites | null,
   sgpIndex: (Searchable & { readonly byNorad: ReadonlyMap<number, number> }) | null,
-  bulkNames: SatelliteNameIndex | null,
+  /** The dots' matches for `query`, and the one it is the NORAD number of (useNameMatches). */
+  bulk: NameMatches | null,
 ): Result[] {
   if (satellites === null) {
     return [];
@@ -1009,9 +1069,8 @@ function satelliteResults(
     if (sgp !== undefined) {
       push('sgp4', sgp);
     }
-    const bulk = bulkNames?.byNorad.get(Number(trimmed));
-    if (bulk !== undefined) {
-      push('bulk', bulk);
+    if (bulk !== null && bulk.norad !== null) {
+      push('bulk', bulk.norad);
     }
   }
   if (sgpIndex !== null) {
@@ -1019,8 +1078,8 @@ function satelliteResults(
       push('sgp4', k);
     }
   }
-  if (bulkNames !== null) {
-    for (const { k } of searchNames(bulkNames, query, SATELLITE_LIMIT)) {
+  if (bulk !== null) {
+    for (const { k } of bulk.matches) {
       push('bulk', k);
     }
   }

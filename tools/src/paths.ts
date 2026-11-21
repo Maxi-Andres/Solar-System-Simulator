@@ -355,3 +355,38 @@ export function thinTable(
   );
   return thinned;
 }
+
+/**
+ * A path cut into pieces of at most `maxSamples`, neighbours sharing their boundary
+ * sample, as a chunked vector table is (see splitTable): paths/<id>/<index>.json.
+ *
+ * Every interval is in exactly one piece, with its tolerance, and a gap keeps its place --
+ * renumbered from the start of its piece. Joined back, dropping each shared sample once,
+ * the pieces are the path, to the last digit.
+ */
+export function splitPath(path: PathTable, maxSamples: number): PathTable[] {
+  if (maxSamples < 2) {
+    throw new Error('A piece of a path needs at least two samples.');
+  }
+  if (path.count <= maxSamples) {
+    return [path];
+  }
+  const pieces: PathTable[] = [];
+  for (let from = 0; from < path.count - 1; from += maxSamples - 1) {
+    const to = Math.min(from + maxSamples - 1, path.count - 1);
+    pieces.push({
+      ...path,
+      count: to - from + 1,
+      t: path.t.slice(from, to + 1),
+      x: path.x.slice(from, to + 1),
+      y: path.y.slice(from, to + 1),
+      z: path.z.slice(from, to + 1),
+      vx: path.vx.slice(from, to + 1),
+      vy: path.vy.slice(from, to + 1),
+      vz: path.vz.slice(from, to + 1),
+      toleranceKm: path.toleranceKm.slice(from, to),
+      gaps: path.gaps.filter((gap) => gap >= from && gap < to).map((gap) => gap - from),
+    });
+  }
+  return pieces;
+}

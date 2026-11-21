@@ -20,11 +20,12 @@ import {
   RETRY_AFTER_MS,
   samplesBetween,
 } from './chunkedTable.ts';
-import { FrameTree } from './frames.ts';
+import { FrameTree, sharedSplit } from './frames.ts';
 import { interpolateState } from './hermite.ts';
 import { propagate } from './kepler.ts';
+import { joinPathPieces, pieceIndexAt } from './pathPieces.ts';
 import { stopIndexAt, surfaceState } from './surface.ts';
-import type { StateVector, Vec3 } from './vec3.ts';
+import { ZERO, type StateVector, type Vec3 } from './vec3.ts';
 
 /**
  * Loads the generated ephemerides and answers "where is this body at this instant".
@@ -36,10 +37,11 @@ import type { StateVector, Vec3 } from './vec3.ts';
  *     Approximate, and flagged as such so the UI can say so rather than quietly
  *     showing a planet in the wrong place.
  *
- * The tables come two ways. A planet's is one file, loaded at startup. A fast moon's is
- * split into chunks fetched as the clock reaches them -- see chunkedTable.ts -- and
- * while one is on its way the moon has no state at all, which is different from having
- * an approximate one.
+ * The tables come in chunks fetched as the clock reaches them -- see chunkedTable.ts --
+ * and while one is on its way the body has no state at all, which is different from
+ * having an approximate one. The planets' chunks at the clock are waited for before the
+ * first frame (loadEphemerisStore); in data from before 2026-11-21 a planet's table is
+ * one file, loaded whole at startup, and that is still read.
  */
 
 /**
@@ -75,6 +77,11 @@ export interface EphemerisData {
   readonly loadChunk: ChunkLoader | null;
   /** Fetches a spacecraft's trajectory, or null where nothing may be fetched. */
   readonly loadPath: PathLoader | null;
+  /**
+   * Fetches one piece of a trajectory published in pieces (PathInfo.chunks); absent or null
+   * where nothing may be fetched.
+   */
+  readonly loadPathPiece?: ((id: BodyId, index: number) => Promise<PathTable>) | null;
   /** Fetches a surface craft's stops; absent or null where nothing may be fetched. */
   readonly loadSurface?: SurfaceLoader | null;
   /** Fetches one planet's small moons; absent or null where nothing may be fetched. */
@@ -157,9 +164,10 @@ export async function loadEphemerisData(
     );
   }
 
-  // Only the tables shipped whole; the chunked ones are fetched as they are needed.
-  // All in parallel: they are independent files and this is the app's slowest
-  // startup step.
+  // Only the tables shipped whole; the chunked ones are fetched as they are needed. Data
+  // from before 2026-11-21 ships the Sun's, the planets', Pluto's and the Moon's whole, 2.1
+  // MB; newer data has none, and loadEphemerisStore waits for their chunks at the clock.
+  // All in parallel: they are independent files.
   const whole = manifest.bodies.filter((id) => manifest.tables[id]?.chunks === null);
   const vectorsRequest = Promise.all(
     whole.map(
@@ -203,6 +211,7 @@ export async function loadEphemerisData(
     loadChunk: async (id, index) =>
       (await fetcher(`${basePath}data/vectors/${id}/${index}.json`)) as VectorTable,
     loadPath: async (id) => (await fetcher(`${basePath}data/paths/${id}.json`)) as PathTable,
+    loadPathPiece: async (id, index) => (await fetcher(`${basePath}data/paths/${id}/${index}.json`)) as PathTable,
     loadSurface: async (id) =>
       (await fetcher(`${basePath}data/surface/${id}.json`)) as SurfaceTrack,
     loadSmallMoons: async (planet) =>
@@ -243,9 +252,34 @@ export class EphemerisStore {
   readonly #paths = new Map<BodyId, PathTable>();
   readonly #pathsPending = new Map<BodyId, Promise<void>>();
   readonly #pathsFailedAt = new Map<BodyId, number>();
+  /**
+   * The pieces of the trajectories published in pieces, each kept once fetched, as a whole
+   * path is: bounded by the paths themselves. Keyed by body, one slot per piece.
+   */
+  readonly #pathPieces = new Map<BodyId, (PathTable | undefined)[]>();
+  readonly #pathPiecesPending = new Map<string, Promise<void>>();
+  readonly #pathPiecesFailedAt = new Map<string, number>();
+  /** The pieces last joined for each body, so the same stretch is the same object. */
+  readonly #pathJoined = new Map<BodyId, { readonly first: number; readonly last: number; readonly path: PathTable }>();
   readonly #surfaces = new Map<BodyId, SurfaceTrack>();
   readonly #surfacesPending = new Map<BodyId, Promise<void>>();
   readonly #surfacesFailedAt = new Map<BodyId, number>();
+  /**
+   * Goes up whenever an answer of localState may have changed for the same instant: a
+   * chunk, a path or a surface track arriving, bodies added or taken away. Chunks land
+   * between frames even while the clock is paused, so the instant alone is not enough.
+   */
+  #generation = 0;
+  /**
+   * Each body's last local state, with the instant and generation it was for. One entry per
+   * body, updated in place: a frame asks for the Sun's and Earth's hundreds of times --
+   * every body on screen is rebased through them -- and they are worked out once. A trail
+   * sampling other instants only overwrites the entries it touches. Nulls are not kept: a
+   * chunk on its way is asked after again, as it was before, so its retry still runs.
+   */
+  readonly #localMemo = new Map<BodyId, { jd: number; generation: number; state: BodyState }>();
+  /** sunFromFocus's last answer from each observer: the focus, and Earth for its own layers. */
+  readonly #sunMemo = new Map<BodyId, { jd: number; generation: number; state: BodyState }>();
 
   /** `chunkBudgetBytes`: see CHUNK_BUDGET_BYTES; smaller only in tests. */
   constructor(data: EphemerisData, chunkBudgetBytes = CHUNK_BUDGET_BYTES) {
@@ -278,8 +312,13 @@ export class EphemerisStore {
   }
 
   #chunkedTable(id: BodyId, info: TableInfo): ChunkedTable {
-    return new ChunkedTable(id, info, this.#data.loadChunk, undefined, this.#chunkBudget);
+    return new ChunkedTable(id, info, this.#data.loadChunk, undefined, this.#chunkBudget, this.#bump);
   }
+
+  /** Every remembered state is stale from here on; see #generation. */
+  readonly #bump = (): void => {
+    this.#generation += 1;
+  };
 
   /** Bytes of chunk data held right now: what the budget keeps within bounds. */
   get chunkBytes(): number {
@@ -370,6 +409,9 @@ export class EphemerisStore {
       }
     }
     this.#tree = new FrameTree(this.#bodies);
+    this.#bump();
+    this.#localMemo.clear();
+    this.#sunMemo.clear();
     this.#version += 1;
     for (const listener of this.#listeners) {
       listener();
@@ -460,6 +502,9 @@ export class EphemerisStore {
   /** The tree rebuilt over the bodies as they now are, and everyone told. */
   #changed(): void {
     this.#tree = new FrameTree(this.#bodies);
+    this.#bump();
+    this.#localMemo.clear();
+    this.#sunMemo.clear();
     this.#version += 1;
     for (const listener of this.#listeners) {
       listener();
@@ -585,6 +630,7 @@ export class EphemerisStore {
       .then((track) => {
         this.#surfaces.set(id, track);
         this.#surfacesFailedAt.delete(id);
+        this.#bump();
       })
       .catch((error: unknown) => {
         this.#surfacesFailedAt.set(id, Date.now());
@@ -668,6 +714,7 @@ export class EphemerisStore {
       .then((path) => {
         this.#paths.set(id, path);
         this.#pathsFailedAt.delete(id);
+        this.#bump();
       })
       .catch((error: unknown) => {
         this.#pathsFailedAt.set(id, Date.now());
@@ -678,6 +725,113 @@ export class EphemerisStore {
       });
     this.#pathsPending.set(id, promise);
     return promise;
+  }
+
+  /**
+   * True for a craft whose trajectory is published in pieces (PathInfo.chunks): its trail
+   * is drawn from pathBetween, not path. Data from before the pieces has one file per craft.
+   */
+  pathInPieces(id: BodyId): boolean {
+    const info = this.pathInfo(id);
+    return info !== null && info.count !== null && (info.chunks?.length ?? 0) > 0;
+  }
+
+  /**
+   * The pieces of a craft's trajectory covering `startJd` to `stopJd`, joined into one
+   * path, or null until every one of them is here -- or when the stretch is outside the
+   * path altogether. Asks for the missing ones, and for the next one once the stretch is
+   * three quarters into its last, so a clock running forward finds it there (as a chunked
+   * table does; see PREFETCH_MARGIN). The same stretch of pieces comes back as the same
+   * object, so a trail can tell it has nothing new.
+   */
+  pathBetween(id: BodyId, startJd: number, stopJd: number): PathTable | null {
+    const chunks = this.pathInPieces(id) ? this.pathInfo(id)!.chunks! : null;
+    if (chunks === null) {
+      return null;
+    }
+    const from = Math.max(startJd, chunks[0]!.startJd);
+    const to = Math.min(stopJd, chunks.at(-1)!.stopJd);
+    if (!(from <= to)) {
+      return null;
+    }
+    const first = pieceIndexAt(chunks, from);
+    const last = pieceIndexAt(chunks, to);
+    const lastChunk = chunks[last]!;
+    if (last + 1 < chunks.length && to > lastChunk.startJd + (lastChunk.stopJd - lastChunk.startJd) * 0.75) {
+      void this.#requestPathPiece(id, last + 1);
+    }
+    const loaded = this.#pathPieces.get(id);
+    let missing = false;
+    for (let index = first; index <= last; index += 1) {
+      if (loaded?.[index] === undefined) {
+        missing = true;
+        void this.#requestPathPiece(id, index);
+      }
+    }
+    if (missing) {
+      return null;
+    }
+    // The last join, while it still covers the stretch with at most one piece to spare
+    // behind: a trail's span is the osculating period, which wobbles with every turn of a
+    // craft about a planet, and its start would otherwise flick across a boundary and back,
+    // the line tessellated anew each time.
+    const joined = this.#pathJoined.get(id);
+    if (joined !== undefined && joined.first <= first && first - joined.first <= 1 && joined.last === last) {
+      return joined.path;
+    }
+    const path = joinPathPieces(loaded!.slice(first, last + 1) as PathTable[]);
+    this.#pathJoined.set(id, { first, last, path });
+    return path;
+  }
+
+  /** Asks for one piece of a trajectory, once; resolves when it has arrived or failed. */
+  #requestPathPiece(id: BodyId, index: number): Promise<void> {
+    const load = this.#data.loadPathPiece ?? null;
+    const count = this.pathInfo(id)?.chunks?.length ?? 0;
+    if (load === null || index < 0 || index >= count || this.#pathPieces.get(id)?.[index] !== undefined) {
+      return Promise.resolve();
+    }
+    const key = `${id}/${index}`;
+    const pending = this.#pathPiecesPending.get(key);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const failedAt = this.#pathPiecesFailedAt.get(key);
+    if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) {
+      return Promise.resolve();
+    }
+    const promise = load(id, index)
+      .then((piece) => {
+        let pieces = this.#pathPieces.get(id);
+        if (pieces === undefined) {
+          pieces = new Array<PathTable | undefined>(count);
+          this.#pathPieces.set(id, pieces);
+        }
+        pieces[index] = piece;
+        this.#pathPiecesFailedAt.delete(key);
+      })
+      .catch((error: unknown) => {
+        this.#pathPiecesFailedAt.set(key, Date.now());
+        console.error(`Could not load piece ${index} of the trajectory of ${id}`, error);
+      })
+      .finally(() => {
+        this.#pathPiecesPending.delete(key);
+      });
+    this.#pathPiecesPending.set(key, promise);
+    return promise;
+  }
+
+  /**
+   * How far from its parent a craft about a planet or a moon gets in the chunk of its table
+   * covering `jd`, km (ChunkInfo.reachKm): published with the manifest, so known before the
+   * chunk is fetched. Null for anything else, outside its table, or in data from before it.
+   */
+  reachKm(id: BodyId, jd: number): number | null {
+    const chunks = this.#tables.get(id)?.chunks ?? null;
+    if (chunks === null || chunks.length === 0 || jd < chunks[0]!.startJd || jd > chunks.at(-1)!.stopJd) {
+      return null;
+    }
+    return chunks[pieceIndexAt(chunks, jd)]!.reachKm ?? null;
   }
 
   /**
@@ -714,8 +868,32 @@ export class EphemerisStore {
    *
    * This is the primitive the frame tree composes; callers usually want
    * `stateInRoot` or `stateRelativeTo` instead.
+   *
+   * Remembered per body for the instant last asked (see #localMemo): the same object comes
+   * back until the instant or the data changes, so nobody may change its fields.
    */
   localState(id: BodyId, jd: number): BodyState | null {
+    const memo = this.#localMemo.get(id);
+    if (memo !== undefined && memo.jd === jd && memo.generation === this.#generation) {
+      return memo.state;
+    }
+    const generation = this.#generation;
+    const state = this.#computeLocalState(id, jd);
+    // Kept only if nothing arrived while it was worked out: a propagated body's state can
+    // read other bodies' (a Lagrange point's reads Earth's and the Sun's).
+    if (state !== null && generation === this.#generation) {
+      if (memo === undefined) {
+        this.#localMemo.set(id, { jd, generation, state });
+      } else {
+        memo.jd = jd;
+        memo.generation = generation;
+        memo.state = state;
+      }
+    }
+    return state;
+  }
+
+  #computeLocalState(id: BodyId, jd: number): BodyState | null {
     // A body with no table at all (see addPropagatedBody): its state about the Sun, put
     // in the root frame as every body without a parent is -- by adding the Sun's own
     // place there, which is up to 1.5 million km off the barycentre with Jupiter's pull.
@@ -786,30 +964,131 @@ export class EphemerisStore {
 
   /** A body's state in the root (barycentric) frame. */
   stateInRoot(id: BodyId, jd: number): BodyState | null {
+    // FrameTree.resolveInRoot's walk, summed in place: the body's own state, then each
+    // parent's, in the same order, so the same doubles come out.
+    const chain = this.#tree.chainOf(id);
     let approximate = false;
-    const state = this.#tree.resolveInRoot(id, (link) => {
-      const local = this.localState(link, jd);
-      if (local?.approximate === true) {
+    let px = 0;
+    let py = 0;
+    let pz = 0;
+    let vx = 0;
+    let vy = 0;
+    let vz = 0;
+    for (let index = 0; index < chain.length; index += 1) {
+      const local = this.localState(chain[index]!, jd);
+      if (local === null) {
+        return null;
+      }
+      if (local.approximate) {
         approximate = true;
       }
-      return local;
-    });
-    return state === null ? null : { ...state, approximate };
+      if (index === 0) {
+        px = local.position.x;
+        py = local.position.y;
+        pz = local.position.z;
+        vx = local.velocity.x;
+        vy = local.velocity.y;
+        vz = local.velocity.z;
+      } else {
+        px += local.position.x;
+        py += local.position.y;
+        pz += local.position.z;
+        vx += local.velocity.x;
+        vy += local.velocity.y;
+        vz += local.velocity.z;
+      }
+    }
+    return { position: { x: px, y: py, z: pz }, velocity: { x: vx, y: vy, z: vz }, approximate };
   }
 
   /**
    * A body's state as seen from another body — the floating origin's input.
+   *
+   * FrameTree.resolveRelative's walk, done here so the approximate flag is gathered on the
+   * way without a closure, a spread or an intermediate state per link: it runs for every
+   * body on screen every frame. Same links, same additions in the same order.
    */
   stateRelativeTo(id: BodyId, observerId: BodyId, jd: number): BodyState | null {
+    if (id === observerId) {
+      return { position: ZERO, velocity: ZERO, approximate: false };
+    }
+    const targetChain = this.#tree.chainOf(id);
+    const observerChain = this.#tree.chainOf(observerId);
+    const { targetLinks, observerLinks } = sharedSplit(targetChain, observerChain);
     let approximate = false;
-    const state = this.#tree.resolveRelative(id, observerId, (link) => {
-      const local = this.localState(link, jd);
-      if (local?.approximate === true) {
+
+    let tpx = 0;
+    let tpy = 0;
+    let tpz = 0;
+    let tvx = 0;
+    let tvy = 0;
+    let tvz = 0;
+    let targetMissing = false;
+    for (let index = 0; index < targetLinks; index += 1) {
+      const local = this.localState(targetChain[index]!, jd);
+      if (local === null) {
+        targetMissing = true;
+        break;
+      }
+      if (local.approximate) {
         approximate = true;
       }
-      return local;
-    });
-    return state === null ? null : { ...state, approximate };
+      tpx += local.position.x;
+      tpy += local.position.y;
+      tpz += local.position.z;
+      tvx += local.velocity.x;
+      tvy += local.velocity.y;
+      tvz += local.velocity.z;
+    }
+    // The observer's side is asked for even when the target's failed, as it always was:
+    // asking is what fetches a missing chunk.
+    let opx = 0;
+    let opy = 0;
+    let opz = 0;
+    let ovx = 0;
+    let ovy = 0;
+    let ovz = 0;
+    for (let index = 0; index < observerLinks; index += 1) {
+      const local = this.localState(observerChain[index]!, jd);
+      if (local === null) {
+        return null;
+      }
+      if (local.approximate) {
+        approximate = true;
+      }
+      opx += local.position.x;
+      opy += local.position.y;
+      opz += local.position.z;
+      ovx += local.velocity.x;
+      ovy += local.velocity.y;
+      ovz += local.velocity.z;
+    }
+    if (targetMissing) {
+      return null;
+    }
+    return {
+      position: { x: tpx - opx, y: tpy - opy, z: tpz - opz },
+      velocity: { x: tvx - ovx, y: tvy - ovy, z: tvz - ovz },
+      approximate,
+    };
+  }
+
+  /**
+   * The Sun as seen from `focus`: stateRelativeTo('sun', focus, jd), worked out once per
+   * instant and shared. Nearly every layer of the scene places itself from the Sun, some
+   * thirty of them a frame; the object that comes back is shared and must not be changed.
+   */
+  sunFromFocus(focus: BodyId, jd: number): BodyState | null {
+    const memo = this.#sunMemo.get(focus);
+    if (memo !== undefined && memo.jd === jd && memo.generation === this.#generation) {
+      return memo.state;
+    }
+    const generation = this.#generation;
+    const state = this.stateRelativeTo('sun', focus, jd);
+    if (state !== null && generation === this.#generation) {
+      this.#sunMemo.set(focus, { jd, generation, state });
+    }
+    return state;
   }
 
   /** Every body's state in the root frame, for one instant. */
@@ -878,12 +1157,61 @@ export class EphemerisStore {
   }
 }
 
-/** Loads everything and returns a ready store. */
+/**
+ * The bodies the first frame waits for: those whose tables span the whole window -- the
+ * Sun, the planets, Pluto and the Moon. Everything the scene places hangs off them, and
+ * until 2026-11-21 their tables shipped whole and were all here before it. Now each is in
+ * chunks (FULL_WINDOW_CHUNK_SAMPLES in tools), and only the chunk covering the clock is
+ * waited for. In data from before, they are whole and there is nothing to wait for.
+ */
+export function startupBodies(bodies: readonly BodyDefinition[]): BodyId[] {
+  return bodies
+    .filter((body) => body.vectorWindow === 'full' && body.sampling === undefined)
+    .map((body) => body.id);
+}
+
+/**
+ * Loads everything and returns a ready store: with, at `startJd()` -- the clock as the
+ * files arrive, TDB Julian day -- the chunk of each startupBodies table, so the first frame
+ * has the Sun and the planets as it always had. A chunk that fails is not waited for again:
+ * that body is absent until a later frame fetches it, as a moon's would be.
+ *
+ * Without `startJd`, every chunk of those tables, joined into the whole table each was
+ * before it was cut: a store that answers for any instant of the window at once, as the
+ * tests against the generated data ask of it.
+ */
 export async function loadEphemerisStore(
   fetcher: Fetcher,
   basePath = '/',
+  startJd: (() => number) | null = null,
 ): Promise<EphemerisStore> {
-  return new EphemerisStore(await loadEphemerisData(fetcher, basePath));
+  const data = await loadEphemerisData(fetcher, basePath);
+  if (startJd === null) {
+    return new EphemerisStore(await withStartupTablesWhole(data));
+  }
+  const store = new EphemerisStore(data);
+  await store.whenLoadedAt(startJd(), startupBodies(store.bodies));
+  return store;
+}
+
+/** `data` with every startupBodies table that is in chunks fetched whole: see loadEphemerisStore. */
+async function withStartupTablesWhole(data: EphemerisData): Promise<EphemerisData> {
+  const load = data.loadChunk;
+  const ids = startupBodies(data.bodies).filter((id) => (data.manifest.tables[id]?.chunks ?? null) !== null);
+  if (load === null || ids.length === 0) {
+    return data;
+  }
+  const tables: Record<BodyId, TableInfo> = { ...data.manifest.tables };
+  const vectors = new Map(data.vectors);
+  await Promise.all(
+    ids.map(async (id) => {
+      const info = tables[id]!;
+      const chunks = await Promise.all(info.chunks!.map((_, index) => load(id, index)));
+      vectors.set(id, samplesBetween(chunks, -Infinity, Infinity)!);
+      tables[id] = { startJd: info.startJd, stopJd: info.stopJd, chunks: null };
+    }),
+  );
+  return { ...data, manifest: { ...data.manifest, tables }, vectors };
 }
 
 /** The browser fetcher: plain JSON GETs that fail loudly. */

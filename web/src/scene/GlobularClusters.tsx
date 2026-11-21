@@ -405,7 +405,7 @@ export function GlobularClusters({
   useFrame(({ camera: frameCamera, gl: renderer }) => {
     const markersGroup = markersRef.current;
     const jd = clock.tdbJulianDay;
-    const sun = store.stateRelativeTo('sun', focus, jd);
+    const sun = store.sunFromFocus(focus, jd);
     if (markersGroup === null || sun === null || !visible) {
       if (markersGroup !== null) markersGroup.visible = false;
       starsGroup.visible = false;

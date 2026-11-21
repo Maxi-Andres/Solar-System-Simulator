@@ -12,14 +12,15 @@ import {
   type LaniakeaNames,
 } from '@sss/tools/types';
 
-import type { BeltFetchers } from './belt.ts';
+import { httpBeltFetchers, type BeltFetchers } from './belt.ts';
 import { aliasField, type Searchable } from './beltNames.ts';
+import { checkLaniakeaNames, laniakeaOthers, laniakeaSearch, laniakeaSearchInWorker } from './nameSearch.ts';
 import type { EphemerisStore } from './ephemerisStore.ts';
 import { skyAxes } from './exoplanets.ts';
 import { structureBodies } from './structures.ts';
 import { colourIndex, type LocalGroupGalaxy } from './localGroup.ts';
 import { volumeClass, volumeModel, axisRatioFromInclination, bulgeShare, BULGE_LEAST_SHARE, inclinationFromAxisRatio } from './localVolume.ts';
-import { normalizeName } from './search.ts';
+import { normalizeName } from './normalizeName.ts';
 import { PARSEC_KM } from './stars3d.ts';
 import type { StateVector } from './vec3.ts';
 
@@ -453,18 +454,9 @@ export interface LaniakeaNameIndex {
 }
 
 export function indexNames(names: LaniakeaNames): LaniakeaNameIndex {
-  if (!Array.isArray(names.name) || names.name.length !== names.count) {
-    throw new Error('laniakea/names.json does not have one name a galaxy.');
-  }
-  const others = new Map<number, readonly string[]>(names.otherNames.map(([k, list]) => [k, list]));
-  return {
-    names,
-    others,
-    search: {
-      display: names.name.map(normalizeName),
-      designation: names.name.map((_, k) => aliasField(others.get(k) ?? [])),
-    },
-  };
+  checkLaniakeaNames(names);
+  const others = laniakeaOthers(names);
+  return { names, others, search: laniakeaSearch(names, others) };
 }
 
 export interface LaniakeaDetails {
@@ -572,9 +564,22 @@ export function laniakeaGroups(): LaniakeaGroups | null {
 }
 
 export async function loadLaniakeaNames(fetchers: BeltFetchers, basePath = '/'): Promise<LaniakeaNameIndex | null> {
-  const raw = await fetchers.json(`${basePath}data/laniakea/names.json`);
+  const path = `${basePath}data/laniakea/names.json`;
+  const raw = await fetchers.json(path);
   if (raw === null) return null;
-  readNames = indexNames(raw as LaniakeaNames);
+  const names = raw as LaniakeaNames;
+  // The names stay here, for the labels; over HTTP the search is made and run in a worker
+  // where there is one (nameSearch.ts), which reads the file itself.
+  if (fetchers === httpBeltFetchers) {
+    checkLaniakeaNames(names);
+    const others = laniakeaOthers(names);
+    const search = await laniakeaSearchInWorker(path, () => laniakeaSearch(names, others));
+    if (search !== null) {
+      readNames = { names, others, search };
+      return readNames;
+    }
+  }
+  readNames = indexNames(names);
   return readNames;
 }
 

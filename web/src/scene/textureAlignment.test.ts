@@ -11,7 +11,7 @@ import { J2000_JD } from '../core/time.ts';
 import { add, scale, type Vec3 } from '../core/vec3.ts';
 import { bodyOrientation, longitudeDirection, poleDirection } from './orientation.ts';
 import { cieX, cieY, cieZ, planckSpectralRadiance } from './blackbody.ts';
-import { drawnTexture } from './drawnTexture.ts';
+import { drawnTexture, MAP_COLOUR_GAIN, mapColourGain } from './drawnTexture.ts';
 
 /**
  * Does the map land where the map says it lands?
@@ -708,5 +708,21 @@ describe('Neptune is drawn in its measured colour', () => {
     expect(drawn).toBeGreaterThan(0.4);
     expect(drawn).toBeLessThan(0.45);
     expect(before).toBeLessThan(0.15);
+  });
+
+  it('compensates the tone curve on Neptune only, in hue and not in brightness', async () => {
+    const luminance = ([r, g, b]: readonly number[]) => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    const [gr, gg, gb] = mapColourGain(getBody('neptune'));
+    const mean = await meanColour('neptune-truecolour.jpg');
+    const gained = [mean[0] * gr, mean[1] * gg, mean[2] * gb];
+
+    // Bluer and less red, the way ACES had greyed it...
+    expect(gb).toBeGreaterThan(1);
+    expect(gr).toBeLessThan(1);
+    // ...with the brightness its albedo gives kept to 1%.
+    expect(luminance(gained) / luminance(mean)).toBeCloseTo(1, 2);
+    // Uranus renders in Irwin et al.'s hue already; every other body is untouched.
+    expect(mapColourGain(getBody('uranus'))).toEqual([1, 1, 1]);
+    expect(Object.keys(MAP_COLOUR_GAIN)).toEqual(['neptune']);
   });
 });

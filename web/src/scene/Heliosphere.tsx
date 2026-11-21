@@ -181,7 +181,7 @@ export function Heliosphere({ store, clock, focus }: { store: EphemerisStore; cl
   const scratchCamera = useMemo(() => new THREE.Vector3(), []);
 
   useFrame(() => {
-    const sun = visible ? store.stateRelativeTo('sun', focus, clock.tdbJulianDay) : null;
+    const sun = visible ? store.sunFromFocus(focus, clock.tdbJulianDay) : null;
     if (sun === null) {
       parts.group.visible = false;
       hideLabel(labels.oort);

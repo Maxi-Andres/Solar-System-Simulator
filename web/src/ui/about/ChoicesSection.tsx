@@ -226,6 +226,12 @@ export const choicesSection: AboutSection = {
             <Cite k="mallama2017" />, the clouds’ brightness from the illustrative map. NASA’s pale map was
             painted, so it was not used.
           </Item>
+          <Item title="Neptune, a little bluer on screen">
+            The display’s tone curve greys a bright disc, and drawn as its map is Neptune came out greyer
+            than its measured colour. So its map is drawn with red down by a quarter and blue up by a fifth,
+            brightness unchanged: a display compensation, aimed at the true colour Irwin et al. measured
+            <Cite k="irwin2024" />, not a change to it. Uranus needs none.
+          </Item>
         </Items>
 
         <Sub section="choices" id="earth">

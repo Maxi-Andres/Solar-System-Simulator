@@ -225,6 +225,7 @@ export class ChunkedTable {
   readonly #lastRead: Float64Array;
   /** The chunk the body was last placed with, which is never let go; -1 for none yet. */
   #current = -1;
+  readonly #onArrival: (() => void) | null;
 
   constructor(
     id: BodyId,
@@ -232,6 +233,8 @@ export class ChunkedTable {
     load: ChunkLoader | null,
     now = () => Date.now(),
     budget: ChunkBudget | null = null,
+    /** Called once each chunk has landed in the table: the store's cue that answers changed. */
+    onArrival: (() => void) | null = null,
   ) {
     const chunks = info.chunks;
     if (chunks === null || chunks.length === 0) {
@@ -244,6 +247,7 @@ export class ChunkedTable {
     this.#now = now;
     this.#budget = budget;
     this.#lastRead = new Float64Array(chunks.length);
+    this.#onArrival = onArrival;
   }
 
   get startJd(): number {
@@ -454,6 +458,7 @@ export class ChunkedTable {
         this.#tables[index] = table;
         this.#read(index);
         this.#failedAt.delete(index);
+        this.#onArrival?.();
       })
       .catch((error: unknown) => {
         this.#failedAt.set(index, this.#now());
