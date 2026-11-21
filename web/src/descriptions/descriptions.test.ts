@@ -13,6 +13,7 @@ import { regionDefinition } from '../core/regions.ts';
 import { namedSatelliteBodyId, satelliteDefinition } from '../core/satelliteBodies.ts';
 import { starBodyDefinition, starBodyId } from '../core/starBodies.ts';
 import { drawnFromData } from './generated.ts';
+import { CATALOGUE_STAR_DESIGNATIONS, DESCRIBED_IDS } from './ids.ts';
 import { DESCRIPTIONS, descriptionByDesignations, descriptionOf } from './index.ts';
 
 const PUBLIC = fileURLToPath(new URL('../../public/', import.meta.url));
@@ -146,6 +147,15 @@ describe('the descriptions', () => {
     expect(points.find((point) => point.title === 'What stands in its place')?.text).toContain('iss.glb');
     expect(points.find((point) => point.title === 'Its size')?.text).toContain('109 m');
     expect(points.some((point) => point.title === 'Its trail')).toBe(false);
+  });
+
+  it('lists in ids.ts exactly the ids that have a page, and each catalogue star’s designations', () => {
+    // The panels offer "Read about" from ids.ts alone; a page missing there would never be offered.
+    expect([...DESCRIBED_IDS].sort()).toEqual([...DESCRIPTIONS.keys()].sort());
+    const designations = [...DESCRIPTIONS.values()]
+      .filter((description) => description.catalogueStar !== undefined)
+      .map((description) => [description.id, description.catalogueStar?.designations] as const);
+    expect(new Map(designations)).toEqual(CATALOGUE_STAR_DESIGNATIONS);
   });
 
   it('finds a catalogue star’s description by any of its designations, and Sgr A*’s by its id', () => {

@@ -10,7 +10,7 @@ import {
   sampleLimitV,
 } from '../core/globularClusters.ts';
 import { PARSEC_KM } from '../scene/scale.ts';
-import { descriptionOf } from '../descriptions/index.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 import { Panel } from './Panel.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { formatStarDistance } from './StarFacts.tsx';
@@ -60,7 +60,7 @@ export function ClusterPanel({
           globular cluster
         </span>
       </div>
-      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
+      {hasDescription(focus) && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {[c.name[k]!, ...others].filter((name) => name !== body.name).length > 0 && (

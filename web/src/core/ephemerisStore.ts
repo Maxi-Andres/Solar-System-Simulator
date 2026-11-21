@@ -126,7 +126,14 @@ export async function loadEphemerisData(
   fetcher: Fetcher,
   basePath = '/',
 ): Promise<EphemerisData> {
-  const published = (await fetcher(`${basePath}data/manifest.json`)) as Manifest;
+  // The manifest and the body definitions at once; the vector tables and the elements as soon
+  // as the manifest says what there is, without waiting on bodies.json. A failure of either
+  // first file fails the load; bodies.json's is observed here so it is not left unhandled
+  // while the manifest is awaited, and reported by the Promise.all below.
+  const manifestRequest = fetcher(`${basePath}data/manifest.json`) as Promise<Manifest>;
+  const bodiesRequest = fetcher(`${basePath}data/bodies.json`) as Promise<BodyDefinition[]>;
+  bodiesRequest.catch(() => undefined);
+  const published = await manifestRequest;
   // Data generated before the trajectories has no paths. Everything else in it is still
   // good, so it is used, and the craft are drawn without their lines until it is
   // regenerated -- said once rather than failed on.
@@ -141,7 +148,6 @@ export async function loadEphemerisData(
     surfaces: published.surfaces ?? {},
     smallMoons: published.smallMoons ?? {},
   };
-  const bodies = (await fetcher(`${basePath}data/bodies.json`)) as BodyDefinition[];
 
   // Data generated before the moons has no table index. Say so plainly, rather than
   // failing later on a file that was never going to exist.
@@ -155,20 +161,39 @@ export async function loadEphemerisData(
   // All in parallel: they are independent files and this is the app's slowest
   // startup step.
   const whole = manifest.bodies.filter((id) => manifest.tables[id]?.chunks === null);
-  const vectorList = await Promise.all(
+  const vectorsRequest = Promise.all(
     whole.map(
       async (id) => [id, (await fetcher(`${basePath}data/vectors/${id}.json`)) as VectorTable] as const,
     ),
   );
 
+  // The elements, one file for every body (Manifest.elementsFile), fetched with the tables.
+  // Data from before it has one file per body, each fetched once bodies.json says which.
   // The small moons are not here at all: see loadSmallMoons.
-  const elementBodies = bodies.filter((body) => body.drawOrbit);
-  const elementList = await Promise.all(
-    elementBodies.map(
-      async (body) =>
-        [body.id, (await fetcher(`${basePath}data/elements/${body.id}.json`)) as OsculatingElements] as const,
-    ),
-  );
+  const elementsFile = manifest.elementsFile;
+  const elementsRequest: Promise<Readonly<Record<BodyId, OsculatingElements>>> =
+    elementsFile !== undefined
+      ? (fetcher(`${basePath}data/${elementsFile}`) as Promise<Record<BodyId, OsculatingElements>>)
+      : bodiesRequest.then(async (list) =>
+          Object.fromEntries(
+            await Promise.all(
+              list
+                .filter((body) => body.drawOrbit)
+                .map(
+                  async (body) =>
+                    [body.id, (await fetcher(`${basePath}data/elements/${body.id}.json`)) as OsculatingElements] as const,
+                ),
+            ),
+          ),
+        );
+
+  const [bodies, vectorList, elementRecord] = await Promise.all([bodiesRequest, vectorsRequest, elementsRequest]);
+  // Only a body whose orbit is drawn is propagated from its elements outside its table: the
+  // bundle carries a spacecraft's too, which has no position outside its own span.
+  const elementList = bodies.flatMap((body) => {
+    const elements = elementRecord[body.id];
+    return body.drawOrbit && elements !== undefined ? [[body.id, elements] as const] : [];
+  });
 
   return {
     manifest,

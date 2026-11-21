@@ -1,4 +1,4 @@
-import type { BodyDefinition, BodyId } from '@sss/tools/types';
+import type { BodyId } from '@sss/tools/types';
 
 import {
   recordHolderCosmology,
@@ -7,7 +7,7 @@ import {
   recordHolderKindLabel,
   recordHolderOf,
 } from '../core/recordHolders.ts';
-import { descriptionOf } from '../descriptions/index.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 import { Panel } from './Panel.tsx';
 import { ReadMore } from './ReadMore.tsx';
 
@@ -35,7 +35,7 @@ export function formatRedshift(z: number, plus: number | null, minus: number | n
   return plus === minus ? `${z} ± ${plus}` : `${z} +${plus} −${minus}`;
 }
 
-export function RecordHolderPanel({ focus, body, onClose }: { focus: BodyId; body: BodyDefinition; onClose: () => void }) {
+export function RecordHolderPanel({ focus, onClose }: { focus: BodyId; onClose: () => void }) {
   const holder = recordHolderOf(focus);
   if (holder === null) {
     return null;
@@ -51,7 +51,7 @@ export function RecordHolderPanel({ focus, body, onClose }: { focus: BodyId; bod
         </span>
       </div>
       <div style={{ color: '#9a9a9a', fontSize: '0.72rem', marginTop: '0.45rem' }}>{holder.record}</div>
-      {descriptionOf(focus, body) !== null && <ReadMore name={holder.name} />}
+      {hasDescription(focus) && <ReadMore name={holder.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {holder.otherNames.length > 0 && <Row label="Also">{holder.otherNames.slice(0, 2).join(' · ')}</Row>}

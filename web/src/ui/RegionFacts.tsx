@@ -2,7 +2,7 @@ import type { BodyId } from '@sss/tools/types';
 
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { regionOf } from '../core/regions.ts';
-import { descriptionOf } from '../descriptions/index.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 import { Panel } from './Panel.tsx';
 import { ReadMore } from './ReadMore.tsx';
 
@@ -55,7 +55,7 @@ export function RegionPanel({
           {region.kindLabel}
         </span>
       </div>
-      {descriptionOf(focus, body) !== null && <ReadMore name={body.name} />}
+      {hasDescription(focus) && <ReadMore name={body.name} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
         {region.centredOnSun !== true && (

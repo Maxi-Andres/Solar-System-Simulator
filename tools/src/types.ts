@@ -748,6 +748,13 @@ export interface Manifest {
    * app starts as fast as it did before there were any. Absent in older data.
    */
   readonly smallMoons?: Readonly<Record<BodyId, SmallMoonCount>>;
+  /**
+   * The file holding every startup body's osculating elements, keyed by body, relative to
+   * the data directory: `elements.json`. One request where there were eighty files of half
+   * a kilobyte. Absent in older data, whose elements are one file per body,
+   * `elements/<id>.json`, which the app still reads.
+   */
+  readonly elementsFile?: string;
 }
 
 /** A planet's small moons, counted for the manifest. See Manifest.smallMoons. */

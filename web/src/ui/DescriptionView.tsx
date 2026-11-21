@@ -39,7 +39,7 @@ export function DescriptionView({ store }: { store: EphemerisStore }) {
   const togglePanel = useViewStore((state) => state.togglePanel);
   const closePanel = useViewStore((state) => state.closePanel);
   const closing = useClosing();
-  const description = descriptionOf(reading ?? focus, reading === null ? store.body(focus) : null);
+  const description = descriptionOf(reading ?? focus);
   // What is no body (the Milky Way, the CMB) names itself; there is no panel to go back to.
   const subject = description?.subject ?? null;
   const body = store.body(focus);

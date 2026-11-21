@@ -142,6 +142,7 @@ import {
   writeCatalog,
   writeConstellations,
   writeSatellites,
+  ELEMENTS_FILE,
   writeElements,
   writeExoplanets,
   writePulsars,
@@ -941,6 +942,7 @@ async function main(): Promise<void> {
   await prepareOutputDir();
 
   const tables: Record<BodyId, TableInfo> = {};
+  const elements: Record<BodyId, OsculatingElements> = {};
   for (const result of results) {
     // A spacecraft is always chunked, even when one chunk holds all of it: a whole table
     // is loaded before the first frame, and with forty craft that would be forty files
@@ -966,9 +968,10 @@ async function main(): Promise<void> {
     }
     // The small moons' go into their planet's bundle, below.
     if (result.elements !== null && !isSmallMoon(result.body)) {
-      await writeElements(result.elements);
+      elements[result.body.id] = result.elements;
     }
   }
+  await writeElements(elements);
 
   // The small moons leave the startup files altogether: each planet's ship in one file
   // of their own, with their definitions, elements and table index, and the manifest
@@ -1081,6 +1084,7 @@ async function main(): Promise<void> {
     paths,
     surfaces,
     smallMoons: smallMoonCounts,
+    elementsFile: ELEMENTS_FILE,
   };
 
   await writeManifest(manifest);

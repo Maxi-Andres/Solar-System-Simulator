@@ -85,6 +85,15 @@ describe('rendering on demand', () => {
     expect(newWakes).toBe(1);
   });
 
+  it('counts its requests, and nothing else, for the readout beat', () => {
+    const demand = new RenderDemand();
+    expect(demand.requests).toBe(0);
+    demand.request();
+    demand.request(2);
+    while (demand.frameDrawn());
+    expect(demand.requests).toBe(2);
+  });
+
   it('settles quickly and idles rarely', () => {
     // Half a second of tail at 60 Hz, and one idle frame a second: cheap next to the
     // sixty a second it replaces, frequent enough for the half-minute detail release.

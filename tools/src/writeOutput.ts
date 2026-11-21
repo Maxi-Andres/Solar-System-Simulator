@@ -40,6 +40,7 @@ import type {
   ExoplanetCatalog,
   BeltInfo,
   BodyDefinition,
+  BodyId,
   ChunkInfo,
   Manifest,
   OsculatingElements,
@@ -92,7 +93,6 @@ async function writeCompactJson(path: string, value: unknown): Promise<void> {
 export async function prepareOutputDir(): Promise<void> {
   await rm(OUTPUT_DIR, { recursive: true, force: true });
   await mkdir(join(OUTPUT_DIR, 'vectors'), { recursive: true });
-  await mkdir(join(OUTPUT_DIR, 'elements'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'paths'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'surface'), { recursive: true });
   await mkdir(join(OUTPUT_DIR, 'small-moons'), { recursive: true });
@@ -187,8 +187,15 @@ export function serializeSeam(seam: Seam): Seam {
   };
 }
 
-export async function writeElements(elements: OsculatingElements): Promise<void> {
-  await writeJson(join(OUTPUT_DIR, 'elements', `${elements.id}.json`), elements);
+/** Where writeElements puts every startup body's elements: Manifest.elementsFile. */
+export const ELEMENTS_FILE = 'elements.json';
+
+/**
+ * Every startup body's osculating elements, keyed by body, as one file (ELEMENTS_FILE): the
+ * app fetches it with the vector tables at startup, one request rather than one per body.
+ */
+export async function writeElements(elements: Readonly<Record<BodyId, OsculatingElements>>): Promise<void> {
+  await writeCompactJson(join(OUTPUT_DIR, ELEMENTS_FILE), elements);
 }
 
 /**

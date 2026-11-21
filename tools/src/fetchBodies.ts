@@ -38,8 +38,8 @@ import {
   todayUtcMidnight,
   writePaths,
 } from './fetchData.ts';
-import type { BodyDefinition, BodyId, ChunkInfo, Manifest, SmallMoonBundle, VectorTable } from './types.ts';
-import { writeCatalog, writeElements, writeManifest, writeSmallMoonBundle, writeVectorChunk } from './writeOutput.ts';
+import type { BodyDefinition, BodyId, ChunkInfo, Manifest, OsculatingElements, SmallMoonBundle, VectorTable } from './types.ts';
+import { ELEMENTS_FILE, writeCatalog, writeElements, writeManifest, writeSmallMoonBundle, writeVectorChunk } from './writeOutput.ts';
 
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T;
@@ -78,6 +78,24 @@ async function publishedTable(id: BodyId, manifest: Manifest): Promise<VectorTab
     vy: column('vy'),
     vz: column('vz'),
   };
+}
+
+/**
+ * The published elements, keyed by body: the one file (Manifest.elementsFile), or, in a
+ * directory from before it, each startup body's own elements/<id>.json -- moved into the one
+ * file when this writes it.
+ */
+async function publishedElements(
+  manifest: Manifest,
+  startup: readonly BodyDefinition[],
+): Promise<Record<BodyId, OsculatingElements>> {
+  if (manifest.elementsFile !== undefined) {
+    return readJson<Record<BodyId, OsculatingElements>>(join(OUTPUT_DIR, manifest.elementsFile));
+  }
+  const entries = await Promise.all(
+    startup.map(async (body) => [body.id, await readJsonOrNull<OsculatingElements>(join(OUTPUT_DIR, 'elements', `${body.id}.json`))] as const),
+  );
+  return Object.fromEntries(entries.filter((entry): entry is readonly [BodyId, OsculatingElements] => entry[1] !== null));
 }
 
 async function main(): Promise<void> {
@@ -143,6 +161,7 @@ async function main(): Promise<void> {
 
   // Tables and elements.
   const tables: Record<BodyId, Manifest['tables'][string]> = { ...manifest.tables };
+  const elements = await publishedElements(manifest, startup);
   for (const result of results) {
     const chunks: ChunkInfo[] = [];
     for (const [index, part] of result.parts.entries()) {
@@ -150,9 +169,10 @@ async function main(): Promise<void> {
     }
     tables[result.body.id] = { startJd: chunks[0]!.startJd, stopJd: chunks.at(-1)!.stopJd, chunks };
     if (result.elements !== null && !isSmallMoon(result.body)) {
-      await writeElements(result.elements);
+      elements[result.body.id] = result.elements;
     }
   }
+  await writeElements(elements);
 
   // The small moons into their primary's bundle.
   const smallMoons: Record<BodyId, NonNullable<Manifest['smallMoons']>[string]> = { ...(manifest.smallMoons ?? {}) };
@@ -188,6 +208,7 @@ async function main(): Promise<void> {
     tables,
     paths,
     smallMoons,
+    elementsFile: ELEMENTS_FILE,
   };
   await writeManifest(next);
 

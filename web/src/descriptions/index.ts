@@ -1,5 +1,4 @@
-import type { BodyDefinition, BodyId } from '@sss/tools/types';
-
+import type { BodyId } from '@sss/tools/types';
 
 import { CALLISTO } from './callisto.ts';
 import { EARTH } from './earth.ts';
@@ -58,7 +57,7 @@ import { CURIOSITY } from './sites/curiosity.ts';
 import { INSIGHT } from './sites/insight.ts';
 import { PERSEVERANCE } from './sites/perseverance.ts';
 import { MOON_SITES } from './sites/moonSites.ts';
-import { starBodyFacts } from '../core/starBodies.ts';
+import { describedId } from './ids.ts';
 import type { Description } from './types.ts';
 
 /** The spacecraft and Earth satellites with descriptions. */
@@ -96,15 +95,14 @@ export function descriptionByDesignations(designations: readonly string[]): Desc
 }
 
 /**
- * A body's description, by its id: the one entry point. A catalogue star made a body
- * (`star-<tier>-<index>`) has no fixed id, so it is looked up by the designations it carries.
- */
-/**
  * A body's description, if it has one: only what is worth a page of its own has one, written
  * and checked by hand (Maxi, 2026-11-20: "todo lo que es así automático no me gusta, quiero
- * cosas de calidad"); a kind of thing is explained by the glossary's "what is this?". `body` is
- * accepted so the panels can pass it, and unused.
+ * cosas de calidad"); a kind of thing is explained by the glossary's "what is this?". A catalogue
+ * star made a body (`star-<tier>-<index>`) has no fixed id, so it is looked up by the
+ * designations it carries (ids.ts). Only the description page (DescriptionView.tsx) imports this
+ * module, so the prose stays out of the first view's chunk; the panels ask ids.ts hasDescription.
  */
-export function descriptionOf(id: BodyId, _body: BodyDefinition | null = null): Description | null {
-  return DESCRIPTIONS.get(id) ?? descriptionByDesignations(starBodyFacts(id)?.designations ?? []);
+export function descriptionOf(id: BodyId): Description | null {
+  const described = describedId(id);
+  return described === null ? null : (DESCRIPTIONS.get(described) ?? null);
 }

@@ -6,7 +6,7 @@ import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { HELIOPAUSE_NOSE_AU, HILLS_CLOUD_INNER_AU, OORT_CLOUD_OUTER_AU } from '../core/heliosphere.ts';
 import { GIANTS } from '../core/localGroup.ts';
 import { SUN_ABOVE_PLANE_PC } from '../core/milkyWay.ts';
-import { descriptionOf } from '../descriptions/index.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 import {
   LOCAL_GROUP_EXTENT_KM,
   LOCAL_VOLUME_EXTENT_KM,
@@ -181,7 +181,7 @@ export function levelFacts(level: LevelId, live: LevelLive): readonly LevelFact[
 
 /** The description a level's panel offers: the first of its own that is written, or null. */
 export function levelReading(level: LevelId): { readonly id: BodyId; readonly name: string } | null {
-  return LEVELS[level].readAbout.find((candidate) => descriptionOf(candidate.id) !== null) ?? null;
+  return LEVELS[level].readAbout.find((candidate) => hasDescription(candidate.id)) ?? null;
 }
 
 function distanceFromSun(store: EphemerisStore, id: BodyId, jd: number, distanceMode: DistanceMode): number | null {

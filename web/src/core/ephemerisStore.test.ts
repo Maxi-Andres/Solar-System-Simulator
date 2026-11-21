@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { describeWithData as withData } from './describeWithData.ts';
 
 import { BYTES_PER_SAMPLE } from './chunkedTable.ts';
@@ -321,5 +321,76 @@ describeWithData('cross-checked against NASA Eyes', () => {
     const neptuneHours = s.lightTimeSeconds('neptune', 'sun', jd)! / 3600;
     expect(neptuneHours).toBeGreaterThan(3.5);
     expect(neptuneHours).toBeLessThan(4.5);
+  });
+});
+
+describe('loading the startup files', () => {
+  /**
+   * A data directory in memory: two bodies, one whose orbit is drawn and one (a craft) whose is
+   * not, a whole table for the first, and the elements in the layout asked for. Every path the
+   * loader asks for is recorded, with whether the manifest had arrived when it was asked.
+   */
+  function directory(bundled: boolean) {
+    const elements = { earth: { id: 'earth', eccentricity: 0.0167 }, probe: { id: 'probe', eccentricity: 0.5 } };
+    const files: Record<string, unknown> = {
+      '/data/manifest.json': {
+        bodies: ['earth', 'probe'],
+        tables: { earth: { startJd: 0, stopJd: 1, chunks: null }, probe: { startJd: 0, stopJd: 1, chunks: [] } },
+        paths: {},
+        ...(bundled ? { elementsFile: 'elements.json' } : {}),
+      },
+      '/data/bodies.json': [
+        { id: 'earth', drawOrbit: true },
+        { id: 'probe', drawOrbit: false },
+      ],
+      '/data/vectors/earth.json': { id: 'earth' },
+      ...(bundled
+        ? { '/data/elements.json': elements }
+        : { '/data/elements/earth.json': elements.earth, '/data/elements/probe.json': elements.probe }),
+    };
+    const asked: string[] = [];
+    let manifestArrived = false;
+    const fetcher: Fetcher = async (path) => {
+      asked.push(manifestArrived ? path : `${path} (before the manifest)`);
+      await Promise.resolve();
+      if (path.endsWith('manifest.json')) manifestArrived = true;
+      if (!(path in files)) throw new Error(`404 ${path}`);
+      return files[path];
+    };
+    return { fetcher, asked };
+  }
+
+  it('asks for the manifest and the bodies together, and the elements in one file with the tables', async () => {
+    const { fetcher, asked } = directory(true);
+    const data = await loadEphemerisData(fetcher, '/');
+    expect(asked).toEqual([
+      '/data/manifest.json (before the manifest)',
+      '/data/bodies.json (before the manifest)',
+      '/data/vectors/earth.json',
+      '/data/elements.json',
+    ]);
+    expect([...data.vectors.keys()]).toEqual(['earth']);
+    // The bundle carries the craft's elements too; only a drawn orbit is propagated.
+    expect([...data.elements.keys()]).toEqual(['earth']);
+    expect(data.elements.get('earth')?.eccentricity).toBe(0.0167);
+  });
+
+  it('still reads data from before the one file, an elements file per drawn body', async () => {
+    const { fetcher, asked } = directory(false);
+    const data = await loadEphemerisData(fetcher, '/');
+    expect(asked).toContain('/data/elements/earth.json');
+    expect(asked).not.toContain('/data/elements/probe.json');
+    expect(asked).not.toContain('/data/elements.json');
+    expect([...data.elements.keys()]).toEqual(['earth']);
+  });
+
+  it('fails when the bodies cannot be read, with nothing left unhandled', async () => {
+    const fetcher: Fetcher = async (path) => {
+      if (path.endsWith('bodies.json')) throw new Error('404 bodies');
+      return path.endsWith('manifest.json')
+        ? { bodies: [], tables: {}, paths: {}, elementsFile: 'elements.json' }
+        : {};
+    };
+    await expect(loadEphemerisData(fetcher, '/')).rejects.toThrow('404 bodies');
   });
 });

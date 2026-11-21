@@ -154,7 +154,7 @@ web/public/data/
 ├─ satellites/bulk.bin         # every other satellite, SGP4 mean elements and rates, float32
 ├─ satellites/bulk-names.json  # the bulk's names, NORAD and COSPAR numbers, element ages
 ├─ satellites/sgp4.json        # the satellites the bulk model cannot follow, full OMM
-└─ elements/<id>.json     # osculating orbital elements at one epoch
+└─ elements.json          # every startup body's osculating orbital elements at one epoch
 ```
 
 The star catalogue comes from a second service — ESA's **Hipparcos** and **Tycho-2**

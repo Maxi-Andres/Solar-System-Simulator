@@ -53,6 +53,22 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'es2022',
     sourcemap: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // The libraries every view runs on, in a chunk of their own: they change only when
+              // a dependency is upgraded, so a deploy of the app's own code leaves the visitor's
+              // cached copy good. three's build only -- its loaders (GLTFLoader) stay in the
+              // chunks that ask for them when a model is first shown.
+              name: 'vendor',
+              test: /[\\/]node_modules[\\/](?:three[\\/]build|react|react-dom|scheduler|@react-three[\\/]fiber|its-fine|suspend-react|zustand)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'node',

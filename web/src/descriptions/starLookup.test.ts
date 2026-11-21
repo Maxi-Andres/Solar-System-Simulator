@@ -19,16 +19,20 @@ vi.mock('../core/starBodies.ts', async (importOriginal) => {
 });
 
 const { descriptionOf } = await import('./index.ts');
+const { hasDescription } = await import('./ids.ts');
 
 describe('descriptionOf, for a star made a body at run time', () => {
   it('finds it by the designations its body carries', () => {
     expect(descriptionOf('star-0-17')?.id).toBe('sirius-b');
     expect(descriptionOf('star-0-3')?.id).toBe('polaris');
+    expect(hasDescription('star-0-17')).toBe(true);
   });
 
   it('finds none for a star without one, and still finds every other body by its id', () => {
     expect(descriptionOf('star-2-500')).toBeNull();
     expect(descriptionOf('star-9-9')).toBeNull();
     expect(descriptionOf('earth')?.id).toBe('earth');
+    expect(hasDescription('star-2-500')).toBe(false);
+    expect(hasDescription('earth')).toBe(true);
   });
 });

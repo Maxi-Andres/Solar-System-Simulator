@@ -99,8 +99,9 @@ export interface Simulation {
   readonly clock: SimClock;
   readonly error: string | null;
   /**
-   * Fires at the readout cadence. Only what shows a number that moves with the clock
-   * listens, through `useSignal`; see signal.ts for why it is not React state here.
+   * Fires at the readout cadence, when the clock or the data has moved since it last did.
+   * Only what shows a number that moves with the clock listens, through `useSignal`; see
+   * signal.ts for why it is not React state here.
    */
   readonly readout: Signal;
 }
@@ -273,6 +274,12 @@ export function useSimulation(refreshHz = 10): Simulation {
     let lastRefresh = 0;
     // NaN, so the first frame always counts as a change.
     let lastEpochMs = Number.NaN;
+    // What the readouts last showed: the clock's instant, rate and mode, and how many frames
+    // had been asked for. NaN and null, so the first beat always fires.
+    let shownEpochMs = Number.NaN;
+    let shownRate = Number.NaN;
+    let shownMode: SimClock['mode'] | null = null;
+    let shownRequests = Number.NaN;
     const refreshInterval = 1000 / refreshHz;
 
     const loop = (time: number): void => {
@@ -289,9 +296,26 @@ export function useSimulation(refreshHz = 10): Simulation {
         renderDemand.request();
       }
 
+      // The readout beat, only when something it shows may have moved: the clock's instant
+      // (every beat while it runs), its rate or mode (TimeControls' buttons), or anything
+      // that asked for a frame -- a chunk, a trajectory or a catalogue landing, which some
+      // panels read without subscribing (StructureFacts.tsx), the view store, the camera.
+      // Paused and untouched, the panels that listen are not re-rendered ten times a second
+      // to show the same numbers.
       if (time - lastRefresh >= refreshInterval) {
         lastRefresh = time;
-        readout.emit();
+        if (
+          clock.epochMs !== shownEpochMs ||
+          clock.rate !== shownRate ||
+          clock.mode !== shownMode ||
+          renderDemand.requests !== shownRequests
+        ) {
+          shownEpochMs = clock.epochMs;
+          shownRate = clock.rate;
+          shownMode = clock.mode;
+          shownRequests = renderDemand.requests;
+          readout.emit();
+        }
       }
 
       handle = requestAnimationFrame(loop);

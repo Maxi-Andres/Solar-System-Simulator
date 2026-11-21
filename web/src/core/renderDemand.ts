@@ -50,7 +50,17 @@ export const IDLE_FRAME_MS = 1000;
 
 export class RenderDemand {
   #remaining = 0;
+  #requests = 0;
   #wake: (() => void) | null = null;
+
+  /**
+   * How many requests there have been. Whatever asks for a frame -- data landing, the view
+   * store, the camera -- may also have changed what a panel shows, so the readout beat fires
+   * on a change of this as well as of the clock (useSimulation.ts).
+   */
+  get requests(): number {
+    return this.#requests;
+  }
 
   /** Frames still owed to the last request. */
   get remaining(): number {
@@ -64,6 +74,7 @@ export class RenderDemand {
    * one must not cut it off.
    */
   request(frames = SETTLE_FRAMES): void {
+    this.#requests += 1;
     this.#remaining = Math.max(this.#remaining, frames);
     this.#wake?.();
   }
