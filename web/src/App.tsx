@@ -43,7 +43,7 @@ import { ensureMagnetosphereBodies } from './core/magnetosphere.ts';
 import { ensureAuroraBodies } from './core/aurora.ts';
 import { ensureMeteorShowers } from './core/meteorShowers.ts';
 import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
-import { tdbToUtc } from './core/time.ts';
+import { julianDayToDate, tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
@@ -711,8 +711,16 @@ export function App() {
     if (store === null) {
       return;
     }
+    // Chosen just now, a craft or site that is not there at the clock's instant is not stepped
+    // back from: the clock is taken to the nearest moment it is -- Cassini's last day at Saturn,
+    // Artemis II's flight, a landing -- and paused there, so choosing it shows it (Maxi,
+    // 2026-11-21: "fijate todos los que sean así porque no los puedo ver"). Only once the clock
+    // then runs past its span does the camera step back, as before.
+    let fresh = true;
     const check = (): void => {
       const body = store.body(focus);
+      const chosenNow = fresh;
+      fresh = false;
       // And a famous comet on an open orbit: with no ellipse to carry it on, it is not placed
       // outside its table either (see the elements in ephemerisStore.ts).
       // And a satellite outside the days its elements are good for (see satelliteBodies.ts).
@@ -723,6 +731,16 @@ export function App() {
         (body.kind === 'region' && store.coverage(focus) !== null) ||
         (body.kind === 'comet' && !store.isPropagatedBody(focus) && store.elementsFor(focus) === null);
       if (unplaceable && !store.isCoveredAt(focus, clock.tdbJulianDay)) {
+        const span = store.coverage(focus);
+        if (chosenNow && span !== null) {
+          // A day inside the span, so a craft whose path ends at an impact or a plunge is seen
+          // just before it; a tenth of the span for a short one.
+          const margin = Math.min(1, (span.stopJd - span.startJd) / 10);
+          const target = clock.tdbJulianDay > span.stopJd ? span.stopJd - margin : span.startJd + margin;
+          clock.setDate(julianDayToDate(tdbToUtc(target)));
+          clock.pause();
+          return;
+        }
         setFocus(body.parent ?? 'sun');
       }
     };

@@ -500,6 +500,12 @@ export class EphemerisStore {
    * and after its trajectory ends it has no state at all.
    */
   isCoveredAt(id: BodyId, jd: number): boolean {
+    // A craft on the ground is there from touchdown on: past the last position NASA reported it
+    // stands where that left it -- it may have driven since, and the panel says so -- rather than
+    // vanishing, as a rover did days after each data build (Maxi, 2026-11-21: "el curiosity, el
+    // perseverance … no me deja verlo, me pone until 2026").
+    const surface = this.#data.manifest.surfaces[id];
+    if (surface !== undefined) return jd >= surface.startJd;
     const span = this.coverage(id);
     return span !== null && jd >= span.startJd && jd <= span.stopJd;
   }

@@ -308,8 +308,9 @@ function CraftFacts({
         </Row>
       )}
       {coverage !== null && (
-        <Row label={site === null ? 'JPL path until' : 'Position known until'}>
+        <Row label={site === null ? 'JPL path until' : site.kind === 'traverse' ? 'Last reported' : 'Position known until'}>
           {formatTdbDate(coverage.stopJd)}
+          {site !== null && site.kind === 'traverse' && jd > coverage.stopJd ? '; may have driven since' : ''}
         </Row>
       )}
       {largestSeam !== null && (

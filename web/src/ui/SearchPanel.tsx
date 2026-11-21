@@ -67,7 +67,7 @@ import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { messierSynonym } from '../core/messier.ts';
 import { useViewStore } from '../state/store.ts';
-import { craftUnavailability, satelliteUnavailability } from './BodyPicker.tsx';
+import { choosableElsewhen, craftUnavailability, satelliteUnavailability } from './BodyPicker.tsx';
 import { Panel } from './Panel.tsx';
 
 /**
@@ -538,7 +538,8 @@ export function SearchPanel({
   };
 
   const choose = (result: Result): void => {
-    if (unavailable(result) !== null) {
+    // Not there now only because of the date: chosen, and the clock goes to it (App.tsx).
+    if (!choosableElsewhen(unavailable(result))) {
       return;
     }
     if (result.kind === 'body') {
@@ -729,7 +730,7 @@ export function SearchPanel({
               key={result.kind === 'body' ? result.id : `${result.kind}-${result.k}`}
               role="option"
               aria-selected={active}
-              aria-disabled={reason !== null}
+              aria-disabled={!choosableElsewhen(reason)}
               onMouseEnter={() => setSelected(index)}
               onClick={() => choose(result)}
               style={{
@@ -738,9 +739,9 @@ export function SearchPanel({
                 gap: '0.5rem',
                 padding: '0.35rem 0.45rem',
                 borderRadius: '0.25rem',
-                cursor: reason === null ? 'pointer' : 'default',
+                cursor: choosableElsewhen(reason) ? 'pointer' : 'default',
                 background: active ? '#1b1b1f' : 'transparent',
-                opacity: reason === null ? 1 : 0.45,
+                opacity: reason === null ? 1 : choosableElsewhen(reason) ? 0.7 : 0.45,
               }}
             >
               <span aria-hidden="true" style={{ color: row.color, fontSize: '0.6rem' }}>

@@ -917,6 +917,15 @@ function Caret({ open }: { open: boolean }) {
   );
 }
 
+/**
+ * Whether a reason a craft is not there now is only one of time -- "from 2028", "until 2017" --
+ * so it can still be chosen: the clock is then taken to its span (App.tsx). Only a craft with no
+ * data at all cannot be.
+ */
+export function choosableElsewhen(reason: string | null): boolean {
+  return reason === null || reason.startsWith('from ') || reason.startsWith('until ');
+}
+
 /** Why a spacecraft cannot be chosen right now, or null when it can. */
 export function craftUnavailability(store: EphemerisStore, id: BodyId, jd: number): string | null {
   const span = store.coverage(id);
@@ -2019,8 +2028,8 @@ function Row({
         type="button"
         role="option"
         aria-selected={active}
-        aria-disabled={unavailable !== null}
-        disabled={unavailable !== null}
+        aria-disabled={!choosableElsewhen(unavailable)}
+        disabled={!choosableElsewhen(unavailable)}
         onClick={() => onChoose(body.id)}
         style={{
           flex: 1,
@@ -2042,7 +2051,7 @@ function Row({
           fontFamily: 'inherit',
           fontSize: indent || craft ? '0.72rem' : '0.78rem',
           letterSpacing: '0.03em',
-          cursor: unavailable === null ? 'pointer' : 'default',
+          cursor: choosableElsewhen(unavailable) ? 'pointer' : 'default',
         }}
       >
         <span
