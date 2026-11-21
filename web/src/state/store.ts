@@ -366,7 +366,9 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   basins: false,
   flowLines: false,
   sdssGalaxies: true,
-  filaments: true,
+  // Off at first (Maxi, 2026-11-21): the filaments are lines an algorithm traces through the
+  // galaxies, not something there to be seen, as the other computed layers are.
+  filaments: false,
   quasars: true,
   szClusters: true,
   observableUniverse: true,
