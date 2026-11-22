@@ -20,6 +20,8 @@ import {
   FUEL_TANK_DIAMETER_M,
   LAB_HEIGHT_M,
   NOSE_CONE_LENGTH_M,
+  INSTRUMENT_BOOM_LENGTH_M,
+  DRIVE_BELL_LENGTH_M,
   RADIATOR_SPAN_M,
   SPINE_LENGTH_M,
   STORAGE_HEIGHT_M,
@@ -331,8 +333,8 @@ describe('the Hail Mary', () => {
 
   it("adds its sections up to the novel's 40 m", () => {
     const sum =
-      HUB_LENGTH_M + SPINE_LENGTH_M + CABLE_FARING_LENGTH_M +
-      STORAGE_HEIGHT_M + DORMITORY_HEIGHT_M + LAB_HEIGHT_M + NOSE_CONE_LENGTH_M;
+      DRIVE_BELL_LENGTH_M + HUB_LENGTH_M + SPINE_LENGTH_M + CABLE_FARING_LENGTH_M +
+      STORAGE_HEIGHT_M + DORMITORY_HEIGHT_M + LAB_HEIGHT_M + NOSE_CONE_LENGTH_M + INSTRUMENT_BOOM_LENGTH_M;
     expect(sum).toBeCloseTo(HAIL_MARY_LENGTH_M, 6);
     // The radiator array reaches out beyond the hull, as said.
     expect(RADIATOR_SPAN_M).toBeLessThan(HAIL_MARY_LENGTH_M);
@@ -401,11 +403,11 @@ describe('the Hail Mary', () => {
       ship.setMode('centrifuge', phase);
       ship.object.updateMatrixWorld(true);
       // The control room's middle, in the crew section's own metres.
-      const control = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - NOSE_CONE_LENGTH_M + CONTROL_ROOM_HEIGHT_M / 2).applyMatrix4(crew.matrixWorld);
+      const control = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - INSTRUMENT_BOOM_LENGTH_M - NOSE_CONE_LENGTH_M + CONTROL_ROOM_HEIGHT_M / 2).applyMatrix4(crew.matrixWorld);
       expect(control.length() / metres).toBeCloseTo(CENTRIFUGE_CONTROL_ROOM_RADIUS_M, 0);
       // The nose points in, toward the centre: nearer it than the storage bay.
       const nose = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M).applyMatrix4(crew.matrixWorld);
-      const storage = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - NOSE_CONE_LENGTH_M - LAB_HEIGHT_M - DORMITORY_HEIGHT_M - STORAGE_HEIGHT_M).applyMatrix4(crew.matrixWorld);
+      const storage = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - INSTRUMENT_BOOM_LENGTH_M - NOSE_CONE_LENGTH_M - LAB_HEIGHT_M - DORMITORY_HEIGHT_M - STORAGE_HEIGHT_M).applyMatrix4(crew.matrixWorld);
       expect(nose.length()).toBeLessThan(storage.length());
       // Spinning about local y: nothing leaves the xz plane it started in.
       expect(Math.abs(control.y)).toBeLessThan(1e-9);
@@ -442,7 +444,7 @@ describe('the Hail Mary', () => {
       const x = position.getX(i);
       const y = position.getY(i);
       const z = position.getZ(i);
-      if (z < 8.5 || z > 10.5 || Math.abs(y) > 0.2) continue;
+      if (z < 18 || z > 22 || Math.abs(y) > 0.2) continue;
       if (Math.abs(x - (axis + radius)) < 0.05) inner = Math.min(inner, detail.getX(i));
       if (Math.abs(x - (axis - radius)) < 0.05) outer = Math.max(outer, detail.getX(i));
     }
