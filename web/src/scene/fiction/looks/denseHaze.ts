@@ -202,7 +202,7 @@ export const DENSE_HAZE: SurfaceLook = {
       s.albedo = decodeAlbedo(baked.rgb);
       float fine = 0.0;
       if (close > 0.0) {
-        fine = fbm(at + 7.0, 1.2 / TEXEL, 3, 0.55, footprint);
+        fine = detailFbm(at + 7.0, 1.2 / TEXEL, 3, 0.55, footprint);
         s.albedo *= 1.0 + close * 0.28 * fine;
       }
       // A cloud deck under haze: flat-ish, its limb darkening softened by the haze above it.

@@ -134,7 +134,7 @@ export const JUNGLE_MOON: SurfaceLook = {
       float height = sky.b;
       if (footprint < TEXEL) {
         float closer = smoothstep(TEXEL, 0.5 * TEXEL, footprint);
-        float detail = fbm(direction, 700.0, 2, 0.5, footprint) * closer * (1.0 - ground.a);
+        float detail = detailFbm(direction, 700.0, 2, 0.5, footprint) * closer * (1.0 - ground.a);
         s.albedo *= 1.0 + 0.3 * detail;
         height += 0.04 * detail;
       }

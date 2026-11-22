@@ -94,7 +94,7 @@ export const ARID: SurfaceLook = {
       s.albedo = decodeAlbedo(ground.rgb);
       float fine = 0.0;
       if (close > 0.0) {
-        fine = fbm(direction + 13.0, 1.5 / TEXEL, 3, 0.5, footprint);
+        fine = detailFbm(direction + 13.0, 1.5 / TEXEL, 3, 0.5, footprint);
         s.albedo *= 1.0 + close * 0.2 * fine;
       }
       // The relief's slope by central differences a pixel or a texel apart, from the mipmap

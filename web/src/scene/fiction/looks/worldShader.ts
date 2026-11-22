@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import type { FictionLook } from '../../../core/fictionLook.ts';
 import { LIGHTING } from '../../shading.ts';
+import { DETAIL_NOISE_GLSL, detailNoiseTexture } from './detailNoise.ts';
 import { NOISE_GLSL, seedHash } from './noise.ts';
 import { RING_GLSL } from './ringProfile.ts';
 import { BAKE_FACE_SIZE, BAKE_TEXELS_PER_FRAME, SurfaceBake } from './surfaceBake.ts';
@@ -183,6 +184,7 @@ function fragmentShader(look: SurfaceLook): string {
   varying vec3 vStar;
 
   ${NOISE_GLSL}
+  ${DETAIL_NOISE_GLSL}
   ${HAZE_GLSL}
   ${RING_GLSL}
 
@@ -237,11 +239,12 @@ function fragmentShader(look: SurfaceLook): string {
    */
   vec3 detailWarp(vec3 direction, float amount) {
     if (amount <= 0.0) return direction;
-    // Two noises along the surface's own east and north: a swirl needs no third.
+    // Two noises along the surface's own east and north, from the detail texture: a swirl
+    // needs no third.
     vec3 p = direction * (0.45 / TEXEL);
     vec3 east = normalize(cross(abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), direction));
     vec3 north = cross(direction, east);
-    vec2 w = vec2(simplex(p + 3.1), simplex(p + 17.3));
+    vec2 w = detailNoise(p + 3.1).rg;
     return normalize(direction + amount * 1.3 * TEXEL * (w.x * east + w.y * north));
   }
 
@@ -391,6 +394,7 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
       uAmbient: ambient,
       uIrradiance: { value: WORLD_IRRADIANCE },
       uBaked: baked,
+      uDetailNoise: { value: detailNoiseTexture() },
       uFallback: { value: new THREE.Vector3(...surface.fallback) },
       ...Object.fromEntries(bake.textures.map((texture, i) => [`uLayer${i}`, { value: texture }])),
       uRayleighDepth: { value: new THREE.Vector3(...haze.rayleigh) },
