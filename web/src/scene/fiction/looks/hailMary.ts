@@ -1,71 +1,87 @@
 import * as THREE from 'three';
 
-import { MARKING, PartBuilder, type Finish, type Planetshine, setShipLight, shipMaterial } from './shipMaterial.ts';
-
-export { planetshineStrength, type Planetshine } from './shipMaterial.ts';
 import { renderDemand } from '../../../core/renderDemand.ts';
+import { MARKING, PartBuilder, type Finish, type Planetshine, setShipLight, shipMaterial } from './shipMaterial.ts';
 import { OcclusionJob, type Occluder } from './shipOcclusion.ts';
 
+export { planetshineStrength, type Planetshine } from './shipMaterial.ts';
+
 /**
- * The Hail Mary (Andy Weir, *Project Hail Mary*, 2021): our own model, from the layout the
- * novel describes, with the publisher's teaching-kit schematics as a cross-check (canon notes,
- * section 3b). Nothing here is from the 2026 film's ship or any concept art.
+ * The Hail Mary (Andy Weir, *Project Hail Mary*, 2021): our own model. The layout inside is
+ * the novel's (canon notes, section 3b); the overall configuration is after the 2026 film --
+ * three long, slender cylinders side by side, joined at the stern by a hub, a long dark
+ * radiator array out from the hub at right angles, white paint with metal only at the joints --
+ * and every detail is our own: no part, panel layout, marking or proportion is taken from the
+ * film's ship.
  *
- * What the novel fixes, nose to stern:
- *  - a "shiny silver, smooth hull, sharp nose cone";
- *  - the control room inside the nose cone, its airlock in the cone's wall, the four Beetles
- *    stowed in the nose;
- *  - the lab, the dormitory, a storage bay about a metre high;
- *  - the Cable Faring with its Zylon spools;
- *  - then the ship widening into three cylinders of fuel, nine bays in all, with red Astrophage
- *    pipes running along the hull;
- *  - the spin drives at the stern, and small spin drives on the sides for attitude;
- *  - a ring with two big hinges, about which the crew section turns round for centrifuge mode.
- *
- * What it leaves to us -- every diameter and deck height but the storage bay's -- is chosen
- * below, one named constant each with its reason, so the data can say they are invented and why.
+ * What the novel fixes, and where it sits here:
+ *  - the crew section: control room inside the nose cone, its airlock in the cone's wall, the
+ *    four Beetles stowed in the nose; the lab, the dormitory, a storage bay about a metre high.
+ *    It leads the middle cylinder;
+ *  - the Cable Faring with its Zylon spools, behind the crew section;
+ *  - three cylinders side by side holding the fuel -- here the two outer tanks and, on the
+ *    middle cylinder's open spine, three fuel pods: nine bays in all, three to each;
+ *  - red Astrophage pipes along the hull, the spin drives at the stern (on the hub's aft
+ *    faces), small spin drives for attitude;
+ *  - a ring with two big hinges about which the crew section turns for centrifuge mode.
  *
  * Built in metres, z from the stern's drive plates forward. `createHailMary` scales it to length
- * one, bow +z, its centre of mass at the origin, as core/fictionLook.ts asks.
+ * one, bow +z, its centre of mass at the origin, as core/fictionLook.ts asks. The radiator array
+ * reaches beyond: about 1.9 ship lengths tip to tip, across.
  */
 
 // --- Dimensions -------------------------------------------------------------------------------
 
-/** Overall length. Canon, derived: Grace calls 20 m "half the length of the ship". */
+/** Hull length, stern to nose. Canon, derived: Grace calls 20 m "half the length of the ship". */
 export const HAIL_MARY_LENGTH_M = 40;
 
-/** Crew section diameter. Invented: a round deck holding three beds in a triangle and a ladder. */
-export const CREW_SECTION_DIAMETER_M = 6.4;
+/** The hub at the stern, drive plates included. Invented: room for the three drive plates. */
+export const HUB_LENGTH_M = 5;
 
-/** Nose cone length, control room included. Invented: sharp, about the crew section's width. */
-export const NOSE_CONE_LENGTH_M = 7;
+/** The middle cylinder's open spine, hub to faring. Invented: makes up the canon length. */
+export const SPINE_LENGTH_M = 19;
+
+/** Crew section diameter. Invented: round decks for three beds and a ladder, slender as the configuration is. */
+export const CREW_SECTION_DIAMETER_M = 4.6;
+
+/** Nose cone length, control room included. Invented: sharp, as the novel's is. */
+export const NOSE_CONE_LENGTH_M = 5.5;
 
 /** The control room's height at the cone's base. Invented: room to stand under tapering walls. */
-export const CONTROL_ROOM_HEIGHT_M = 2.8;
+export const CONTROL_ROOM_HEIGHT_M = 2.6;
 
 /** Lab deck height. Invented: the tallest deck, the novel's pendulum hangs metres down in it. */
-export const LAB_HEIGHT_M = 4.2;
+export const LAB_HEIGHT_M = 4.1;
 
 /** Dormitory deck height. Invented: its ceiling hatch is "10 feet off the ground", plus floor. */
-export const DORMITORY_HEIGHT_M = 3.6;
+export const DORMITORY_HEIGHT_M = 3.4;
 
 /** Storage bay height. Canon: about a metre. */
 export const STORAGE_HEIGHT_M = 1;
 
-/** Cable Faring length. Invented: five spools of Zylon cable a hundred metres long. */
-export const CABLE_FARING_LENGTH_M = 2.2;
+/** Cable Faring length. Invented: five spools of Zylon cable eighty metres long. */
+export const CABLE_FARING_LENGTH_M = 2;
 
-/** The skirt widening from the crew section to the tanks. Invented, to make up the canon length. */
-export const SKIRT_LENGTH_M = 6.7;
+/** Outer fuel tank diameter. Invented: long and slender, as the configuration is. */
+export const FUEL_TANK_DIAMETER_M = 3.2;
 
-/** Fuel tank diameter. Novel: the three cylinders are as wide as the crew compartment. */
-export const FUEL_TANK_DIAMETER_M = 6;
+/** Outer fuel tank length. Invented: most of the hull's length, ending short of the crew section. */
+export const FUEL_TANK_LENGTH_M = 26;
 
-/** Fuel tank length. Invented: three tanks of this hold the fuel at a density near 1.9 t/m^3. */
-export const FUEL_TANK_LENGTH_M = 12.4;
+/** Centre-to-centre spacing of the three cylinders. Invented: clear of each other by a metre and more. */
+export const CYLINDER_SPACING_M = 6;
 
-/** Spin drives and their housings at the stern. Invented. */
-export const SPIN_DRIVE_LENGTH_M = 2.6;
+/** Fuel pods on the spine: three, of this diameter and length. Invented. */
+export const FUEL_POD_DIAMETER_M = 3.4;
+export const FUEL_POD_LENGTH_M = 2.6;
+
+/**
+ * Each radiator wing's span out from the hub, and its width. Invented, after the film's long
+ * array: two wings of 34 m, longer than the hull, shedding the generators' and life support's
+ * heat edge-on to the drive.
+ */
+export const RADIATOR_SPAN_M = 34;
+export const RADIATOR_WIDTH_M = 4.6;
 
 /** Astrophage at launch. Summaries of the novel: about two million kilograms. */
 export const FUEL_MASS_KG = 2e6;
@@ -76,8 +92,8 @@ export const FUEL_AT_TAU_CETI_KG = 3e5;
 /** Crew section mass. Invented: three pressurised decks, like three ISS-sized modules. */
 export const CREW_SECTION_MASS_KG = 6e4;
 
-/** Fuel section dry mass: tanks, skirt, faring, drives. Invented. */
-export const FUEL_SECTION_DRY_MASS_KG = 1.5e5;
+/** Everything else, dry: hub, drives, tanks, spine, radiators. Invented. */
+export const FUEL_SECTION_DRY_MASS_KG = 1.8e5;
 
 /** Control room to the centre of mass in centrifuge mode, cables fully out. Canon: 75 m. */
 export const CENTRIFUGE_CONTROL_ROOM_RADIUS_M = 75;
@@ -86,27 +102,27 @@ export const CENTRIFUGE_CONTROL_ROOM_RADIUS_M = 75;
 export const CENTRIFUGE_GRAVITY_M_S2 = 9.80665;
 
 // The layout, z from the stern (metres).
-const Z_TANKS = SPIN_DRIVE_LENGTH_M;
-const Z_BULKHEAD = Z_TANKS + FUEL_TANK_LENGTH_M;
-const Z_SKIRT = Z_BULKHEAD + 0.3;
-const Z_FARING = Z_SKIRT + SKIRT_LENGTH_M;
+const Z_HUB_FRONT = HUB_LENGTH_M;
+const Z_FARING = Z_HUB_FRONT + SPINE_LENGTH_M;
 const Z_CREW = Z_FARING + CABLE_FARING_LENGTH_M;
 const Z_DORM = Z_CREW + STORAGE_HEIGHT_M;
-/** The lab floor: the hinge ring is at the lab and dormitory's boundary (kit schematic). */
+/** The lab floor: the hinge ring is at the lab and dormitory's boundary. */
 const Z_LAB = Z_DORM + DORMITORY_HEIGHT_M;
 const Z_CONE = Z_LAB + LAB_HEIGHT_M;
 const Z_NOSE = Z_CONE + NOSE_CONE_LENGTH_M;
 const Z_CONTROL = Z_CONE + CONTROL_ROOM_HEIGHT_M / 2;
 const CREW_R = CREW_SECTION_DIAMETER_M / 2;
 const TANK_R = FUEL_TANK_DIAMETER_M / 2;
-/** Three tanks touching, about the axis. */
-const TANK_RING = TANK_R / Math.sin(Math.PI / 3);
-const SKIRT_R = TANK_RING + TANK_R;
-const TANK_ANGLES = [90, 210, 330].map((deg) => (deg * Math.PI) / 180);
+/** The outer tanks' fronts: short of the crew section, so the nose leads. */
+const Z_TANK_FRONT = Z_HUB_FRONT + FUEL_TANK_LENGTH_M + 2;
+/** The -x tank runs straight into the hub; the +x tank stands out further and bends in through an elbow. */
+const TANK_X = [-CYLINDER_SPACING_M, CYLINDER_SPACING_M + 1.2] as const;
+const ELBOW_START_Z = Z_HUB_FRONT + 4.2;
+const POD_Z = [Z_HUB_FRONT + 4, Z_HUB_FRONT + 9.5, Z_HUB_FRONT + 15] as const;
 const HINGE_Z = Z_LAB;
 const CREW_CENTRE_Z = Z_CREW + (Z_NOSE - Z_CREW) * 0.42;
-const FUEL_CENTRE_Z = Z_TANKS + FUEL_TANK_LENGTH_M / 2;
-const REAR_DRY_CENTRE_Z = 9.5;
+const FUEL_CENTRE_Z = (Z_HUB_FRONT + Z_TANK_FRONT) / 2;
+const REAR_DRY_CENTRE_Z = 8;
 
 /** The cruise centre of mass, from the stern (metres), with the fuel left at tau Ceti. */
 export const CRUISE_CENTRE_OF_MASS_Z_M =
@@ -118,14 +134,13 @@ export const CRUISE_CENTRE_OF_MASS_Z_M =
 /**
  * Centrifuge mode, worked out from the above.
  *
- * The crew section turns 180 degrees about its hinges (nose toward the fuel section) and rides
- * out on the cables until the control room is 75 m from the common centre of mass, the novel's
- * figure. With the crew section a sixth of the mass, the centre of mass stays near the tanks,
- * and the cables come out at about 77 m -- Lokken's "hundred metres of separation" between the
- * two halves' far ends, near enough. The spin is set for one g at the lab floor: 3.3 turns a
- * minute, a turn every 19 s, inside the 4 rpm usually given as the limit people adapt to without
- * motion sickness (Hall 1999). The control room then feels 0.93 g and the dormitory floor 1.05 g,
- * the gentle gradient Grace notices with his pendulum.
+ * The crew section turns 180 degrees about its hinges (nose toward the rest of the ship) and
+ * rides out on the cables until the control room is 75 m from the common centre of mass, the
+ * novel's figure. With the crew section about a ninth of the mass the centre of mass stays near
+ * the hub, and the cables come out at about 80 m. The spin is set for one g at the lab floor:
+ * about 3.3 turns a minute, inside the 4 rpm usually given as the limit people adapt to without
+ * motion sickness (Hall 1999). The control room then feels a little under one g and the
+ * dormitory floor a little over, the gentle gradient Grace notices with his pendulum.
  */
 function centrifugeLayout(): { hingeZ: number; centreZ: number; spin: number } {
   const rearMass = FUEL_SECTION_DRY_MASS_KG + FUEL_AT_TAU_CETI_KG;
@@ -134,7 +149,6 @@ function centrifugeLayout(): { hingeZ: number; centreZ: number; spin: number } {
   // Turned about the hinge, a crew point at cruise z lands at hinge - (z - HINGE_Z).
   const crewCentreOffset = CREW_CENTRE_Z - HINGE_Z;
   const controlOffset = Z_CONTROL - HINGE_Z;
-  // control - centre = 75, with centre = (rearMass rearCentre + crewMass (h - crewOffset)) / total.
   const share = CREW_SECTION_MASS_KG / total;
   const hingeZ =
     (CENTRIFUGE_CONTROL_ROOM_RADIUS_M + controlOffset + (rearMass * rearCentre - CREW_SECTION_MASS_KG * crewCentreOffset) / total) /
@@ -158,26 +172,23 @@ export const CENTRIFUGE_RPM = (CENTRIFUGE_SPIN_RAD_S * 60) / (2 * Math.PI);
 // --- Finishes ---------------------------------------------------------------------------------
 
 /**
- * The novel's "shiny silver" hull: aluminium, satin and brushed. A mirror hull in space
- * reflects black space and reads black but for one glint; brushed, the star's highlight is a
- * streak across each plate that slides from plate to plate as the view turns.
+ * The hull is white paint -- matte-satin, a little dirty -- with bare metal only at the joints
+ * and in the trusses. Paint is a dielectric: diffuse, with a weak, broad sheen; the plates and
+ * the grime come from the shader (shipMaterial.ts), the paint's albedo near 0.8, as spacecraft
+ * white paints are.
  */
-// Satin aluminium is not a mirror: its rolled, brushed, oxidised surface scatters most of the
-// light it returns broadly, and lit plates read light grey to silver from nearly every angle, as
-// in any photograph of the ISS or an Apollo service module. So the hull is a blend (`metal` well
-// under one): a diffuse share at an albedo near 0.6, and the brushed metallic highlight on top.
-const SILVER: Finish = { color: [0.88, 0.89, 0.9], metal: 0.35, rough: 0.32, plates: 1, aniso: 0.5 };
-const SILVER_FINE: Finish = { color: [0.9, 0.9, 0.91], metal: 0.4, rough: 0.28, plates: 0.6, aniso: 0.45 };
-const TANK_SKIN: Finish = { color: [0.84, 0.85, 0.86], metal: 0.32, rough: 0.38, plates: 1.5, aniso: 0.55 };
-/** Plain trim, unbrushed. */
-const TRIM: Finish = { color: [0.82, 0.83, 0.84], metal: 0.45, rough: 0.34 };
+const PAINT: Finish = { color: [0.8, 0.8, 0.78], metal: 0, rough: 0.55, plates: 1 };
+const PAINT_FINE: Finish = { color: [0.82, 0.82, 0.8], metal: 0, rough: 0.5, plates: 0.6 };
+const TANK_PAINT: Finish = { color: [0.78, 0.78, 0.76], metal: 0, rough: 0.58, plates: 1.5 };
+/** Bare metal at the joints: satin aluminium, a diffuse share and a brushed highlight. */
+const TRIM: Finish = { color: [0.82, 0.83, 0.84], metal: 0.45, rough: 0.34, aniso: 0.4 };
 const DARK_METAL: Finish = { color: [0.36, 0.36, 0.38], metal: 0.5, rough: 0.4, aniso: 0.3 };
 const GUNMETAL: Finish = { color: [0.22, 0.22, 0.23], metal: 0.5, rough: 0.48 };
-/** Multi-layer insulation: gold-coloured Kapton, crinkled. */
+/** The joints' gold: multi-layer insulation, gold-coloured Kapton, crinkled. */
 const GOLD_FOIL: Finish = { color: [1.0, 0.74, 0.34], metal: 1, rough: 0.24, plates: MARKING.foil };
-/** Radiator panels: matte white silicate paint, as on the ISS's, a little weathered. */
-const RADIATOR: Finish = { color: [0.6, 0.6, 0.59], metal: 0, rough: 0.85 };
-const RADIATOR_RIB: Finish = { color: [0.5, 0.5, 0.49], metal: 0, rough: 0.8 };
+/** Radiator panels: dark, high-emissivity coating, nearly matte. */
+const RADIATOR: Finish = { color: [0.07, 0.075, 0.08], metal: 0, rough: 0.7, plates: 0.8 };
+const RADIATOR_FRAME: Finish = { color: [0.3, 0.3, 0.32], metal: 0.5, rough: 0.45 };
 /** The novel's red Astrophage pipes: painted metal. */
 const RED_PIPE: Finish = { color: [0.42, 0.03, 0.02], metal: 0, rough: 0.38 };
 /** Zylon is golden-yellow. */
@@ -185,7 +196,7 @@ const ZYLON: Finish = { color: [0.8, 0.6, 0.22], metal: 0, rough: 0.6 };
 const EMITTER: Finish = { color: [0.04, 0.04, 0.045], metal: 0.3, rough: 0.3 };
 const LENS: Finish = { color: [0.02, 0.025, 0.03], metal: 0, rough: 0.05 };
 const HAZARD: Finish = { color: [0.75, 0.5, 0.02], metal: 0, rough: 0.55, plates: MARKING.hazard };
-const STENCIL: Finish = { color: [0.88, 0.89, 0.9], metal: 0.35, rough: 0.32, plates: MARKING.stencil };
+const STENCIL: Finish = { color: [0.8, 0.8, 0.78], metal: 0, rough: 0.55, plates: MARKING.stencil };
 /**
  * The spin drives' plates. Astrophage emits at 25.984 um, far infrared: the drive shows no
  * flame to the eye. The plates are drawn only warm -- a dull red at the limit of seeing -- and
@@ -269,37 +280,52 @@ function noseRadius(z: number): number {
 /** Section ids, for the shadow map's per-section transforms. */
 const SECTION = { rear: 0, crew: 1, cables: 2 } as const;
 
+/** A tube of `radius` along a curve, `segments` along it and `radial` round. */
+function bend(curve: THREE.Curve<THREE.Vector3>, radius: number, segments: number, radial: number): [THREE.BufferGeometry, THREE.Matrix4] {
+  return [new THREE.TubeGeometry(curve, segments, radius, radial, false), new THREE.Matrix4()];
+}
+
+/** The elbow carrying the +x tank into the hub: leaves the hub along +z, arrives along +z. */
+const ELBOW = new THREE.CubicBezierCurve3(
+  new THREE.Vector3(TANK_X[1] - 2.4, 0, Z_HUB_FRONT - 0.2),
+  new THREE.Vector3(TANK_X[1] - 2.4, 0, Z_HUB_FRONT + 1.8),
+  new THREE.Vector3(TANK_X[1], 0, ELBOW_START_Z - 2.0),
+  new THREE.Vector3(TANK_X[1], 0, ELBOW_START_Z),
+);
+
+/** The hub's three drums: centre x and radius. The side ones carry the outer cylinders. */
+const HUB_DRUMS = [
+  { x: 0, r: 3.0 },
+  { x: TANK_X[0], r: 2.1 },
+  { x: TANK_X[1] - 2.4, r: 2.1 },
+] as const;
+const HUB_Z0 = 0.6;
+/** The radiator array's root, across the hub, and its wings' long edges. */
+const RADIATOR_ROOT_Y = 3.8;
+const RADIATOR_Z = 2.8;
+
 /** The large shapes the sky-visibility pass casts against, cruise coordinates (metres). */
 function occluders(): Occluder[] {
   const shapes: Occluder[] = [
     { kind: 'cylinder', cx: 0, cy: 0, r: CREW_R, z0: Z_CREW, z1: Z_CONE },
     { kind: 'cone', r0: CREW_R, r1: 0.001, z0: Z_CONE, z1: Z_NOSE },
-    { kind: 'cylinder', cx: 0, cy: 0, r: CREW_R + 0.14, z0: HINGE_Z - 0.35, z1: HINGE_Z + 0.35 },
-    { kind: 'cylinder', cx: 0, cy: 0, r: CREW_R + 0.15, z0: Z_FARING, z1: Z_CREW },
-    { kind: 'cone', r0: SKIRT_R, r1: CREW_R + 0.05, z0: Z_SKIRT, z1: Z_FARING },
-    { kind: 'cylinder', cx: 0, cy: 0, r: SKIRT_R + 0.08, z0: Z_BULKHEAD, z1: Z_SKIRT },
-    { kind: 'cylinder', cx: 0, cy: 0, r: 1.1, z0: 0.8, z1: Z_BULKHEAD },
+    { kind: 'cylinder', cx: 0, cy: 0, r: CREW_R + 0.12, z0: HINGE_Z - 0.3, z1: HINGE_Z + 0.3 },
+    { kind: 'cylinder', cx: 0, cy: 0, r: CREW_R + 0.1, z0: Z_FARING, z1: Z_CREW },
+    { kind: 'cylinder', cx: TANK_X[0], cy: 0, r: TANK_R, z0: Z_HUB_FRONT, z1: Z_TANK_FRONT },
+    { kind: 'cylinder', cx: TANK_X[1], cy: 0, r: TANK_R, z0: ELBOW_START_Z, z1: Z_TANK_FRONT },
   ];
-  for (const angle of TANK_ANGLES) {
-    const cx = TANK_RING * Math.cos(angle);
-    const cy = TANK_RING * Math.sin(angle);
-    shapes.push({ kind: 'cylinder', cx, cy, r: TANK_R, z0: Z_TANKS, z1: Z_BULKHEAD });
-    shapes.push({ kind: 'cylinder', cx, cy, r: TANK_R * 0.98, z0: 0.0, z1: Z_TANKS });
-    const valley = angle + Math.PI / 3;
-    const inner = TANK_RING * 0.62;
-    const outer = SKIRT_R + 0.4;
-    const radial: [number, number, number] = [Math.cos(valley), Math.sin(valley), 0];
-    const tangent: [number, number, number] = [-Math.sin(valley), Math.cos(valley), 0];
-    shapes.push({
-      kind: 'box',
-      centre: [radial[0] * ((inner + outer) / 2), radial[1] * ((inner + outer) / 2), (Z_TANKS + 1.2 + Z_BULKHEAD - 1.0) / 2],
-      axes: [radial, [0, 0, 1], tangent],
-      half: [(outer - inner) / 2, (Z_BULKHEAD - 1.0 - (Z_TANKS + 1.2)) / 2, 0.05],
-    });
+  for (const drum of HUB_DRUMS) shapes.push({ kind: 'cylinder', cx: drum.x, cy: 0, r: drum.r, z0: HUB_Z0, z1: Z_HUB_FRONT });
+  for (const z of POD_Z) {
+    shapes.push({ kind: 'cylinder', cx: 0, cy: 0, r: FUEL_POD_DIAMETER_M / 2, z0: z - FUEL_POD_LENGTH_M / 2, z1: z + FUEL_POD_LENGTH_M / 2 });
   }
   for (const side of [1, -1]) {
-    // The hinge discs, as short cylinders standing out of the ring (along y, so as boxes).
-    shapes.push({ kind: 'box', centre: [0, side * (CREW_R + 0.45), HINGE_Z], axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], half: [0.9, 0.3, 0.9] });
+    shapes.push({
+      kind: 'box',
+      centre: [0, side * (RADIATOR_ROOT_Y + RADIATOR_SPAN_M / 2), RADIATOR_Z],
+      axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+      half: [0.06, RADIATOR_SPAN_M / 2, RADIATOR_WIDTH_M / 2],
+    });
+    shapes.push({ kind: 'box', centre: [0, side * (CREW_R + 0.35), HINGE_Z], axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], half: [0.8, 0.25, 0.8] });
   }
   return shapes;
 }
@@ -323,14 +349,14 @@ const OCCLUSION_SLICE_MS = 6;
 
 /** Where the five cables meet the crew section, crew-cruise coordinates: two at each hinge, one aft of the ring. */
 function cableAnchors(): THREE.Vector3[] {
-  const hingeOut = CREW_R + 0.55;
+  const hingeOut = CREW_R + 0.5;
   return [
-    new THREE.Vector3(0.45, hingeOut, HINGE_Z),
-    new THREE.Vector3(-0.45, hingeOut, HINGE_Z),
-    new THREE.Vector3(0.45, -hingeOut, HINGE_Z),
-    new THREE.Vector3(-0.45, -hingeOut, HINGE_Z),
+    new THREE.Vector3(0.4, hingeOut, HINGE_Z),
+    new THREE.Vector3(-0.4, hingeOut, HINGE_Z),
+    new THREE.Vector3(0.4, -hingeOut, HINGE_Z),
+    new THREE.Vector3(-0.4, -hingeOut, HINGE_Z),
     // The fifth, off the hinge axis, keeps the section from swinging about it.
-    new THREE.Vector3(-(CREW_R + 0.3), 0, HINGE_Z),
+    new THREE.Vector3(-(CREW_R + 0.25), 0, HINGE_Z),
   ];
 }
 
@@ -342,125 +368,112 @@ function spoolPoints(): THREE.Vector3[] {
   });
 }
 
-/** The running lights: crew section's (crew-cruise coordinates) and the fuel section's. */
-const CREW_LIGHTS: readonly { position: THREE.Vector3; finish: Finish }[] = [
-  { position: new THREE.Vector3(-(CREW_R + 0.2), 0, HINGE_Z + 0.5), finish: LIGHT_RED },
-  { position: new THREE.Vector3(CREW_R + 0.2, 0, HINGE_Z + 0.5), finish: LIGHT_GREEN },
-  ...[0, 1, 2, 3].map((i) => {
-    const phi = Math.PI / 4 + (i * Math.PI) / 2;
-    const z = Z_NOSE - 2.3 + 0.62;
-    const r = noseRadius(z) + 0.05;
-    return { position: new THREE.Vector3(r * Math.cos(phi), r * Math.sin(phi), z), finish: LIGHT_WHITE };
-  }),
-];
+/** The running lights: crew section's (crew-cruise coordinates) and the rest's. */
+const CREW_LIGHTS: readonly { position: THREE.Vector3; finish: Finish }[] = [0, 1, 2, 3].map((i) => {
+  const phi = Math.PI / 4 + (i * Math.PI) / 2;
+  const z = Z_NOSE - 2.0 + 0.55;
+  const r = noseRadius(z) + 0.05;
+  return { position: new THREE.Vector3(r * Math.cos(phi), r * Math.sin(phi), z), finish: LIGHT_WHITE };
+});
 const REAR_LIGHTS: readonly { position: THREE.Vector3; finish: Finish }[] = [
-  { position: new THREE.Vector3(-(SKIRT_R + 0.2), 0, Z_BULKHEAD + 0.15), finish: LIGHT_RED },
-  { position: new THREE.Vector3(SKIRT_R + 0.2, 0, Z_BULKHEAD + 0.15), finish: LIGHT_GREEN },
-  ...TANK_ANGLES.map((angle) => {
-    const valley = angle + Math.PI / 3;
-    return { position: new THREE.Vector3((SKIRT_R + 0.4) * Math.cos(valley), (SKIRT_R + 0.4) * Math.sin(valley), Z_TANKS + 1.0), finish: LIGHT_WHITE };
-  }),
+  { position: new THREE.Vector3(TANK_X[0] - 2.25, 0, 2.8), finish: LIGHT_RED },
+  { position: new THREE.Vector3(TANK_X[1] - 2.4 + 2.25, 0, 2.8), finish: LIGHT_GREEN },
+  { position: new THREE.Vector3(0, RADIATOR_ROOT_Y + RADIATOR_SPAN_M + 0.3, RADIATOR_Z), finish: LIGHT_WHITE },
+  { position: new THREE.Vector3(0, -(RADIATOR_ROOT_Y + RADIATOR_SPAN_M + 0.3), RADIATOR_Z), finish: LIGHT_WHITE },
 ];
 
 function buildCrew(detail: Detail): PartBuilder {
   const b = new PartBuilder(SECTION.crew);
   const full = detail === 'full';
-  const seg = full ? 72 : 20;
+  const seg = full ? 64 : 16;
 
   // The pressure hull: storage, dormitory, lab -- in rows, so occlusion can vary along it.
-  b.add(...frustum(CREW_R, CREW_R, Z_CREW, Z_CONE, seg, true, full ? 10 : 4), SILVER);
+  b.add(...frustum(CREW_R, CREW_R, Z_CREW, Z_CONE, seg, true, full ? 10 : 3), PAINT);
   // The nose cone, control room and Beetles inside it, to a sharp point.
-  b.add(...frustum(CREW_R, 0.0, Z_CONE, Z_NOSE, seg, true, full ? 8 : 3), SILVER_FINE);
+  b.add(...frustum(CREW_R, 0.0, Z_CONE, Z_NOSE, seg, true, full ? 8 : 3), PAINT_FINE);
   // The aft bulkhead, where it meets the faring.
-  b.add(...frustum(CREW_R, CREW_R * 0.98, Z_CREW - 0.12, Z_CREW, seg), DARK_METAL);
+  b.add(...frustum(CREW_R, CREW_R * 0.97, Z_CREW - 0.12, Z_CREW, seg), DARK_METAL);
   if (full) {
     // The separation joint: hazard-striped, as a line not to stand across.
-    b.add(...frustum(CREW_R + 0.012, CREW_R + 0.012, Z_CREW + 0.02, Z_CREW + 0.32, seg, true), HAZARD, SMALL);
+    b.add(...frustum(CREW_R + 0.012, CREW_R + 0.012, Z_CREW + 0.02, Z_CREW + 0.28, seg, true), HAZARD, SMALL);
   }
 
-  // The ring with its two big hinges, at the lab and dormitory's boundary.
-  b.add(...frustum(CREW_R + 0.14, CREW_R + 0.14, HINGE_Z - 0.35, HINGE_Z + 0.35, seg, false, full ? 3 : 1), DARK_METAL);
+  // The ring with its two big hinges, at the lab and dormitory's boundary, gold-wrapped beside it.
+  b.add(...frustum(CREW_R + 0.12, CREW_R + 0.12, HINGE_Z - 0.3, HINGE_Z + 0.3, seg, false, full ? 2 : 1), TRIM);
+  b.add(...frustum(CREW_R + 0.06, CREW_R + 0.06, HINGE_Z + 0.3, HINGE_Z + 0.7, seg, true), GOLD_FOIL, SMALL);
   for (const side of [1, -1]) {
-    const disc = new THREE.CylinderGeometry(1.0, 1.0, 0.45, full ? 40 : 10);
-    b.add(disc, new THREE.Matrix4().makeTranslation(0, side * (CREW_R + 0.38), HINGE_Z), GUNMETAL);
-    b.add(new THREE.CylinderGeometry(0.42, 0.5, 0.8, full ? 24 : 8), new THREE.Matrix4().makeTranslation(0, side * (CREW_R + 0.55), HINGE_Z), TRIM, SMALL);
+    b.add(new THREE.CylinderGeometry(0.85, 0.85, 0.4, full ? 36 : 10), new THREE.Matrix4().makeTranslation(0, side * (CREW_R + 0.32), HINGE_Z), GUNMETAL);
+    b.add(new THREE.CylinderGeometry(0.36, 0.42, 0.7, full ? 24 : 8), new THREE.Matrix4().makeTranslation(0, side * (CREW_R + 0.48), HINGE_Z), TRIM, SMALL);
     if (full) {
-      // Bolts round the disc, and the two cable eyes.
-      for (let i = 0; i < 12; i += 1) {
-        const a = (i / 12) * Math.PI * 2;
-        b.add(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 6), new THREE.Matrix4().makeTranslation(0.8 * Math.cos(a), side * (CREW_R + 0.63), HINGE_Z + 0.8 * Math.sin(a)), TRIM, SMALL);
+      for (let i = 0; i < 10; i += 1) {
+        const a = (i / 10) * Math.PI * 2;
+        b.add(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 6), new THREE.Matrix4().makeTranslation(0.68 * Math.cos(a), side * (CREW_R + 0.55), HINGE_Z + 0.68 * Math.sin(a)), TRIM, SMALL);
       }
-      for (const dx of [0.45, -0.45]) {
-        b.add(new THREE.TorusGeometry(0.16, 0.05, 6, 12), new THREE.Matrix4().makeTranslation(dx, side * (CREW_R + 0.95), HINGE_Z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)), DARK_METAL, SMALL);
+      for (const dx of [0.4, -0.4]) {
+        b.add(new THREE.TorusGeometry(0.14, 0.045, 6, 12), new THREE.Matrix4().makeTranslation(dx, side * (CREW_R + 0.85), HINGE_Z).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)), DARK_METAL, SMALL);
       }
     }
   }
   if (full) {
-    // The fifth cable's eye on the ring.
-    b.add(...boxOn(surfaceFrame(Math.PI, HINGE_Z, CREW_R + 0.14, 0), 0.5, 0.5, 0.25), GUNMETAL, SMALL);
+    b.add(...boxOn(surfaceFrame(Math.PI, HINGE_Z, CREW_R + 0.12, 0), 0.45, 0.45, 0.22), GUNMETAL, SMALL);
   }
 
   // The airlock, in the cone's wall at the control room: a docking collar and its hatch.
-  const airlockZ = Z_CONE + 1.4;
+  const airlockZ = Z_CONE + 1.3;
   const airlockFrame = surfaceFrame(0, airlockZ, noseRadius(airlockZ), NOSE_SLOPE);
-  b.add(...stalkOn(airlockFrame, 1.0, 0.9, full ? 40 : 10, -0.35), TRIM);
-  b.add(...stalkOn(airlockFrame, 1.06, 0.14, full ? 40 : 10, 0.5), DARK_METAL, SMALL);
+  b.add(...stalkOn(airlockFrame, 0.9, 0.85, full ? 36 : 10, -0.35), TRIM);
+  b.add(...stalkOn(airlockFrame, 0.96, 0.12, full ? 36 : 10, 0.46), DARK_METAL, SMALL);
   if (full) {
-    // Docking ring, its alignment guides, the outer hatch and its handrails.
-    b.add(new THREE.TorusGeometry(0.98, 0.07, 8, 40), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.66)), GUNMETAL, SMALL);
-    // A hazard-striped band round the hatch, where the docking collar closes.
-    b.add(new THREE.RingGeometry(0.8, 0.92, 40), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.645)), HAZARD, SMALL);
+    b.add(new THREE.TorusGeometry(0.88, 0.06, 8, 36), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.6)), GUNMETAL, SMALL);
+    b.add(new THREE.RingGeometry(0.72, 0.83, 36), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.585)), HAZARD, SMALL);
+    b.add(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 32), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.53)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)), { ...GUNMETAL, cavity: 0.7 }, SMALL);
     for (let i = 0; i < 3; i += 1) {
       const a = (i / 3) * Math.PI * 2 + 0.3;
-      b.add(...boxOn(airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0.9 * Math.cos(a), 0.9 * Math.sin(a), 0.6)), 0.22, 0.22, 0.35), DARK_METAL, SMALL);
-    }
-    b.add(new THREE.CylinderGeometry(0.78, 0.78, 0.06, 32), airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.58)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)), { ...GUNMETAL, cavity: 0.7 }, SMALL);
-    for (const dx of [-0.55, 0.55]) {
-      b.add(...boxOn(surfaceFrame(0.18 * Math.sign(dx), airlockZ - 1.4, CREW_R, 0, 0.12), 0.05, 1.6, 0.05), DARK_METAL, SMALL);
+      b.add(...boxOn(airlockFrame.clone().multiply(new THREE.Matrix4().makeTranslation(0.8 * Math.cos(a), 0.8 * Math.sin(a), 0.55)), 0.2, 0.2, 0.3), DARK_METAL, SMALL);
     }
   }
 
   // The Beetles' four bays in the nose: hatches flush with the cone, hazard-edged.
-  const beetleZ = Z_NOSE - 2.3;
+  const beetleZ = Z_NOSE - 2.0;
   for (let i = 0; i < 4; i += 1) {
     const phi = Math.PI / 4 + (i * Math.PI) / 2;
     if (full) {
-      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.8, 1.1, 0.045), HAZARD, SMALL);
-      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.66, 0.96, 0.055), { ...DARK_METAL, cavity: 0.8 }, SMALL);
+      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.62, 0.9, 0.045), HAZARD, SMALL);
+      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.5, 0.78, 0.055), { ...PAINT_FINE, plates: 0, cavity: 0.85 }, SMALL);
     } else {
-      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.7, 1.0, 0.05), DARK_METAL, SMALL);
+      b.add(...boxOn(surfaceFrame(phi, beetleZ, noseRadius(beetleZ), NOSE_SLOPE, -0.02), 0.6, 0.9, 0.05), GUNMETAL, SMALL);
     }
   }
 
   if (full) {
     // The instruments, on the cone's far side from the airlock: a telescope looking ahead and
     // the Petrovascope beside it, wrapped in foil, on a short pylon.
-    const instrumentFrame = surfaceFrame(Math.PI, Z_CONE + 0.9, noseRadius(Z_CONE + 0.9), NOSE_SLOPE);
-    b.add(...boxOn(instrumentFrame, 0.9, 0.9, 0.5), GOLD_FOIL, SMALL);
+    const instrumentFrame = surfaceFrame(Math.PI, Z_CONE + 0.8, noseRadius(Z_CONE + 0.8), NOSE_SLOPE);
+    b.add(...boxOn(instrumentFrame, 0.8, 0.8, 0.45), GOLD_FOIL, SMALL);
     const scopeBase = new THREE.Vector3().setFromMatrixPosition(instrumentFrame);
     const outward = new THREE.Vector3(-1, 0, 0);
-    const telescope = scopeBase.clone().addScaledVector(outward, 0.85).add(new THREE.Vector3(0, 0.25, 0));
-    b.add(...tube(telescope.clone().add(new THREE.Vector3(0, 0, -0.4)), telescope.clone().add(new THREE.Vector3(0, 0, 1.4)), 0.32, 24), TRIM, SMALL);
-    const rim = frustum(0.35, 0.35, telescope.z + 1.38, telescope.z + 1.48, 24);
+    const telescope = scopeBase.clone().addScaledVector(outward, 0.75).add(new THREE.Vector3(0, 0.22, 0));
+    b.add(...tube(telescope.clone().add(new THREE.Vector3(0, 0, -0.4)), telescope.clone().add(new THREE.Vector3(0, 0, 1.3)), 0.28, 24), TRIM, SMALL);
+    const rim = frustum(0.31, 0.31, telescope.z + 1.28, telescope.z + 1.38, 24);
     b.add(rim[0], at(telescope.x, telescope.y, rim[1]), GUNMETAL, SMALL);
-    const lens = frustum(0.29, 0.29, telescope.z + 1.3, telescope.z + 1.36, 24);
+    const lens = frustum(0.25, 0.25, telescope.z + 1.2, telescope.z + 1.26, 24);
     b.add(lens[0], at(telescope.x, telescope.y, lens[1]), LENS, SMALL);
-    const scope2 = scopeBase.clone().addScaledVector(outward, 0.7).add(new THREE.Vector3(0, -0.45, 0));
-    b.add(...tube(scope2.clone().add(new THREE.Vector3(0, 0, -0.3)), scope2.clone().add(new THREE.Vector3(0, 0, 0.9)), 0.2, 16), GOLD_FOIL, SMALL);
-    const cap = frustum(0.2, 0.2, scope2.z + 0.88, scope2.z + 0.92, 16);
+    const scope2 = scopeBase.clone().addScaledVector(outward, 0.6).add(new THREE.Vector3(0, -0.4, 0));
+    b.add(...tube(scope2.clone().add(new THREE.Vector3(0, 0, -0.3)), scope2.clone().add(new THREE.Vector3(0, 0, 0.8)), 0.18, 16), GOLD_FOIL, SMALL);
+    const cap = frustum(0.18, 0.18, scope2.z + 0.78, scope2.z + 0.82, 16);
     b.add(cap[0], at(scope2.x, scope2.y, cap[1]), LENS, SMALL);
   }
 
   // Small spin drives for attitude: four pods round the storage deck.
   for (let i = 0; i < 4; i += 1) {
     const phi = Math.PI / 4 + (i * Math.PI) / 2;
-    const frame = surfaceFrame(phi, Z_CREW + 0.6, CREW_R, 0);
-    b.add(...boxOn(frame, 0.7, 0.8, 0.35), DARK_METAL, SMALL);
+    const frame = surfaceFrame(phi, Z_CREW + 0.55, CREW_R, 0);
+    b.add(...boxOn(frame, 0.6, 0.7, 0.3), TRIM, SMALL);
     if (full) {
-      for (const [dx, dz] of [[0.36, 0], [-0.36, 0], [0, 0.24]] as const) {
-        const emitter = frame.clone().multiply(new THREE.Matrix4().makeTranslation(dx, 0, 0.18 + dz));
+      for (const [dx, dz] of [[0.31, 0], [-0.31, 0], [0, 0.21]] as const) {
+        const emitter = frame.clone().multiply(new THREE.Matrix4().makeTranslation(dx, 0, 0.15 + dz));
         const turn = dz > 0 ? new THREE.Matrix4().makeRotationX(Math.PI / 2) : new THREE.Matrix4().makeRotationZ(Math.PI / 2);
-        b.add(new THREE.CylinderGeometry(0.13, 0.13, 0.04, 12), emitter.multiply(turn), EMITTER, SMALL);
+        b.add(new THREE.CylinderGeometry(0.11, 0.11, 0.04, 12), emitter.multiply(turn), EMITTER, SMALL);
       }
     }
   }
@@ -468,179 +481,243 @@ function buildCrew(detail: Detail): PartBuilder {
   if (full) {
     // The Astrophage pipes along the crew hull, and the temperature sensors every few metres.
     for (const phi of [Math.PI * 0.62, Math.PI * 1.38]) {
-      const a = new THREE.Vector3((CREW_R + 0.08) * Math.cos(phi), (CREW_R + 0.08) * Math.sin(phi), Z_CREW);
+      const a = new THREE.Vector3((CREW_R + 0.07) * Math.cos(phi), (CREW_R + 0.07) * Math.sin(phi), Z_CREW);
       const c = a.clone().setZ(Z_CONE - 0.2);
-      b.add(...tube(a, c, 0.06, 8), RED_PIPE, SMALL);
-      for (let z = Z_CREW + 1.5; z < Z_CONE; z += 3) {
-        b.add(...boxOn(surfaceFrame(phi + 0.06, z, CREW_R, 0), 0.12, 0.12, 0.08), DARK_METAL, SMALL);
+      b.add(...tube(a, c, 0.05, 8), RED_PIPE, SMALL);
+      for (let z = Z_CREW + 1.4; z < Z_CONE; z += 2.8) {
+        b.add(...boxOn(surfaceFrame(phi + 0.07, z, CREW_R, 0), 0.1, 0.1, 0.07), DARK_METAL, SMALL);
       }
     }
     // Handrails from the airlock aft, for EVAs along the hull.
-    for (const phi of [-0.22, 0.22]) {
-      for (let z = Z_CREW + 0.8; z < Z_CONE - 0.2; z += 1.6) {
-        b.add(...boxOn(surfaceFrame(phi, z, CREW_R, 0, 0.1), 0.05, 1.3, 0.05), TRIM, SMALL);
-        b.add(...boxOn(surfaceFrame(phi, z - 0.6, CREW_R, 0), 0.04, 0.04, 0.12), TRIM, SMALL);
+    for (const phi of [-0.24, 0.24]) {
+      for (let z = Z_CREW + 0.8; z < Z_CONE - 0.2; z += 1.5) {
+        b.add(...boxOn(surfaceFrame(phi, z, CREW_R, 0, 0.09), 0.045, 1.2, 0.045), TRIM, SMALL);
+        b.add(...boxOn(surfaceFrame(phi, z - 0.55, CREW_R, 0), 0.035, 0.035, 0.11), TRIM, SMALL);
       }
     }
     // Stencils: the ship's name and the deck behind each stretch of hull. Ours, generic.
-    b.add(...decalOn(surfaceFrame(-0.75, Z_LAB + 2.4, CREW_R, 0), 2.6, 0.42), STENCIL, { ...SMALL, label: 'HAIL MARY' });
-    b.add(...decalOn(surfaceFrame(-0.75, Z_LAB + 1.6, CREW_R, 0), 1.4, 0.26), STENCIL, { ...SMALL, label: 'LAB' });
-    b.add(...decalOn(surfaceFrame(-0.75, Z_DORM + 1.4, CREW_R, 0), 2.0, 0.26), STENCIL, { ...SMALL, label: 'DORMITORY' });
-    b.add(...decalOn(surfaceFrame(0.55, airlockZ - 1.55, CREW_R, 0), 1.6, 0.26), STENCIL, { ...SMALL, label: 'AIRLOCK' });
-    // The running lights' housings (their glow is drawn as sprites, see createHailMary).
+    b.add(...decalOn(surfaceFrame(-0.8, Z_LAB + 2.4, CREW_R, 0), 2.4, 0.38), STENCIL, { ...SMALL, label: 'HAIL MARY' });
+    b.add(...decalOn(surfaceFrame(-0.8, Z_LAB + 1.6, CREW_R, 0), 1.3, 0.24), STENCIL, { ...SMALL, label: 'LAB' });
+    b.add(...decalOn(surfaceFrame(-0.8, Z_DORM + 1.3, CREW_R, 0), 1.9, 0.24), STENCIL, { ...SMALL, label: 'DORMITORY' });
+    b.add(...decalOn(surfaceFrame(0.6, airlockZ - 1.5, CREW_R, 0), 1.5, 0.24), STENCIL, { ...SMALL, label: 'AIRLOCK' });
     for (const light of CREW_LIGHTS) {
-      b.add(new THREE.SphereGeometry(0.1, 8, 6), new THREE.Matrix4().makeTranslation(light.position.x, light.position.y, light.position.z), light.finish, SMALL);
+      b.add(new THREE.SphereGeometry(0.09, 8, 6), new THREE.Matrix4().makeTranslation(light.position.x, light.position.y, light.position.z), light.finish, SMALL);
     }
   }
   return b;
 }
 
-// --- The fuel and drive section ---------------------------------------------------------------
+// --- The hub, the fuel, the radiators and the drives ------------------------------------------
+
+/** A hexagonal array of drive cells on a hub drum's aft face, centre (x, 0). */
+function driveCells(b: PartBuilder, x: number, radius: number): void {
+  const cell = 0.3;
+  const pitch = cell * Math.sqrt(3) + 0.035;
+  for (let q = -6; q <= 6; q += 1) {
+    for (let r = -6; r <= 6; r += 1) {
+      const cx = pitch * (q + r / 2);
+      const cy = pitch * ((r * Math.sqrt(3)) / 2);
+      if (Math.hypot(cx, cy) > radius - cell) continue;
+      const hex = frustum(cell, cell, 0.06, HUB_Z0, 6);
+      b.add(hex[0], at(x + cx, cy, hex[1]), DRIVE_CELL, SMALL);
+      const face = frustum(cell * 0.82, cell * 0.82, 0, 0.06, 6);
+      b.add(face[0], at(x + cx, cy, face[1]), DRIVE_FACE, SMALL);
+    }
+  }
+}
+
+/** A gold-wrapped collar at a joint: a short band a little proud of the cylinder it rings. */
+function collar(b: PartBuilder, x: number, radius: number, z0: number, z1: number, segments: number): void {
+  const band = frustum(radius + 0.06, radius + 0.06, z0, z1, segments, true);
+  b.add(band[0], at(x, 0, band[1]), GOLD_FOIL, { axis: [x, 0], occluded: false });
+  const lip = frustum(radius + 0.1, radius + 0.1, z0 - 0.06, z0, segments);
+  b.add(lip[0], at(x, 0, lip[1]), TRIM, { axis: [x, 0], occluded: false });
+}
 
 function buildRear(detail: Detail): PartBuilder {
   const b = new PartBuilder(SECTION.rear);
   const full = detail === 'full';
-  const seg = full ? 72 : 20;
-  const tankSeg = full ? 48 : 14;
+  const seg = full ? 64 : 16;
+  const tankSeg = full ? 40 : 12;
 
   // The Cable Faring: a drum, foil between the five spool housings.
-  b.add(...frustum(CREW_R + 0.05, CREW_R + 0.05, Z_FARING, Z_FARING + CABLE_FARING_LENGTH_M, seg, true, full ? 4 : 1), GOLD_FOIL);
-  b.add(...frustum(CREW_R + 0.15, CREW_R + 0.15, Z_FARING + CABLE_FARING_LENGTH_M - 0.15, Z_FARING + CABLE_FARING_LENGTH_M, seg, true), DARK_METAL);
-  b.add(...frustum(CREW_R + 0.15, CREW_R + 0.15, Z_FARING, Z_FARING + 0.15, seg, true), DARK_METAL);
+  b.add(...frustum(CREW_R + 0.05, CREW_R + 0.05, Z_FARING, Z_FARING + CABLE_FARING_LENGTH_M, seg, true, full ? 3 : 1), GOLD_FOIL);
+  b.add(...frustum(CREW_R + 0.14, CREW_R + 0.14, Z_FARING + CABLE_FARING_LENGTH_M - 0.14, Z_FARING + CABLE_FARING_LENGTH_M, seg, true), TRIM);
+  b.add(...frustum(CREW_R + 0.14, CREW_R + 0.14, Z_FARING, Z_FARING + 0.14, seg, true), TRIM);
+  b.add(...frustum(CREW_R, CREW_R, Z_FARING - 0.1, Z_FARING, seg), DARK_METAL);
   for (const deg of [90, 270, 180, 18, 342]) {
     const phi = (deg * Math.PI) / 180;
-    b.add(...boxOn(surfaceFrame(phi, Z_FARING + CABLE_FARING_LENGTH_M / 2, CREW_R, 0), 1.0, 1.7, 0.42), TRIM);
-    if (full) {
-      b.add(...stalkOn(surfaceFrame(phi, Z_FARING + CABLE_FARING_LENGTH_M / 2, CREW_R, 0, 0.42), 0.32, 0.12, 20), DARK_METAL, SMALL);
-    }
+    b.add(...boxOn(surfaceFrame(phi, Z_FARING + CABLE_FARING_LENGTH_M / 2, CREW_R, 0), 0.9, 1.5, 0.38), PAINT_FINE);
+    if (full) b.add(...stalkOn(surfaceFrame(phi, Z_FARING + CABLE_FARING_LENGTH_M / 2, CREW_R, 0, 0.38), 0.28, 0.1, 20), DARK_METAL, SMALL);
+  }
+  if (full) {
+    b.add(...decalOn(surfaceFrame(Math.PI * 0.5, Z_FARING + CABLE_FARING_LENGTH_M / 2, CREW_R + 0.38, 0), 0.8, 0.2), STENCIL, { ...SMALL, label: 'CABLE' });
   }
 
-  // The skirt, widening to the tanks, and the bulkhead under it.
-  const skirtSlope = -(SKIRT_R - CREW_R) / SKIRT_LENGTH_M;
-  b.add(...frustum(SKIRT_R, CREW_R + 0.05, Z_SKIRT, Z_FARING, seg, true, full ? 6 : 3), SILVER);
-  b.add(...frustum(SKIRT_R + 0.08, SKIRT_R + 0.08, Z_BULKHEAD, Z_SKIRT, seg), DARK_METAL);
-
-  // The three tanks: nine fuel bays, three to a tank, with jettison rings between them.
-  for (const [index, angle] of TANK_ANGLES.entries()) {
-    const cx = TANK_RING * Math.cos(angle);
-    const cy = TANK_RING * Math.sin(angle);
-    const axis = [cx, cy] as const;
-    const tank = frustum(TANK_R, TANK_R, Z_TANKS, Z_BULKHEAD, tankSeg, true, full ? 9 : 4);
-    b.add(tank[0], at(cx, cy, tank[1]), TANK_SKIN, { axis });
-    for (let bay = 1; bay < 3; bay += 1) {
-      const z = Z_TANKS + (bay * FUEL_TANK_LENGTH_M) / 3;
-      const ring = frustum(TANK_R + 0.07, TANK_R + 0.07, z - 0.12, z + 0.12, tankSeg, true);
-      b.add(ring[0], at(cx, cy, ring[1]), full ? HAZARD : DARK_METAL, { axis, occluded: false });
-      if (full) {
-        // Explosive-bolt housings round each separation ring.
-        for (let k = 0; k < 8; k += 1) {
-          const phi = angle + Math.PI + ((k - 3.5) / 8) * Math.PI * 1.6;
-          b.add(...boxOn(surfaceFrame(phi, z, TANK_R + 0.07, 0, 0, cx, cy), 0.22, 0.34, 0.1), GUNMETAL, { axis, occluded: false });
-        }
-      }
-    }
+  // The hub: three drums side by side, joined by short white connectors, gold at every joint.
+  for (const drum of HUB_DRUMS) {
+    const body = frustum(drum.r, drum.r, HUB_Z0, Z_HUB_FRONT, drum.x === 0 ? seg : tankSeg, false, full ? 4 : 1);
+    b.add(body[0], at(drum.x, 0, body[1]), PAINT_FINE, { axis: [drum.x, 0] });
+    const plate = frustum(drum.r * 0.96, drum.r * 0.96, HUB_Z0 - 0.1, HUB_Z0, drum.x === 0 ? seg : tankSeg);
+    b.add(plate[0], at(drum.x, 0, plate[1]), DARK_METAL, { axis: [drum.x, 0], occluded: false });
     if (full) {
-      // Each bay's number, stencilled on its tank's outer face.
-      for (let bay = 0; bay < 3; bay += 1) {
-        const z = Z_TANKS + ((bay + 0.5) * FUEL_TANK_LENGTH_M) / 3;
-        const label = `BAY ${index * 3 + bay + 1}`;
-        b.add(...decalOn(surfaceFrame(angle + 0.25, z, TANK_R, 0, 0, cx, cy), 1.2, 0.3), STENCIL, { axis, occluded: false, label });
-      }
-    }
-    // The tank's aft dome, half hidden by the drive housing.
-    const dome = new THREE.SphereGeometry(TANK_R, tankSeg, full ? 12 : 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    b.add(dome, new THREE.Matrix4().makeTranslation(cx, cy, Z_TANKS).multiply(new THREE.Matrix4().makeScale(1, 1, 0.35)).multiply(UP_TO_Z), TANK_SKIN, { axis });
-
-    // The spin drive under it: a housing, the drive plate, and its cells.
-    const housing = frustum(TANK_R * 0.86, TANK_R * 0.98, 1.0, Z_TANKS, tankSeg, false, full ? 3 : 1);
-    b.add(housing[0], at(cx, cy, housing[1]), GUNMETAL, { axis });
-    const plate = frustum(TANK_R * 0.9, TANK_R * 0.9, 0.55, 1.0, tankSeg);
-    b.add(plate[0], at(cx, cy, plate[1]), DARK_METAL, { axis });
-    if (full) {
-      // A hexagonal array of drive cells, faces aft.
-      const cell = 0.34;
-      const pitch = cell * Math.sqrt(3) + 0.04;
-      for (let q = -4; q <= 4; q += 1) {
-        for (let r = -4; r <= 4; r += 1) {
-          const x = pitch * (q + r / 2);
-          const y = pitch * ((r * Math.sqrt(3)) / 2);
-          if (Math.hypot(x, y) > TANK_R * 0.82) continue;
-          const hex = frustum(cell, cell, 0.06, 0.55, 6);
-          b.add(hex[0], at(cx + x, cy + y, hex[1]), DRIVE_CELL, SMALL);
-          const face = frustum(cell * 0.82, cell * 0.82, 0, 0.06, 6);
-          b.add(face[0], at(cx + x, cy + y, face[1]), DRIVE_FACE, SMALL);
-        }
-      }
+      driveCells(b, drum.x, drum.r * 0.92);
+      collar(b, drum.x, drum.r, Z_HUB_FRONT - 0.5, Z_HUB_FRONT - 0.15, tankSeg);
     } else {
-      const face = frustum(TANK_R * 0.86, TANK_R * 0.86, 0, 0.55, tankSeg);
-      b.add(face[0], at(cx, cy, face[1]), DRIVE_FACE, SMALL);
+      const face = frustum(drum.r * 0.9, drum.r * 0.9, 0, HUB_Z0, tankSeg);
+      b.add(face[0], at(drum.x, 0, face[1]), DRIVE_FACE, SMALL);
     }
-
+  }
+  for (const side of [0, 2] as const) {
+    const drum = HUB_DRUMS[side];
+    const from = new THREE.Vector3(drum.x, 0, RADIATOR_Z);
+    const to = new THREE.Vector3(0, 0, RADIATOR_Z);
+    b.add(...tube(from, to, 1.1, full ? 24 : 8), PAINT_FINE, SMALL);
     if (full) {
-      // Red Astrophage pipes up the tank's outer face to the skirt, and sensors along them.
-      for (const offset of [-0.35, 0.35]) {
-        const phi = angle + offset;
-        const a = new THREE.Vector3(cx + (TANK_R + 0.1) * Math.cos(phi), cy + (TANK_R + 0.1) * Math.sin(phi), 1.2);
-        const c = a.clone().setZ(Z_BULKHEAD);
-        b.add(...tube(a, c, 0.07, 8), RED_PIPE, SMALL);
-        const top = new THREE.Vector3((CREW_R + 0.12) * Math.cos(angle + offset * 0.5), (CREW_R + 0.12) * Math.sin(angle + offset * 0.5), Z_FARING + CABLE_FARING_LENGTH_M);
-        const skirtFoot = new THREE.Vector3((SKIRT_R + 0.1) * Math.cos(angle + offset * 0.4), (SKIRT_R + 0.1) * Math.sin(angle + offset * 0.4), Z_SKIRT);
-        b.add(...tube(c, skirtFoot, 0.07, 8), RED_PIPE, SMALL);
-        b.add(...tube(skirtFoot, top, 0.07, 8), RED_PIPE, SMALL);
+      const mid = from.clone().lerp(to, 0.5);
+      b.add(...tube(mid.clone().setX(mid.x - 0.2), mid.clone().setX(mid.x + 0.2), 1.18, 24), GOLD_FOIL, SMALL);
+    }
+  }
+
+  // The radiator array: a beam across the hub, a rotary joint each side, and two long wings of
+  // dark panels on a light truss, edge-on to the drive.
+  b.add(new THREE.BoxGeometry(1.0, 2 * RADIATOR_ROOT_Y, 1.0), new THREE.Matrix4().makeTranslation(0, 0, RADIATOR_Z), DARK_METAL, SMALL);
+  for (const side of [1, -1]) {
+    const joint = new THREE.CylinderGeometry(0.75, 0.75, 0.45, full ? 32 : 10);
+    b.add(joint, new THREE.Matrix4().makeTranslation(0, side * (RADIATOR_ROOT_Y - 0.2), RADIATOR_Z), GOLD_FOIL, SMALL);
+    const segments = full ? 12 : 3;
+    const panelLength = RADIATOR_SPAN_M / segments;
+    for (let k = 0; k < segments; k += 1) {
+      const y0 = RADIATOR_ROOT_Y + k * panelLength;
+      const centreY = side * (y0 + panelLength / 2);
+      b.add(new THREE.BoxGeometry(0.07, panelLength - 0.22, RADIATOR_WIDTH_M - 0.3, 1, full ? 2 : 1, full ? 3 : 1), new THREE.Matrix4().makeTranslation(0, centreY, RADIATOR_Z), RADIATOR);
+      if (full) {
+        // Cross members between the panels, and a gold hinge block every third.
+        const gap = side * (y0 + panelLength);
+        b.add(...tube(new THREE.Vector3(0, gap, RADIATOR_Z - RADIATOR_WIDTH_M / 2), new THREE.Vector3(0, gap, RADIATOR_Z + RADIATOR_WIDTH_M / 2), 0.05, 6), RADIATOR_FRAME, SMALL);
+        if (k % 3 === 2) b.add(new THREE.BoxGeometry(0.3, 0.35, 0.3), new THREE.Matrix4().makeTranslation(0, gap, RADIATOR_Z), GOLD_FOIL, SMALL);
       }
-      for (let z = Z_TANKS + 1.5; z < Z_BULKHEAD; z += 3) {
-        b.add(...boxOn(surfaceFrame(angle + 0.5, z, TANK_R, 0, 0, cx, cy), 0.14, 0.14, 0.09), DARK_METAL, { axis, occluded: false });
+    }
+    if (full) {
+      for (const dz of [-RADIATOR_WIDTH_M / 2, RADIATOR_WIDTH_M / 2]) {
+        b.add(
+          ...tube(new THREE.Vector3(0, side * RADIATOR_ROOT_Y, RADIATOR_Z + dz), new THREE.Vector3(0, side * (RADIATOR_ROOT_Y + RADIATOR_SPAN_M), RADIATOR_Z + dz), 0.09, 6),
+          RADIATOR_FRAME,
+          SMALL,
+        );
       }
     }
   }
 
-  // The spine between the tanks, and the radiators in the valleys between them: the generators'
-  // and life support's heat, shed edge-on to the drive.
-  b.add(...frustum(1.1, 1.1, 0.8, Z_BULKHEAD, full ? 24 : 8, false, full ? 8 : 2), GUNMETAL);
-  for (const angle of TANK_ANGLES) {
-    const valley = angle + Math.PI / 3;
-    const inner = TANK_RING * 0.62;
-    const outer = SKIRT_R + 0.4;
-    const radial = new THREE.Vector3(Math.cos(valley), Math.sin(valley), 0);
-    const tangent = new THREE.Vector3(-Math.sin(valley), Math.cos(valley), 0);
-    const height = Z_BULKHEAD - 1.0 - (Z_TANKS + 1.2);
-    const centre = radial.clone().multiplyScalar((inner + outer) / 2).setZ((Z_TANKS + 1.2 + Z_BULKHEAD - 1.0) / 2);
-    const panel = new THREE.Matrix4().makeBasis(radial, new THREE.Vector3(0, 0, 1), tangent).setPosition(centre);
-    // Subdivided, so the occlusion between the tanks can grade across it.
-    b.add(new THREE.BoxGeometry(outer - inner, height, 0.08, full ? 5 : 2, full ? 8 : 3, 1), panel, RADIATOR);
-    if (full) {
-      // Coolant ribs across the panel, and headers along its edges.
-      for (let k = 1; k < 10; k += 1) {
-        const z = Z_TANKS + 1.2 + (k * height) / 10;
-        const a = centre.clone().addScaledVector(radial, -(outer - inner) / 2).setZ(z);
-        const c = centre.clone().addScaledVector(radial, (outer - inner) / 2).setZ(z);
-        for (const side of [1, -1]) {
-          b.add(...tube(a.clone().addScaledVector(tangent, side * 0.05), c.clone().addScaledVector(tangent, side * 0.05), 0.025, 4), RADIATOR_RIB, SMALL);
+  // The outer tanks: three fuel bays each, separation rings between them, gold at the hub.
+  for (const [index, x] of TANK_X.entries()) {
+    const z0 = index === 0 ? Z_HUB_FRONT : ELBOW_START_Z;
+    const tank = frustum(TANK_R, TANK_R, z0, Z_TANK_FRONT, tankSeg, true, full ? 12 : 3);
+    b.add(tank[0], at(x, 0, tank[1]), TANK_PAINT, { axis: [x, 0] });
+    const dome = new THREE.SphereGeometry(TANK_R, tankSeg, full ? 10 : 4, 0, Math.PI * 2, 0, Math.PI / 2);
+    b.add(dome, new THREE.Matrix4().makeTranslation(x, 0, Z_TANK_FRONT).multiply(new THREE.Matrix4().makeScale(1, 1, 0.5)).multiply(UP_TO_Z), TANK_PAINT, { axis: [x, 0] });
+    if (index === 0) {
+      if (full) collar(b, x, TANK_R, z0, z0 + 0.35, tankSeg);
+    } else {
+      b.add(...bend(ELBOW, TANK_R, full ? 24 : 8, tankSeg), { ...TANK_PAINT, plates: 0 });
+      if (full) {
+        collar(b, x, TANK_R, z0 - 0.05, z0 + 0.3, tankSeg);
+        // Stiffening rings round the elbow.
+        for (const t of [0.3, 0.55, 0.8]) {
+          const point = ELBOW.getPoint(t);
+          const tangent = ELBOW.getTangent(t);
+          const ring = new THREE.TorusGeometry(TANK_R + 0.03, 0.05, 6, tankSeg);
+          const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+          b.add(ring, new THREE.Matrix4().compose(point, rotation, new THREE.Vector3(1, 1, 1)), TRIM, SMALL);
         }
       }
-      for (const along of [-(outer - inner) / 2, (outer - inner) / 2]) {
-        const edge = centre.clone().addScaledVector(radial, along);
-        b.add(...tube(edge.clone().setZ(Z_TANKS + 1.2), edge.clone().setZ(Z_BULKHEAD - 1.0), 0.07, 8), DARK_METAL, SMALL);
+    }
+    const bayLength = (Z_TANK_FRONT - z0) / 3;
+    for (let bay = 1; bay < 3; bay += 1) {
+      const z = z0 + bay * bayLength;
+      const ring = frustum(TANK_R + 0.05, TANK_R + 0.05, z - 0.1, z + 0.1, tankSeg, true);
+      b.add(ring[0], at(x, 0, ring[1]), full ? HAZARD : DARK_METAL, { axis: [x, 0], occluded: false });
+    }
+    if (full) {
+      for (let bay = 0; bay < 3; bay += 1) {
+        const z = z0 + (bay + 0.5) * bayLength;
+        b.add(...decalOn(surfaceFrame(Math.PI / 2, z, TANK_R, 0, 0, x, 0), 1.1, 0.26), STENCIL, { axis: [x, 0], occluded: false, label: `BAY ${index * 3 + bay + 1}` });
+      }
+      // A red Astrophage pipe down the tank's inboard side, into the hub.
+      const inboard = -Math.sign(x);
+      const a = new THREE.Vector3(x + inboard * (TANK_R + 0.08), 0.5, z0 + 0.4);
+      const c = a.clone().setZ(Z_TANK_FRONT - 0.5);
+      b.add(...tube(a, c, 0.06, 8), RED_PIPE, SMALL);
+      for (let z = z0 + 1.5; z < Z_TANK_FRONT; z += 3) {
+        b.add(...boxOn(surfaceFrame(-Math.PI / 2, z, TANK_R, 0, 0, x, 0), 0.12, 0.12, 0.08), DARK_METAL, { axis: [x, 0], occluded: false });
       }
     }
   }
 
-  // Small spin drives for attitude on the skirt's foot.
-  for (let i = 0; i < 3; i += 1) {
-    const phi = TANK_ANGLES[i]! + Math.PI / 3;
-    const frame = surfaceFrame(phi, Z_SKIRT + 0.8, SKIRT_R - 0.8 * -skirtSlope, skirtSlope);
-    b.add(...boxOn(frame, 0.8, 0.9, 0.4), DARK_METAL, SMALL);
+  // The middle cylinder: an open spine of four longerons and ring frames, braced, a red pipe
+  // down its middle, three fuel pods along it, gold at their ends.
+  const longeron = 1.1;
+  const frames = full ? 9 : 3;
+  for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+    b.add(...tube(new THREE.Vector3(dx * longeron, dy * longeron, Z_HUB_FRONT), new THREE.Vector3(dx * longeron, dy * longeron, Z_FARING), full ? 0.12 : 0.18, full ? 8 : 4), GUNMETAL, SMALL);
+  }
+  for (let k = 0; k <= frames; k += 1) {
+    const z = Z_HUB_FRONT + 0.3 + (k * (SPINE_LENGTH_M - 0.6)) / frames;
+    b.add(new THREE.TorusGeometry(longeron * Math.SQRT2, full ? 0.07 : 0.1, 6, full ? 24 : 8), new THREE.Matrix4().makeTranslation(0, 0, z), TRIM, SMALL);
+    if (full && k < frames) {
+      const zNext = Z_HUB_FRONT + 0.3 + ((k + 1) * (SPINE_LENGTH_M - 0.6)) / frames;
+      // One diagonal brace on each face, alternating.
+      const corners = [[1, 1], [1, -1], [-1, -1], [-1, 1]] as const;
+      for (let f = 0; f < 4; f += 1) {
+        const p = corners[f]!;
+        const q = corners[(f + 1) % 4]!;
+        const flip = (k + f) % 2 === 0;
+        const a = new THREE.Vector3(p[0] * longeron, p[1] * longeron, flip ? z : zNext);
+        const c = new THREE.Vector3(q[0] * longeron, q[1] * longeron, flip ? zNext : z);
+        b.add(...tube(a, c, 0.045, 5), GUNMETAL, SMALL);
+      }
+    }
+  }
+  b.add(...tube(new THREE.Vector3(0, 0, Z_HUB_FRONT), new THREE.Vector3(0, 0, Z_FARING), 0.16, full ? 10 : 4), RED_PIPE, SMALL);
+  for (const [i, z] of POD_Z.entries()) {
+    const r = FUEL_POD_DIAMETER_M / 2;
+    b.add(...frustum(r, r, z - FUEL_POD_LENGTH_M / 2, z + FUEL_POD_LENGTH_M / 2, seg, false, full ? 3 : 1), PAINT);
     if (full) {
-      for (const dx of [0.42, -0.42]) {
-        b.add(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), frame.clone().multiply(new THREE.Matrix4().makeTranslation(dx, 0, 0.2)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)), EMITTER, SMALL);
+      collar(b, 0, r, z - FUEL_POD_LENGTH_M / 2 - 0.05, z - FUEL_POD_LENGTH_M / 2 + 0.25, seg);
+      collar(b, 0, r, z + FUEL_POD_LENGTH_M / 2 - 0.25, z + FUEL_POD_LENGTH_M / 2 + 0.05, seg);
+      b.add(...decalOn(surfaceFrame(Math.PI / 2, z, r, 0), 1.1, 0.26), STENCIL, { ...SMALL, label: `BAY ${7 + i}` });
+    }
+  }
+
+  // Struts from the outer tanks to the spine, metal, at three stations.
+  for (const x of TANK_X) {
+    for (const z of [Z_HUB_FRONT + 7, Z_HUB_FRONT + 13, Z_HUB_FRONT + 21]) {
+      if (x > 0 && z < ELBOW_START_Z) continue;
+      const inner = new THREE.Vector3(Math.sign(x) * longeron, 0, z);
+      const outer = new THREE.Vector3(x - Math.sign(x) * TANK_R, 0, z);
+      b.add(...tube(inner, outer, full ? 0.11 : 0.16, full ? 8 : 4), TRIM, SMALL);
+      if (full) {
+        b.add(...tube(inner.clone().setZ(z - 1.2), outer, 0.06, 6), GUNMETAL, SMALL);
+        collar(b, x, TANK_R, z - 0.2, z + 0.2, 32);
+      }
+    }
+  }
+
+  // Small spin drives for attitude on the hub.
+  for (let i = 0; i < 4; i += 1) {
+    const phi = Math.PI / 4 + (i * Math.PI) / 2;
+    const frame = surfaceFrame(phi, 3.6, 3.0, 0);
+    b.add(...boxOn(frame, 0.7, 0.8, 0.35), TRIM, SMALL);
+    if (full) {
+      for (const dx of [0.36, -0.36]) {
+        b.add(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 12), frame.clone().multiply(new THREE.Matrix4().makeTranslation(dx, 0, 0.18)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)), EMITTER, SMALL);
       }
     }
   }
 
   if (full) {
-    b.add(...decalOn(surfaceFrame(Math.PI * 0.5, Z_FARING + CABLE_FARING_LENGTH_M / 2 + 1.1, CREW_R + 0.42, 0), 1.6, 0.24), STENCIL, { ...SMALL, label: 'CABLE' });
     for (const light of REAR_LIGHTS) {
-      b.add(new THREE.SphereGeometry(0.12, 8, 6), new THREE.Matrix4().makeTranslation(light.position.x, light.position.y, light.position.z), light.finish, SMALL);
+      b.add(new THREE.SphereGeometry(0.11, 8, 6), new THREE.Matrix4().makeTranslation(light.position.x, light.position.y, light.position.z), light.finish, SMALL);
     }
   }
   return b;
@@ -655,12 +732,11 @@ function buildCables(mode: 'cruise' | 'centrifuge'): PartBuilder {
     const spool = spools[i]!;
     const anchor = mode === 'cruise' ? anchors[i]!.clone() : crewToCentrifuge(anchors[i]!.clone());
     if (mode === 'cruise') {
-      // Stowed along the hull, from the spool's head up to the hinge.
       const out = anchor.clone().setZ(spool.z);
-      b.add(...tube(spool, out, 0.035, 6), ZYLON, SMALL);
-      b.add(...tube(out, anchor, 0.035, 6), ZYLON, SMALL);
+      b.add(...tube(spool, out, 0.03, 6), ZYLON, SMALL);
+      b.add(...tube(out, anchor, 0.03, 6), ZYLON, SMALL);
     } else {
-      b.add(...tube(spool, anchor, 0.035, 6), ZYLON, SMALL);
+      b.add(...tube(spool, anchor, 0.03, 6), ZYLON, SMALL);
     }
   }
   return b;
@@ -752,9 +828,9 @@ export interface HailMary {
   update(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void;
   /**
    * Cruise, or centrifuge mode at a spin angle (radians, about the hinge axis, local y). In
-   * centrifuge mode the crew section is turned round and 77 m out on its cables, the whole
+   * centrifuge mode the crew section is turned round and 80 m out on its cables, the whole
    * turning about the common centre of mass -- which is the origin in either mode; the layer
-   * advances `spinPhase` by CENTRIFUGE_SPIN_RAD_S a second. The model then spans about 2.6
+   * advances `spinPhase` by CENTRIFUGE_SPIN_RAD_S a second. The model then spans about 2.7
    * ship lengths. The drives cannot fire while split, so their plates are cold.
    */
   setMode(mode: ShipMode, spinPhase?: number): void;
@@ -994,7 +1070,7 @@ export function createHailMary(): HailMary {
       // the view's half-height.
       object.getWorldPosition(objectPosition);
       camera.getWorldPosition(cameraPosition);
-      const length = object.matrixWorld.getMaxScaleOnAxis() * (mode === 'cruise' ? 1 : 2.6);
+      const length = object.matrixWorld.getMaxScaleOnAxis() * (mode === 'cruise' ? 1.9 : 2.7);
       const distance = Math.max(objectPosition.distanceTo(cameraPosition), 1e-9);
       const halfView = camera instanceof THREE.PerspectiveCamera ? Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) : 1;
       const share = length / distance / halfView;

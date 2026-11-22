@@ -293,6 +293,11 @@ const FRAGMENT_SHADER = /* glsl */ `
       // Brushed round the axis, or along it on about a third of the plates.
       if (temper > 0.8) t = normalize(cross(n, t));
       albedo *= 1.0 - 0.5 * seam - 0.15 * weld;
+      // Paint weathers: faint grime in broad, soft patches, a little heavier along the plates'
+      // lower edges where handling and outgassing leave it. Metal is left clean.
+      float grime = valueNoise(surfaceMetres * vec2(0.45, 0.3)) * valueNoise(surfaceMetres * vec2(1.9, 1.3) + 5.0);
+      float grimeShown = 1.0 - smoothstep(0.2, 0.8, max(pixelMetres.x, pixelMetres.y));
+      albedo *= 1.0 - (1.0 - metal) * grimeShown * (0.14 * grime + 0.05 * smoothstep(0.35, 0.0, rowFraction));
       rough = mix(rough, 0.75, weld);
       aniso *= 1.0 - weld;
       occlusion *= 1.0 - 0.35 * seam;

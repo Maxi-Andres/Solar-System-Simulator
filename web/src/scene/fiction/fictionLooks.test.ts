@@ -14,12 +14,14 @@ import {
   CENTRIFUGE_SPIN_RAD_S,
   CONTROL_ROOM_HEIGHT_M,
   DORMITORY_HEIGHT_M,
-  FUEL_TANK_LENGTH_M,
   HAIL_MARY_LENGTH_M,
+  HUB_LENGTH_M,
+  CYLINDER_SPACING_M,
+  FUEL_TANK_DIAMETER_M,
   LAB_HEIGHT_M,
   NOSE_CONE_LENGTH_M,
-  SKIRT_LENGTH_M,
-  SPIN_DRIVE_LENGTH_M,
+  RADIATOR_SPAN_M,
+  SPINE_LENGTH_M,
   STORAGE_HEIGHT_M,
   createHailMary,
 } from './looks/hailMary.ts';
@@ -329,9 +331,12 @@ describe('the Hail Mary', () => {
 
   it("adds its sections up to the novel's 40 m", () => {
     const sum =
-      SPIN_DRIVE_LENGTH_M + FUEL_TANK_LENGTH_M + 0.3 + SKIRT_LENGTH_M + CABLE_FARING_LENGTH_M +
+      HUB_LENGTH_M + SPINE_LENGTH_M + CABLE_FARING_LENGTH_M +
       STORAGE_HEIGHT_M + DORMITORY_HEIGHT_M + LAB_HEIGHT_M + NOSE_CONE_LENGTH_M;
     expect(sum).toBeCloseTo(HAIL_MARY_LENGTH_M, 6);
+    // The radiator array reaches out beyond the hull, as said.
+    expect(RADIATOR_SPAN_M).toBeLessThan(HAIL_MARY_LENGTH_M);
+    expect(2 * RADIATOR_SPAN_M).toBeGreaterThan(HAIL_MARY_LENGTH_M);
     expect(CONTROL_ROOM_HEIGHT_M).toBeLessThan(NOSE_CONE_LENGTH_M);
   });
 
@@ -422,25 +427,26 @@ describe('the Hail Mary', () => {
     expect(CENTRIFUGE_CABLE_LENGTH_M).toBeLessThan(100);
   });
 
-  it('works out how much sky each vertex sees: less in the gaps between the tanks', () => {
+  it("works out how much sky each vertex sees: less on a tank's face toward the spine than outward", () => {
     const ship = createHailMary();
     ship.finishOcclusion();
     const { rear } = parts(ship.object);
     const position = rear.geometry.getAttribute('position');
     const detail = rear.geometry.getAttribute('detail');
-    // A point on a tank facing the spine, and one on the same tank facing out.
+    // The -x tank: its face toward the fuel pods against its face outward.
+    const axis = -CYLINDER_SPACING_M;
+    const radius = FUEL_TANK_DIAMETER_M / 2;
     let inner = 1;
     let outer = 0;
     for (let i = 0; i < position.count; i += 1) {
       const x = position.getX(i);
       const y = position.getY(i);
       const z = position.getZ(i);
-      if (z < 6 || z > 12) continue;
-      const r = Math.hypot(x, y);
-      if (Math.abs(r - 0.47) < 0.05) inner = Math.min(inner, detail.getX(i));
-      if (Math.abs(r - 6.46) < 0.05) outer = Math.max(outer, detail.getX(i));
+      if (z < 8.5 || z > 10.5 || Math.abs(y) > 0.2) continue;
+      if (Math.abs(x - (axis + radius)) < 0.05) inner = Math.min(inner, detail.getX(i));
+      if (Math.abs(x - (axis - radius)) < 0.05) outer = Math.max(outer, detail.getX(i));
     }
-    expect(inner).toBeLessThan(0.6);
+    expect(inner).toBeLessThan(outer);
     expect(outer).toBeGreaterThan(0.85);
     ship.dispose();
   });
