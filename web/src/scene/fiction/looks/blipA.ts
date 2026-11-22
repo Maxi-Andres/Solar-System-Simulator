@@ -65,13 +65,13 @@ const SPINDLE_X = (SPINDLE_GAP_M + SPINDLE_WIDTH_M) / 2;
  */
 const FRAMES = 5;
 const FRAME_PITCH_M = 12;
-const FRAME_BAND_M = 6;
-const FRAME_DEPTH_M = 2.4;
+const FRAME_BAND_M = 2;
+const FRAME_DEPTH_M = 1.2;
 const FRAME_PEAK_M = 12;
-const FRAME_LEAN = 0.2;
+const FRAME_LEAN = 0.55;
 
-/** The hub between the spindles: half-extents. Compact: it fills the gap, a little proud of the spindles. */
-const HUB_HALF = new THREE.Vector3(SPINDLE_GAP_M * 0.48, SPINDLE_THICKNESS_M * 0.62, 36);
+/** The hub between the spindles: half-extents. A joint, not a body: half the gap across, the frames' straps meeting on it. */
+const HUB_HALF = new THREE.Vector3(SPINDLE_GAP_M * 0.25, SPINDLE_THICKNESS_M * 0.3, 16);
 
 /** Rods each spindle carries at each level of detail. */
 const RODS_FULL = 800;
@@ -116,11 +116,17 @@ function generator(seed: number): () => number {
 const SECTION_EXPONENT = 1.5;
 
 /**
+ * The spindle's taper: its radius at a share `s` of the half-length from the middle is
+ * (1 - s)^TAPER of the middle's -- 15 % at 70 % of the way out, the last stretch a few long rods.
+ */
+const TAPER = 1.6;
+
+/**
  * How far along z a rod at normalised radius `rho` (0 at the axis, 1 at the middle's edge)
- * reaches: the spindle's profile, full length at the axis, tapering to a point at both ends.
+ * reaches: the inverse of the taper, full length at the axis.
  */
 function reachAt(rho: number): number {
-  return (BLIP_A_LENGTH_M / 2) * Math.pow(Math.max(1 - rho * rho, 0), 0.75);
+  return (BLIP_A_LENGTH_M / 2) * (1 - Math.pow(Math.min(Math.max(rho, 0), 1), 1 / TAPER));
 }
 
 /** A rod: centre, length, width, how much sky it sees, its tone. */
@@ -135,19 +141,19 @@ interface Rod {
 }
 
 /**
- * One spindle's rods, around its axis at x = `centreX`: on its outer layers, where they are seen,
- * each as long as the spindle's profile allows at its radius, its two ends staggered
- * independently, a few reaching on past the taper.
+ * One spindle's rods, around its axis at x = `centreX`, spread evenly over its cross-section,
+ * each as long as the taper allows at its radius -- the outer ones short, the inner ones running
+ * on toward the tips -- its two ends staggered independently, a few reaching past the taper.
  */
 function rods(count: number, widthScale: number, centreX: number, seed: number): Rod[] {
   const random = generator(seed);
   const result: Rod[] = [];
   for (let i = 0; i < count; i += 1) {
-    // A point on the cross-section, in its outer layers (radius 0.55 to 1) -- but one rod in
-    // twenty near the axis, the longest, which make the spindle's points.
+    // A point on the cross-section, evenly over its area -- and one rod in twenty near the axis,
+    // the longest, which make the spindle's points.
     const angle = random() * Math.PI * 2;
     const axial = random() < 0.05;
-    const rho = axial ? 0.3 * random() : 0.55 + 0.45 * Math.sqrt(random());
+    const rho = axial ? 0.15 * random() : Math.sqrt(random());
     const c = Math.cos(angle);
     const s = Math.sin(angle);
     // The superellipse's radius in this direction.
@@ -155,7 +161,7 @@ function rods(count: number, widthScale: number, centreX: number, seed: number):
     const x = centreX + c * edge * rho * (SPINDLE_WIDTH_M / 2);
     const y = s * edge * rho * (SPINDLE_THICKNESS_M / 2);
     // Staggered ends: each a little short of the profile, now and then one reaching beyond it.
-    const reach = reachAt(rho * 0.92);
+    const reach = reachAt(rho * 0.97);
     const stray = (): number => (axial ? 0.9 + 0.1 * random() : random() < 0.06 ? 1.05 + 0.25 * random() : 0.72 + 0.28 * random());
     const fore = Math.min(reach * stray(), BLIP_A_LENGTH_M / 2);
     const aft = Math.min(reach * stray(), BLIP_A_LENGTH_M / 2);
@@ -170,7 +176,7 @@ function rods(count: number, widthScale: number, centreX: number, seed: number):
       z: (fore - aft) / 2,
       length: fore + aft,
       width: widthScale * (0.25 + 1.0 * Math.pow(random(), 3)),
-      sky: axial ? 0.5 : 0.45 + 0.55 * Math.pow((rho - 0.55) / 0.45, 0.7),
+      sky: axial ? 0.5 : 0.35 + 0.65 * Math.pow(rho, 0.7),
       tone: 0.4 + 0.9 * Math.pow(random(), 1.4),
     });
   }
@@ -186,7 +192,7 @@ function spindleCores(builder: ShipBuilder, scale: number, finish: number, occlu
   const steps = 14;
   for (let k = 0; k <= steps; k += 1) {
     const z = -1 + (2 * k) / steps;
-    const rho = Math.sqrt(Math.max(1 - Math.pow(Math.abs(z), 1 / 0.75), 0));
+    const rho = Math.pow(1 - Math.abs(z), TAPER);
     points.push(new THREE.Vector2(Math.max(rho, 1e-3), (z * BLIP_A_LENGTH_M) / 2));
   }
   for (const side of [-1, 1]) {
@@ -194,7 +200,7 @@ function spindleCores(builder: ShipBuilder, scale: number, finish: number, occlu
     const matrix = new THREE.Matrix4().compose(
       new THREE.Vector3(side * SPINDLE_X, 0, 0),
       new THREE.Quaternion(),
-      new THREE.Vector3((SPINDLE_WIDTH_M / 2) * scale, (SPINDLE_THICKNESS_M / 2) * scale, 0.72),
+      new THREE.Vector3((SPINDLE_WIDTH_M / 2) * scale, (SPINDLE_THICKNESS_M / 2) * scale, 0.85),
     );
     builder.add(lathe, matrix, finish, occlusion);
   }
@@ -211,8 +217,8 @@ function middleGeometry(builder: ShipBuilder): void {
   for (let k = -2; k <= 2; k += 1) {
     if (k === 0) continue;
     for (const side of [-1, 1]) {
-      const rib = new THREE.BoxGeometry(2, HUB_HALF.y * 1.3, 3);
-      builder.add(rib, new THREE.Matrix4().makeTranslation(side * HUB_HALF.x * 0.82, 0, k * 11), FINISH.hull, 0.75);
+      const rib = new THREE.BoxGeometry(1, HUB_HALF.y * 1.3, 1.5);
+      builder.add(rib, new THREE.Matrix4().makeTranslation(side * HUB_HALF.x * 0.82, 0, k * 5), FINISH.hull, 0.75);
     }
   }
 
@@ -253,10 +259,12 @@ function middleGeometry(builder: ShipBuilder): void {
         builder.add(segment, placed, FINISH.hull, 0.85);
       });
     }
-    // Across the gap, over and under the hub, joining the two bands.
+    // Across the gap, over and under the hub, joining the two bands where they meet: the
+    // chevron's point, ahead of the band's middle by its lean.
+    const apex = z + (SPINDLE_WIDTH_M / 2 + 1.2) * Math.sin(FRAME_LEAN);
     for (const ySide of [-1, 1]) {
       const strap = new THREE.BoxGeometry(SPINDLE_GAP_M + 4, FRAME_DEPTH_M, FRAME_BAND_M);
-      builder.add(strap, new THREE.Matrix4().makeTranslation(0, ySide * (HUB_HALF.y + FRAME_DEPTH_M / 2), z), FINISH.hull, 0.8);
+      builder.add(strap, new THREE.Matrix4().makeTranslation(0, ySide * (HUB_HALF.y + FRAME_DEPTH_M / 2), apex), FINISH.hull, 0.8);
     }
   }
 }
@@ -270,7 +278,7 @@ function silhouetteGeometry(): THREE.BufferGeometry {
       new THREE.Matrix4().compose(
         new THREE.Vector3(side * SPINDLE_X, 0, 0),
         new THREE.Quaternion(),
-        new THREE.Vector3(SPINDLE_WIDTH_M * 0.8, SPINDLE_THICKNESS_M * 0.8, BLIP_A_LENGTH_M),
+        new THREE.Vector3(SPINDLE_WIDTH_M * 0.6, SPINDLE_THICKNESS_M * 0.6, BLIP_A_LENGTH_M),
       ),
       FINISH.rod,
       0.6,
@@ -357,7 +365,7 @@ export function createBlipA(): BlipA {
   const body = rig.sections[0]!;
   const builder = new ShipBuilder(0);
   middleGeometry(builder);
-  spindleCores(builder, 0.58, FINISH.core, 0.45);
+  spindleCores(builder, 0.5, FINISH.core, 0.4);
   const bodyFull = builder.build();
   const silhouette = silhouetteGeometry();
   body.geometry = bodyFull;
