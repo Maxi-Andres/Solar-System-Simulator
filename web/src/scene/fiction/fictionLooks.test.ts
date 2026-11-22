@@ -576,12 +576,14 @@ describe('the Blip-A', () => {
     expect(AFT_REACH_M + FORE_REACH_M).toBe(BLIP_A_LENGTH_M);
     // Ten Hail Marys: the film's stills, against its 40 m.
     expect(BLIP_A_LENGTH_M).toBe(400);
-    // Thin through, tall across: a flattened fan.
-    expect(box.max.x - box.min.x).toBeLessThan(0.5 * (box.max.y - box.min.y));
+    // Two spindles side by side: wide across, thin through.
+    expect(box.max.x - box.min.x).toBeGreaterThan(1.5 * (box.max.y - box.min.y));
+    // Symmetric across the plane between the spindles.
+    expect(box.max.x).toBeCloseTo(-box.min.x, 3);
     ship.dispose();
   });
 
-  it('draws its needles instanced on the ship shader, and carries no running lights', () => {
+  it('draws its rods instanced on the ship shader, and carries no running lights', () => {
     const ship = createBlipA();
     let instancedMeshes = 0;
     let points = 0;
@@ -591,7 +593,7 @@ describe('the Blip-A', () => {
       if ((part as THREE.Points).isPoints) points += 1;
       if ((part as THREE.Mesh).isMesh) programs.add((part as THREE.Mesh).material as THREE.Material);
     });
-    expect(instancedMeshes).toBe(4);
+    expect(instancedMeshes).toBe(2);
     expect(points).toBe(0);
     // The ship's material, and its variant for the rods, on the very same uniforms.
     expect(programs.size).toBe(2);
@@ -607,8 +609,8 @@ describe('the Blip-A', () => {
     expect(ship.triangles.full).toBeLessThan(20000);
     expect(ship.triangles.mid).toBeLessThan(ship.triangles.full);
     expect(ship.triangles.low).toBeLessThan(100);
-    const needles = ship.object.getObjectByName('blip-a-needles')!;
-    const middle = ship.object.getObjectByName('blip-a-needles-mid')!;
+    const needles = ship.object.getObjectByName('blip-a-rods')!;
+    const middle = ship.object.getObjectByName('blip-a-rods-mid')!;
     const core = ship.object.getObjectByName('blip-a-core') as THREE.Mesh;
     const coreFull = core.geometry;
     ship.object.updateMatrixWorld(true);

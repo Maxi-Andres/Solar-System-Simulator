@@ -895,8 +895,8 @@ const BLIP_A: FictionShipRecord = {
     'Scaled from the 2026 film’s stills against the Hail Mary’s 40 m: about ten Hail Marys. The novel gives no length.',
   ),
   parked: {
-    // Its needles run along the orbit, the 230 m aft fan toward the Hail Mary, whose centrifuge
-    // reaches 75 m from its centre: 400 m centre to centre leaves some 95 m between them.
+    // Its needles run along the orbit, the 200 m aft reach toward the Hail Mary, whose centrifuge
+    // reaches 75 m from its centre: 400 m centre to centre leaves some 125 m between them.
     beside: 'hail-mary',
     aheadKm: invented(
       0.4,
