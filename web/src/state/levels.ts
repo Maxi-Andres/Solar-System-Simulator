@@ -1,6 +1,9 @@
 import type { BodyId } from '@sss/tools/types';
 
+import { ALPHA_CEN_FRAMING_KM } from '../core/alphaCenBodies.ts';
+import { RADIUS_A_SUN } from '../core/alphaCentauri.ts';
 import {
+  ALPHA_CEN_SYSTEM_DESCRIPTION_ID,
   CMB_DESCRIPTION_ID,
   LANIAKEA_DESCRIPTION_ID,
   LOCAL_GROUP_DESCRIPTION_ID,
@@ -28,9 +31,18 @@ import {
  * the info panel's, its description the one offered -- while the focus, what the camera orbits,
  * is its centre: the Sun for most, M87 for the Virgo Cluster, the attractor for Laniakea. Any
  * body chosen afterwards, however, clears it (store.ts setFocus).
+ *
+ * Every other star system is one too, beside the Solar System under the Solar Neighbourhood,
+ * though not centred on the Sun: Alpha Centauri, and a planetary system -- Tau Ceti, Epsilon
+ * Eridani, an Archive system gone to -- which is the one the focus is in (planetarySystems.ts
+ * planetarySystemOf), the focus staying its star or planet. Selected by the zoom alone, from any
+ * body of the system (systemLadder), so its panel and its description follow the view as the
+ * Solar System's do (Maxi, 2026-11-22).
  */
 export type LevelId =
   | 'solar-system'
+  | 'alpha-centauri'
+  | 'planetary-system'
   | 'solar-neighbourhood'
   | 'milky-way'
   | 'local-group'
@@ -126,6 +138,23 @@ export const LEVELS: Readonly<Record<LevelId, Level>> = {
     tier: 6,
     readAbout: [{ id: SOLAR_SYSTEM_DESCRIPTION_ID, name: 'Solar System' }],
   },
+  // The Solar System's neighbour on the breadcrumb, the same crumb's place.
+  'alpha-centauri': {
+    id: 'alpha-centauri',
+    name: 'Alpha Centauri',
+    kind: 'triple star system',
+    tier: 6,
+    readAbout: [{ id: ALPHA_CEN_SYSTEM_DESCRIPTION_ID, name: 'Alpha Centauri system' }],
+  },
+  // The planetary system the focus is in: its name, and its description where one is written,
+  // are that system's (LevelFacts.tsx), so none is listed here.
+  'planetary-system': {
+    id: 'planetary-system',
+    name: 'Planetary system',
+    kind: 'planetary system',
+    tier: 6,
+    readAbout: [],
+  },
 };
 
 /**
@@ -179,17 +208,50 @@ export const LADDER_HYSTERESIS = 1.25;
  * so a camera resting near a boundary does not flicker the breadcrumb.
  */
 export function levelForDistance(current: LevelId | null, cameraFromSunKm: number): LevelId | null {
-  const SUN_LADDER = sunLadder();
-  const d = Math.max(cameraFromSunKm, 1);
+  return ladderLevel(sunLadder(), current, cameraFromSunKm);
+}
+
+/** levelForDistance on any ladder: `ladder`'s level for the camera `distanceKm` from its centre. */
+export function ladderLevel(ladder: readonly Rung[], current: LevelId | null, distanceKm: number): LevelId | null {
+  const d = Math.max(distanceKm, 1);
   let index = 0;
-  for (let k = 1; k < SUN_LADDER.length; k += 1) {
-    if (d >= Math.sqrt(SUN_LADDER[k - 1]!.km * SUN_LADDER[k]!.km)) index = k;
+  for (let k = 1; k < ladder.length; k += 1) {
+    if (d >= Math.sqrt(ladder[k - 1]!.km * ladder[k]!.km)) index = k;
   }
-  const at = SUN_LADDER.findIndex((rung) => rung.level === current);
+  const at = ladder.findIndex((rung) => rung.level === current);
   if (at >= 0 && Math.abs(at - index) === 1) {
-    const boundary = Math.sqrt(SUN_LADDER[Math.min(at, index)]!.km * SUN_LADDER[Math.max(at, index)]!.km);
+    const boundary = Math.sqrt(ladder[Math.min(at, index)]!.km * ladder[Math.max(at, index)]!.km);
     const past = index > at ? d / boundary : boundary / d;
     if (past < LADDER_HYSTERESIS) return current;
   }
-  return SUN_LADDER[index]!.level;
+  return ladder[index]!.level;
+}
+
+/**
+ * A star system's ladder, made as the Sun's first two rungs are: the star itself, null, at the
+ * eight radii a body is framed from, and the system, `level`, at the distance its breadcrumb entry
+ * frames it from. The boundary is their geometric mean, as the Sun's is: 2.6 AU for the Solar
+ * System, 2.3 for Alpha Centauri, 0.48 for Tau Ceti, whose planets are all within 1.6 AU, 0.11
+ * for 51 Pegasi, whose one planet is 0.05 AU out. LADDER_HYSTERESIS past it, out, the view is
+ * the system's; as far back in, a single body's again. Read as the camera's distance from the
+ * focus -- the star, a planet, a fictional moon -- which is what the zoom changes; nothing beyond
+ * the system, whose neighbourhood is the Sun's and centred there.
+ */
+export function systemLadder(level: LevelId, starRadiusKm: number, framingKm: number): readonly Rung[] {
+  return [
+    { level: null, km: 8 * starRadiusKm },
+    { level, km: framingKm },
+  ];
+}
+
+let alphaCenRungs: readonly Rung[] | null = null;
+
+/**
+ * Alpha Centauri's: about A, its centre as the Sun is the Solar System's, framed as a body from
+ * eight of its radii, and as a system 120 AU from it (alphaCenBodies.ts ALPHA_CEN_FRAMING_KM) --
+ * the boundary 2.3 AU, the system's past 2.9 and a single star's again inside 1.9.
+ */
+export function alphaCenLadder(): readonly Rung[] {
+  alphaCenRungs ??= systemLadder('alpha-centauri', RADIUS_A_SUN * 695_700, ALPHA_CEN_FRAMING_KM);
+  return alphaCenRungs;
 }

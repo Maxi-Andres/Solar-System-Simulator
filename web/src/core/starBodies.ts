@@ -210,20 +210,131 @@ export async function addStarBody(
 
 /**
  * The names some stars are shown by instead of names.json's, by a designation each carries:
- * where the IAU's proper name alone does not say which star it is. Alpha Centauri A and B by
- * their Bayer letters first, the proper name after (Maxi, 2026-11-22, read "Toliman" and did
- * not know it was Alpha Centauri B). The proper name stays in the name, and the star's other
- * designations are searched too (search.ts), so "Toliman" and "alf Cen B" both find it.
+ * where the IAU's proper name alone does not say which star it is. Its usual designation first --
+ * the Bayer letter, the Flamsteed number, the catalogue name the Exoplanet Archive lists it by --
+ * and the proper name after (Maxi, 2026-11-22, read "Toliman" and did not know it was Alpha
+ * Centauri B). The proper name stays in the name, and the star's other designations are searched
+ * too (search.ts), so "Toliman" and "alf Cen B" both find it.
+ *
+ * Which: Alpha Centauri A and B; every star the Exoplanet Archive lists as a host whose
+ * names.json name is an IAU proper name few would know -- the NameExoWorlds names (Ran,
+ * Helvetios, Copernicus, Chalawan, Titawin, the HD stars' Formosa to Macondo) and the
+ * traditional ones as obscure (Tarf, Errai, Edasich, Muscida) -- each made a system when gone to
+ * (archiveSystems.ts); and 40 Eridani A, Keid, and the Hyades' Chamukuy, curated stars. The famous
+ * keep their own names alone: Hamal, Aldebaran, Pollux, Kochab, Mirach and Algieba among the
+ * hosts, Sirius, Vega, Canopus, Betelgeuse, Polaris, Barnard's Star and Proxima everywhere. Made
+ * from names.json and exoplanets.json on 2026-11-22, keyed by the HIP number where it has one.
  */
-const SHOWN_NAMES: ReadonlyMap<string, string> = new Map([
+export const STAR_SHOWN_NAMES: ReadonlyMap<string, string> = new Map([
   ['alf Cen A', 'α Cen A (Rigil Kentaurus)'],
   ['alf Cen B', 'α Cen B (Toliman)'],
+  ['HIP 74793', '11 UMi (Pherkad Minor)'],
+  ['HIP 116076', '14 And (Veritate)'],
+  ['HIP 103527', '18 Del (Musica)'],
+  ['HIP 53721', '47 UMa (Chalawan)'],
+  ['HIP 113357', '51 Peg (Helvetios)'],
+  ['HIP 43587', '55 Cnc (Copernicus)'],
+  ['HIP 73136', '8 UMi (Baekdu)'],
+  ['HIP 2247', 'BD-17 63 (Felixvarela)'],
+  ['HIP 104780', 'BD+14 4559 (Solaris)'],
+  ['HIP 40526', 'β Cnc (Tarf)'],
+  ['HIP 16537', 'ε Eri (Ran)'],
+  ['HIP 20889', 'ε Tau (Ain)'],
+  ['HIP 116727', 'γ Cep (Errai)'],
+  ['HIP 76333', 'γ Lib (Zubenelhakrabi)'],
+  ['HIP 114971', 'γ Psc (Yunyu)'],
+  ['HIP 47780', 'GJ 367 (Añañuca)'],
+  ['HIP 57087', 'GJ 436 (Noquisi)'],
+  ['HIP 62452', 'GJ 486 (Gar)'],
+  ['HIP 56508', 'HD 100655 (Formosa)'],
+  ['HIP 56572', 'HD 100777 (Sagarmatha)'],
+  ['HIP 57291', 'HD 102117 (Uklun)'],
+  ['HIP 57370', 'HD 102195 (Flegetonte)'],
+  ['HIP 57820', 'HD 102956 (Aniara)'],
+  ['HIP 58952', 'HD 104985 (Tonatiuh)'],
+  ['HIP 60644', 'HD 108147 (Tupã)'],
+  ['HIP 61177', 'HD 109246 (Funi)'],
+  ['HIP 63090', 'δ Vir (Minelauva)'],
+  ['HIP 66047', 'HD 117618 (Dofida)'],
+  ['HIP 66192', 'HD 118203 (Liesma)'],
+  ['HIP 9353', 'HD 12235 (Zibbatu)'],
+  ['HIP 72339', 'HD 130322 (Mönch)'],
+  ['HIP 72845', 'HD 131496 (Arcalís)'],
+  ['HIP 74961', 'HD 136418 (Nikawiy)'],
+  ['HIP 76351', 'HD 137388 (Karaka)'],
+  ['HIP 79219', 'HD 145457 (Kamuy)'],
+  ['HIP 80687', 'HD 148427 (Timir)'],
+  ['HIP 80838', 'HD 149026 (Ogma)'],
+  ['HIP 81022', 'HD 149143 (Rosalíadecastro)'],
+  ['HIP 83547', 'HD 153950 (Rapeto)'],
+  ['HIP 84787', 'HD 156411 (Inquill)'],
+  ['HIP 86796', 'μ Ara (Cervantes)'],
+  ['HIP 12191', 'HD 16175 (Buna)'],
+  ['HIP 88414', 'HD 164604 (Pincoya)'],
+  ['HIP 90004', 'HD 168746 (Alasia)'],
+  ['HIP 13192', 'HD 17156 (Nushagak)'],
+  ['HIP 91852', 'HD 173416 (Xihe)'],
+  ['HIP 94645', 'HD 179949 (Gumala)'],
+  ['HIP 95124', 'HD 181342 (Belel)'],
+  ['HIP 95262', 'HD 181720 (Sika)'],
+  ['HIP 13993', 'HD 18742 (Ayeyarwady)'],
+  ['HIP 99711', 'HD 192263 (Phoenicia)'],
+  ['HIP 99894', 'HD 192699 (Chechia)'],
+  ['HIP 106824', 'HD 205739 (Sāmaya)'],
+  ['HIP 108375', 'HD 208487 (Itonda)'],
+  ['HIP 15578', 'HD 20868 (Intan)'],
+  ['HIP 110813', 'HD 212771 (Lionrock)'],
+  ['HIP 114322', 'HD 218566 (Ebla)'],
+  ['HIP 116084', 'HD 221287 (Poerava)'],
+  ['HIP 118319', 'HD 224693 (Axólotl)'],
+  ['HIP 17096', 'HD 23079 (Tupi)'],
+  ['HIP 22491', 'HD 30856 (Mouhoun)'],
+  ['HIP 24003', 'HD 32518 (Mago)'],
+  ['HIP 26380', 'HD 38283 (Bubup)'],
+  ['HIP 3479', 'HD 4208 (Cocibolca)'],
+  ['HIP 29550', 'HD 43197 (Amadioha)'],
+  ['HIP 30860', 'HD 45350 (Lucilinburhuc)'],
+  ['HIP 30905', 'HD 45652 (Lusitânia)'],
+  ['HIP 31895', 'HD 48265 (Nosaxa)'],
+  ['HIP 32916', 'HD 49674 (Nervia)'],
+  ['HIP 33719', 'HD 52265 (Citalá)'],
+  ['HIP 37284', 'HD 63454 (Ceibo)'],
+  ['HIP 38041', 'HD 63765 (Tapecue)'],
+  ['HIP 5054', 'HD 6434 (Nenque)'],
+  ['HIP 40687', 'HD 68988 (Násti)'],
+  ['HIP 5529', 'HD 7199 (Emiw)'],
+  ['HIP 42446', 'HD 73534 (Gakyid)'],
+  ['HIP 43674', 'HD 75898 (Stribor)'],
+  ['HIP 46471', 'HD 81688 (Intercrus)'],
+  ['HIP 47087', 'HD 82886 (Illyrian)'],
+  ['HIP 47202', 'HD 83443 (Kalausi)'],
+  ['HIP 48235', 'HD 85390 (Natasha)'],
+  ['HIP 6643', 'HD 8574 (Bélénos)'],
+  ['HIP 52521', 'HD 93083 (Macondo)'],
+  ['HIP 53524', 'HD 95086 (Aiolos)'],
+  ['HIP 55664', 'HD 99109 (Shama)'],
+  ['HIP 12961', 'HIP 12961 (Koeia)'],
+  ['HIP 65426', 'HIP 65426 (Matza)'],
+  ['HIP 79431', 'HIP 79431 (Sharjah)'],
+  ['HIP 75458', 'ι Dra (Edasich)'],
+  ['HIP 116805', 'κ And (Kaffalmusalsala)'],
+  ['HIP 115211', 'L 168-9 (Danfeng)'],
+  ['HIP 117883', 'LTT 9779 (Uúba)'],
+  ['HIP 48455', 'μ Leo (Rasalas)'],
+  ['HIP 82545', 'μ² Sco (Pipirima)'],
+  ['HIP 41704', 'ο UMa (Muscida)'],
+  ['HIP 67275', 'τ Boo (Tepiamenit)'],
+  ['HIP 7513', 'υ And (Titawin)'],
+  ['WASP-80', 'WASP-80 (Petra)'],
+  ['HIP 97938', 'ξ Aql (Libertas)'],
+  ['HIP 19849', '40 Eri A (Keid)'],
+  ['HIP 20894', 'θ² Tau (Chamukuy)'],
 ]);
 
-/** The name a star body is shown by: names.json's `display`, or the one SHOWN_NAMES gives it. */
+/** The name a star body is shown by: names.json's `display`, or the one STAR_SHOWN_NAMES gives it. */
 export function starShownName(display: string, designations: readonly string[]): string {
   for (const designation of designations) {
-    const shown = SHOWN_NAMES.get(designation);
+    const shown = STAR_SHOWN_NAMES.get(designation);
     if (shown !== undefined) return shown;
   }
   return display;

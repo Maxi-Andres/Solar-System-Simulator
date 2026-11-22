@@ -42,6 +42,7 @@ import { CMB } from './cmb.ts';
 import { LEVEL_DESCRIPTIONS } from './levels.ts';
 import { ALPHA_CENTAURI_A, ALPHA_CENTAURI_B } from './alphaCentauri.ts';
 import { ALPHA_CENTAURI_SYSTEM } from './alphaCentauriSystem.ts';
+import { TAU_CETI_SYSTEM } from './tauCetiSystem.ts';
 import { BETELGEUSE } from './betelgeuse.ts';
 import { POLARIS } from './polaris.ts';
 import { PROXIMA_CENTAURI } from './proximaCentauri.ts';
@@ -87,7 +88,7 @@ const SITES: readonly Description[] = [VIKING_LANDER_1, VIKING_LANDER_2, MARS_PA
 
 /** Every body with a description, by id. Written one at a time; the panel offers it where there is one. */
 export const DESCRIPTIONS: ReadonlyMap<BodyId, Description> = new Map(
-  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT, ...FAR, ...LEVEL_DESCRIPTIONS, ALPHA_CENTAURI_SYSTEM, ...STARS, ...SITES].map((description) => [description.id, description]),
+  [SUN, MERCURY, VENUS, EARTH, MOON, MARS, JUPITER, IO, EUROPA, GANYMEDE, CALLISTO, SATURN, ENCELADUS, TITAN, URANUS, NEPTUNE, TRITON, ...DWARFS, ...CRAFT, ...FAR, ...LEVEL_DESCRIPTIONS, ALPHA_CENTAURI_SYSTEM, TAU_CETI_SYSTEM, ...STARS, ...SITES].map((description) => [description.id, description]),
 );
 
 /** The description of the catalogue star known by any of `designations` ("HIP 27989", "alf CMa B"), or null. */

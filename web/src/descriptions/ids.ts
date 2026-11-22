@@ -13,6 +13,7 @@ import {
   OBSERVABLE_UNIVERSE_DESCRIPTION_ID,
   SOLAR_NEIGHBOURHOOD_DESCRIPTION_ID,
   SOLAR_SYSTEM_DESCRIPTION_ID,
+  TAU_CETI_SYSTEM_DESCRIPTION_ID,
   VIRGO_CLUSTER_DESCRIPTION_ID,
 } from './subjects.ts';
 
@@ -35,8 +36,8 @@ export const DESCRIBED_IDS: ReadonlySet<BodyId> = new Set<BodyId>([
   // The breadcrumb's levels.
   SOLAR_SYSTEM_DESCRIPTION_ID, SOLAR_NEIGHBOURHOOD_DESCRIPTION_ID, LOCAL_GROUP_DESCRIPTION_ID, LOCAL_VOLUME_DESCRIPTION_ID,
   VIRGO_CLUSTER_DESCRIPTION_ID, NEARBY_UNIVERSE_DESCRIPTION_ID, OBSERVABLE_UNIVERSE_DESCRIPTION_ID,
-  // Alpha Centauri as a whole, no body: its stars are three.
-  ALPHA_CEN_SYSTEM_DESCRIPTION_ID,
+  // Star systems as a whole, no body: Alpha Centauri's stars are three, Tau Ceti's planets four.
+  ALPHA_CEN_SYSTEM_DESCRIPTION_ID, TAU_CETI_SYSTEM_DESCRIPTION_ID,
   // The stars, and Sgr A*.
   'alpha-centauri-a', 'alpha-centauri-b', 'proxima-centauri', 'sirius', 'sirius-b', 'betelgeuse', 'polaris', SGR_A_ID,
   // Landing sites, and the craft standing on Mars.

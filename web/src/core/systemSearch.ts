@@ -1,6 +1,10 @@
 import type { BodyId } from '@sss/tools/types';
 
-import { ALPHA_CEN_SYSTEM_DESCRIPTION_ID, SOLAR_SYSTEM_DESCRIPTION_ID } from '../descriptions/subjects.ts';
+import {
+  ALPHA_CEN_SYSTEM_DESCRIPTION_ID,
+  PLANETARY_SYSTEM_DESCRIPTION_IDS,
+  SOLAR_SYSTEM_DESCRIPTION_ID,
+} from '../descriptions/subjects.ts';
 import { ALPHA_CEN_SYSTEM } from './alphaCenBodies.ts';
 import { normalizeName } from './normalizeName.ts';
 import type { PlanetarySystem } from './planetarySystems.ts';
@@ -56,7 +60,7 @@ export function systemEntries(planetary: readonly PlanetarySystem[]): SystemEntr
         name: system.name,
         detail: 'Planetary system',
         otherNames: system.hostDesignation === '' ? [] : [system.hostDesignation],
-        about: null,
+        about: PLANETARY_SYSTEM_DESCRIPTION_IDS[system.key] ?? null,
       }),
     ),
   ];

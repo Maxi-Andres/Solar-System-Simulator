@@ -29,8 +29,6 @@ import { KIND_TERM } from './about/terms.ts';
 import { WhatIs } from './WhatIs.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { hasDescription } from '../descriptions/ids.ts';
-import { ALPHA_CEN_SYSTEM_DESCRIPTION_ID } from '../descriptions/subjects.ts';
-import { inAlphaCen } from '../core/alphaCenBodies.ts';
 import { LevelPanel } from './LevelFacts.tsx';
 import { FictionPanel } from './FictionFacts.tsx';
 import { isFictionBody } from '../core/fiction.ts';
@@ -117,8 +115,6 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
           <WhatIs term="star" kind="star" />
         </div>
         {hasDescription(focus) && <ReadMore name={body.name} />}
-        {/* And the system it is one of (descriptions/alphaCentauriSystem.ts). */}
-        {inAlphaCen(store, focus) && <ReadMore name="Alpha Centauri system" about={ALPHA_CEN_SYSTEM_DESCRIPTION_ID} />}
         <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
           <StarFacts id={focus} jd={jd} stars3d={stars3d} />
@@ -159,8 +155,6 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
         <WhatIs term={focus === 'sun' ? 'sun' : KIND_TERM[body.kind]} kind={body.kind.replace('-', ' ')} />
       </div>
       {hasDescription(focus) && <ReadMore name={body.name} />}
-      {/* A planet of Alpha Centauri: the system it is in too. */}
-      {inAlphaCen(store, focus) && <ReadMore name="Alpha Centauri system" about={ALPHA_CEN_SYSTEM_DESCRIPTION_ID} />}
 
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
 

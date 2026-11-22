@@ -41,9 +41,9 @@ describe('the star systems in search', () => {
     expect(names('solar')).toEqual(['Solar System']);
   });
 
-  it('offers the descriptions that exist: the Solar System’s and Alpha Centauri’s', () => {
+  it('offers the descriptions that exist: the Solar System’s, Alpha Centauri’s and Tau Ceti’s', () => {
     const about = ENTRIES.filter((entry) => entry.about !== null);
-    expect(about.map((entry) => entry.name)).toEqual(['Solar System', 'Alpha Centauri']);
+    expect(about.map((entry) => entry.name)).toEqual(['Solar System', 'Alpha Centauri', 'Tau Ceti']);
     for (const entry of about) expect(hasDescription(entry.about!), entry.name).toBe(true);
   });
 });

@@ -24,17 +24,15 @@ const WITH_THE: ReadonlySet<string> = new Set([
   'Local Volume',
   'Nearby Universe',
   'observable universe',
-  // Alpha Centauri as a whole (descriptions/alphaCentauriSystem.ts).
-  'Alpha Centauri system',
 ]);
 
 /**
  * Kinds of name an English speaker puts "the" before: a nebula, a cloud, a cluster, a wall, a
- * telescope, a meteor shower… -- the Coalsack, the Hyades, the Perseids. A name already starting
- * with "the" is left alone.
+ * telescope, a meteor shower, a star's system… -- the Coalsack, the Hyades, the Perseids, the Tau
+ * Ceti system. A name already starting with "the" is left alone.
  */
 const THE_BY_ENDING =
-  /(Nebula|Cloud|Clouds|Cluster|Supercluster|Void|Wall|Stream|Bubble|Bubbles|Superbubble|Loop|Arc|Ring|Wave|Bridge|Arm|Sheet|Group|Galaxy|Observatory|Telescope|Station|Belt|Coalsack|Hyades|Pleiades|ids|ds)$/;
+  /(Nebula|Cloud|Clouds|Cluster|Supercluster|Void|Wall|Stream|Bubble|Bubbles|Superbubble|Loop|Arc|Ring|Wave|Bridge|Arm|Sheet|Group|Galaxy|Observatory|Telescope|Station|Belt|system|Coalsack|Hyades|Pleiades|ids|ds)$/;
 
 export function spokenName(name: string): string {
   if (/^the/i.test(name)) return name;

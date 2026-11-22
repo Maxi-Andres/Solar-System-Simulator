@@ -3,7 +3,10 @@ import { useFrame, useThree } from '@react-three/fiber';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
-import { levelForDistance, sunLadder } from '../state/levels.ts';
+import { inAlphaCen } from '../core/alphaCenBodies.ts';
+import { planetarySystemOf, systemFramingKm } from '../core/planetarySystems.ts';
+import { STAR_FRAMING_RADIUS_KM } from '../core/starBodies.ts';
+import { alphaCenLadder, ladderLevel, levelForDistance, sunLadder, systemLadder, type Rung } from '../state/levels.ts';
 import { useViewStore } from '../state/store.ts';
 import { nextInSolarSystem } from './inSolarSystem.ts';
 import { KM_PER_UNIT } from './scale.ts';
@@ -40,7 +43,32 @@ export function SolarSystemWatch({
     if (focus === 'sun' && (current === null || sunLadder().some((rung) => rung.level === current))) {
       const level = levelForDistance(current, fromSunKm);
       if (level !== current) state.setZoomLevel(level);
+    } else if (current === null || current === 'alpha-centauri' || current === 'planetary-system') {
+      // Every other star system the same, from any of its stars or what goes round them -- a
+      // planet, a fictional moon at Alpha Centauri A: zoomed out past its scale the view is the
+      // system's, its panel and its description with it; back in, the body's again (levels.ts
+      // systemLadder). The camera stands about the focus, so its distance from it is the zoom.
+      // A level the user picked themselves is any other, and is left alone.
+      const ladder = systemLadderOf(store, focus);
+      if (ladder !== null) {
+        const level = ladderLevel(ladder, current, camera.position.length() * KM_PER_UNIT);
+        if (level !== current) state.setZoomLevel(level);
+      }
     }
   });
   return null;
+}
+
+/**
+ * The ladder of the star system `focus` is in: Alpha Centauri's, or its planetary system's about
+ * its star -- framed as a body from eight of the star's radii (the Sun's where none is measured,
+ * starBodies.ts) and as a system from where its breadcrumb entry frames it (planetarySystems.ts
+ * systemFramingKm); null for a body of no such system.
+ */
+function systemLadderOf(store: EphemerisStore, focus: BodyId): readonly Rung[] | null {
+  if (inAlphaCen(store, focus)) return alphaCenLadder();
+  const system = planetarySystemOf(focus);
+  if (system === null) return null;
+  const starRadiusKm = system.hostRadiusSun === null ? STAR_FRAMING_RADIUS_KM : system.hostRadiusSun * 695_700;
+  return systemLadder('planetary-system', starRadiusKm, systemFramingKm(system));
 }

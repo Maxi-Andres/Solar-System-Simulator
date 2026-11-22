@@ -6,7 +6,9 @@ import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import { HELIOPAUSE_NOSE_AU, HILLS_CLOUD_INNER_AU, OORT_CLOUD_OUTER_AU } from '../core/heliosphere.ts';
 import { GIANTS } from '../core/localGroup.ts';
 import { SUN_ABOVE_PLANE_PC } from '../core/milkyWay.ts';
+import { planetarySystemOf, systemExtentKm, type PlanetarySystem } from '../core/planetarySystems.ts';
 import { hasDescription } from '../descriptions/ids.ts';
+import { PLANETARY_SYSTEM_DESCRIPTION_IDS } from '../descriptions/subjects.ts';
 import {
   LOCAL_GROUP_EXTENT_KM,
   LOCAL_VOLUME_EXTENT_KM,
@@ -40,6 +42,46 @@ export interface LevelLive {
   readonly voyager1Km: number | null;
   /** The focus's -- the level's centre: M87 for the Virgo Cluster, the attractor for Laniakea. */
   readonly centreKm: number | null;
+  /** The planetary system the focus is in, for that level's lines; absent or null for none. */
+  readonly system?: PlanetarySystem | null;
+}
+
+/** A reference's authors and year: "Feng et al. 2017" of "Feng et al. 2017, AJ 154, 135". */
+function cited(reference: string): string {
+  return reference.split(',')[0]!.trim();
+}
+
+/** A planetary system's lines: its star's mass, its planets and how sure each is, its reach. */
+function planetarySystemFacts(system: PlanetarySystem | null): readonly LevelFact[] {
+  if (system === null) {
+    return [
+      { label: 'Star mass', value: '--', source: null },
+      { label: 'Planets', value: '--', source: null },
+      { label: 'Outermost orbit', value: '--', source: null },
+    ];
+  }
+  const { planets } = system;
+  const counts = (['confirmed', 'candidate', 'disputed'] as const)
+    .map((status) => [status, planets.filter((planet) => planet.status === status).length] as const)
+    .filter(([, count]) => count > 0)
+    .map(([status, count]) => `${count} ${status}`);
+  // An Archive system may list planets it gives no orbit for (archiveSystems.ts): said, not drawn.
+  const unplaced = system.archive === undefined ? 0 : system.archive.listed - planets.length;
+  if (unplaced > 0) counts.push(`${unplaced} without an orbit`);
+  const outermost = planets.length === 0 ? null : planets.reduce((a, b) => (b.semiMajorAxisAu > a.semiMajorAxisAu ? b : a));
+  return [
+    { label: 'Star mass', value: `${system.hostMassSun} M☉`, source: cited(system.hostMassReference) },
+    {
+      label: 'Planets',
+      value: counts.length === 0 ? 'none with an orbit' : counts.join(', '),
+      source: system.archive !== undefined ? 'NASA Exoplanet Archive' : [...new Set(planets.map((planet) => cited(planet.reference)))].join('; '),
+    },
+    {
+      label: 'Outermost orbit',
+      value: outermost === null ? 'not known' : `${(systemExtentKm(system) / AU_KM).toFixed(2)} AU at its farthest`,
+      source: outermost === null ? null : cited(outermost.reference),
+    },
+  ];
 }
 
 function grouped(n: number): string {
@@ -93,6 +135,16 @@ export function levelFacts(level: LevelId, live: LevelLive): readonly LevelFact[
           source: 'JPL Horizons',
         },
       ];
+    case 'alpha-centauri':
+      return [
+        { label: 'Stars', value: 'A G2V, B K1V, Proxima M5.5Ve', source: 'SIMBAD' },
+        { label: 'A and B', value: '79.93 years round, 11.3–35.8 AU apart', source: 'Kervella et al. 2016' },
+        { label: 'Proxima', value: '13,000 AU from them, bound', source: 'Kervella et al. 2017' },
+        { label: 'Distance', value: '4.37 ly, Proxima 4.25 ly', source: 'Kervella et al. 2016; Gaia DR3' },
+        { label: 'Planets', value: 'Proxima b and d; c and A’s S1 candidates', source: 'Suárez Mascareño et al. 2025' },
+      ];
+    case 'planetary-system':
+      return planetarySystemFacts(live.system ?? null);
     case 'solar-neighbourhood':
       return [
         {
@@ -179,8 +231,18 @@ export function levelFacts(level: LevelId, live: LevelLive): readonly LevelFact[
   }
 }
 
-/** The description a level's panel offers: the first of its own that is written, or null. */
-export function levelReading(level: LevelId): { readonly id: BodyId; readonly name: string } | null {
+/**
+ * The description a level's panel offers: the first of its own that is written, or null. For a
+ * planetary system, `system`'s, where one is written (descriptions/subjects.ts).
+ */
+export function levelReading(
+  level: LevelId,
+  system: Pick<PlanetarySystem, 'key' | 'name'> | null = null,
+): { readonly id: BodyId; readonly name: string } | null {
+  if (level === 'planetary-system') {
+    const id = system === null ? undefined : PLANETARY_SYSTEM_DESCRIPTION_IDS[system.key];
+    return system !== null && id !== undefined && hasDescription(id) ? { id, name: `${system.name} system` } : null;
+  }
   return LEVELS[level].readAbout.find((candidate) => hasDescription(candidate.id)) ?? null;
 }
 
@@ -208,12 +270,16 @@ export function LevelPanel({
   distanceMode: DistanceMode;
   onClose: () => void;
 }) {
-  const { name, kind } = LEVELS[level];
+  // A planetary system's panel is the system the focus is in, named as it is.
+  const system = level === 'planetary-system' ? planetarySystemOf(focus) : null;
+  const name = system?.name ?? LEVELS[level].name;
+  const { kind } = LEVELS[level];
   const live: LevelLive = {
     voyager1Km: level === 'solar-system' ? distanceFromSun(store, 'voyager-1', jd, distanceMode) : null,
     centreKm: level === 'virgo-cluster' || level === 'laniakea' ? distanceFromSun(store, focus, jd, distanceMode) : null,
+    system,
   };
-  const reading = levelReading(level);
+  const reading = levelReading(level, system);
   return (
     <Panel title={name} onClose={onClose} width="17.5rem">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

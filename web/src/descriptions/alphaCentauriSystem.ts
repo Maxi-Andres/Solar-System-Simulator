@@ -58,7 +58,7 @@ export const ALPHA_CENTAURI_SYSTEM: Description = {
   drawnHere: [
     {
       title: 'Its view',
-      text: 'The breadcrumb’s Alpha Centauri, and its search result, put the camera 120 AU from A, 20° off the pole of the pair’s orbit, so that A’s and B’s orbits about their barycentre — 36 AU across at the widest — fill the middle of the frame as the ellipses they are. From the Sun that orbit is seen 79° from face-on, nearly edge-on: two lines.',
+      text: 'The breadcrumb’s Alpha Centauri, and its search result, put the camera 120 AU from A, 20° off the pole of the pair’s orbit, so that A’s and B’s orbits about their barycentre — 36 AU across at the widest — fill the middle of the frame as the ellipses they are. From the Sun that orbit is seen 79° from face-on, nearly edge-on: two lines. Zoomed out past about 3 AU from any of its stars or planets, the panel becomes the system’s, and back inside 2 a single body’s again.',
       cite: ['kervella2016'],
     },
     {

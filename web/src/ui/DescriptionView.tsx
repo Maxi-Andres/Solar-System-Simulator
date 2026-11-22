@@ -4,6 +4,7 @@ import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { drawnFromData } from '../descriptions/generated.ts';
 import { descriptionOf } from '../descriptions/index.ts';
 import { levelReading } from './LevelFacts.tsx';
+import { planetarySystemOf } from '../core/planetarySystems.ts';
 import type { Description, DescriptionPhoto, DescriptionPoint } from '../descriptions/types.ts';
 import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
@@ -61,7 +62,9 @@ function BodyDescriptionView({ store }: { store: EphemerisStore }) {
   // Back to the panel it was opened from: the focus's, or the level's selected (LevelFacts.tsx).
   const selectedLevel = useViewStore((state) => state.selectedLevel);
   const back = (): void =>
-    reading === null || (selectedLevel !== null && levelReading(selectedLevel)?.id === reading) ? togglePanel('body') : closePanel();
+    reading === null || (selectedLevel !== null && levelReading(selectedLevel, planetarySystemOf(focus))?.id === reading)
+      ? togglePanel('body')
+      : closePanel();
   const [opened, setOpened] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   /**

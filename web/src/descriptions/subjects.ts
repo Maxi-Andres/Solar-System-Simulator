@@ -21,9 +21,20 @@ export const OBSERVABLE_UNIVERSE_DESCRIPTION_ID = 'observable-universe';
 
 /**
  * Alpha Centauri as a whole, its three stars together: no body, for its stars are three. Offered
- * by the breadcrumb's Alpha Centauri list, by its stars' panels and by its search result.
+ * by its level's panel (state/levels.ts), the breadcrumb's Alpha Centauri list and its search result.
  */
 export const ALPHA_CEN_SYSTEM_DESCRIPTION_ID = 'alpha-centauri';
+
+/** Tau Ceti as a system, its star with its planets and its disc: offered as Alpha Centauri's is. */
+export const TAU_CETI_SYSTEM_DESCRIPTION_ID = 'tau-ceti';
+
+/**
+ * The planetary systems' descriptions, by system key (core/planetarySystems.ts): offered by the
+ * planetary-system level's panel and the system's search result. A system not here has none.
+ */
+export const PLANETARY_SYSTEM_DESCRIPTION_IDS: Readonly<Record<string, string>> = {
+  'tau-ceti': TAU_CETI_SYSTEM_DESCRIPTION_ID,
+};
 
 /**
  * Laniakea's is a body's -- the structure "Laniakea Supercluster" (laniakea.ts), its level's

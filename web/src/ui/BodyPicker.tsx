@@ -69,7 +69,13 @@ import { useViewStore, type FramingView } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { CasedName } from './casedName.tsx';
-import { ALPHA_CEN_SYSTEM_DESCRIPTION_ID, CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
+import {
+  ALPHA_CEN_SYSTEM_DESCRIPTION_ID,
+  CMB_DESCRIPTION_ID,
+  MILKY_WAY_DESCRIPTION_ID,
+  PLANETARY_SYSTEM_DESCRIPTION_IDS,
+} from '../descriptions/subjects.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 
 /**
  * The breadcrumb, and the list of bodies that drops down from it.
@@ -241,8 +247,11 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   return isCatalogueStar(body) ? 'none' : 'solar-system';
 }
 
-/** The levels centred on the Sun: all but the Virgo Cluster, about M87, and Laniakea, about its attractor. */
-export type SunLevel = Exclude<LevelId, 'virgo-cluster' | 'laniakea'>;
+/**
+ * The levels centred on the Sun: all but the Virgo Cluster, about M87, Laniakea, about its
+ * attractor, and the other star systems, about their own stars and reached by the zoom alone.
+ */
+export type SunLevel = Exclude<LevelId, 'virgo-cluster' | 'laniakea' | 'alpha-centauri' | 'planetary-system'>;
 
 /** Where each level centred on the Sun is seen from: its crumb's framing (scene/scale.ts). */
 export const SUN_LEVEL_FRAMINGS: Readonly<Record<SunLevel, { readonly km: number; readonly view?: FramingView }>> = {
@@ -637,6 +646,22 @@ export function BodyPicker({
             <Caret open={open} />
           </button>
         )}
+        {/* Another star system zoomed out to (state/levels.ts systemLadder): the same, its name
+            ending the breadcrumb and dropping down its bodies -- Alpha Centauri's, or the
+            planetary system's the focus is in. */}
+        {(selectedLevel === 'alpha-centauri' && inAlphaCenSystem) || (selectedLevel === 'planetary-system' && planetSystem !== null) ? (
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-current="location"
+            onClick={() => only('bodies')}
+            style={{ ...crumbStyle, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            {selectedLevel === 'alpha-centauri' ? ALPHA_CEN_SYSTEM : planetSystem!.name}
+            <Caret open={open} />
+          </button>
+        ) : null}
         {inSolarSystem && selectedLevel === null && (
           <>
             <Crumb onClick={toSolarSystem}>Solar System</Crumb>
@@ -1283,6 +1308,14 @@ function BodyList({
       )}
       {planetSystem !== null && host !== undefined && (
         <>
+          {/* Its description, where one is written, as Alpha Centauri's above. */}
+          {hasDescription(PLANETARY_SYSTEM_DESCRIPTION_IDS[planetSystem.key] ?? '') && (
+            <ReadMore
+              name={`${planetSystem.name} system`}
+              about={PLANETARY_SYSTEM_DESCRIPTION_IDS[planetSystem.key]!}
+              onRead={onRead}
+            />
+          )}
           {planetSystem.name !== host.name && <div style={TOP_HEADING}>{planetSystem.name}</div>}
           <MemberRow name={host.name} active={host.id === focus} onChoose={() => onChooseSystem(planetSystem.key)} />
           {systemMembers(store, host.id, visibleKinds)
