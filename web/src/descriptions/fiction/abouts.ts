@@ -72,9 +72,62 @@ const POLYPHEMUS_FAMILY: FictionAbout = {
   ],
 };
 
+const ADRIAN: FictionAbout = {
+  kind: 'Planet · drawn over τ Ceti e',
+  story: [
+    'In Andy Weir’s Project Hail Mary (2021), a microbe called Astrophage is dimming the Sun. τ Ceti, 11.9 light years away, is infected too but is not dimming, and the Hail Mary is sent to find out why. Adrian is the planet there that τ Ceti’s own line of Astrophage runs to.',
+  ],
+  canon: [
+    'The novel gives few numbers. Adrian’s gravity is stronger than Earth’s, so a low orbit is “just over 12 kilometers per second”, and the ship must hold 12.6 to stay in orbit; its air is rich in carbon dioxide, with methane. The film’s shooting script labels the planet’s model “TAU CETI E”, and NASA’s explainer of the story’s science makes the same identification.',
+    'Figures that circulate for it — 3.93 Earth masses, a radius of 10,318 km, 1.4 g, an air of 91% carbon dioxide — come from an AI-written wiki and are not in the text of the novel that could be checked. The first is simply the real candidate’s minimum mass. None of them is used here.',
+  ],
+  invented: [
+    'Adrian is not drawn as a second planet: it is τ Ceti e itself, the real candidate the app draws from Feng et al.’s 2017 fit, seen in a fiction’s look while the Fiction layer is on. Its orbit, period and size stay that fit’s and its estimate’s; only the look — a deck of grey-ochre cloud under thick air, its limb turned teal by methane, this app’s own procedural drawing from what the novel says of the air — and the name are the fiction’s. With the layer off, nothing about τ Ceti e changes.',
+    'Its mass is invented for one purpose, the ship’s orbit. At the real candidate’s minimum, 3.93 Earths, the novel’s 12.6 km/s would put that orbit below the 11,530 km sphere the app draws; at 5.0 Earths, which an unknown tilt of the orbit allows, it is 12,550 km from the centre, a thousand kilometres up, and the gravity at the ground about 1.5 g.',
+  ],
+  reality: [
+    'τ Ceti is real: a star like the Sun, a little smaller and poorer in metals, 11.9 light years away, ringed by a dust belt some ten times as massive as the Kuiper belt. Four planets were proposed for it in 2017 from tiny wobbles in its light; studies since, from 2024 and 2025, find the signals more likely the star’s own activity, so τ Ceti e is drawn grey, as a candidate. Were it real, it would be four Earth masses at least, taking about 1.8 times the light Earth takes from the Sun.',
+  ],
+};
+
+const HAIL_MARY: FictionAbout = {
+  kind: 'Starship',
+  story: [
+    'The Hail Mary is the ship of Project Hail Mary: a last-ditch mission from Earth to τ Ceti, to learn why that star, alone among the Sun’s infected neighbours, is not dimming. It is driven by Astrophage itself, the microbe that stores starlight as mass and gives it back as infrared light.',
+  ],
+  canon: [
+    'The novel gives the voyage as thirteen years as Earth counts them, and the ship’s speed in orbit about Adrian once there, 12.6 km/s. A constant acceleration of 1.5 g, turning over halfway, and some three years and nine months aboard are widely quoted from it but were not found in the text that could be checked; they are shown, marked unverified. Its crew is three. Its length is given in passing: when the centrifuge’s cables are paid out, its radius grows from 20 m, half the ship’s length, to 75 m — so about 40 m, not the 47 m an AI-written wiki gives.',
+  ],
+  invented: [
+    'The launch date, which the canon does not give: 1 January 2026, so that the ship is in flight now and leaves from where the exact ephemerides place Earth. Its route, straight from where Earth is at launch to where τ Ceti e will be at arrival; and its orbit at the end, at the canon’s speed and 12,550 km from Adrian’s centre, from Adrian’s invented mass. The novel’s arrival — into orbit about τ Ceti first, then about Adrian — is made one. The model is this app’s own design from what the novel describes.',
+  ],
+  reality: [
+    'The relativity is real, worked out here from the trip’s two numbers alone. At a constant 1.5 g, turning over halfway, 11.9 light years take 13.1 years as Earth counts them and 3.9 aboard; at the turnover the ship is at 0.995 of light’s speed, its clock running ten times slower than Earth’s — the novel’s thirteen years and its quoted three years and nine months. Launched on 1 January 2026, it arrives in February 2039. The drive is the fiction: even turning fuel wholly into light, the trip would take some four hundred times the ship’s own mass of it.',
+  ],
+};
+
+const PETROVA: FictionAbout = {
+  kind: 'Line of Astrophage',
+  story: [
+    'In Project Hail Mary, astronomers first notice the Sun’s trouble as a faint line of infrared light running from the Sun to Venus — the Petrova line, named for the astronomer who saw it. It is Astrophage, a microbe living at the Sun’s surface, on its way to Venus to breed and back, glowing as it goes. A second Petrova line, from τ Ceti to Adrian, shows that star infected too.',
+  ],
+  canon: [
+    'The novel describes each line as a faint arc of light, dark red and seen only in the infrared, through an instrument it calls the Petrovascope: one from the Sun to Venus, one from τ Ceti to Adrian. It gives no width and no brightness for either.',
+  ],
+  invented: [
+    'Each is drawn straight, from the star’s centre to the planet’s, a single faint line in dark red — the colour a choice, since infrared light has none an eye can see. With the Fiction layer off, neither is there and neither costs anything. Venus is the real Venus: nothing else about it changes.',
+  ],
+  reality: [
+    'Nothing like it exists. The space between the Sun and Venus holds the thin solar wind and the zodiacal dust, watched by many spacecraft; and the Sun’s output, which the novel has falling, has been measured from orbit since 1978 and varies by about a tenth of a percent over each eleven-year cycle.',
+  ],
+};
+
 /** Each page by its key (ids.ts). */
 export const FICTION_ABOUTS: Readonly<Record<FictionAboutKey, FictionAbout>> = {
   pandora: PANDORA,
   polyphemus: POLYPHEMUS,
   'polyphemus-family': POLYPHEMUS_FAMILY,
+  adrian: ADRIAN,
+  'hail-mary': HAIL_MARY,
+  petrova: PETROVA,
 };

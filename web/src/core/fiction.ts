@@ -120,7 +120,13 @@ export type FictionAnchor =
    * A Lagrange point of another fictional object about its star (lagrange.ts): a Trojan, on
    * that object's orbit 60 degrees ahead (L4) or behind (L5).
    */
-  | { readonly kind: 'lagrange'; readonly of: string; readonly point: 4 | 5 };
+  | { readonly kind: 'lagrange'; readonly of: string; readonly point: 4 | 5 }
+  /**
+   * A real body the fiction says is this world -- Adrian is τ Ceti e -- drawn over it rather than
+   * beside it (FICTION_OVERLAYS): with the Fiction layer on, the body's label, look and panel add
+   * the fiction; off, nothing of the body changes. No body of its own, and the real data untouched.
+   */
+  | { readonly kind: 'overlay'; readonly body: BodyId };
 
 /**
  * Where a fictional thing goes round its anchor: the elements exoplanets.ts draws a real planet
@@ -147,13 +153,24 @@ export interface FictionFact {
   readonly note?: string;
 }
 
-export interface FictionRecord {
-  /** Unique among the records; the body's id is fictionBodyId(id). */
+/** What every fictional thing has, a world, a ship or a line. */
+export interface FictionBase {
+  /** Unique among all of fiction's entries; a body's id is fictionBodyId(id). */
   readonly id: string;
   readonly name: string;
   /** Other names it is found by. */
   readonly aliases: readonly string[];
   readonly work: FictionWork;
+  /** The anchor, said in a line: "Orbits the real α Centauri A". */
+  readonly anchorLine: string;
+  /** See FictionRecord. */
+  readonly position: 'canon' | 'invented';
+  readonly facts: readonly FictionFact[];
+  /** One line: what is real about the anchor, and what is not. */
+  readonly realityCheck: string;
+}
+
+export interface FictionRecord extends FictionBase {
   /**
    * What a world is in its system, as the scene draws it: a planet about a star, a moon about a
    * planet, a Trojan at a planet's L4 or L5 (its orbit then the planet's).
@@ -483,6 +500,270 @@ export const FICTION: readonly FictionRecord[] = [
   trojan(5, 150, [0.64, 0.62, 0.6]),
 ];
 
+// --- Project Hail Mary -----------------------------------------------------------------------
+
+const HAIL_MARY_NOVEL: FictionWork = { title: 'Project Hail Mary', creator: 'Andy Weir', year: 2021, medium: 'novel' };
+
+/**
+ * Project Hail Mary's sources. The novel's own words, found by full-text search, and nothing a
+ * wiki says without one: the figures an AI-written wiki gives for Adrian (3.93 Earth masses,
+ * 10,318 km, 1.4 g, 91% CO₂) are not used. What is widely quoted from the novel but was not found
+ * in the text checked -- the 1.5 g, the ship's 3 years and 9 months -- is shown, marked so.
+ */
+const PHM_NOVEL: CanonSource = {
+  short: 'Project Hail Mary, 2021',
+  full: 'Andy Weir, Project Hail Mary (Ballantine, 2021); passages found by full-text search, Internet Archive item project-hail-mary-andy-weir-2021',
+};
+const PHM_QUOTED: CanonSource = {
+  short: 'Project Hail Mary, as quoted',
+  full: 'Andy Weir, Project Hail Mary (2021), as widely quoted; not found in the text checked',
+  unverified: true,
+};
+const PHM_IDENTITY: CanonSource = {
+  short: 'Shooting script; NASA',
+  full:
+    'Project Hail Mary shooting script (Internet Archive item project-hail-mary_202606): Grace’s model labelled “TAU CETI E”; ' +
+    'NASA, “The Science Behind Project Hail Mary” (science.nasa.gov, updated May 2026)',
+};
+
+/** τ Ceti e's body (planetarySystems.ts): the real candidate Adrian is drawn over. */
+export const TAU_CETI_E_ID: BodyId = 'tau-ceti-e';
+
+/**
+ * Adrian's mass, invented: the real candidate's minimum mass is 3.93 Earths (Feng et al. 2017), the
+ * mass at an unknown tilt anything above it. 5.0 puts the canon's 12.6 km/s orbit a thousand
+ * kilometres above the sphere the app draws for τ Ceti e (its radius estimated from that minimum
+ * mass, exoplanets.ts) -- at the minimum itself that speed would be below the ground.
+ */
+const ADRIAN_MASS_EARTH = 5.0;
+
+/**
+ * Adrian, the world the Hail Mary is sent to: Tau Ceti e, which the app draws as the real candidate
+ * Feng et al. 2017 fitted. An overlay: its orbit, size and every real value stay theirs.
+ */
+const ADRIAN: FictionRecord = {
+  id: 'adrian',
+  name: 'Adrian',
+  aliases: [],
+  work: HAIL_MARY_NOVEL,
+  kind: 'planet',
+  anchor: { kind: 'overlay', body: TAU_CETI_E_ID },
+  anchorLine: 'Drawn over the real candidate τ Ceti e',
+  position: 'canon',
+  look: { kind: 'world', palette: 'dense-haze', seed: 300, tint: [0.66, 0.78, 0.55] },
+  // The real body's, estimated from its mass: nothing here changes it.
+  radiusKm: { silent: true },
+  massEarth: invented(
+    ADRIAN_MASS_EARTH,
+    'Canon says only heavier gravity than Earth’s; above the real candidate’s minimum 3.93, chosen so the novel’s 12.6 km/s orbit clears the drawn sphere.',
+  ),
+  // The real candidate's orbit (Feng et al. 2017), not the fiction's: these are not used.
+  orbit: {
+    semiMajorAxisKm: { silent: true },
+    eccentricity: { silent: true },
+    inclinationDeg: { silent: true },
+    nodeDeg: { silent: true },
+  },
+  facts: [
+    { label: 'Is', value: { value: 'τ Ceti e', source: PHM_IDENTITY } },
+    { label: 'Gravity', value: { value: 'more than Earth’s', source: PHM_NOVEL } },
+    { label: 'Low orbit', value: { value: 'just over 12', source: PHM_NOVEL }, unit: 'km/s' },
+    { label: 'Ship’s orbit', value: { value: 12.6, source: PHM_NOVEL }, unit: 'km/s' },
+    { label: 'Air', value: { value: 'CO₂-rich, with methane', source: PHM_NOVEL } },
+    { label: 'Day', value: { silent: true } },
+  ],
+  realityCheck: 'τ Ceti e is a real candidate, 11.9 ly away; recent studies find it likely the star’s own activity, not a planet.',
+};
+
+/** The worlds drawn over real bodies (FictionAnchor 'overlay'). */
+export const FICTION_OVERLAYS: readonly FictionRecord[] = [ADRIAN];
+
+/** A ship's voyage, at constant proper acceleration, turning over at the midpoint (hailMary.ts). */
+export interface FictionVoyage {
+  /** From where the body is at launch, to where the destination is at arrival. */
+  readonly from: BodyId;
+  readonly to: BodyId;
+  /** TDB Julian day. */
+  readonly launchJd: FictionValue;
+  /** Proper acceleration, g (9.80665 m/s²). */
+  readonly accelerationG: FictionValue;
+  /** The canon's Earth-frame duration, years: shown beside the one worked out. */
+  readonly earthYears: FictionValue;
+  /** The canon's ship time, years: shown beside the one worked out. */
+  readonly shipYears: FictionValue;
+  /** Its circular orbit about the destination once there, km/s; the radius from the destination's mass. */
+  readonly orbitSpeedKmS: FictionValue;
+  /** The destination's mass, Earths, for that radius. */
+  readonly destinationMassEarth: FictionValue;
+}
+
+/** A fictional ship: a body of its own, drawn as its model (FictionLook 'ship'). */
+export interface FictionShipRecord extends FictionBase {
+  readonly kind: 'ship';
+  readonly look: Extract<FictionLook, { kind: 'ship' }>;
+  readonly lengthM: FictionValue;
+  readonly voyage: FictionVoyage;
+}
+
+/** 1 January 2026, 0 h TDB. */
+const JAN_2026_JD = 2_461_041.5;
+
+const HAIL_MARY: FictionShipRecord = {
+  id: 'hail-mary',
+  name: 'Hail Mary',
+  aliases: ['Project Hail Mary'],
+  work: HAIL_MARY_NOVEL,
+  kind: 'ship',
+  anchorLine: 'From Earth to the real τ Ceti, then about τ Ceti e',
+  position: 'canon',
+  look: { kind: 'ship', design: 'hail-mary' },
+  // Grace says the centrifuge's radius grew from 20 m, half the ship's length, to 75 m. The 47 m
+  // an AI-written wiki gives is wrong by the novel's own numbers.
+  lengthM: { value: 40, source: PHM_NOVEL, basis: 'twice its 20 m half-length' },
+  voyage: {
+    from: 'earth',
+    to: TAU_CETI_E_ID,
+    launchJd: invented(
+      JAN_2026_JD,
+      'Canon silent: 1 January 2026, so the ship is under way now and leaves from where the exact ephemerides place Earth (2016–2036).',
+    ),
+    accelerationG: { value: 1.5, source: PHM_QUOTED },
+    earthYears: { value: 13, source: PHM_NOVEL },
+    shipYears: { value: 3.75, source: PHM_QUOTED },
+    orbitSpeedKmS: { value: 12.6, source: PHM_NOVEL },
+    destinationMassEarth: ADRIAN.massEarth,
+  },
+  facts: [
+    { label: 'Crew', value: { value: 'three', source: PHM_NOVEL } },
+    { label: 'Fuel', value: { value: 'Astrophage', source: PHM_NOVEL } },
+  ],
+  realityCheck: 'The relativity is real: at 1.5 g, 11.9 ly take 13.1 years on Earth and 3.9 aboard. No such drive exists.',
+};
+
+/** The ships. */
+export const FICTION_SHIPS: readonly FictionShipRecord[] = [HAIL_MARY];
+
+/**
+ * A line of something fictional from a star to one of its planets: the Petrova lines, Astrophage
+ * glowing in the infrared on their way between a star and the planet they breed at.
+ */
+export interface FictionLineRecord extends FictionBase {
+  readonly kind: 'line';
+  /** The planet; the line runs from its star (the Sun for a planet of the Sun's). */
+  readonly planet: BodyId;
+  /** Linear RGB, 0..1: what it is drawn in. */
+  readonly colour: readonly [number, number, number];
+}
+
+/** The novel's dark red, faint: Astrophage glow in the infrared, at the wavelength of CO₂'s absorption. */
+const PETROVA_RED = [0.22, 0.02, 0.015] as const;
+
+export const FICTION_LINES: readonly FictionLineRecord[] = [
+  {
+    id: 'petrova-sun',
+    name: 'Petrova line',
+    aliases: ['Petrova line (Sun–Venus)'],
+    work: HAIL_MARY_NOVEL,
+    kind: 'line',
+    planet: 'venus',
+    colour: PETROVA_RED,
+    anchorLine: 'From the real Sun to the real Venus',
+    position: 'canon',
+    facts: [{ label: 'Seen', value: { value: 'in the infrared', source: PHM_NOVEL } }],
+    realityCheck: 'Nothing glows between the Sun and Venus; the Sun’s output is measured and steady to a tenth of a percent.',
+  },
+  {
+    id: 'petrova-tau-ceti',
+    name: 'Petrova line',
+    aliases: ['Petrova line (τ Ceti–Adrian)'],
+    work: HAIL_MARY_NOVEL,
+    kind: 'line',
+    planet: TAU_CETI_E_ID,
+    colour: PETROVA_RED,
+    anchorLine: 'From the real τ Ceti to τ Ceti e, drawn as Adrian',
+    position: 'canon',
+    facts: [{ label: 'Seen', value: { value: 'in the infrared', source: PHM_NOVEL } }],
+    realityCheck: 'τ Ceti is real, 11.9 ly away; τ Ceti e is only a candidate planet.',
+  },
+];
+
+/** Every fictional thing: the worlds, the overlays, the ships, the lines. */
+export type FictionEntry = FictionRecord | FictionShipRecord | FictionLineRecord;
+
+export const FICTION_ENTRIES: readonly FictionEntry[] = [...FICTION, ...FICTION_OVERLAYS, ...FICTION_SHIPS, ...FICTION_LINES];
+
+const ENTRY_BY_ID = new Map(FICTION_ENTRIES.map((entry) => [entry.id, entry] as const));
+
+/** Any fictional entry by its id; null for none. */
+export function fictionEntry(id: string): FictionEntry | null {
+  return ENTRY_BY_ID.get(id) ?? null;
+}
+
+/** Every number an entry carries, its facts' among them: for the About's sources and the tests. */
+export function valuesOfEntry(entry: FictionEntry): FictionValue<unknown>[] {
+  const facts = entry.facts.map((fact) => fact.value);
+  if (entry.kind === 'line') return facts;
+  if (entry.kind === 'ship') {
+    const { voyage } = entry;
+    return [
+      entry.lengthM,
+      voyage.launchJd,
+      voyage.accelerationG,
+      voyage.earthYears,
+      voyage.shipYears,
+      voyage.orbitSpeedKmS,
+      voyage.destinationMassEarth,
+      ...facts,
+    ];
+  }
+  const { orbit } = entry;
+  return [
+    entry.radiusKm,
+    entry.massEarth,
+    orbit.semiMajorAxisKm,
+    orbit.eccentricity,
+    orbit.inclinationDeg,
+    orbit.nodeDeg,
+    ...(orbit.periodDays === undefined ? [] : [orbit.periodDays]),
+    ...(orbit.meanAnomalyDeg === undefined ? [] : [orbit.meanAnomalyDeg]),
+    ...facts,
+  ];
+}
+
+/** The overlay drawn over a real body, by the body's id; null for every other body. */
+export function overlayOf(id: BodyId): FictionRecord | null {
+  return FICTION_OVERLAYS.find((record) => record.anchor.kind === 'overlay' && record.anchor.body === id) ?? null;
+}
+
+const SHIP_BY_BODY = new Map<BodyId, FictionShipRecord>(FICTION_SHIPS.map((ship) => [`fiction-${ship.id}`, ship]));
+
+/** The ship a body is, or null. */
+export function fictionShipOf(id: BodyId): FictionShipRecord | null {
+  return SHIP_BY_BODY.get(id) ?? null;
+}
+
+/** The body a fictional entry is found at: its own, or the real body it is drawn over or along. */
+export function fictionTargetId(entry: FictionEntry): BodyId {
+  if (entry.kind === 'line') return entry.planet;
+  if (entry.kind !== 'ship' && entry.anchor.kind === 'overlay') return entry.anchor.body;
+  return fictionBodyId(entry.id);
+}
+
+/**
+ * The id a fictional entry's "about" is read by (the store's readAbout): its own page, apart from
+ * the real descriptions' ids, so a page can be opened about the Petrova line while the focus is
+ * Venus or about Adrian while it is τ Ceti e.
+ */
+export function fictionReadingId(id: string): string {
+  return `fiction:${id}`;
+}
+
+/** The entry a reading id is for, or null for a real description's. */
+export function fictionOfReading(reading: string): FictionEntry | null {
+  return reading.startsWith('fiction:') ? fictionEntry(reading.slice('fiction:'.length)) : null;
+}
+
+
 const BY_ID = new Map(FICTION.map((record) => [record.id, record] as const));
 
 /** Each record's body in the store. */
@@ -502,7 +783,12 @@ export function fictionOf(id: BodyId): FictionRecord | null {
 }
 
 export function isFictionBody(id: BodyId): boolean {
-  return BY_BODY.has(id);
+  return BY_BODY.has(id) || SHIP_BY_BODY.has(id);
+}
+
+/** The entry a fictional body is -- a world or a ship -- or null for every real one. */
+export function fictionEntryOfBody(id: BodyId): FictionRecord | FictionShipRecord | null {
+  return BY_BODY.get(id) ?? SHIP_BY_BODY.get(id) ?? null;
 }
 
 /** The world's look, for a fictional body drawn as a sphere; null for any other body. */
@@ -516,11 +802,11 @@ export function fictionWorldLook(id: BodyId): Extract<FictionLook, { kind: 'worl
  * is Polyphemus's, Alpha Centauri A. Null for a chain of fictional anchors that never reaches a
  * real one, which fiction.test.ts rules out.
  */
-export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { kind: 'alphaCen' }> | null {
+export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { kind: 'alphaCen' | 'overlay' }> | null {
   let current: FictionRecord | null = record;
   for (let steps = 0; current !== null && steps <= FICTION.length; steps += 1) {
     const anchor: FictionAnchor = current.anchor;
-    if (anchor.kind === 'alphaCen') return anchor;
+    if (anchor.kind === 'alphaCen' || anchor.kind === 'overlay') return anchor;
     current = fictionRecord(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   }
   return null;
@@ -530,12 +816,12 @@ export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { ki
  * The layer besides Fiction a fictional body needs on, as its real kind would: a planet's the
  * Planets, a moon's the Moons -- and a Trojan its planet's, the Planets (floatingOrigin.ts).
  */
-export function fictionLayerKind(record: FictionRecord): 'planet' | 'moon' {
-  return record.kind === 'moon' ? 'moon' : 'planet';
+export function fictionLayerKind(record: FictionRecord | FictionShipRecord): 'planet' | 'moon' | 'spacecraft' {
+  return record.kind === 'moon' ? 'moon' : record.kind === 'ship' ? 'spacecraft' : 'planet';
 }
 
 /** The tag beside its name, on its label and in search: FICTION, and whether its place is invented. */
-export function fictionTag(record: FictionRecord): string {
+export function fictionTag(record: Pick<FictionBase, 'position'>): string {
   return record.position === 'invented' ? 'FICTION · POSITION INVENTED' : 'FICTION';
 }
 
@@ -549,11 +835,14 @@ export function workLine(work: FictionWork): string {
  * work's title or creator, or "fiction" itself -- so "avatar" lists the film's worlds and
  * "fiction" all of them -- a word in the name counting before one elsewhere, as search.ts does.
  */
-export function searchFiction(query: string, records: readonly FictionRecord[] = FICTION): FictionRecord[] {
+export function searchFiction<T extends FictionBase = FictionEntry>(
+  query: string,
+  records: readonly T[] = FICTION_ENTRIES as readonly FictionBase[] as readonly T[],
+): T[] {
   const words = normalizeName(query).split(' ').filter((word) => word.length > 0);
   if (words.length === 0) return [];
   const typed = words.join(' ');
-  const scored: { record: FictionRecord; score: number }[] = [];
+  const scored: { record: T; score: number }[] = [];
   for (const record of records) {
     const names = [record.name, ...record.aliases].map(normalizeName);
     const nameWords = names.flatMap((name) => name.split(' '));

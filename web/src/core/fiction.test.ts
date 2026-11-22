@@ -15,6 +15,12 @@ import {
   realAnchorOf,
   searchFiction,
   seededRandom,
+  FICTION_ENTRIES,
+  fictionEntry,
+  fictionOfReading,
+  fictionReadingId,
+  fictionTargetId,
+  valuesOfEntry,
   standIn,
   valueNote,
   valueOf,
@@ -131,6 +137,32 @@ describe('the fiction records', () => {
   it('keep no stand-in for the two Avatar worlds: the research is in', () => {
     const pending = FICTION.flatMap((record) => valuesOf(record)).filter(([, value]) => valueNote(value).kind === 'standIn');
     expect(pending).toEqual([]);
+  });
+
+  it('give every entry -- world, overlay, ship, line -- a unique id and a reason or a source for each number', () => {
+    expect(new Set(FICTION_ENTRIES.map((entry) => entry.id)).size).toBe(FICTION_ENTRIES.length);
+    for (const entry of FICTION_ENTRIES) {
+      expect(fictionEntry(entry.id)).toBe(entry);
+      for (const value of valuesOfEntry(entry)) {
+        if ('silent' in value) continue;
+        if ('source' in value) {
+          expect(value.source.full.length, entry.id).toBeGreaterThan(value.source.short.length);
+          if (/wiki|as widely quoted/i.test(value.source.full)) expect(value.source.unverified, entry.id).toBe(true);
+        } else {
+          expect(value.why.length, entry.id).toBeGreaterThan(5);
+          expect(value.pending, entry.id).toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it('find each entry at its own body, or at the real one it is drawn over or runs to', () => {
+    expect(fictionTargetId(fictionEntry('adrian')!)).toBe('tau-ceti-e');
+    expect(fictionTargetId(fictionEntry('petrova-sun')!)).toBe('venus');
+    expect(fictionTargetId(fictionEntry('hail-mary')!)).toBe(fictionBodyId('hail-mary'));
+    expect(fictionTargetId(fictionEntry('pandora')!)).toBe(fictionBodyId('pandora'));
+    expect(fictionOfReading(fictionReadingId('petrova-sun'))?.id).toBe('petrova-sun');
+    expect(fictionOfReading('alpha-centauri-a')).toBeNull();
   });
 });
 
@@ -259,8 +291,14 @@ describe('search', () => {
     expect(searchFiction('pand').map((record) => record.id)).toEqual(['pandora']);
     expect(searchFiction('Avatar').length).toBe(FICTION.length);
     expect(searchFiction('cameron').length).toBe(FICTION.length);
-    expect(searchFiction('fiction').length).toBe(FICTION.length);
+    expect(searchFiction('fiction').length).toBe(FICTION_ENTRIES.length);
     expect(searchFiction('polyphemus')[0]!.id).toBe('polyphemus');
+    // Project Hail Mary's: the world over τ Ceti e, the ship, both Petrova lines.
+    // Adrian itself before the line that runs to it.
+    expect(searchFiction('adrian').map((entry) => entry.id)).toEqual(['adrian', 'petrova-tau-ceti']);
+    expect(searchFiction('hail mary')[0]!.id).toBe('hail-mary');
+    expect(searchFiction('petrova').map((entry) => entry.id).sort()).toEqual(['petrova-sun', 'petrova-tau-ceti']);
+    expect(searchFiction('weir').length).toBe(4);
     // Pandora by its number among the moons, before Polyphemus VI and the rest.
     expect(searchFiction('Polyphemus V')[0]!.id).toBe('pandora');
     expect(searchFiction('dante').map((record) => record.id)).toEqual(['polyphemus-1']);

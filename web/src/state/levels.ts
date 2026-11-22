@@ -170,7 +170,8 @@ export function crumbShown(tier: number, selected: LevelId | null): boolean {
  * (scene/scale.ts) -- and before them the Sun itself, null, at the eight radii a body is framed
  * from. Zooming out from the Sun walks up this list and zooming in walks back down (Maxi,
  * 2026-11-20: "si hago zoom o deszoom debería aparecer y desaparecer el camino"), so the
- * breadcrumb grows and shrinks with the view as it does with a crumb clicked.
+ * breadcrumb grows and shrinks with the view as it does with a crumb clicked. Every other focus
+ * has a ladder of its own made of the same rungs (scene/focusLadder.ts).
  */
 export interface Rung {
   readonly level: LevelId | null;
@@ -234,8 +235,8 @@ export function ladderLevel(ladder: readonly Rung[], current: LevelId | null, di
  * System, 2.3 for Alpha Centauri, 0.48 for Tau Ceti, whose planets are all within 1.6 AU, 0.11
  * for 51 Pegasi, whose one planet is 0.05 AU out. LADDER_HYSTERESIS past it, out, the view is
  * the system's; as far back in, a single body's again. Read as the camera's distance from the
- * focus -- the star, a planet, a fictional moon -- which is what the zoom changes; nothing beyond
- * the system, whose neighbourhood is the Sun's and centred there.
+ * focus -- the star, a planet, a fictional moon -- which is what the zoom changes. The Sun's
+ * outer rungs follow it on the focus's whole ladder (scene/focusLadder.ts).
  */
 export function systemLadder(level: LevelId, starRadiusKm: number, framingKm: number): readonly Rung[] {
   return [

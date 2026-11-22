@@ -11,7 +11,7 @@ import {
   inAlphaCen,
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
-import { fictionOf, realAnchorOf } from '../core/fiction.ts';
+import { fictionEntryOfBody, fictionOf, fictionShipOf, realAnchorOf } from '../core/fiction.ts';
 import { FictionTag } from './FictionTag.tsx';
 import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf, type BlackHoleSystem } from '../core/blackHoles.ts';
@@ -230,6 +230,10 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   }
   if (blackHoleSystemOf(body.id) !== null) {
     return 'black-hole';
+  }
+  // A fictional ship goes between systems: listed in none, found by search (core/hailMary.ts).
+  if (fictionShipOf(body.id) !== null) {
+    return 'none';
   }
   // A fictional world of it too, a moon of a planet of A as well (core/fiction.ts).
   const fiction = fictionOf(body.id);
@@ -1119,7 +1123,7 @@ function BodyList({
         )
       : [];
   const craft = solar && visibleKinds.has('spacecraft')
-    ? store.bodies.filter((body) => body.kind === 'spacecraft')
+    ? store.bodies.filter((body) => body.kind === 'spacecraft' && fictionShipOf(body.id) === null)
     : [];
   // The named satellites whose chip is on; a bulk one gone to from search is among them.
   const satellites = store.bodies.filter(
@@ -2089,7 +2093,7 @@ function Row({
 }) {
   // A satellite is a craft too, and has the craft's diamond, in the scene and here.
   const craft = body.kind === 'spacecraft' || body.kind === 'satellite';
-  const fiction = fictionOf(body.id);
+  const fiction = fictionEntryOfBody(body.id);
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <button

@@ -3,7 +3,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { deepSkyLayerKind } from '../core/deepSky.ts';
 import { RECORD_HOLDER_LAYER, recordHolderOf } from '../core/recordHolders.ts';
-import { FICTION_LAYER, fictionLayerKind, fictionOf } from '../core/fiction.ts';
+import { FICTION_LAYER, fictionEntryOfBody, fictionLayerKind } from '../core/fiction.ts';
 import { regionOf } from '../core/regions.ts';
 import { satelliteBodyChip, satelliteChipLayer } from '../core/satelliteGroups.ts';
 import type { Vec3 } from '../core/vec3.ts';
@@ -151,8 +151,9 @@ export function isShown(body: BodyDefinition, visibleKinds: ReadonlySet<string>)
     return visibleKinds.has(deepSkyLayerKind(body.id));
   }
   // A fictional world: the Fiction layer's, and its kind's as a real planet or moon is -- a
-  // Trojan with the planets, as its planet is (core/fiction.ts fictionLayerKind).
-  const fiction = fictionOf(body.id);
+  // Trojan with the planets, as its planet is; a ship with the spacecraft (core/fiction.ts
+  // fictionLayerKind).
+  const fiction = fictionEntryOfBody(body.id);
   if (fiction !== null) {
     return visibleKinds.has(FICTION_LAYER) && visibleKinds.has(fictionLayerKind(fiction));
   }

@@ -424,6 +424,11 @@ export function setFocusFraming(framing: ((id: BodyId) => FramingRequest | null)
   focusFraming = framing;
 }
 
+/** The framing `id` asks for when focused, if it asks for one (setFocusFraming): what it is seen from as itself. */
+export function focusFramingOf(id: BodyId): FramingRequest | null {
+  return focusFraming?.(id) ?? null;
+}
+
 /** Which slide-over panel is open, if any. */
 export type PanelId = 'layers' | 'lighting' | 'body' | 'about' | 'search' | 'readout' | 'description';
 

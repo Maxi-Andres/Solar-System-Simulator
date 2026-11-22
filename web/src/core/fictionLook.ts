@@ -50,4 +50,9 @@ export type FictionLook =
   /** A closed cylinder, length over diameter as given (Rama). Length 1. */
   | { readonly kind: 'cylinder'; readonly lengthOverDiameter: number }
   /** A sphere that shows the sky behind it bent, as a wormhole's mouth would. Radius 1. */
-  | { readonly kind: 'wormhole' };
+  | { readonly kind: 'wormhole' }
+  /**
+   * A ship, our own design from what its canon describes. Length 1 along local +z (+z the bow,
+   * the direction it accelerates), centred on its centre of mass.
+   */
+  | { readonly kind: 'ship'; readonly design: 'hail-mary' };

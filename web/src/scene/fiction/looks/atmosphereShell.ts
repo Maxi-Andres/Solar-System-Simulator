@@ -141,16 +141,22 @@ const FRAGMENT_SHADER = /* glsl */ `
     float z = max(b - 1.0, 0.0);
     vec3 up = closest / max(b, 1e-6);
 
-    vec3 column = hazeDepth() * exp(-z / uScaleHeight) * sqrt(2.0 * PI / uScaleHeight);
+    vec3 column = hazeExtinction() * exp(-z / uScaleHeight) * sqrt(2.0 * PI / uScaleHeight);
     float muSun = dot(up, toStar);
+    // Where the light reaching the camera was scattered: on an opaque tangent path, not at the
+    // tangent point but where the path's depth from the camera's side reaches about one -- a few
+    // scale heights higher, where the star's light has come through far less air. Lit at the
+    // tangent point instead, the halo's foot went dark against the disc's bright limb.
+    float columnLuminance = dot(column, vec3(0.2126, 0.7152, 0.0722));
+    float zSun = z + uScaleHeight * log(max(0.5 * columnLuminance, 1.0));
     // The world's shadow: the star is below the horizon of a point at z by sqrt(2z), about.
-    float dip = sqrt(2.0 * z);
+    float dip = sqrt(2.0 * zSun);
     float lit = smoothstep(-dip - 0.02, -dip + 0.02, muSun);
-    vec3 sunlight = sunThroughHaze(muSun, z) * lit;
+    vec3 sunlight = sunThroughHaze(muSun, zSun) * lit;
 
     float direct = (1.0 - uAmbient) * uIrradiance;
     vec3 transmitted = exp(-column);
-    vec3 radiance = direct / (4.0 * PI) * hazePhase(dot(ray, toStar)) * (1.0 - transmitted) * sunlight;
+    vec3 radiance = direct / (4.0 * PI) * hazePhase(dot(ray, toStar)) * hazeAlbedo() * (1.0 - transmitted) * sunlight;
     float opacity = 1.0 - dot(transmitted, vec3(0.2126, 0.7152, 0.0722));
 
     gl_FragColor = vec4(radiance, opacity);
@@ -202,6 +208,7 @@ export function atmosphereHalo(world: THREE.ShaderMaterial): THREE.Mesh[] {
     uIrradiance: shared['uIrradiance']!,
     uRayleighDepth: shared['uRayleighDepth']!,
     uMieDepth: shared['uMieDepth']!,
+    uAbsorption: shared['uAbsorption']!,
     uMieAsymmetry: shared['uMieAsymmetry']!,
     uScaleHeight: shared['uScaleHeight']!,
     uShellRadius: { value: radius },

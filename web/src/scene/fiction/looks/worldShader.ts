@@ -48,6 +48,7 @@ export const WORLD_IRRADIANCE = LIGHTING.natural.sun;
 export const HAZE_GLSL = /* glsl */ `
   uniform vec3 uRayleighDepth;
   uniform float uMieDepth;
+  uniform vec3 uAbsorption;
   uniform float uMieAsymmetry;
   uniform float uScaleHeight;
 
@@ -59,8 +60,19 @@ export const HAZE_GLSL = /* glsl */ `
     return 2.0 * grazing * exp(min(mu * mu / (2.0 * uScaleHeight), 30.0)) - 1.0 / (-mu + 1.0 / grazing);
   }
 
+  /** Optical depth that scatters: Rayleigh and Mie. */
   vec3 hazeDepth() {
     return uRayleighDepth + vec3(uMieDepth);
+  }
+
+  /** Optical depth that dims: scattering plus absorption (methane's red bands, say). */
+  vec3 hazeExtinction() {
+    return hazeDepth() + uAbsorption;
+  }
+
+  /** The share of what the air takes that it scatters rather than absorbs. */
+  vec3 hazeAlbedo() {
+    return hazeDepth() / max(hazeExtinction(), vec3(1e-6));
   }
 
   /** The air's phase function, Rayleigh and Henyey-Greenstein weighted by their depths. */
@@ -68,12 +80,16 @@ export const HAZE_GLSL = /* glsl */ `
     float rayleigh = 0.75 * (1.0 + cosTheta * cosTheta);
     float g = uMieAsymmetry;
     float mie = (1.0 - g * g) / pow(max(1.0 + g * g - 2.0 * g * cosTheta, 1e-4), 1.5);
+    // A share scattered isotropically, standing in for the light a thick haze scatters many
+    // times over: single scattering alone left a forward-scattering haze black at the limb
+    // whenever the star was behind the camera.
+    mie = mix(mie, 1.0, 0.35);
     return (uRayleighDepth * rayleigh + vec3(uMieDepth * mie)) / max(hazeDepth(), vec3(1e-6));
   }
 
   /** Sunlight left after the air above a point at \`altitude\` radii, sun at mu0. */
   vec3 sunThroughHaze(float mu0, float altitude) {
-    return exp(-hazeDepth() * exp(-altitude / uScaleHeight) * chapman(mu0));
+    return exp(-hazeExtinction() * exp(-altitude / uScaleHeight) * chapman(mu0));
   }
 `;
 
@@ -265,11 +281,11 @@ function fragmentShader(look: SurfaceLook): string {
     vec3 radiance = mix(ground, cloud, s.cloud);
 
     // The haze between: what it takes from the ground on the way out and what it adds.
-    vec3 depth = hazeDepth();
+    vec3 depth = hazeExtinction();
     vec3 outward = exp(-depth * chapman(mu));
     float cosTheta = -dot(toCamera, toStar);
     float lit = max(mu0, 0.0);
-    vec3 inScattered = direct / (4.0 * PI) * hazePhase(cosTheta)
+    vec3 inScattered = direct / (4.0 * PI) * hazePhase(cosTheta) * hazeAlbedo()
       * (lit / (mu + lit + 1e-4))
       * (1.0 - exp(-depth * (chapman(mu) + chapman(mu0))))
       * smoothstep(-0.08, 0.04, mu0);
@@ -294,6 +310,8 @@ export interface Haze {
   readonly mie: number;
   readonly mieAsymmetry: number;
   readonly scaleHeight: number;
+  /** Zenith absorption optical depth per channel; none when absent. */
+  readonly absorption?: readonly [number, number, number];
 }
 
 /** What a world's material is made from: its look and the parameters every look shares. */
@@ -354,6 +372,7 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
       ...Object.fromEntries(bake.textures.map((texture, i) => [`uLayer${i}`, { value: texture }])),
       uRayleighDepth: { value: new THREE.Vector3(...haze.rayleigh) },
       uMieDepth: { value: haze.mie },
+      uAbsorption: { value: new THREE.Vector3(...(haze.absorption ?? [0, 0, 0])) },
       uMieAsymmetry: { value: haze.mieAsymmetry },
       uScaleHeight: { value: haze.scaleHeight },
       ...ringUniformValues(world.seed, world.rings),

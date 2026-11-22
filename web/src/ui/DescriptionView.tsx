@@ -8,7 +8,7 @@ import { planetarySystemOf } from '../core/planetarySystems.ts';
 import type { Description, DescriptionPhoto, DescriptionPoint } from '../descriptions/types.ts';
 import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
-import { fictionOf } from '../core/fiction.ts';
+import { fictionEntryOfBody, fictionOfReading } from '../core/fiction.ts';
 import { FictionAboutView } from './FictionAboutView.tsx';
 
 /**
@@ -43,7 +43,9 @@ const COLOUR_NOTE: Record<DescriptionPhoto['colour'], string> = {
 export function DescriptionView({ store }: { store: EphemerisStore }) {
   const focus = useViewStore((state) => state.focus);
   const reading = useViewStore((state) => state.reading);
-  const fiction = reading === null ? fictionOf(focus) : null;
+  // The focused fictional thing's own, or one asked for by name: Adrian's over τ Ceti e, a
+  // Petrova line's from its name (core/fiction.ts fictionReadingId).
+  const fiction = reading === null ? fictionEntryOfBody(focus) : fictionOfReading(reading);
   return fiction !== null ? <FictionAboutView record={fiction} /> : <BodyDescriptionView store={store} />;
 }
 

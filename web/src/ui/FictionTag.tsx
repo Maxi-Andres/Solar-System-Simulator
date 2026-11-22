@@ -1,10 +1,10 @@
-import { FICTION_COLOR, fictionTag, type FictionRecord } from '../core/fiction.ts';
+import { FICTION_COLOR, fictionTag, type FictionBase } from '../core/fiction.ts';
 
 /**
  * The FICTION tag, wherever a fictional thing is listed or shown outside the scene -- the
  * breadcrumb's list, search, the info panel -- as its label carries it in the scene (App.tsx).
  */
-export function FictionTag({ record }: { readonly record: FictionRecord }) {
+export function FictionTag({ record }: { readonly record: Pick<FictionBase, 'position'> }) {
   return (
     <span
       style={{

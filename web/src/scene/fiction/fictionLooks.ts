@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import type { FictionLook, WorldPalette } from '../../core/fictionLook.ts';
 import { exoplanetMaterial } from '../exoplanetSurface.ts';
 import { BARREN, ICY, NO_HAZE } from './looks/airless.ts';
+import { DENSE_HAZE, DENSE_HAZE_AIR } from './looks/denseHaze.ts';
+import { createHailMary, type ShipMode } from './looks/hailMary.ts';
 import { atmosphereHalo } from './looks/atmosphereShell.ts';
 import { BANDED_GIANT, BANDED_GIANT_HAZE } from './looks/bandedGiant.ts';
 import { JUNGLE_MOON, JUNGLE_MOON_HAZE } from './looks/jungleMoon.ts';
@@ -34,6 +36,7 @@ const PALETTE_LOOKS: Partial<Record<WorldPalette, PaletteLook>> = {
   'banded-giant': { surface: BANDED_GIANT, haze: BANDED_GIANT_HAZE, tintWeight: 1 },
   barren: { surface: BARREN, haze: NO_HAZE, tintWeight: 0.6 },
   icy: { surface: ICY, haze: NO_HAZE, tintWeight: 0.4 },
+  'dense-haze': { surface: DENSE_HAZE, haze: DENSE_HAZE_AIR, tintWeight: 0.6 },
 };
 
 /** A stand-in colour for the palettes without a look yet. */
@@ -73,8 +76,16 @@ export interface FictionObject {
   readonly object: THREE.Object3D;
   /** Each frame it is drawn: the direction to the light that falls on it, world space. */
   update?(lightDirection: THREE.Vector3, camera: THREE.Camera): void;
+  /**
+   * A ship's flight mode, for the ships that have more than one (looks/hailMary.ts): `cruise`,
+   * or `centrifuge`, split and spinning for gravity, at `spinPhase` radians about local y. The
+   * layer advances the phase by the ship's spin rate (CENTRIFUGE_SPIN_RAD_S) each frame.
+   */
+  setMode?(mode: ShipMode, spinPhase?: number): void;
   dispose(): void;
 }
+
+export type { ShipMode };
 
 /**
  * What a world has beyond its sphere: the haze past its limb, and its rings if it has any.
@@ -117,6 +128,9 @@ export function createFictionWorldExtras(look: WorldLook, material: THREE.Materi
 
 /** A fictional object that is not a world: a monolith, Rama, a wormhole's mouth. */
 export function createFictionObject(look: Exclude<FictionLook, { kind: 'world' }>): FictionObject {
+  if (look.kind === 'ship') {
+    return createHailMary();
+  }
   const geometry =
     look.kind === 'monolith'
       ? new THREE.BoxGeometry(1 / 9, 1, 4 / 9)

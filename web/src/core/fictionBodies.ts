@@ -42,6 +42,8 @@ export function resolveAnchor(store: EphemerisStore, anchor: FictionAnchor): Bod
   if (anchor.kind === 'alphaCen') {
     return store.bodies.find((body) => alphaCenMember(body.id) === anchor.member)?.id ?? null;
   }
+  // An overlay is no body of its own: drawn over the real one (SolarSystem.tsx), never placed.
+  if (anchor.kind === 'overlay') return null;
   const id = fictionBodyId(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   if (!store.isPropagatedBody(id)) return null;
   return anchor.kind === 'fiction' ? id : store.body(id).parent;
@@ -123,10 +125,12 @@ export function fictionBodyDefinition(record: FictionRecord, parent: BodyId): Bo
  * placed it -- search switches the layer on and goes to the world the moment it is there.
  */
 export function whenPlaced(store: EphemerisStore, id: BodyId): Promise<BodyId> {
-  if (store.isPropagatedBody(id)) return Promise.resolve(id);
+  // A body from the start -- Venus, which a Petrova line runs to -- is there already.
+  const there = (): boolean => store.isPropagatedBody(id) || store.bodies.some((body) => body.id === id);
+  if (there()) return Promise.resolve(id);
   return new Promise((resolve) => {
     const unsubscribe = store.subscribe(() => {
-      if (!store.isPropagatedBody(id)) return;
+      if (!there()) return;
       unsubscribe();
       resolve(id);
     });

@@ -1,4 +1,4 @@
-import { FICTION, FICTION_COLOR, valueNote, workLine, type FictionRecord, type FictionWork } from '../../core/fiction.ts';
+import { FICTION_COLOR, FICTION_ENTRIES, valueNote, valuesOfEntry, workLine, type FictionEntry, type FictionWork } from '../../core/fiction.ts';
 import { Item, Items, Prose, Strong, Sub } from './prose.tsx';
 import type { AboutSection } from './section.ts';
 
@@ -9,9 +9,9 @@ import type { AboutSection } from './section.ts';
  */
 
 /** The works, each once, in the order their first object is listed. */
-function works(): { readonly work: FictionWork; readonly records: readonly FictionRecord[] }[] {
-  const byTitle = new Map<string, { work: FictionWork; records: FictionRecord[] }>();
-  for (const record of FICTION) {
+function works(): { readonly work: FictionWork; readonly records: readonly FictionEntry[] }[] {
+  const byTitle = new Map<string, { work: FictionWork; records: FictionEntry[] }>();
+  for (const record of FICTION_ENTRIES) {
     const entry = byTitle.get(record.work.title) ?? { work: record.work, records: [] };
     entry.records.push(record);
     byTitle.set(record.work.title, entry);
@@ -20,14 +20,8 @@ function works(): { readonly work: FictionWork; readonly records: readonly Ficti
 }
 
 /** Every source a work's records cite, in full, each once. */
-function sourcesOf(records: readonly FictionRecord[]): string[] {
-  const values = records.flatMap((record) => [
-    record.radiusKm,
-    record.massEarth,
-    record.orbit.semiMajorAxisKm,
-    record.orbit.eccentricity,
-    ...record.facts.map((fact) => fact.value),
-  ]);
+function sourcesOf(records: readonly FictionEntry[]): string[] {
+  const values = records.flatMap(valuesOfEntry);
   return [
     ...new Set(
       values.flatMap((value) =>
@@ -38,16 +32,8 @@ function sourcesOf(records: readonly FictionRecord[]): string[] {
 }
 
 /** How many of a record's drawn numbers are still stand-ins. */
-function standIns(record: FictionRecord): number {
-  const values = [
-    record.radiusKm,
-    record.massEarth,
-    record.orbit.semiMajorAxisKm,
-    record.orbit.eccentricity,
-    record.orbit.inclinationDeg,
-    record.orbit.nodeDeg,
-  ];
-  return values.filter((value) => valueNote(value).kind === 'standIn').length;
+function standIns(record: FictionEntry): number {
+  return valuesOfEntry(record).filter((value) => valueNote(value).kind === 'standIn').length;
 }
 
 export const fictionSection: AboutSection = {
@@ -72,7 +58,8 @@ export const fictionSection: AboutSection = {
         <span style={{ color: FICTION_COLOR }}>magenta</span> triangle for its marker and a magenta orbit, shapes
         and a colour nothing real is drawn with; a <Strong>FICTION</Strong> tag on its name, in search and on
         its panel. No fictional body is counted in any list or statistic of real ones: α Centauri A’s planets
-        are still its one unconfirmed candidate, whatever this layer draws beside it.
+        are still its one unconfirmed candidate, whatever this layer draws beside it. Where a story says a real planet is its world — Project Hail Mary’s Adrian is τ Ceti e — the fiction is drawn over it
+        while the layer is on, with a section of its own at the foot of the planet’s panel, and every real value left as it is.
       </Prose>
 
       <Sub section="fiction" id="numbers">

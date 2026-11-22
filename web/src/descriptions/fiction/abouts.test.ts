@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FICTION, fictionBodyId } from '../../core/fiction.ts';
+import { FICTION_ENTRIES, fictionBodyId } from '../../core/fiction.ts';
 import { DESCRIBED_IDS } from '../ids.ts';
 import { FICTION_ABOUTS } from './abouts.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from './ids.ts';
@@ -12,8 +12,8 @@ function paragraphs(key: keyof typeof FICTION_ABOUTS): string[] {
 }
 
 describe('fiction’s abouts', () => {
-  it('give every Avatar record a page, and name each page', () => {
-    for (const record of FICTION) {
+  it('give every fictional entry a page, and name each page', () => {
+    for (const record of FICTION_ENTRIES) {
       expect(fictionAboutKey(record.id), record.id).not.toBeNull();
     }
     expect(Object.keys(FICTION_ABOUT_NAMES).sort()).toEqual(Object.keys(FICTION_ABOUTS).sort());
@@ -40,7 +40,7 @@ describe('fiction’s abouts', () => {
   });
 
   it('are kept apart from the real descriptions', () => {
-    for (const record of FICTION) {
+    for (const record of FICTION_ENTRIES) {
       expect(DESCRIBED_IDS.has(fictionBodyId(record.id)), record.id).toBe(false);
       expect(DESCRIBED_IDS.has(record.id), record.id).toBe(false);
     }

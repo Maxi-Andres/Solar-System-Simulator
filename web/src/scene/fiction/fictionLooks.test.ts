@@ -6,6 +6,24 @@ import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial } f
 import { AIRLESS_FACE_SIZE, BARREN, ICY } from './looks/airless.ts';
 import { SHELL_SHADERS, shellRadius } from './looks/atmosphereShell.ts';
 import { rayCraterPlacements } from './looks/craters.ts';
+import {
+  CABLE_FARING_LENGTH_M,
+  CENTRIFUGE_CABLE_LENGTH_M,
+  CENTRIFUGE_CONTROL_ROOM_RADIUS_M,
+  CENTRIFUGE_RPM,
+  CENTRIFUGE_SPIN_RAD_S,
+  CONTROL_ROOM_HEIGHT_M,
+  DORMITORY_HEIGHT_M,
+  FUEL_TANK_LENGTH_M,
+  HAIL_MARY_LENGTH_M,
+  LAB_HEIGHT_M,
+  NOSE_CONE_LENGTH_M,
+  SKIRT_LENGTH_M,
+  SPIN_DRIVE_LENGTH_M,
+  STORAGE_HEIGHT_M,
+  createHailMary,
+} from './looks/hailMary.ts';
+import { SHIP_SHADERS } from './looks/shipMaterial.ts';
 import { STORM_COUNT, stormPlacements } from './looks/bandedGiant.ts';
 import { JUNGLE_MOON } from './looks/jungleMoon.ts';
 import { seedFraction, seedHash } from './looks/noise.ts';
@@ -273,6 +291,181 @@ describe('airless moons (barren, icy)', () => {
     expect(counts[0]).toBeGreaterThan(150);
     expect(counts[1]).toBeGreaterThan(90);
     expect(counts[2]).toBeGreaterThan(30);
+  });
+});
+
+describe('dense-haze (Adrian)', () => {
+  const ADRIAN: World = { kind: 'world', palette: 'dense-haze', seed: 3 };
+
+  it('hazes with methane: absorption strongest in the red, and a halo past the limb', () => {
+    const material = shader(fictionWorldMaterial(ADRIAN));
+    const absorption = (material.uniforms['uAbsorption']!.value as THREE.Vector3).toArray();
+    expect(absorption[0]).toBeGreaterThan(absorption[1]!);
+    expect(absorption[1]).toBeGreaterThan(absorption[2]!);
+    expect(material.uniforms['uMieDepth']!.value).toBeGreaterThan(0.1);
+    const extras = createFictionWorldExtras(ADRIAN, material)!;
+    expect(extras.object.children.length).toBe(2);
+    extras.dispose();
+    material.dispose();
+  });
+
+  it('leaves the other worlds without absorption', () => {
+    const material = shader(fictionWorldMaterial(PANDORA));
+    expect((material.uniforms['uAbsorption']!.value as THREE.Vector3).toArray()).toEqual([0, 0, 0]);
+    material.dispose();
+  });
+});
+
+describe('the Hail Mary', () => {
+  const metres = 1 / HAIL_MARY_LENGTH_M;
+
+  function parts(object: THREE.Object3D): { crew: THREE.Mesh; rear: THREE.Mesh; cables: THREE.Mesh } {
+    return {
+      crew: object.getObjectByName('hail-mary-crew') as THREE.Mesh,
+      rear: object.getObjectByName('hail-mary-fuel-and-drives') as THREE.Mesh,
+      cables: object.getObjectByName('hail-mary-cables') as THREE.Mesh,
+    };
+  }
+
+  it("adds its sections up to the novel's 40 m", () => {
+    const sum =
+      SPIN_DRIVE_LENGTH_M + FUEL_TANK_LENGTH_M + 0.3 + SKIRT_LENGTH_M + CABLE_FARING_LENGTH_M +
+      STORAGE_HEIGHT_M + DORMITORY_HEIGHT_M + LAB_HEIGHT_M + NOSE_CONE_LENGTH_M;
+    expect(sum).toBeCloseTo(HAIL_MARY_LENGTH_M, 6);
+    expect(CONTROL_ROOM_HEIGHT_M).toBeLessThan(NOSE_CONE_LENGTH_M);
+  });
+
+  it('is length one along +z, bow forward, its centre of mass at the origin', () => {
+    const ship = createFictionObject({ kind: 'ship', design: 'hail-mary' });
+    ship.object.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(ship.object);
+    expect(box.max.z - box.min.z).toBeCloseTo(1, 2);
+    // The tanks hold most of the mass: the origin lies aft of the middle.
+    expect(box.max.z).toBeGreaterThan(0.5);
+    expect(box.min.z).toBeGreaterThan(-0.5);
+    // The nose is a point on the axis, at the front.
+    const { crew } = parts(ship.object);
+    crew.geometry.computeBoundingBox();
+    expect(crew.geometry.boundingBox!.max.z).toBeCloseTo(HAIL_MARY_LENGTH_M, 3);
+    ship.dispose();
+  });
+
+  it('is three draws on one program, and one of light glows', () => {
+    const ship = createHailMary();
+    const { crew, rear, cables } = parts(ship.object);
+    expect(crew.material).toBe(rear.material);
+    expect(cables.material).toBe(rear.material);
+    let meshes = 0;
+    let points = 0;
+    ship.object.traverse((part) => {
+      if ((part as THREE.Mesh).isMesh) meshes += 1;
+      if ((part as THREE.Points).isPoints) points += 1;
+    });
+    expect(meshes).toBe(3);
+    expect(points).toBe(1);
+    expect(SHIP_SHADERS.vertex).toContain('#include <logdepthbuf_vertex>');
+    expect(SHIP_SHADERS.fragment).toContain('#include <logdepthbuf_fragment>');
+    expect(SHIP_SHADERS.fragment).toContain('#include <tonemapping_fragment>');
+    expect(ship.triangles.full).toBeLessThan(40000);
+    expect(ship.triangles.low).toBeLessThan(3000);
+    ship.dispose();
+  });
+
+  it('draws its silhouette model when small on screen, and the full one close', () => {
+    const ship = createHailMary();
+    const { crew } = parts(ship.object);
+    const full = crew.geometry;
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 1e6);
+    const light = new THREE.Vector3(1, 0, 0);
+    camera.position.set(0, 0, 500);
+    camera.updateMatrixWorld();
+    ship.object.updateMatrixWorld(true);
+    ship.update(light, camera);
+    expect(crew.geometry).not.toBe(full);
+    camera.position.set(0, 0, 3);
+    camera.updateMatrixWorld();
+    ship.update(light, camera);
+    expect(crew.geometry).toBe(full);
+    ship.dispose();
+  });
+
+  it("splits for centrifuge mode: crew section turned round, its control room 75 m from the centre", () => {
+    const ship = createHailMary();
+    const { crew, cables } = parts(ship.object);
+    for (const phase of [0, 1.3]) {
+      ship.setMode('centrifuge', phase);
+      ship.object.updateMatrixWorld(true);
+      // The control room's middle, in the crew section's own metres.
+      const control = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - NOSE_CONE_LENGTH_M + CONTROL_ROOM_HEIGHT_M / 2).applyMatrix4(crew.matrixWorld);
+      expect(control.length() / metres).toBeCloseTo(CENTRIFUGE_CONTROL_ROOM_RADIUS_M, 0);
+      // The nose points in, toward the centre: nearer it than the storage bay.
+      const nose = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M).applyMatrix4(crew.matrixWorld);
+      const storage = new THREE.Vector3(0, 0, HAIL_MARY_LENGTH_M - NOSE_CONE_LENGTH_M - LAB_HEIGHT_M - DORMITORY_HEIGHT_M - STORAGE_HEIGHT_M).applyMatrix4(crew.matrixWorld);
+      expect(nose.length()).toBeLessThan(storage.length());
+      // Spinning about local y: nothing leaves the xz plane it started in.
+      expect(Math.abs(control.y)).toBeLessThan(1e-9);
+    }
+    expect(cables.visible).toBe(true);
+    ship.setMode('cruise');
+    ship.object.updateMatrixWorld(true);
+    expect(new THREE.Vector3().setFromMatrixPosition(crew.matrixWorld).x).toBeCloseTo(0, 9);
+    ship.dispose();
+  });
+
+  it('spins for one g at a rate people adapt to', () => {
+    // One g at the lab floor: a lab's height and half the control room's beyond the control room.
+    const labRadius = CENTRIFUGE_CONTROL_ROOM_RADIUS_M + CONTROL_ROOM_HEIGHT_M / 2 + LAB_HEIGHT_M;
+    expect(CENTRIFUGE_SPIN_RAD_S ** 2 * labRadius / 9.80665).toBeCloseTo(1, 1);
+    expect(CENTRIFUGE_RPM).toBeGreaterThan(2);
+    expect(CENTRIFUGE_RPM).toBeLessThan(4);
+    expect(CENTRIFUGE_CABLE_LENGTH_M).toBeGreaterThan(50);
+    expect(CENTRIFUGE_CABLE_LENGTH_M).toBeLessThan(100);
+  });
+
+  it('works out how much sky each vertex sees: less in the gaps between the tanks', () => {
+    const ship = createHailMary();
+    ship.finishOcclusion();
+    const { rear } = parts(ship.object);
+    const position = rear.geometry.getAttribute('position');
+    const detail = rear.geometry.getAttribute('detail');
+    // A point on a tank facing the spine, and one on the same tank facing out.
+    let inner = 1;
+    let outer = 0;
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i);
+      const y = position.getY(i);
+      const z = position.getZ(i);
+      if (z < 6 || z > 12) continue;
+      const r = Math.hypot(x, y);
+      if (Math.abs(r - 0.47) < 0.05) inner = Math.min(inner, detail.getX(i));
+      if (Math.abs(r - 6.46) < 0.05) outer = Math.max(outer, detail.getX(i));
+    }
+    expect(inner).toBeLessThan(0.6);
+    expect(outer).toBeGreaterThan(0.85);
+    ship.dispose();
+  });
+
+  it("casts the star's shadow only when large on screen", () => {
+    const ship = createHailMary();
+    const material = parts(ship.object).crew.material as THREE.ShaderMaterial;
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 1e6);
+    const light = new THREE.Vector3(0, 1, 0);
+    camera.position.set(0, 0, 50);
+    camera.updateMatrixWorld();
+    ship.object.updateMatrixWorld(true);
+    ship.update(light, camera);
+    expect(material.uniforms['uShadowOn']!.value).toBe(0);
+    ship.dispose();
+  });
+
+  it('frees what it made', () => {
+    const ship = createHailMary();
+    const freed = vi.fn();
+    const { crew } = parts(ship.object);
+    (crew.material as THREE.Material).addEventListener('dispose', freed);
+    crew.geometry.addEventListener('dispose', freed);
+    ship.dispose();
+    expect(freed).toHaveBeenCalledTimes(2);
   });
 });
 

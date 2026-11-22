@@ -30,8 +30,8 @@ import { WhatIs } from './WhatIs.tsx';
 import { ReadMore } from './ReadMore.tsx';
 import { hasDescription } from '../descriptions/ids.ts';
 import { LevelPanel } from './LevelFacts.tsx';
-import { FictionPanel } from './FictionFacts.tsx';
-import { isFictionBody } from '../core/fiction.ts';
+import { FictionOverlaySection, FictionPanel } from './FictionFacts.tsx';
+import { isFictionBody, overlayOf } from '../core/fiction.ts';
 import type { Stars3dSource } from '../core/stars3d.ts';
 import { LIGHT_YEAR_KM } from '../scene/scale.ts';
 
@@ -57,6 +57,8 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
   const focus = useViewStore((state) => state.focus);
   const closePanel = useViewStore((state) => state.closePanel);
   const selectedLevel = useViewStore((state) => state.selectedLevel);
+  // A fiction drawn over a real body (Adrian over τ Ceti e) adds its own section while it is on.
+  const fictionOn = useViewStore((state) => state.layers.fiction);
   void tick;
 
   // A breadcrumb level selected: its panel, not its centre's (state/levels.ts).
@@ -207,6 +209,7 @@ export function InfoPanel({ store, jd, distanceMode, tick, stars3d = null }: Inf
             vectors: where it came from and what its place is worth. */}
         <BeltBodyFacts id={focus} store={store} jd={jd} />
       </dl>
+      {fictionOn && overlayOf(focus) !== null && <FictionOverlaySection record={overlayOf(focus)!} />}
     </Panel>
   );
 }

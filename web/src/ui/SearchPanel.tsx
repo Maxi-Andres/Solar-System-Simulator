@@ -70,7 +70,16 @@ import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { messierSynonym } from '../core/messier.ts';
-import { FICTION_COLOR, fictionBodyId, fictionRecord, isFictionBody, searchFiction, type FictionRecord } from '../core/fiction.ts';
+import {
+  FICTION_COLOR,
+  fictionEntry,
+  fictionReadingId,
+  fictionRecord,
+  fictionTargetId,
+  isFictionBody,
+  searchFiction,
+  type FictionEntry,
+} from '../core/fiction.ts';
 import { whenPlaced } from '../core/fictionBodies.ts';
 import { FictionTag } from './FictionTag.tsx';
 import { useViewStore } from '../state/store.ts';
@@ -598,16 +607,20 @@ export function SearchPanel({
       return;
     }
     if (result.kind === 'fiction') {
-      const record = fictionRecord(result.id);
+      const record = fictionEntry(result.id);
       if (record !== null) {
-        // Its layer, and its kind's -- a moon's planet's too -- or it would not be drawn.
+        // Its layer, and its kind's -- a moon's planet's too, a ship's the craft's -- or it would
+        // not be drawn.
         setLayer('fiction', true);
         setLayer('planets', true);
         if (record.kind === 'moon') setLayer('moons', true);
-        // Made a body by the layer's chunk once it is in (scene/fiction/FictionLayer.tsx).
-        whenPlaced(store, fictionBodyId(record.id))
+        if (record.kind === 'ship') setLayer('spacecraft', true);
+        // Made a body by the layer's chunk once it is in (scene/fiction/FictionLayer.tsx); or the
+        // real body it is drawn over or runs to, there already. A line has no panel: its about.
+        whenPlaced(store, fictionTargetId(record))
           .then((id) => {
             setFocus(id);
+            if (record.kind === 'line') readAbout(fictionReadingId(record.id));
             renderDemand.request();
           })
           .catch((error: unknown) => {
@@ -890,23 +903,29 @@ function describeResult(
   readonly name: string;
   readonly detail: string;
   /** For a fictional thing: its record, for the tag. */
-  readonly fiction?: FictionRecord;
+  readonly fiction?: FictionEntry;
 } {
   if (result.kind === 'system') {
     return { glyph: '◎', color: '#e6d8b0', name: result.entry.name, detail: result.entry.detail };
   }
   if (result.kind === 'fiction') {
-    const record = fictionRecord(result.id)!;
+    const record = fictionEntry(result.id)!;
     return {
       glyph: '△',
       color: FICTION_COLOR,
       name: record.name,
       detail: [
-        record.kind === 'trojan'
-          ? 'Trojan'
-          : record.kind === 'moon' && record.anchor.kind === 'fiction'
-            ? `Moon of ${fictionRecord(record.anchor.id)?.name ?? ''}`
-            : 'Planet',
+        record.kind === 'line'
+          ? record.aliases[0]?.replace(/^Petrova line \((.*)\)$/, '$1') ?? 'Line'
+          : record.kind === 'ship'
+            ? 'Starship'
+            : record.kind === 'trojan'
+              ? 'Trojan'
+              : record.kind === 'moon' && record.anchor.kind === 'fiction'
+                ? `Moon of ${fictionRecord(record.anchor.id)?.name ?? ''}`
+                : record.anchor.kind === 'overlay'
+                  ? record.anchorLine
+                  : 'Planet',
         `${record.work.title} (${record.work.year})`,
       ].join(' · '),
       fiction: record,

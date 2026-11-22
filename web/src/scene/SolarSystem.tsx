@@ -1,6 +1,6 @@
 import type { BodyDefinition, BodyId, CraftShape } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -74,9 +74,17 @@ import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
 import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
 import { ambientShare, exoplanetMaterial } from './exoplanetSurface.ts';
-import { fictionWorldFor } from './fiction/fictionHooks.ts';
+import {
+  fictionMakersReady,
+  fictionObjectFor,
+  fictionOverlayFor,
+  fictionPose,
+  fictionWorldFor,
+  subscribeFictionMakers,
+  type FictionWorldParts,
+} from './fiction/fictionHooks.ts';
 import type { FictionObject } from './fiction/fictionLooks.ts';
-import { isFictionBody } from '../core/fiction.ts';
+import { FICTION_LAYER, fictionShipOf, isFictionBody, overlayOf } from '../core/fiction.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import { lensState } from './lens.ts';
 import {
@@ -114,6 +122,7 @@ import {
   kmToUnits,
   markerOpacity,
   meshOpacity,
+  MESH_FADE_END_PX,
   pixelsToWorldSize,
 } from './scale.ts';
 import { disposeOwnResources, neverDrawnAsSphere, NOT_A_SPHERE_KINDS, staleIds } from './bodyHandles.ts';
@@ -596,6 +605,24 @@ function disposeHandle(handle: BodyHandles, lateOrbits: THREE.Group): void {
     handle.mesh.remove(extras.object);
     extras.dispose();
   }
+  // A ship's model likewise, off its group.
+  const model = handle.mesh.userData['fictionObject'] as FictionObject | undefined;
+  if (model !== undefined) {
+    handle.group.remove(model.object);
+    model.dispose();
+  }
+  // A real body drawn over by a fiction (core/fiction.ts overlayOf): whichever of its two looks is
+  // not on the sphere now is freed here; the sweep frees the one that is.
+  const overlay = handle.mesh.userData['fictionOverlay'] as FictionWorldParts | null | undefined;
+  const real = handle.mesh.userData['realMaterial'] as THREE.Material | undefined;
+  if (overlay != null) {
+    if (overlay.extras !== null) {
+      handle.mesh.remove(overlay.extras.object);
+      overlay.extras.dispose();
+    }
+    if (handle.mesh.material !== overlay.material) overlay.material.dispose();
+  }
+  if (real !== undefined && handle.mesh.material !== real) real.dispose();
   // The sphere, its own material, any ring, glare, cloud deck. Its marker is only numbers
   // written into the batch each frame, and a body no longer in the store is not written.
   disposeOwnResources(handle.group, SHARED_RESOURCES);
@@ -613,6 +640,17 @@ function lightingStar(store: EphemerisStore, definition: BodyDefinition): BodyId
     id = parent;
   }
   return id;
+}
+
+/** A fictional ship's model's bow, before it is turned (FictionLook 'ship'). */
+const SHIP_AXIS = new THREE.Vector3(0, 0, 1);
+/** Scratch for a ship's pose and its light, written each frame rather than allocated. */
+const scratchBow = new THREE.Vector3();
+const scratchLight = new THREE.Vector3();
+
+/** The squared distance between two points, km². */
+function lengthSq(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
 }
 
 /** How long a frame may spend building craft trails before leaving the rest to the next, ms. */
@@ -749,6 +787,15 @@ export function SolarSystem({
         fiction.extras.object.scale.setScalar(radiusUnits);
         mesh.add(fiction.extras.object);
         mesh.userData['fictionExtras'] = fiction.extras;
+      }
+      // A fictional ship's model (fictionLooks.ts), a unit long along +z: scaled to its length,
+      // twice the radius it is framed by, and turned each frame to its thrust (fictionPose).
+      const model = fictionObjectFor(definition.id);
+      if (model !== null) {
+        model.object.scale.setScalar(2 * radiusUnits);
+        model.object.visible = false;
+        group.add(model.object);
+        mesh.userData['fictionObject'] = model;
       }
 
       // Fiction's triangle is a shape nothing real is drawn with (core/fiction.ts).
@@ -1063,6 +1110,35 @@ export function SolarSystem({
   const { size, camera, gl } = useThree();
   const scene = useThree((state) => state.scene);
 
+  // A real body drawn over by a fiction -- τ Ceti e as Adrian (core/fiction.ts overlayOf) -- wears
+  // the fiction's look while the Fiction layer is on and its own again the moment it is off: the
+  // sphere's material swapped, the haze added and taken away. Its data is never touched. The look
+  // is made once, the first time, and kept with the real one.
+  const fictionOn = visibleKinds.has(FICTION_LAYER);
+  const fictionReady = useSyncExternalStore(subscribeFictionMakers, fictionMakersReady);
+  useEffect(() => {
+    for (const handle of handles) {
+      if (overlayOf(handle.definition.id) === null) continue;
+      const data = handle.mesh.userData;
+      if (fictionOn && fictionReady) {
+        if (data['fictionOverlay'] === undefined) data['fictionOverlay'] = fictionOverlayFor(handle.definition.id);
+        const overlay = data['fictionOverlay'] as FictionWorldParts | null;
+        if (overlay === null || handle.mesh.material === overlay.material) continue;
+        data['realMaterial'] ??= handle.mesh.material;
+        handle.mesh.material = overlay.material;
+        if (overlay.extras !== null) {
+          overlay.extras.object.scale.setScalar(kmToUnits(handle.definition.radiusEquatorialKm));
+          handle.mesh.add(overlay.extras.object);
+        }
+      } else if (data['realMaterial'] !== undefined && handle.mesh.material !== data['realMaterial']) {
+        handle.mesh.material = data['realMaterial'] as THREE.Material;
+        const overlay = data['fictionOverlay'] as FictionWorldParts | null | undefined;
+        if (overlay?.extras != null) handle.mesh.remove(overlay.extras.object);
+      }
+    }
+    renderDemand.request();
+  }, [handles, fictionOn, fictionReady]);
+
   // Hidden layers are not resolved at all, which for the moons means not fetched.
   const wanted = useMemo(
     () => (void version, bodiesToResolve(store, visibleKinds, focus)),
@@ -1339,12 +1415,37 @@ export function SolarSystem({
           )
           .normalize();
       }
+      // A fictional ship (core/hailMary.ts): its model, turned to its thrust, stands in for a sphere
+      // as a craft's does, the marker handing over to it as it grows.
+      const model = handle.mesh.userData['fictionObject'] as FictionObject | undefined;
+      if (model !== undefined) {
+        const pose = fictionPose(handle.definition.id, jd, scratchBow);
+        model.object.visible = pose !== null && pixelRadius > MESH_FADE_END_PX;
+        if (pose !== null && model.object.visible) {
+          model.object.quaternion.setFromUnitVectors(SHIP_AXIS, scratchBow.normalize());
+          model.setMode?.(pose.centrifuge ? 'centrifuge' : 'cruise', pose.spinPhase);
+          // Lit by the nearer of the Sun and the star it is bound for.
+          const bound = fictionShipOf(handle.definition.id)?.voyage.to;
+          const there = bound === undefined || !store.isPropagatedBody(bound) ? undefined : snapshot.bodies.get(lightingStar(store, store.body(bound)));
+          const light = there !== undefined && (sun === undefined || lengthSq(there.positionKm, rebased.positionKm) < lengthSq(sun.positionKm, rebased.positionKm)) ? there : sun;
+          if (light !== undefined && model.update !== undefined) {
+            scratchLight.set(
+              light.positionKm.x - rebased.positionKm.x,
+              light.positionKm.y - rebased.positionKm.y,
+              light.positionKm.z - rebased.positionKm.z,
+            ).normalize();
+            model.update(scratchLight, camera);
+          }
+        }
+      }
       const shaped =
-        craft !== null
-          ? handle.craftShape !== null
-          : shapeModel !== null
-            ? handle.bodyShape !== null
-            : sized;
+        model !== undefined
+          ? true
+          : craft !== null
+            ? handle.craftShape !== null
+            : shapeModel !== null
+              ? handle.bodyShape !== null
+              : sized;
       // Folded into its host's mark as the two come together on the screen (markFolding.ts):
       // a cluster into the Milky Way's, a satellite galaxy into its giant's.
       const folded = bodyFoldStrength(handle.definition, rebased.positionKm, sun?.positionKm, lineage);

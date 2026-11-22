@@ -46,7 +46,7 @@ import { ensureMeteorShowers } from './core/meteorShowers.ts';
 import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
 import { julianDayToDate, tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
-import { FICTION_COLOR, FICTION_LAYER, fictionOf, fictionTag } from './core/fiction.ts';
+import { FICTION_COLOR, FICTION_LAYER, fictionEntryOfBody, fictionTag, overlayOf } from './core/fiction.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -906,6 +906,7 @@ export function App() {
         focus={focus}
         onFocus={setFocus}
         elements={labelElements}
+        fictionOn={layers.fiction}
       />
 
       {uiVisible && (
@@ -1098,6 +1099,7 @@ const LabelLayer = memo(function LabelLayer({
   focus,
   onFocus,
   elements,
+  fictionOn,
 }: {
   store: EphemerisStore;
   /** The store's version: the list grows when a planet's small moons arrive. */
@@ -1105,6 +1107,8 @@ const LabelLayer = memo(function LabelLayer({
   focus: BodyId;
   onFocus: (id: BodyId) => void;
   elements: RefObject<Map<BodyId, HTMLElement | null>>;
+  /** The Fiction layer: a real body a fiction is drawn over names it too while it is on. */
+  fictionOn: boolean;
 }) {
   void version;
   const refs = useMemo(
@@ -1128,6 +1132,7 @@ const LabelLayer = memo(function LabelLayer({
         <BodyLabel
           key={body.id}
           body={body}
+          overlay={fictionOn ? (overlayOf(body.id)?.name ?? null) : null}
           focused={body.id === focus}
           elementRef={refFor(body.id)}
           onFocus={onFocus}
@@ -1228,17 +1233,20 @@ function HorizonScaleLabels({ elements }: { elements: RefObject<(HTMLElement | n
 
 const BodyLabel = memo(function BodyLabel({
   body,
+  overlay,
   focused,
   elementRef,
   onFocus,
 }: {
   body: BodyDefinition;
+  /** The fiction drawn over this real body, named after its own name: "Tau Ceti e · Adrian". */
+  overlay: string | null;
   focused: boolean;
   elementRef: (element: HTMLElement | null) => void;
   onFocus: (id: BodyId) => void;
 }) {
   // A fictional thing says so on its name, wherever it is (core/fiction.ts).
-  const fiction = fictionOf(body.id);
+  const fiction = fictionEntryOfBody(body.id);
   return (
     <button
       type="button"
@@ -1251,6 +1259,13 @@ const BodyLabel = memo(function BodyLabel({
     >
       <span data-label-name=""><CasedName name={body.name} /></span>
       {fiction !== null && <span style={FICTION_TAG_STYLE}>{fictionTag(fiction)}</span>}
+      {overlay !== null && (
+        <span>
+          {' · '}
+          {overlay}
+          <span style={FICTION_TAG_STYLE}>FICTION</span>
+        </span>
+      )}
       {/* Shown instead of the name when the label stands for more than its body: a whole
           star system seen from afar, or Alpha Centauri's pair (LabelProjector). */}
       <span data-label-alt="" style={{ display: 'none' }} />

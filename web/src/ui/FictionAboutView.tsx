@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 
-import { workLine, type FictionRecord } from '../core/fiction.ts';
+import { workLine, type FictionEntry } from '../core/fiction.ts';
 import { FICTION_ABOUTS } from '../descriptions/fiction/abouts.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from '../descriptions/fiction/ids.ts';
 import { useViewStore } from '../state/store.ts';
@@ -20,7 +20,7 @@ const BRIGHT = '#e0e0e0';
 const MUTED = '#6a6a6a';
 const RULE = '#2a2a2a';
 
-export function FictionAboutView({ record }: { readonly record: FictionRecord }) {
+export function FictionAboutView({ record }: { readonly record: FictionEntry }) {
   const togglePanel = useViewStore((state) => state.togglePanel);
   const closing = useClosing();
   const key = fictionAboutKey(record.id);

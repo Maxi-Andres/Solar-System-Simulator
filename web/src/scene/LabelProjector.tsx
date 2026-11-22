@@ -1,6 +1,6 @@
 import type { BodyId } from '@sss/tools/types';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useMemo, type RefObject } from 'react';
+import { useEffect, useMemo, type RefObject } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
@@ -10,7 +10,7 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { ALPHA_CEN_PAIR_LABEL, ALPHA_CEN_SYSTEM, alphaCenMember, inAlphaCen } from '../core/alphaCenBodies.ts';
 import { setCasedText } from '../ui/casedName.tsx';
-import { isFictionBody } from '../core/fiction.ts';
+import { FICTION_OVERLAYS, isFictionBody } from '../core/fiction.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
@@ -390,6 +390,13 @@ export function LabelProjector({
   const { camera, size } = useThree();
   // Each label's measured width, kept once it has been on screen. Text does not change.
   const widths = useMemo(() => new Map<BodyId, number>(), []);
+  // A real body a fiction is drawn over (core/fiction.ts overlayOf) names it too while the Fiction
+  // layer is on (App.tsx BodyLabel): its text changes with the layers, so its width is measured again.
+  useEffect(() => {
+    for (const record of FICTION_OVERLAYS) {
+      if (record.anchor.kind === 'overlay') widths.delete(record.anchor.body);
+    }
+  }, [visibleKinds, widths]);
   // The labels shown last frame, which keep their places. See `declutterLabels`.
   const held = useMemo(() => new Set<BodyId>(), []);
   // This frame's, kept between frames only to be cleared and refilled.
@@ -425,7 +432,13 @@ export function LabelProjector({
         if (isCatalogueStar(body)) {
           entry.host = body.id;
         }
-      } else if (!isCatalogueStar(body) && blackHoleSystemOf(body.id) === null && !OUT_IN_THE_GALAXY.has(body.kind)) {
+      } else if (
+        !isCatalogueStar(body) &&
+        blackHoleSystemOf(body.id) === null &&
+        !OUT_IN_THE_GALAXY.has(body.kind) &&
+        // A fictional ship goes between the stars: never folded into the Solar System's name.
+        !isFictionBody(body.id)
+      ) {
         solar.add(body.id);
       }
     }

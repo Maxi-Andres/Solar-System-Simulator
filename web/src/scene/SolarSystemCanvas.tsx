@@ -15,6 +15,7 @@ import type { LazySource } from '../core/satellites.ts';
 import type { CosmicWebSource } from '../core/cosmicWeb.ts';
 import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
+import { FICTION_LAYER } from '../core/fiction.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import { useViewStore, type LightingMode } from '../state/store.ts';
@@ -542,7 +543,19 @@ export function SolarSystemCanvas({
       <LazyLayer>{auroraMounted && <Aurora store={store} clock={clock} focus={focus} />}</LazyLayer>
       <LazyLayer>{meteorShowersMounted && <MeteorShowers store={store} clock={clock} focus={focus} />}</LazyLayer>
       {/* Fiction's worlds, made bodies once the layer is first on (core/fiction.ts). */}
-      <LazyLayer>{fictionMounted && <FictionLayer store={store} />}</LazyLayer>
+      <LazyLayer>
+        {fictionMounted && (
+          <FictionLayer
+            store={store}
+            clock={clock}
+            focus={focus}
+            visible={visibleKinds.has(FICTION_LAYER)}
+            showOrbits={showOrbits}
+            showLabels={showLabels}
+            sharedFrame={sharedFrame}
+          />
+        )}
+      </LazyLayer>
       {/* Its names posted before LabelProjector's declutter, which runs after it. */}
       <LazyLayer>{constellationsMounted && <Constellations store={store} clock={clock} focus={focus} />}</LazyLayer>
       <SolarSystemWatch store={store} clock={clock} focus={focus} />
