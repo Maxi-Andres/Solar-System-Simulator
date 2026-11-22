@@ -482,28 +482,17 @@ resized to WebP: a 640-pixel thumbnail and a larger copy opened on a click.
 
 The Sun's spotless Sun of March 2017 is the glossary's (`public/glossary/CREDITS.md`).
 
-## Fiction's abouts (`fiction/`)
+## Fiction's abouts (`fiction/film/`)
 
-Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.ts`). No film still, poster, cover or concept art: the renders are this app's own, taken headless from the app itself with every panel, name, mark and orbit line hidden; the portraits are freely licensed photographs of the creators. The real places' photographs are the real descriptions' own, credited above.
-
-| File | What | Credit | Licence | Source |
-|---|---|---|---|---|
-| `fiction/pandora-polyphemus.webp`, `-large` | Pandora with Polyphemus beyond, as this app draws them | Rendered in this app | This app's own | — |
-| `fiction/polyphemus-vi.webp`, `-large` | Polyphemus VI before its planet, as this app draws it | Rendered in this app | This app's own | — |
-| `fiction/dante.webp`, `-large` | Dante, as this app draws it | Rendered in this app | This app's own | — |
-| `fiction/adrian-crescent.webp`, `-large` | τ Ceti e as Adrian, a crescent, as this app draws it | Rendered in this app | This app's own | — |
-| `fiction/hail-mary-cruise.webp`, `-large` | The Hail Mary in cruise, as this app draws it (a fan-made model; see its about) | Rendered in this app | This app's own | — |
-| `fiction/hail-mary-centrifuge.webp`, `-large` | The Hail Mary in centrifuge mode over Adrian, as this app draws it | Rendered in this app | This app's own | — |
-| `fiction/petrova-sun-venus.webp`, `-large` | The Petrova line from the Sun to Venus, as this app draws it | Rendered in this app | This app's own | — |
-| `fiction/james-cameron-2016.webp`, `-large` | James Cameron at San Diego Comic-Con, July 2016 | Gage Skidmore | CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:James_Cameron_by_Gage_Skidmore.jpg) |
-| `fiction/andy-weir-2015.webp`, `-large` | Andy Weir at NASA's Johnson Space Center, April 2015 | NASA/James Blair and Lauren Harnett | Public domain | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Andy_Weir_at_NASA_JSC.png) |
-
-### Film images (`fiction/film/`)
-
-Images from the films themselves, few and small (a 640-pixel thumbnail, a large copy no wider than 800), shown for illustration in a non-commercial project, as an encyclopaedia shows a film's stills. They belong to their studios. Taken from the film's official site only. No reputable source was found for the Hail Mary, Adrian or the Petrova line, which have none.
+Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.ts`), and only the works' own images: from the films and the franchise, few and small (a 640-pixel thumbnail, a large copy no wider than 800), shown for illustration in a non-commercial project, as an encyclopaedia shows a film's stills. They belong to their studios. Those from the film's official site, avatar.com, are linked below; the others were supplied by the project's author. The Petrova line has none.
 
 | File | What | Credit | Source |
 |---|---|---|---|
 | `fiction/film/pandora-from-space.webp`, `-large` | Pandora from space | © 20th Century Studios | [Pandorapedia, "Pandora"](https://www.avatar.com/pandorapedia/pandora) |
 | `fiction/film/polyphemus-and-moons.webp`, `-large` | Polyphemus with five of its moons | © 20th Century Studios | [Pandorapedia, "Polyphemus"](https://www.avatar.com/pandorapedia/polyphemus) |
 | `fiction/film/hallelujah-mountains.webp`, `-large` | The Hallelujah Mountains | © 20th Century Studios | [Pandorapedia, "The Hallelujah Mountains"](https://www.avatar.com/pandorapedia/the-hallelujah-mountains) |
+| `fiction/film/pandora-and-polyphemus-film.webp`, `-large` | Pandora before Polyphemus (300 pixels wide, as supplied) | © 20th Century Studios | Supplied by the project's author |
+| `fiction/film/polyphemus-over-the-mountains.webp`, `-large` | Polyphemus over the floating mountains, probably from the licensed game Avatar: Frontiers of Pandora | © 20th Century Studios | Supplied by the project's author |
+| `fiction/film/hail-mary-in-space.webp`, `-large` | The Hail Mary in space (the letterbox's top band cropped) | © Amazon MGM Studios | Supplied by the project's author |
+| `fiction/film/hail-mary-over-the-aurora.webp`, `-large` | The Hail Mary in Earth orbit over an aurora | © Amazon MGM Studios | Supplied by the project's author |
+| `fiction/film/adrian-from-orbit.webp`, `-large` | Adrian from orbit, with a ship | © Amazon MGM Studios | Supplied by the project's author |

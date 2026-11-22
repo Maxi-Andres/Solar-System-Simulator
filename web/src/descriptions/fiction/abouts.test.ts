@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { FICTION_ENTRIES, fictionBodyId } from '../../core/fiction.ts';
 import { DESCRIBED_IDS } from '../ids.ts';
-import { FICTION_ABOUTS } from './abouts.ts';
+import { FICTION_ABOUTS, SUPPLIED_BY_AUTHOR } from './abouts.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from './ids.ts';
 
 /** A WebP's width, from its header: lossy (VP8), lossless (VP8L) or extended (VP8X). */
@@ -51,40 +51,26 @@ describe('fiction’s abouts', () => {
     }
   });
 
-  it('show only renders from this app, or real photographs with their credit and a free licence', () => {
+  it('show only the works’ own images: in film/, credited to a studio, sourced, small', () => {
     const publicDir = join(import.meta.dirname, '../../../public');
     for (const key of Object.keys(FICTION_ABOUTS) as (keyof typeof FICTION_ABOUTS)[]) {
-      expect(FICTION_ABOUTS[key].photos.length, key).toBeGreaterThan(0);
+      // An about may have none: the Petrova line's.
       for (const photo of FICTION_ABOUTS[key].photos) {
+        expect(photo.origin, photo.file).toBe('film');
         for (const file of [photo.file, photo.largeFile]) {
+          expect(file, key).toMatch(/^photos\/fiction\/film\//);
           expect(existsSync(join(publicDir, file)), file).toBe(true);
-          // A thumbnail and its larger copy, both small enough for a page of text.
-          expect(statSync(join(publicDir, file)).size, file).toBeLessThan(400_000);
         }
-        if (photo.origin === 'film') {
-          // A film's own image: from its official site, credited to its studio, and small.
-          expect(photo.file, key).toMatch(/^photos\/fiction\/film\//);
-          expect(photo.largeFile, key).toMatch(/^photos\/fiction\/film\//);
-          expect(photo.credit, key).toMatch(/^© .*Studios$/);
-          expect(photo.sourceUrl, key).toMatch(/^https:\/\//);
-          expect(webpWidth(join(publicDir, photo.largeFile)), photo.largeFile).toBeLessThanOrEqual(800);
-          expect(webpWidth(join(publicDir, photo.file)), photo.file).toBeLessThanOrEqual(640);
-          continue;
-        }
-        if (photo.origin === 'render') {
-          // The app's own, of what it draws, and said to be.
-          expect(photo.file, key).toMatch(/^photos\/fiction\//);
-          expect(photo.caption, key).toMatch(/A render from this app/);
-          expect(photo.credit, key).toBe('Rendered in this app');
-          continue;
-        }
-        // Anything else is real -- a real place, or the creator -- credited and freely licensed.
-        expect(photo.credit.length, photo.file).toBeGreaterThan(2);
-        expect(photo.licence, photo.file).toMatch(/^(CC BY(-SA)? \d\.\d|CC0|Public domain|NASA media, not copyrighted)/);
-        expect(photo.sourceUrl, photo.file).toMatch(/^https:\/\//);
-        if (photo.origin === 'creator') expect(photo.caption, photo.file).toMatch(/real photograph/i);
+        expect(photo.credit, photo.file).toMatch(/^© .*Studios$/);
+        // A page it is from, or the author's own supply, said so.
+        if (photo.sourceUrl !== SUPPLIED_BY_AUTHOR) expect(photo.sourceUrl, photo.file).toMatch(/^https:\/\//);
+        // Shown small, for illustration: 800 pixels wide at most, the thumbnail 640.
+        expect(webpWidth(join(publicDir, photo.largeFile)), photo.largeFile).toBeLessThanOrEqual(800);
+        expect(webpWidth(join(publicDir, photo.file)), photo.file).toBeLessThanOrEqual(640);
       }
     }
+    expect(FICTION_ABOUTS['polyphemus-family'].photos.length).toBeGreaterThan(0);
+    expect(FICTION_ABOUTS.petrova.photos).toEqual([]);
   });
 
   it('are kept apart from the real descriptions', () => {

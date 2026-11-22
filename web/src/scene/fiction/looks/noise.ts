@@ -90,8 +90,9 @@ export const NOISE_GLSL = /* glsl */ `
     float amplitude = 1.0;
     float total = 0.0;
     vec3 q = p * frequency;
-    for (int i = 0; i < 10; i++) {
-      if (i >= octaves) break;
+    // Bounded by the count itself: a constant count unrolls to just its octaves, and a count
+    // the compiler cannot know keeps the loop a loop (denseHaze.ts).
+    for (int i = 0; i < min(octaves, 10); i++) {
       total += amplitude;
       float weight = octaveWeight(frequency, footprint);
       if (weight <= 0.0) {
@@ -116,8 +117,9 @@ export const NOISE_GLSL = /* glsl */ `
     float amplitude = 1.0;
     float total = 0.0;
     vec3 q = p * frequency;
-    for (int i = 0; i < 10; i++) {
-      if (i >= octaves) break;
+    // Bounded by the count itself: a constant count unrolls to just its octaves, and a count
+    // the compiler cannot know keeps the loop a loop (denseHaze.ts).
+    for (int i = 0; i < min(octaves, 10); i++) {
       total += amplitude;
       float weight = octaveWeight(frequency, footprint);
       if (weight > 0.0) sum += amplitude * weight * (2.0 * abs(simplex(q)) - 0.7);

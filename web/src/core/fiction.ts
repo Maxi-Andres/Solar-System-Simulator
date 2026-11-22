@@ -550,7 +550,7 @@ const ADRIAN: FictionRecord = {
   anchor: { kind: 'overlay', body: TAU_CETI_E_ID },
   anchorLine: 'Drawn over the real candidate τ Ceti e',
   position: 'canon',
-  // No tint: the palette's own warm grey-ochre. The "pale green" in circulation is an AI-written wiki's.
+  // No tint: the palette's own greens and ambers, after the 2026 film (looks/denseHaze.ts).
   look: { kind: 'world', palette: 'dense-haze', seed: 300 },
   // The real body's, estimated from its mass: nothing here changes it.
   radiusKm: { silent: true },

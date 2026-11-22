@@ -297,12 +297,15 @@ describe('airless moons (barren, icy)', () => {
 describe('dense-haze (Adrian)', () => {
   const ADRIAN: World = { kind: 'world', palette: 'dense-haze', seed: 3 };
 
-  it('hazes with methane: absorption strongest in the red, and a halo past the limb', () => {
+  it('hazes green: methane takes the red, an organic haze the blue, and a halo past the limb', () => {
     const material = shader(fictionWorldMaterial(ADRIAN));
     const absorption = (material.uniforms['uAbsorption']!.value as THREE.Vector3).toArray();
-    expect(absorption[0]).toBeGreaterThan(absorption[1]!);
-    expect(absorption[1]).toBeGreaterThan(absorption[2]!);
-    expect(material.uniforms['uMieDepth']!.value).toBeGreaterThan(0.1);
+    expect(absorption[0]).toBeGreaterThan(10 * absorption[1]!);
+    expect(absorption[2]).toBeGreaterThan(10 * absorption[1]!);
+    expect(material.uniforms['uMieDepth']!.value).toBeGreaterThan(0);
+    // Scattering most in the green: the limb's colour.
+    const scattering = (material.uniforms['uRayleighDepth']!.value as THREE.Vector3).toArray();
+    expect(scattering[1]).toBeGreaterThan(Math.max(scattering[0]!, scattering[2]!));
     const extras = createFictionWorldExtras(ADRIAN, material)!;
     expect(extras.object.children.length).toBe(2);
     extras.dispose();

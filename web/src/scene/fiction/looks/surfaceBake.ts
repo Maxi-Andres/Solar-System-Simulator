@@ -18,9 +18,13 @@ import { NOISE_GLSL } from './noise.ts';
  * same unit directions the live shader did: what is drawn is that noise, sampled.
  *
  * **Spread over frames.** A whole layer at 1,024 a face is 6.3 million texels, about 110 ms of
- * that GPU for the jungle's land: in one frame, a visible stall. So it is baked in tiles of a
- * budget of texels per frame, each frame asking for the next (renderDemand), and the world is
- * drawn in its flat stand-in colour until the last tile is in -- under a second.
+ * that GPU for the jungle's land: in one frame, a visible stall. So it is baked in tiles, as
+ * many a frame as fit a budget of GPU time, each frame asking for the next (renderDemand), and
+ * the world is drawn in its flat stand-in colour until the last tile is in. The budget is in
+ * milliseconds, not texels: where the GPU can time itself (EXT_disjoint_timer_query_webgl2)
+ * each frame's tiles are timed, and the next frame bakes as many as that cost per texel fits --
+ * so a cheap look bakes in a few frames and a costly one never holds a frame past the budget.
+ * Without the timer, a look's own texel count a frame.
  *
  * **Compiled first, off the frame.** The bake's shader is the expensive one to compile, and
  * three compiles on first draw, holding the page. It is compiled with `compileAsync` for the
@@ -32,8 +36,14 @@ import { NOISE_GLSL } from './noise.ts';
 /** Texels a cube face is baked at by default: at a world filling a 1080-line screen, a texel a pixel. */
 export const BAKE_FACE_SIZE = 1024;
 
-/** Texels baked per frame: a quarter of a 1,024 face, about 5 ms on the integrated GPU measured. */
+/** Texels baked per frame until the bake's cost is measured: a quarter of a 1,024 face, about 5 ms on the integrated GPU measured. */
 export const BAKE_TEXELS_PER_FRAME = 512 * 512;
+
+/** GPU time a frame's bake may take, once its cost is measured: a frame stays under about 8 ms with the rest. */
+export const BAKE_FRAME_MS = 6;
+
+/** A tile's side: the unit the budget is counted in. */
+const TILE = 64;
 
 
 /**
@@ -98,9 +108,11 @@ export interface BakeSource {
    * height magnified come out as terraces, every step a line of shading.
    */
   readonly halfFloat?: boolean;
-  /** Texels baked a frame; BAKE_TEXELS_PER_FRAME when absent. */
+  /** Texels baked a frame until the cost is measured; BAKE_TEXELS_PER_FRAME when absent. */
   readonly texelsPerFrame?: number;
 }
+
+type TimerExtension = { readonly TIME_ELAPSED_EXT: number; readonly GPU_DISJOINT_EXT: number };
 
 const FULL_TRIANGLE = new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]);
 
@@ -120,12 +132,17 @@ export class SurfaceBake {
   readonly #texelsPerFrame: number;
   readonly #tilesPerFace: number;
   readonly #onDone: () => void;
+  /** Measured GPU milliseconds a texel, once a frame's tiles have been timed. */
+  #msPerTexel: number | null = null;
+  /** Tiles baked in the last frame that baked: the next may bake at most half as many again. */
+  #lastTiles = 0;
+  /** Frames' timer queries not yet read back, with the texels each covered. */
+  #pending: { query: WebGLQuery; texels: number }[] = [];
 
   constructor(source: BakeSource, uniforms: Record<string, THREE.IUniform>, onDone: () => void, faceSize = BAKE_FACE_SIZE) {
     this.#onDone = onDone;
     this.#texelsPerFrame = source.texelsPerFrame ?? BAKE_TEXELS_PER_FRAME;
-    // Square tiles of a frame's texels, or the whole face if that is smaller.
-    this.#tile = Math.min(Math.floor(Math.sqrt(this.#texelsPerFrame)), faceSize);
+    this.#tile = Math.min(TILE, faceSize);
     this.#tilesPerFace = Math.ceil(faceSize / this.#tile) ** 2;
     this.#geometry.setAttribute('position', new THREE.BufferAttribute(FULL_TRIANGLE, 3));
     this.#targets = [];
@@ -176,12 +193,46 @@ export class SurfaceBake {
     if (this.#state !== 'baking') return;
     renderDemand.request(1);
     if (renderer.info.render.frame === frameTaken) return;
-    // Tiles up to the frame's budget: one of a large face, a whole small face or more.
-    for (let texels = 0; texels < this.#texelsPerFrame && this.#state === 'baking'; texels += this.#tile ** 2) {
-      this.#bakeTile(renderer);
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    const timer = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExtension | null;
+    if (timer !== null) this.#readTimers(gl, timer);
+    // The frame's budget: what the measured cost fits in BAKE_FRAME_MS, or the look's own count.
+    const tileTexels = this.#tile ** 2;
+    const budget = this.#msPerTexel === null ? this.#texelsPerFrame : BAKE_FRAME_MS / this.#msPerTexel;
+    // Growing by half at most a frame: a look's cost varies across the sphere, and a cheap stretch
+    // read back would otherwise send the next frame into a costly one at full stride.
+    const fits = Math.max(1, Math.floor(budget / tileTexels));
+    const tiles = this.#lastTiles === 0 ? fits : Math.min(fits, Math.ceil(this.#lastTiles * 1.5));
+    // Timed only when nothing else is timing: queries of one kind cannot nest.
+    const query = timer !== null && gl.getQuery(timer.TIME_ELAPSED_EXT, gl.CURRENT_QUERY) === null ? gl.createQuery() : null;
+    if (query !== null) gl.beginQuery(timer!.TIME_ELAPSED_EXT, query);
+    let baked = 0;
+    for (; baked < tiles && this.#state === 'baking'; baked += 1) this.#bakeTile(renderer);
+    this.#lastTiles = baked;
+    if (query !== null) {
+      gl.endQuery(timer!.TIME_ELAPSED_EXT);
+      this.#pending.push({ query, texels: baked * tileTexels });
     }
     // After the tiles' own renders, which count as frames too.
     frameTaken = renderer.info.render.frame;
+  }
+
+  /** Reads back the timed frames that are ready: the cost a texel. */
+  #readTimers(gl: WebGL2RenderingContext, timer: TimerExtension): void {
+    const disjoint = gl.getParameter(timer.GPU_DISJOINT_EXT) as boolean;
+    while (this.#pending.length > 0) {
+      const { query, texels } = this.#pending[0]!;
+      if (gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) !== true) break;
+      this.#pending.shift();
+      const ms = (gl.getQueryParameter(query, gl.QUERY_RESULT) as number) / 1e6;
+      gl.deleteQuery(query);
+      if (disjoint || texels === 0 || ms <= 0) continue;
+      // Up at once, down slowly: a costlier stretch of the sphere is met in the next frame, a
+      // cheaper one trusted only as it lasts.
+      const cost = ms / texels;
+      const known = this.#msPerTexel;
+      this.#msPerTexel = known === null || cost > known ? cost : 0.7 * known + 0.3 * cost;
+    }
   }
 
   #compile(renderer: THREE.WebGLRenderer): void {
@@ -248,6 +299,7 @@ export class SurfaceBake {
 
   dispose(): void {
     this.#state = 'disposed';
+    this.#pending = [];
     for (const target of this.#targets) target.dispose();
     for (const material of this.#materials) material.dispose();
     this.#geometry.dispose();
