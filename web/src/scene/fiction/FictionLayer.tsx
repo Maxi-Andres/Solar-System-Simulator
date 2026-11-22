@@ -27,7 +27,7 @@ import { ORBIT_OPACITY } from '../orbitGeometry.ts';
 import type { SharedFrame } from '../satellites.ts';
 import { kmToUnits } from '../scale.ts';
 import { projectToScreen } from '../screenProjection.ts';
-import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial } from './fictionLooks.ts';
+import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial, planetshineStrength } from './fictionLooks.ts';
 import { CENTRIFUGE_SPIN_RAD_S } from './looks/hailMary.ts';
 import { setFictionMakers } from './fictionHooks.ts';
 
@@ -36,6 +36,7 @@ setFictionMakers({
   material: fictionWorldMaterial,
   extras: createFictionWorldExtras,
   object: createFictionObject,
+  planetshineStrength,
   pose: (id, jd, out) => {
     const voyage = voyageOf(id);
     const pose = voyage?.pose(jd, out) ?? null;

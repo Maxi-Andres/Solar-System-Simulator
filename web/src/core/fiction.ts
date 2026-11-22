@@ -1,6 +1,6 @@
 import type { BodyId } from '@sss/tools/types';
 
-import type { FictionLook } from './fictionLook.ts';
+import type { FictionLook, WorldPalette } from './fictionLook.ts';
 import { normalizeName } from './normalizeName.ts';
 
 /**
@@ -550,7 +550,8 @@ const ADRIAN: FictionRecord = {
   anchor: { kind: 'overlay', body: TAU_CETI_E_ID },
   anchorLine: 'Drawn over the real candidate τ Ceti e',
   position: 'canon',
-  look: { kind: 'world', palette: 'dense-haze', seed: 300, tint: [0.66, 0.78, 0.55] },
+  // No tint: the palette's own warm grey-ochre. The "pale green" in circulation is an AI-written wiki's.
+  look: { kind: 'world', palette: 'dense-haze', seed: 300 },
   // The real body's, estimated from its mass: nothing here changes it.
   radiusKm: { silent: true },
   massEarth: invented(
@@ -574,6 +575,28 @@ const ADRIAN: FictionRecord = {
   ],
   realityCheck: 'τ Ceti e is a real candidate, 11.9 ly away; recent studies find it likely the star’s own activity, not a planet.',
 };
+
+/**
+ * The Bond albedo of each look, for the light a world casts on a ship near it (planetshine): a
+ * choice, from the real body each is most like -- Venus's 0.76 for a world under thick haze, the
+ * Moon's 0.11 for bare rock, Europa's ice, Earth's 0.3 for oceans and cloud, Jupiter's 0.34.
+ */
+export const PALETTE_ALBEDO: Readonly<Record<WorldPalette, number>> = {
+  'jungle-moon': 0.3,
+  'banded-giant': 0.34,
+  desert: 0.25,
+  arid: 0.25,
+  'dense-haze': 0.7,
+  'storm-rock': 0.15,
+  scorched: 0.12,
+  temperate: 0.3,
+  crystal: 0.5,
+  barren: 0.12,
+  icy: 0.6,
+};
+
+/** A world's albedo where no fiction is drawn over it: a rocky planet with some air, Earth's. */
+export const DEFAULT_ALBEDO = 0.3;
 
 /** The worlds drawn over real bodies (FictionAnchor 'overlay'). */
 export const FICTION_OVERLAYS: readonly FictionRecord[] = [ADRIAN];

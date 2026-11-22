@@ -29,6 +29,8 @@ export interface FictionMakers {
    * spun, radians (core/hailMary.ts Voyage.pose; looks/hailMary.ts CENTRIFUGE_SPIN_RAD_S).
    */
   readonly pose: (id: BodyId, jd: number, out: { x: number; y: number; z: number }) => ShipPose | null;
+  /** A world's light on a ship near it, as a share of the star's (fictionLooks.ts planetshineStrength). */
+  readonly planetshineStrength: (albedo: number, litFraction: number, angularRadius: number) => number;
 }
 
 export interface ShipPose {
@@ -88,6 +90,11 @@ export function fictionOverlayFor(id: BodyId): FictionWorldParts | null {
 export function fictionObjectFor(id: BodyId): FictionObject | null {
   const ship = fictionShipOf(id);
   return ship === null || makers === null ? null : makers.object(ship.look);
+}
+
+/** A world's light on a ship near it (FictionMakers.planetshineStrength); none before the chunk. */
+export function fictionPlanetshine(albedo: number, litFraction: number, angularRadius: number): number {
+  return makers === null ? 0 : makers.planetshineStrength(albedo, litFraction, angularRadius);
 }
 
 /** A ship's pose at `jd` (FictionMakers.pose); null where there is none. */

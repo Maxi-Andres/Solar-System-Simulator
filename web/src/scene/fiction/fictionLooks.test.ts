@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FictionLook } from '../../core/fictionLook.ts';
-import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial } from './fictionLooks.ts';
+import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial, planetshineStrength } from './fictionLooks.ts';
 import { AIRLESS_FACE_SIZE, BARREN, ICY } from './looks/airless.ts';
 import { SHELL_SHADERS, shellRadius } from './looks/atmosphereShell.ts';
 import { rayCraterPlacements } from './looks/craters.ts';
@@ -455,6 +455,35 @@ describe('the Hail Mary', () => {
     ship.object.updateMatrixWorld(true);
     ship.update(light, camera);
     expect(material.uniforms['uShadowOn']!.value).toBe(0);
+    ship.dispose();
+  });
+
+  it("takes a nearby world's light on its dark side, by albedo, lit fraction and size", () => {
+    // Half the sky, fully lit, albedo 0.5: half the star's light.
+    expect(planetshineStrength(0.5, 1, Math.PI / 2)).toBeCloseTo(0.5, 6);
+    expect(planetshineStrength(0.5, 0, Math.PI / 2)).toBe(0);
+    // Far away it fades as the square of the angular size.
+    expect(planetshineStrength(0.5, 1, 0.01) / planetshineStrength(0.5, 1, 0.02)).toBeCloseTo(0.25, 2);
+    const ship = createHailMary();
+    const material = parts(ship.object).crew.material as THREE.ShaderMaterial;
+    const camera = new THREE.PerspectiveCamera();
+    camera.updateMatrixWorld();
+    ship.update(new THREE.Vector3(1, 0, 0), camera, { direction: new THREE.Vector3(0, -1, 0), strength: 0.2 });
+    expect(material.uniforms['uFillIrradiance']!.value).toBe(0.2);
+    ship.update(new THREE.Vector3(1, 0, 0), camera);
+    expect(material.uniforms['uFillIrradiance']!.value).toBe(0);
+    ship.dispose();
+  });
+
+  it('keeps its running lights when small, so a few pixels still show a ship', () => {
+    const ship = createHailMary();
+    const glows = ship.object.getObjectByName('hail-mary-lights')!;
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 1e6);
+    camera.position.set(0, 0, 500);
+    camera.updateMatrixWorld();
+    ship.object.updateMatrixWorld(true);
+    ship.update(new THREE.Vector3(1, 0, 0), camera);
+    expect(glows.visible).toBe(true);
     ship.dispose();
   });
 

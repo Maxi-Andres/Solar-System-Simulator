@@ -156,6 +156,9 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uShadowTexel;
   uniform vec2 uShadowRange;
   uniform vec3 uGalaxyPole;
+  uniform vec3 uFillDirection;
+  uniform vec3 uFillColor;
+  uniform float uFillIrradiance;
   uniform int uFont[${FONT_BITS.length}];
 
   varying vec3 vLocal;
@@ -200,7 +203,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   /** The star, a dark sky and a faint galaxy, as a surface of roughness \`rough\` reflects them. */
   vec3 sky(vec3 r, float rough) {
     float band = exp(-pow(dot(r, uGalaxyPole), 2.0) / 0.04);
-    vec3 galaxy = vec3(0.9, 0.85, 0.8) * (0.0015 + 0.006 * band);
+    vec3 galaxy = vec3(0.9, 0.85, 0.8) * (0.002 + 0.008 * band);
     // Stars only in what is near a mirror; rougher metal sees their average, already above.
     float smooth_ = 1.0 - smoothstep(0.08, 0.22, rough);
     if (smooth_ > 0.0) {
@@ -363,6 +366,21 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec3 reflected = mix(sky(r, rough), sky(r, 1.0), hazeShare);
     radiance += (fresnelSky * reflected + diffuse * sky(n, 1.0) * PI) * uIrradiance * occlusion;
 
+    // Planetshine: a nearby world's lit face, a broad source, as Lambert for the diffuse share
+    // and through the broad lobe for the metal. Unshadowed: it is wide and soft.
+    if (uFillIrradiance > 0.0) {
+      float nlFill = max(dot(n, uFillDirection), 0.0);
+      vec3 hFill = normalize(uFillDirection + v);
+      float nhFill = max(dot(n, hFill), 0.0);
+      float dFill = ha2 / (PI * pow(nhFill * nhFill * (ha2 - 1.0) + 1.0, 2.0));
+      vec3 fill = diffuse + f0 * dFill * 0.25 / max(nv, 0.2);
+      radiance += fill * uFillColor * uFillIrradiance * uIrradiance * nlFill * mix(0.4, 1.0, occlusion);
+    }
+
+    // The silhouette: grazing angles reflect the sky's faint band at nearly full Fresnel, so an
+    // edge on the dark side still separates from black space.
+    radiance += pow(1.0 - nv, 5.0) * sky(r, 1.0) * uIrradiance * 2.0 * occlusion;
+
     // Lights glow in their own colour; the drive plates' warmth (negative) is a dull red.
     radiance += glow > 0.0 ? albedo * glow : vec3(1.0, 0.22, 0.06) * (-glow * uDriveGlow);
 
@@ -393,16 +411,52 @@ export function shipMaterial(): THREE.ShaderMaterial {
       uShadowProjection: { value: new THREE.Matrix4() },
       // A galaxy across the sky, tilted: in view space, set with the light.
       uGalaxyPole: { value: new THREE.Vector3(0, 1, 0) },
+      uFillDirection: { value: new THREE.Vector3(0, -1, 0) },
+      uFillColor: { value: new THREE.Color(1, 1, 1) },
+      uFillIrradiance: { value: 0 },
       uFont: { value: FONT_BITS },
     },
   });
 }
 
 const GALAXY_POLE = new THREE.Vector3(0.3, 0.85, 0.43).normalize();
+const WHITE = new THREE.Color(1, 1, 1);
 
 /** Points the material's light along world-space `toLight`, in `camera`'s view space. */
-export function setShipLight(material: THREE.ShaderMaterial, toLight: THREE.Vector3, camera: THREE.Camera): void {
+/**
+ * Light from a nearby world on a ship: the direction to the world (world space), its strength as
+ * a share of the star's irradiance (`planetshineStrength`), and its colour.
+ */
+export interface Planetshine {
+  readonly direction: THREE.Vector3;
+  readonly strength: number;
+  readonly color?: THREE.Color;
+}
+
+/**
+ * The irradiance a world's lit face sends a nearby ship, as a share of the star's at the ship.
+ *
+ * A Lambertian sphere of Bond albedo `albedo`, filling `angularRadius` (radians) of the sky
+ * and `litFraction` lit as the ship sees it (0 new, 1 full), gives about
+ * albedo * litFraction * sin^2(angularRadius): its radiance, albedo * E / pi, times the solid
+ * angle it fills, projected (pi sin^2 for a disc face-on), times the share of it that is lit.
+ * Adrian from a low orbit, filling half the sky, half lit, albedo 0.5: about 0.2 of the star's
+ * light -- why a ship's night side over a bright world is not black.
+ */
+export function planetshineStrength(albedo: number, litFraction: number, angularRadius: number): number {
+  const sine = Math.sin(Math.min(Math.max(angularRadius, 0), Math.PI / 2));
+  return albedo * Math.min(Math.max(litFraction, 0), 1) * sine * sine;
+}
+
+export function setShipLight(material: THREE.ShaderMaterial, toLight: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void {
   (material.uniforms['uLight']!.value as THREE.Vector3).copy(toLight).transformDirection(camera.matrixWorldInverse);
+  if (planetshine === undefined || planetshine.strength <= 0) {
+    material.uniforms['uFillIrradiance']!.value = 0;
+  } else {
+    (material.uniforms['uFillDirection']!.value as THREE.Vector3).copy(planetshine.direction).transformDirection(camera.matrixWorldInverse);
+    material.uniforms['uFillIrradiance']!.value = planetshine.strength;
+    (material.uniforms['uFillColor']!.value as THREE.Color).copy(planetshine.color ?? WHITE);
+  }
   (material.uniforms['uGalaxyPole']!.value as THREE.Vector3).copy(GALAXY_POLE).transformDirection(camera.matrixWorldInverse);
 }
 

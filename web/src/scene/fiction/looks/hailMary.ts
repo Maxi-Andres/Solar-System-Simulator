@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
-import { MARKING, PartBuilder, type Finish, setShipLight, shipMaterial } from './shipMaterial.ts';
+import { MARKING, PartBuilder, type Finish, type Planetshine, setShipLight, shipMaterial } from './shipMaterial.ts';
+
+export { planetshineStrength, type Planetshine } from './shipMaterial.ts';
 import { renderDemand } from '../../../core/renderDemand.ts';
 import { OcclusionJob, type Occluder } from './shipOcclusion.ts';
 
@@ -160,13 +162,17 @@ export const CENTRIFUGE_RPM = (CENTRIFUGE_SPIN_RAD_S * 60) / (2 * Math.PI);
  * reflects black space and reads black but for one glint; brushed, the star's highlight is a
  * streak across each plate that slides from plate to plate as the view turns.
  */
-const SILVER: Finish = { color: [0.91, 0.92, 0.93], metal: 1, rough: 0.32, plates: 1, aniso: 0.5 };
-const SILVER_FINE: Finish = { color: [0.91, 0.91, 0.92], metal: 1, rough: 0.28, plates: 0.6, aniso: 0.45 };
-const TANK_SKIN: Finish = { color: [0.86, 0.87, 0.88], metal: 1, rough: 0.38, plates: 1.5, aniso: 0.55 };
+// Satin aluminium is not a mirror: its rolled, brushed, oxidised surface scatters most of the
+// light it returns broadly, and lit plates read light grey to silver from nearly every angle, as
+// in any photograph of the ISS or an Apollo service module. So the hull is a blend (`metal` well
+// under one): a diffuse share at an albedo near 0.6, and the brushed metallic highlight on top.
+const SILVER: Finish = { color: [0.88, 0.89, 0.9], metal: 0.35, rough: 0.32, plates: 1, aniso: 0.5 };
+const SILVER_FINE: Finish = { color: [0.9, 0.9, 0.91], metal: 0.4, rough: 0.28, plates: 0.6, aniso: 0.45 };
+const TANK_SKIN: Finish = { color: [0.84, 0.85, 0.86], metal: 0.32, rough: 0.38, plates: 1.5, aniso: 0.55 };
 /** Plain trim, unbrushed. */
-const TRIM: Finish = { color: [0.82, 0.83, 0.84], metal: 1, rough: 0.34 };
-const DARK_METAL: Finish = { color: [0.34, 0.34, 0.36], metal: 1, rough: 0.4, aniso: 0.3 };
-const GUNMETAL: Finish = { color: [0.2, 0.2, 0.21], metal: 1, rough: 0.48 };
+const TRIM: Finish = { color: [0.82, 0.83, 0.84], metal: 0.45, rough: 0.34 };
+const DARK_METAL: Finish = { color: [0.36, 0.36, 0.38], metal: 0.5, rough: 0.4, aniso: 0.3 };
+const GUNMETAL: Finish = { color: [0.22, 0.22, 0.23], metal: 0.5, rough: 0.48 };
 /** Multi-layer insulation: gold-coloured Kapton, crinkled. */
 const GOLD_FOIL: Finish = { color: [1.0, 0.74, 0.34], metal: 1, rough: 0.24, plates: MARKING.foil };
 /** Radiator panels: matte white silicate paint, as on the ISS's, a little weathered. */
@@ -179,7 +185,7 @@ const ZYLON: Finish = { color: [0.8, 0.6, 0.22], metal: 0, rough: 0.6 };
 const EMITTER: Finish = { color: [0.04, 0.04, 0.045], metal: 0.3, rough: 0.3 };
 const LENS: Finish = { color: [0.02, 0.025, 0.03], metal: 0, rough: 0.05 };
 const HAZARD: Finish = { color: [0.75, 0.5, 0.02], metal: 0, rough: 0.55, plates: MARKING.hazard };
-const STENCIL: Finish = { color: [0.9, 0.9, 0.91], metal: 1, rough: 0.32, plates: MARKING.stencil };
+const STENCIL: Finish = { color: [0.88, 0.89, 0.9], metal: 0.35, rough: 0.32, plates: MARKING.stencil };
 /**
  * The spin drives' plates. Astrophage emits at 25.984 um, far infrared: the drive shows no
  * flame to the eye. The plates are drawn only warm -- a dull red at the limit of seeing -- and
@@ -739,7 +745,11 @@ const GLOW_FRAGMENT = /* glsl */ `
 
 export interface HailMary {
   readonly object: THREE.Object3D;
-  update(lightDirection: THREE.Vector3, camera: THREE.Camera): void;
+  /**
+   * Each frame it is drawn: the direction to the star (world space), the camera, and the light
+   * of a nearby world on the ship's dark side if there is one (see Planetshine).
+   */
+  update(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void;
   /**
    * Cruise, or centrifuge mode at a spin angle (radians, about the hinge axis, local y). In
    * centrifuge mode the crew section is turned round and 77 m out on its cables, the whole
@@ -978,8 +988,8 @@ export function createHailMary(): HailMary {
   return {
     object,
     triangles,
-    update(lightDirection, camera) {
-      setShipLight(material, lightDirection, camera);
+    update(lightDirection, camera, planetshine) {
+      setShipLight(material, lightDirection, camera, planetshine);
       // Detail from how much of the view the ship spans: its length over its distance against
       // the view's half-height.
       object.getWorldPosition(objectPosition);
@@ -994,7 +1004,7 @@ export function createHailMary(): HailMary {
         crew.geometry = low ? geometries.crewLow : geometries.crewFull;
         rear.geometry = low ? geometries.rearLow : geometries.rearFull;
         if (mode === 'cruise') cables.visible = !low;
-        glows.visible = !low;
+        // The glows stay: at a few pixels the running lights are what is seen of the ship.
       }
       // The shadow: wanted only while large; redrawn when the star moves against the ship.
       shadowWanted = share > SHADOWS_ABOVE;

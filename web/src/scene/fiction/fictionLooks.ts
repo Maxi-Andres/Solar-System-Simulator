@@ -4,7 +4,7 @@ import type { FictionLook, WorldPalette } from '../../core/fictionLook.ts';
 import { exoplanetMaterial } from '../exoplanetSurface.ts';
 import { BARREN, ICY, NO_HAZE } from './looks/airless.ts';
 import { DENSE_HAZE, DENSE_HAZE_AIR } from './looks/denseHaze.ts';
-import { createHailMary, type ShipMode } from './looks/hailMary.ts';
+import { createHailMary, type Planetshine, type ShipMode } from './looks/hailMary.ts';
 import { atmosphereHalo } from './looks/atmosphereShell.ts';
 import { BANDED_GIANT, BANDED_GIANT_HAZE } from './looks/bandedGiant.ts';
 import { JUNGLE_MOON, JUNGLE_MOON_HAZE } from './looks/jungleMoon.ts';
@@ -74,8 +74,13 @@ export function fictionWorldMaterial(look: Extract<FictionLook, { kind: 'world' 
 /** A fictional object that is not a world's sphere, at unit size (see FictionLook). */
 export interface FictionObject {
   readonly object: THREE.Object3D;
-  /** Each frame it is drawn: the direction to the light that falls on it, world space. */
-  update?(lightDirection: THREE.Vector3, camera: THREE.Camera): void;
+  /**
+   * Each frame it is drawn: the direction to the light that falls on it (world space), the
+   * camera, and -- for a ship near a world -- that world's light on its dark side: the direction
+   * to the world and `planetshineStrength(albedo, litFraction, angularRadius)`, a share of the
+   * star's irradiance. Omit it, or pass strength 0, far from any world.
+   */
+  update?(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void;
   /**
    * A ship's flight mode, for the ships that have more than one (looks/hailMary.ts): `cruise`,
    * or `centrifuge`, split and spinning for gravity, at `spinPhase` radians about local y. The
@@ -85,7 +90,8 @@ export interface FictionObject {
   dispose(): void;
 }
 
-export type { ShipMode };
+export type { Planetshine, ShipMode };
+export { planetshineStrength } from './looks/hailMary.ts';
 
 /**
  * What a world has beyond its sphere: the haze past its limb, and its rings if it has any.

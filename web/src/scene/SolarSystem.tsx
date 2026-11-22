@@ -78,13 +78,14 @@ import {
   fictionMakersReady,
   fictionObjectFor,
   fictionOverlayFor,
+  fictionPlanetshine,
   fictionPose,
   fictionWorldFor,
   subscribeFictionMakers,
   type FictionWorldParts,
 } from './fiction/fictionHooks.ts';
 import type { FictionObject } from './fiction/fictionLooks.ts';
-import { FICTION_LAYER, fictionShipOf, isFictionBody, overlayOf } from '../core/fiction.ts';
+import { DEFAULT_ALBEDO, FICTION_LAYER, fictionShipOf, isFictionBody, overlayOf, PALETTE_ALBEDO } from '../core/fiction.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import { lensState } from './lens.ts';
 import {
@@ -647,6 +648,46 @@ const SHIP_AXIS = new THREE.Vector3(0, 0, 1);
 /** Scratch for a ship's pose and its light, written each frame rather than allocated. */
 const scratchBow = new THREE.Vector3();
 const scratchLight = new THREE.Vector3();
+
+/** A world's light on a ship near it, written here each frame rather than allocated. */
+const scratchShine = { direction: new THREE.Vector3(), strength: 0, color: new THREE.Color() };
+const scratchShineWhite = { direction: scratchShine.direction, strength: 0 };
+/** Below this angular radius, radians, a world sends a ship nothing worth drawing: sin² under 1e-5. */
+const PLANETSHINE_MIN_RADIUS = 3e-3;
+
+/**
+ * The light `world`'s lit face sends a ship at `ship`, its star at `star` (all km, this frame's
+ * rebased places): toward the world, a share of the star's light from its albedo -- the fiction's
+ * look while the Fiction layer draws one over it (Adrian over τ Ceti e), an Earth-like 0.3
+ * otherwise -- how much of the face the ship sees lit, from the phase angle at the world, and how
+ * much sky it fills. Undefined far from it.
+ */
+function planetshine(
+  world: BodyDefinition,
+  worldKm: { x: number; y: number; z: number },
+  starKm: { x: number; y: number; z: number },
+  shipKm: { x: number; y: number; z: number },
+  fictionOn: boolean,
+): { readonly direction: THREE.Vector3; readonly strength: number; readonly color?: THREE.Color } | undefined {
+  const toShipX = shipKm.x - worldKm.x;
+  const toShipY = shipKm.y - worldKm.y;
+  const toShipZ = shipKm.z - worldKm.z;
+  const distance = Math.hypot(toShipX, toShipY, toShipZ);
+  const angularRadius = Math.asin(Math.min(1, world.radiusEquatorialKm / Math.max(distance, 1e-9)));
+  if (angularRadius < PLANETSHINE_MIN_RADIUS) return undefined;
+  const toStarX = starKm.x - worldKm.x;
+  const toStarY = starKm.y - worldKm.y;
+  const toStarZ = starKm.z - worldKm.z;
+  const cosPhase =
+    (toShipX * toStarX + toShipY * toStarY + toShipZ * toStarZ) / (distance * Math.hypot(toStarX, toStarY, toStarZ));
+  const overlay = fictionOn ? overlayOf(world.id) : null;
+  const look = overlay?.look.kind === 'world' ? overlay.look : null;
+  const shine = look?.tint === undefined ? scratchShineWhite : scratchShine;
+  shine.direction.set(-toShipX, -toShipY, -toShipZ).normalize();
+  shine.strength = fictionPlanetshine(look === null ? DEFAULT_ALBEDO : PALETTE_ALBEDO[look.palette], (1 + cosPhase) / 2, angularRadius);
+  if (look?.tint !== undefined) scratchShine.color.setRGB(look.tint[0], look.tint[1], look.tint[2], THREE.LinearSRGBColorSpace);
+  return shine;
+}
 
 /** The squared distance between two points, km². */
 function lengthSq(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
@@ -1434,7 +1475,13 @@ export function SolarSystem({
               light.positionKm.y - rebased.positionKm.y,
               light.positionKm.z - rebased.positionKm.z,
             ).normalize();
-            model.update(scratchLight, camera);
+            // And the world it goes round, once near it: its lit face on the ship's night side.
+            const world = bound === undefined ? undefined : snapshot.bodies.get(bound);
+            const shine =
+              world === undefined || bound === undefined
+                ? undefined
+                : planetshine(store.body(bound), world.positionKm, light.positionKm, rebased.positionKm, fictionOn);
+            model.update(scratchLight, camera, shine);
           }
         }
       }
