@@ -20,6 +20,7 @@ import { useClosing } from './Presence.tsx';
 /** What a picture is, before its title: a render, or a real photograph and its colours. */
 function photoNote(photo: FictionPhoto): PhotoNote {
   if (photo.origin === 'render') return { text: 'Render · this app', colour: FICTION_COLOR };
+  if (photo.origin === 'film') return { text: 'Official image', colour: '#7fb2e8' };
   if (photo.origin === 'creator') return { text: 'Real photograph', colour: '#8fc79a' };
   const colours = colourNote(photo);
   return { text: `Real photograph · ${colours.text}`, colour: colours.colour };
@@ -97,7 +98,9 @@ export function FictionAboutView({ record }: { readonly record: FictionEntry }) 
                     </li>
                   ))}
                 <li style={{ color: TEXT, fontSize: '0.78rem', lineHeight: 1.6 }}>
-                  The renders are this app’s own, of what it draws; no picture from the work itself is shown.
+                  The renders are this app’s own, of what it draws.
+                  {about.photos.some((photo) => photo.origin === 'film') &&
+                    ' The films’ official images are shown small, for illustration, in a non-commercial project, and belong to their studios.'}
                 </li>
               </ol>
             </Section>

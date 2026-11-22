@@ -5,15 +5,48 @@ import { VENUS } from '../venus.ts';
 import type { FictionAboutKey } from './ids.ts';
 
 /**
- * A picture on a fictional thing's about, and what it is: a render of it from this app -- the
- * only pictures of a fictional thing shown, never a film still, a poster, a cover or concept art,
- * none of which this site may use -- a real photograph of the real place it is put, from a real
- * description, or a freely licensed photograph of its creator. FictionAboutView says which on
- * each; abouts.test.ts checks every one that is not a render carries its credit and licence.
+ * A picture on a fictional thing's about, and what it is: a render of it from this app; a few
+ * images from the film itself, small and credited to the studio, as an encyclopaedia shows a
+ * film's stills (Maxi, 2026-11-22: without them the page does not show what the thing is) --
+ * from its official site only, never a wallpaper or scraper site; a real photograph of the real
+ * place it is put, from a real description; or a freely licensed photograph of its creator.
+ * FictionAboutView says which on each; abouts.test.ts checks every one but a render carries its
+ * credit and source, and a still its studio and its small size.
  */
 export interface FictionPhoto extends DescriptionPhoto {
-  readonly origin: 'render' | 'real' | 'creator';
+  readonly origin: 'render' | 'film' | 'real' | 'creator';
 }
+
+/** Avatar's studio, as its images are credited. */
+const AVATAR_STUDIO = '© 20th Century Studios';
+
+/**
+ * An image from the film's official site (web/public/photos/fiction/film/): a 640-pixel thumbnail
+ * and a large copy 800 pixels wide at most, no larger -- shown small, for illustration.
+ */
+function filmStill(name: string, title: string, caption: string, sourceUrl: string): FictionPhoto {
+  return {
+    file: `photos/fiction/film/${name}.webp`,
+    largeFile: `photos/fiction/film/${name}-large.webp`,
+    width: 640,
+    height: 360,
+    title,
+    caption: `${caption} An image from the film’s own official site, shown small for illustration; it belongs to the studio.`,
+    colour: 'true',
+    credit: AVATAR_STUDIO,
+    licence: 'All rights reserved; shown small for illustration in a non-commercial project',
+    date: 'avatar.com, Pandorapedia',
+    sourceUrl,
+    origin: 'film',
+  };
+}
+
+const AVATAR_POLYPHEMUS_STILL = filmStill(
+  'polyphemus-and-moons',
+  'Polyphemus and its moons, as Avatar shows them',
+  'Polyphemus’ blue bands and great storm, with five of its moons before it.',
+  'https://www.avatar.com/pandorapedia/polyphemus',
+);
 
 /** A real description's photograph, by the end of its file name; shown with its own credit. */
 function realPhoto(from: Description | DescriptionPhoto, fileEnd?: string): FictionPhoto {
@@ -102,6 +135,18 @@ const PANDORA: FictionAbout = {
       'Pandora, with Polyphemus beyond',
       'Pandora as drawn here: this app’s own procedural surface and haze, lit by α Centauri A, with Polyphemus 270,000 km behind it and two of its sister moons as specks.',
     ),
+    filmStill(
+      'pandora-from-space',
+      'Pandora from space, as Avatar shows it',
+      'Pandora whole: green continents and blue seas under cloud.',
+      'https://www.avatar.com/pandorapedia/pandora',
+    ),
+    filmStill(
+      'hallelujah-mountains',
+      'The Hallelujah Mountains, as Avatar shows them',
+      'Pandora’s floating mountains, in their haze.',
+      'https://www.avatar.com/pandorapedia/the-hallelujah-mountains',
+    ),
     realPhoto(SOUTHERN_CROSS),
     realPhoto(HUBBLE_PAIR),
     JAMES_CAMERON,
@@ -132,6 +177,7 @@ const POLYPHEMUS: FictionAbout = {
       'Polyphemus, with Pandora before it',
       'Polyphemus as drawn here, at left: this app’s own procedural bands and storm, lit by α Centauri A, with Pandora in front of it.',
     ),
+    AVATAR_POLYPHEMUS_STILL,
     realPhoto(ALPHA_CENTAURI_A, 'webb-miri-s1.webp'),
     realPhoto(HUBBLE_PAIR),
     JAMES_CAMERON,
@@ -165,6 +211,7 @@ const POLYPHEMUS_FAMILY: FictionAbout = {
       'Dante, close',
       'Dante, the innermost moon, named only in Avatar: The Game; its size, its craters and its colour are this app’s inventions, drawn procedurally.',
     ),
+    AVATAR_POLYPHEMUS_STILL,
   ],
   story: [
     'In Avatar, Pandora is one of several moons of Polyphemus, and others hang in its daytime sky.',

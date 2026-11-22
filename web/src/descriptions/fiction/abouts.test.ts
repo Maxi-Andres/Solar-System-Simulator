@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,15 @@ import { FICTION_ENTRIES, fictionBodyId } from '../../core/fiction.ts';
 import { DESCRIBED_IDS } from '../ids.ts';
 import { FICTION_ABOUTS } from './abouts.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from './ids.ts';
+
+/** A WebP's width, from its header: lossy (VP8), lossless (VP8L) or extended (VP8X). */
+function webpWidth(file: string): number {
+  const b = readFileSync(file);
+  const chunk = b.toString('ascii', 12, 16);
+  if (chunk === 'VP8X') return 1 + b.readUIntLE(24, 3);
+  if (chunk === 'VP8L') return 1 + (b.readUInt32LE(21) & 0x3fff);
+  return b.readUInt16LE(26) & 0x3fff;
+}
 
 /** Every paragraph of a page. */
 function paragraphs(key: keyof typeof FICTION_ABOUTS): string[] {
@@ -51,6 +60,16 @@ describe('fiction’s abouts', () => {
           expect(existsSync(join(publicDir, file)), file).toBe(true);
           // A thumbnail and its larger copy, both small enough for a page of text.
           expect(statSync(join(publicDir, file)).size, file).toBeLessThan(400_000);
+        }
+        if (photo.origin === 'film') {
+          // A film's own image: from its official site, credited to its studio, and small.
+          expect(photo.file, key).toMatch(/^photos\/fiction\/film\//);
+          expect(photo.largeFile, key).toMatch(/^photos\/fiction\/film\//);
+          expect(photo.credit, key).toMatch(/^© .*Studios$/);
+          expect(photo.sourceUrl, key).toMatch(/^https:\/\//);
+          expect(webpWidth(join(publicDir, photo.largeFile)), photo.largeFile).toBeLessThanOrEqual(800);
+          expect(webpWidth(join(publicDir, photo.file)), photo.file).toBeLessThanOrEqual(640);
+          continue;
         }
         if (photo.origin === 'render') {
           // The app's own, of what it draws, and said to be.

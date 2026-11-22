@@ -497,3 +497,13 @@ Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.t
 | `fiction/petrova-sun-venus.webp`, `-large` | The Petrova line from the Sun to Venus, as this app draws it | Rendered in this app | This app's own | — |
 | `fiction/james-cameron-2016.webp`, `-large` | James Cameron at San Diego Comic-Con, July 2016 | Gage Skidmore | CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:James_Cameron_by_Gage_Skidmore.jpg) |
 | `fiction/andy-weir-2015.webp`, `-large` | Andy Weir at NASA's Johnson Space Center, April 2015 | NASA/James Blair and Lauren Harnett | Public domain | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Andy_Weir_at_NASA_JSC.png) |
+
+### Film images (`fiction/film/`)
+
+Images from the films themselves, few and small (a 640-pixel thumbnail, a large copy no wider than 800), shown for illustration in a non-commercial project, as an encyclopaedia shows a film's stills. They belong to their studios. Taken from the film's official site only. No reputable source was found for the Hail Mary, Adrian or the Petrova line, which have none.
+
+| File | What | Credit | Source |
+|---|---|---|---|
+| `fiction/film/pandora-from-space.webp`, `-large` | Pandora from space | © 20th Century Studios | [Pandorapedia, "Pandora"](https://www.avatar.com/pandorapedia/pandora) |
+| `fiction/film/polyphemus-and-moons.webp`, `-large` | Polyphemus with five of its moons | © 20th Century Studios | [Pandorapedia, "Polyphemus"](https://www.avatar.com/pandorapedia/polyphemus) |
+| `fiction/film/hallelujah-mountains.webp`, `-large` | The Hallelujah Mountains | © 20th Century Studios | [Pandorapedia, "The Hallelujah Mountains"](https://www.avatar.com/pandorapedia/the-hallelujah-mountains) |
