@@ -86,10 +86,16 @@ describe('planFallbacks', () => {
 });
 
 describe('dataFallbackDirectory', () => {
-  it('is null unset, or when the directory is not there (a first run)', () => {
+  it('is null when the directory is not there (a first run)', () => {
     expect(dataFallbackDirectory(undefined, join(root, 'data'))).toBeNull();
     expect(dataFallbackDirectory('', join(root, 'data'))).toBeNull();
     expect(dataFallbackDirectory(join(root, 'nothing'), join(root, 'data'))).toBeNull();
+  });
+
+  it('is the data directory itself when unset and there: a local run keeps what it has', () => {
+    mkdirSync(join(root, 'data'));
+    expect(dataFallbackDirectory(undefined, join(root, 'data'))).toBe(join(root, 'data'));
+    expect(dataFallbackDirectory('', join(root, 'data'))).toBe(join(root, 'data'));
   });
 
   it('is the directory when it is there', () => {
@@ -97,9 +103,9 @@ describe('dataFallbackDirectory', () => {
     expect(dataFallbackDirectory(join(root, 'last-data'), join(root, 'data'))).toBe(join(root, 'last-data'));
   });
 
-  it('refuses the data directory itself, or one inside it: the run empties it before copying', () => {
-    expect(() => dataFallbackDirectory(join(root, 'data'), join(root, 'data'))).toThrow('which this run empties');
-    expect(() => dataFallbackDirectory(join(root, 'data', 'old'), join(root, 'data'))).toThrow('which this run empties');
+  it('refuses a directory inside the data directory, where the run writes', () => {
+    expect(() => dataFallbackDirectory(join(root, 'data'), join(root, 'data'))).not.toThrow();
+    expect(() => dataFallbackDirectory(join(root, 'data', 'old'), join(root, 'data'))).toThrow('which this run writes into');
     expect(() => dataFallbackDirectory(join(root, 'data-old'), join(root, 'data'))).not.toThrow();
   });
 });
@@ -121,5 +127,18 @@ describe('restoreProduct', () => {
     expect(builtOn).toMatch(/^\d{4}-\d\d-\d\d$/);
     const lines = vi.mocked(console.log).mock.calls.map(([line]) => String(line));
     expect(lines).toContainEqual(expect.stringMatching(/^::warning title=Stale data%3A Laniakea::Laniakea could not be built .*TimeoutError: aborted/));
+  });
+
+  it('leaves the product where it is when the last good copy is the data directory itself', async () => {
+    const data = join(root, 'data');
+    lay(data, ['laniakea/laniakea.json', 'laniakea/galaxies-0.bin']);
+
+    const builtOn = await restoreProduct({ product: DATA_PRODUCTS.laniakea, error: new Error('HTTP 503') }, data, data);
+
+    expect(readFileSync(join(data, 'laniakea/galaxies-0.bin'), 'utf8')).toBe('laniakea/galaxies-0.bin');
+    expect(existsSync(join(data, 'laniakea/laniakea.json'))).toBe(true);
+    expect(builtOn).toMatch(/^\d{4}-\d\d-\d\d$/);
+    const warnings = vi.mocked(console.warn).mock.calls.map(([line]) => String(line));
+    expect(warnings).toContainEqual(expect.stringContaining('kept the last good data'));
   });
 });

@@ -85,17 +85,29 @@ async function writeCompactJson(path: string, value: unknown): Promise<void> {
 }
 
 /**
- * Clears and recreates the output tree.
- *
- * A full wipe means a body removed from the catalog cannot leave a stale file behind
- * that the manifest no longer lists.
+ * The directories of the ephemerides, every file in them written again by each run.
+ * Emptied first, so a body removed from the catalog cannot leave a stale file behind that
+ * the manifest no longer lists.
  */
-export async function prepareOutputDir(): Promise<void> {
-  await rm(OUTPUT_DIR, { recursive: true, force: true });
-  await mkdir(join(OUTPUT_DIR, 'vectors'), { recursive: true });
-  await mkdir(join(OUTPUT_DIR, 'paths'), { recursive: true });
-  await mkdir(join(OUTPUT_DIR, 'surface'), { recursive: true });
-  await mkdir(join(OUTPUT_DIR, 'small-moons'), { recursive: true });
+export const EPHEMERIS_DIRS = ['vectors', 'paths', 'surface', 'small-moons'] as const;
+
+/**
+ * Clears the ephemerides' directories and nothing else.
+ *
+ * Not the whole data directory, as it was until 2026-11-22. That wipe took with it whatever
+ * this run does not write: the cosmic web and the quasars, made by their own commands
+ * (fetch:cosmic-web, fetch:quasars), and a catalogue that could not be read this run. A
+ * local `pnpm fetch:data` on 2026-11-16 left the SDSS Galaxies, Filaments, Quasars and SZ
+ * Clusters layers with no data for a week, and nothing said so: the app leaves out a layer it
+ * has no data for. Now each product replaces its own files when it has new ones
+ * (writeOutput's writers, each of a directory emptying that one first), and what a run does
+ * not make is left as it was -- the last good copy (fallback.ts).
+ */
+export async function prepareOutputDir(outputDir = OUTPUT_DIR): Promise<void> {
+  for (const directory of EPHEMERIS_DIRS) {
+    await rm(join(outputDir, directory), { recursive: true, force: true });
+    await mkdir(join(outputDir, directory), { recursive: true });
+  }
 }
 
 function serializeTable(table: VectorTable): VectorTable {

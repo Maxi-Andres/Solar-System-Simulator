@@ -47,7 +47,10 @@ export interface DataProduct {
   readonly complete: readonly string[];
 }
 
-/** The products that may fall back. Not the satellites: elements a week old are wrong. */
+/**
+ * The products that may fall back. Not the satellites, whose elements a week old are wrong:
+ * the deploy restores the newest ones it saved instead, usually a day old (deploy.yml).
+ */
 export const DATA_PRODUCTS = {
   stars: {
     name: 'the stars and their planets',
@@ -81,21 +84,24 @@ export function settle<T>(promise: Promise<T>): Promise<Outcome<T>> {
 }
 
 /**
- * DATA_FALLBACK's directory, or null when it is unset or does not exist (a first run, or a
- * local one: nothing to fall back on, and a failure fails as it always has). Refused inside
- * the data directory, which the run empties before it writes.
+ * Where the last good data is: DATA_FALLBACK's directory -- the deploy's, the last full run's
+ * data moved out of the way -- or, unset, the data directory itself, whose catalogues a run
+ * now leaves in place until it has new ones (writeOutput.ts prepareOutputDir): a local run
+ * that cannot read VizieR keeps the copy it already had instead of failing. Null when there
+ * is none (a first run: a failure fails as it always has). Refused inside the data directory
+ * but not the directory itself: a product written there would land on its own fallback.
  */
 export function dataFallbackDirectory(
   setting = process.env.DATA_FALLBACK,
   outputDir = OUTPUT_DIR,
 ): string | null {
   if (setting === undefined || setting === '') {
-    return null;
+    return existsSync(outputDir) ? resolve(outputDir) : null;
   }
   const directory = resolve(setting);
   const inside = relative(outputDir, directory);
-  if (inside === '' || (!inside.startsWith('..') && !isAbsolute(inside))) {
-    throw new Error(`DATA_FALLBACK (${directory}) is inside ${outputDir}, which this run empties: copy it elsewhere first.`);
+  if (inside !== '' && !inside.startsWith('..') && !isAbsolute(inside)) {
+    throw new Error(`DATA_FALLBACK (${directory}) is inside ${outputDir}, which this run writes into: copy it elsewhere first.`);
   }
   return existsSync(directory) ? directory : null;
 }
@@ -143,8 +149,9 @@ export function reasonOf(error: unknown, length = 400): string {
 
 /**
  * Copies a product's files from the fallback directory into `outputDir`, timestamps kept
- * -- so a copy of a copy still says when it was built -- and says so, in the log and on the
- * run's page. Returns the date its files were written.
+ * -- so a copy of a copy still says when it was built -- or, the fallback being `outputDir`
+ * itself, leaves them where they are; and says so, in the log and on the run's page. Returns
+ * the date its files were written.
  */
 export async function restoreProduct(
   failure: ProductFailure,
@@ -152,7 +159,9 @@ export async function restoreProduct(
   outputDir = OUTPUT_DIR,
 ): Promise<string> {
   const { product } = failure;
-  for (const path of product.paths) {
+  // The last good copy is the one already in place (a local run): left as it is.
+  const inPlace = resolve(from) === resolve(outputDir);
+  for (const path of inPlace ? [] : product.paths) {
     const source = join(from, path);
     if (!existsSync(source)) {
       continue;
@@ -163,7 +172,9 @@ export async function restoreProduct(
   }
   const builtOn = (await stat(join(from, product.complete[0]!))).mtime.toISOString().slice(0, 10);
   const reason = reasonOf(failure.error);
-  console.warn(`[fetch-data] STALE: ${product.name} could not be built (${reason}); copied the last good data, built ${builtOn}.`);
+  console.warn(
+    `[fetch-data] STALE: ${product.name} could not be built (${reason}); ${inPlace ? 'kept' : 'copied'} the last good data, built ${builtOn}.`,
+  );
   githubWarning(
     `Stale data: ${product.name}`,
     `${product.name} could not be built this run, so this deploy carries the last good copy, built ${builtOn}. Why: ${reason}`,

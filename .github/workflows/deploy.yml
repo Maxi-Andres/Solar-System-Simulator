@@ -133,8 +133,9 @@ jobs:
       # A full run fetches everything afresh, but a catalogue whose host is down on the day
       # (VizieR, HyperLEDA, CDS, the Gaia archive, the CosmicFlows page -- one of them, most
       # pushes) is copied from the last full run's data instead of failing the deploy, with a
-      # warning naming it (tools/src/fallback.ts). Moved out of the way, as the fetch empties
-      # web/public/data; a cache restores only to the path it was saved from.
+      # warning naming it (tools/src/fallback.ts); so are the cosmic web and the quasars below.
+      # Moved out of the way so that nothing in what is published is last week's unless a
+      # warning says so; a cache restores only to the path it was saved from.
       - name: Keep the last full run's data as the fallback
         if: steps.mode.outputs.satellites_only != 'true' && steps.restore.outputs.cache-matched-key != ''
         run: |
@@ -276,9 +277,19 @@ jobs:
           path: tools/.cache/cosmic-web
           key: ${{ steps.cosmic-web-key.outputs.key }}
 
-      - name: Say whether the cosmic web was built
+      # Not built this run: the last full run's copy, as fetch:data does for a catalogue
+      # (tools/src/fallback.ts), rather than a site that has quietly lost two layers. Only
+      # with no copy at all does the deploy go without them.
+      - name: Keep the last cosmic web if it was not built
         if: steps.cosmic-web.outcome == 'failure'
-        run: echo "::warning title=Cosmic web not built::pnpm fetch:cosmic-web failed; this deploy has no SDSS Galaxies or Filaments layers. Its log says why."
+        run: |
+          if [ -f tools/.cache/last-data/cosmic-web/cosmic-web.json ]; then
+            rm -rf web/public/data/cosmic-web
+            cp -a tools/.cache/last-data/cosmic-web web/public/data/cosmic-web
+            echo "::warning title=Stale data%3A the cosmic web::pnpm fetch:cosmic-web failed; this deploy carries the last full run's cosmic web. Its log says why."
+          else
+            echo "::warning title=Cosmic web not built::pnpm fetch:cosmic-web failed and there is no earlier copy; this deploy has no SDSS Galaxies or Filaments layers. Its log says why."
+          fi
 
       # The quasars and the Planck SZ clusters (tools/src/quasars/): SDSS DR16Q's 750 thousand
       # quasars, 100 MB of text from VizieR, whose database is not always reachable. As the cosmic
@@ -315,9 +326,29 @@ jobs:
           path: tools/.cache/quasars
           key: ${{ steps.quasars-key.outputs.key }}
 
-      - name: Say whether the quasars were built
+      - name: Keep the last quasars if they were not built
         if: steps.quasars.outcome == 'failure'
-        run: echo "::warning title=Quasars not built::pnpm fetch:quasars failed; this deploy has no Quasars or SZ Clusters layers. Its log says why."
+        run: |
+          if [ -f tools/.cache/last-data/quasars/quasars.json ]; then
+            rm -rf web/public/data/quasars
+            cp -a tools/.cache/last-data/quasars web/public/data/quasars
+            echo "::warning title=Stale data%3A the quasars::pnpm fetch:quasars failed; this deploy carries the last full run's quasars and SZ clusters. Its log says why."
+          else
+            echo "::warning title=Quasars not built::pnpm fetch:quasars failed and there is no earlier copy; this deploy has no Quasars or SZ Clusters layers. Its log says why."
+          fi
+
+      # CelesTrak refused this full run (fetchData.ts says why that does not fail it): the
+      # newest satellites saved, the daily run's or the last full run's, a day or a week old,
+      # rather than none. Their elements say the instant they are for, and tomorrow's daily
+      # run replaces them.
+      - name: Keep the newest satellites if CelesTrak refused
+        if: (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '') && hashFiles('web/public/data/satellites/satellites.json') == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: web/public/data/satellites
+          key: deploy-satellites-none
+          restore-keys: |
+            deploy-satellites-
 
       # Keyed by the commit it was made from too, which "Choose the run" reads back.
       - name: Save the data for the daily satellite runs

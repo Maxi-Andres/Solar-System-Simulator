@@ -721,7 +721,7 @@ async function main(): Promise<void> {
   // keeps failing on is already left out and reported below.
   //
   // Not so the satellites, a fourth service, read alongside. A run that cannot read them
-  // publishes without satellites/ -- which the app shows as no satellites, not as fewer --
+  // writes none -- leaving the ones already there; the deploy restores its newest saved --
   // and still succeeds. CelesTrak's usage policy forbids what makes failing the run
   // reasonable for the others: it asks clients to stop at the first non-200 rather than
   // retry, and refuses a group already downloaded from the same address since its last
@@ -776,7 +776,7 @@ async function main(): Promise<void> {
     ),
     settle(fetchComets()),
     loadSatellites().catch((error: unknown) => {
-      console.error(`[fetch-data] satellites: FAILED, left out of this run (${String(error).slice(0, 300)})`);
+      console.error(`[fetch-data] satellites: FAILED, none written this run (${String(error).slice(0, 300)})`);
       return null;
     }),
     settle(fetchArchive()),
@@ -1064,7 +1064,7 @@ async function main(): Promise<void> {
   if (satellites !== null) {
     await writeSatellites(satellites);
   } else {
-    console.error('[fetch-data] NO SATELLITES this run: CelesTrak could not be read (see above).');
+    console.error('[fetch-data] NO NEW SATELLITES this run: CelesTrak could not be read (see above); any already in the data directory are left.');
   }
 
   // The window every full-window body can answer for: the intersection of their
