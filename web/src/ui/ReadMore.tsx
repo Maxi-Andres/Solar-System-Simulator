@@ -24,6 +24,8 @@ const WITH_THE: ReadonlySet<string> = new Set([
   'Local Volume',
   'Nearby Universe',
   'observable universe',
+  // Alpha Centauri as a whole (descriptions/alphaCentauriSystem.ts).
+  'Alpha Centauri system',
 ]);
 
 /**

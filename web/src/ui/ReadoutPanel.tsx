@@ -1,4 +1,5 @@
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
+import { isFictionBody } from '../core/fiction.ts';
 import { isSmallMoon } from '../scene/floatingOrigin.ts';
 import { useViewStore } from '../state/store.ts';
 import { Panel } from './Panel.tsx';
@@ -86,12 +87,14 @@ export function ReadoutPanel({
           {store.bodies
             // Not the small moons: a hundred rows of Jupiter's would bury the table. Nor the
             // Earth satellites but the one in focus: fifty rows of Earth's distance from the
-            // Sun, to the AU, say nothing the Earth row does not.
+            // Sun, to the AU, say nothing the Earth row does not. Nor fiction (core/fiction.ts):
+            // a table of the bodies' distances is data.
             .filter(
               (body) =>
                 visibleKinds.has(body.kind) &&
                 !isSmallMoon(body) &&
-                (body.kind !== 'satellite' || body.id === focus),
+                (body.kind !== 'satellite' || body.id === focus) &&
+                !isFictionBody(body.id),
             )
             .map((body) => {
               const fromSun = store.distanceBetween(body.id, 'sun', jd, distanceMode);

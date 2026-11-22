@@ -6,6 +6,7 @@ import { expect, it } from 'vitest';
 
 import { ALPHA_CEN_FRAMING_KM, ALPHA_CEN_MEMBERS, alphaCenEntries, alphaCenView } from './alphaCenBodies.ts';
 import { abOrbitNormal } from './alphaCentauri.ts';
+import { starShownName } from './starBodies.ts';
 import { describeWithData as withData } from './describeWithData.ts';
 
 const NAMES = join(import.meta.dirname, '../../public/data/stars3d/names.json');
@@ -30,6 +31,20 @@ describeWithData('Alpha Centauri in the star names', () => {
     }
     expect(new Set(Object.values(entries!)).size).toBe(3);
   });
+});
+
+it('shows A and B by their Bayer letters with their proper names, and Proxima by its own name', () => {
+  // Each member's shown name is the one its body takes (starBodies.ts starShownName).
+  for (const member of ALPHA_CEN_MEMBERS) {
+    expect(starShownName(member.name, ['HIP 1', member.designation])).toBe(member.shown);
+  }
+  expect(ALPHA_CEN_MEMBERS.map((member) => member.shown)).toEqual([
+    'α Cen A (Rigil Kentaurus)',
+    'α Cen B (Toliman)',
+    'Proxima Centauri',
+  ]);
+  // Any other star keeps names.json's name.
+  expect(starShownName('Sirius', ['alf CMa A', 'HIP 32349'])).toBe('Sirius');
 });
 
 it('frames the system from beyond the pair\'s widest separation', () => {

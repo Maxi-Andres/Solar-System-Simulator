@@ -22,18 +22,23 @@ export const ALPHA_CEN_SYSTEM = 'Alpha Centauri';
 
 /**
  * The three in the order the breadcrumb lists them: the designation that tells each apart
- * in the star names, and the name names.json displays it by -- the IAU's (WGSN) for all
- * three, checked against the shipped file in alphaCenBodies.test.ts.
+ * in the star names, the name names.json displays it by -- the IAU's (WGSN) for all
+ * three, checked against the shipped file in alphaCenBodies.test.ts -- and the name the
+ * app shows it by, its body's (starBodies.ts starShownName), checked there too.
  */
 export const ALPHA_CEN_MEMBERS: readonly {
   readonly key: AlphaCenKey;
   readonly designation: string;
   readonly name: string;
+  readonly shown: string;
 }[] = [
-  { key: 'A', designation: 'alf Cen A', name: 'Rigil Kentaurus' },
-  { key: 'B', designation: 'alf Cen B', name: 'Toliman' },
-  { key: 'Proxima', designation: 'Proxima Cen', name: 'Proxima Centauri' },
+  { key: 'A', designation: 'alf Cen A', name: 'Rigil Kentaurus', shown: 'α Cen A (Rigil Kentaurus)' },
+  { key: 'B', designation: 'alf Cen B', name: 'Toliman', shown: 'α Cen B (Toliman)' },
+  { key: 'Proxima', designation: 'Proxima Cen', name: 'Proxima Centauri', shown: 'Proxima Centauri' },
 ];
+
+/** A and B's one name on screen while their two markers are one (scene/LabelProjector.tsx). */
+export const ALPHA_CEN_PAIR_LABEL = 'α Cen A + B';
 
 /**
  * Where to stand when going to the system rather than to one star, km from A: 120 AU,
@@ -83,6 +88,17 @@ export function alphaCenMember(id: BodyId): AlphaCenKey | null {
     }
   }
   return null;
+}
+
+/**
+ * Whether a body is of Alpha Centauri: one of its stars, or anything about one -- a planet, or
+ * a moon of a planet (a fictional one, core/fiction.ts), however far down the frame tree.
+ */
+export function inAlphaCen(store: Pick<EphemerisStore, 'body'>, id: BodyId): boolean {
+  for (let current: BodyId | null = id; current !== null; current = store.body(current).parent) {
+    if (alphaCenMember(current) !== null) return true;
+  }
+  return false;
 }
 
 /**

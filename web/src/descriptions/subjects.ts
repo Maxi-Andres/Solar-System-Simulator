@@ -20,6 +20,12 @@ export const NEARBY_UNIVERSE_DESCRIPTION_ID = 'nearby-universe';
 export const OBSERVABLE_UNIVERSE_DESCRIPTION_ID = 'observable-universe';
 
 /**
+ * Alpha Centauri as a whole, its three stars together: no body, for its stars are three. Offered
+ * by the breadcrumb's Alpha Centauri list, by its stars' panels and by its search result.
+ */
+export const ALPHA_CEN_SYSTEM_DESCRIPTION_ID = 'alpha-centauri';
+
+/**
  * Laniakea's is a body's -- the structure "Laniakea Supercluster" (laniakea.ts), its level's
  * centre -- and is offered by its level's panel too.
  */

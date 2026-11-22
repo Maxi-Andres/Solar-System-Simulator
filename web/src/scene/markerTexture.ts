@@ -2,9 +2,10 @@ import * as THREE from 'three';
 
 /**
  * The hollow markers used for bodies too small to draw: a circle for a natural body,
- * a diamond for a spacecraft.
+ * a diamond for a spacecraft, a triangle for a fictional thing (core/fiction.ts) -- a shape
+ * nothing real is drawn with, so fiction is told from data before its label is read.
  *
- * Two shapes because the two are different kinds of thing and the eye should know
+ * Shapes apart because they are different kinds of thing and the eye should know
  * which is which before reading a label -- NASA Eyes draws its craft differently from
  * its planets for the same reason. A spacecraft's marker is never replaced by a mesh,
  * so the diamond is all of it there is to see until a model exists.
@@ -14,7 +15,7 @@ import * as THREE from 'three';
  * Drawn white so a sprite's `color` can tint it per body.
  */
 
-export type MarkerShape = 'circle' | 'diamond';
+export type MarkerShape = 'circle' | 'diamond' | 'triangle';
 
 const cached = new Map<MarkerShape, THREE.Texture>();
 
@@ -44,6 +45,19 @@ export function markerTexture(shape: MarkerShape = 'circle'): THREE.Texture {
   ctx.beginPath();
   if (shape === 'circle') {
     ctx.arc(center, center, radius, 0, Math.PI * 2);
+  } else if (shape === 'triangle') {
+    // Point up, its centroid on the centre, its corners a little farther out than the
+    // diamond's, for the area its narrow corners leave empty -- and no farther, or the mitred
+    // top would be cut off at the texture's edge.
+    const reach = radius * 1.2;
+    for (let k = 0; k < 3; k += 1) {
+      const angle = -Math.PI / 2 + (k * 2 * Math.PI) / 3;
+      const x = center + reach * Math.cos(angle);
+      const y = center + reach * Math.sin(angle);
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
   } else {
     // Corner to corner a little wider than the circle's diameter, so the two read as
     // the same size rather than the diamond looking smaller for its empty corners.

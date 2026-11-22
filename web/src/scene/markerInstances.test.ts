@@ -17,7 +17,7 @@ function written(batch: MarkerInstances): number[][] {
 }
 
 function batch(): MarkerInstances {
-  return new MarkerInstances(new THREE.Texture(), new THREE.Texture());
+  return new MarkerInstances(new THREE.Texture(), new THREE.Texture(), new THREE.Texture());
 }
 
 describe('grownCapacity', () => {
@@ -44,6 +44,17 @@ describe('MarkerInstances', () => {
     expect(rows[0]).toEqual([-3, 4, -1000, 50, 1, 1, 1, 1, 1]);
     expect(rows[2]).toEqual([1, 2, -10, 0.5, 0.25, 0.5, 0.75, Math.fround(0.8), 0]);
     expect(markers.mesh.visible).toBe(true);
+  });
+
+  it('numbers each shape for the map the shader picks: fiction’s triangle the third (core/fiction.ts)', () => {
+    const markers = batch();
+    markers.begin();
+    markers.stage('circle', { x: 0, y: 0, z: -3 }, 1, WHITE, 1, 'circle');
+    markers.stage('diamond', { x: 0, y: 0, z: -2 }, 1, WHITE, 1, 'diamond');
+    markers.stage('triangle', { x: 0, y: 0, z: -1 }, 1, WHITE, 1, 'triangle');
+    markers.commit(() => true);
+    expect(written(markers).map((row) => row[8])).toEqual([0, 1, 2]);
+    expect(Object.keys(markers.mesh.material.uniforms).sort()).toEqual(['uCircle', 'uDiamond', 'uTriangle']);
   });
 
   it('draws only the markers kept, and none at all when none are', () => {

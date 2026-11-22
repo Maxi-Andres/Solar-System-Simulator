@@ -75,13 +75,14 @@ const VERTEX_SHADER = /* glsl */ `
 
 /**
  * The sprite's fragment shader, from three's sprite_frag: the colour times the map, at the
- * opacity, then tone mapped and encoded. Both maps are read and one kept, rather than
+ * opacity, then tone mapped and encoded. Every map is read and one kept, rather than
  * branching on the shape: the shape is the same over the whole quad, so `mix` by 0 or 1 is
- * exactly the one map.
+ * exactly the one map -- circle 0, diamond 1, triangle 2 (SHAPE_INDEX).
  */
 const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D uCircle;
   uniform sampler2D uDiamond;
+  uniform sampler2D uTriangle;
   varying vec2 vUv;
   varying vec4 vColor;
   varying float vShape;
@@ -89,7 +90,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
   void main() {
     #include <logdepthbuf_fragment>
-    gl_FragColor = vColor * mix(texture2D(uCircle, vUv), texture2D(uDiamond, vUv), vShape);
+    vec4 shape = mix(texture2D(uCircle, vUv), texture2D(uDiamond, vUv), clamp(vShape, 0.0, 1.0));
+    gl_FragColor = vColor * mix(shape, texture2D(uTriangle, vUv), clamp(vShape - 1.0, 0.0, 1.0));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -119,6 +121,9 @@ function instanceBuffer(capacity: number): THREE.InstancedInterleavedBuffer {
 
 const noRaycast = (): void => {};
 
+/** Each shape's number in the instance data, which the fragment shader picks its map by. */
+export const SHAPE_INDEX: Readonly<Record<MarkerShape, number>> = { circle: 0, diamond: 1, triangle: 2 };
+
 export class MarkerInstances {
   /** The one object drawn: in the scene for as long as the markers are. */
   readonly mesh: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>;
@@ -131,10 +136,10 @@ export class MarkerInstances {
   private buffer: THREE.InstancedInterleavedBuffer;
   private capacity = INITIAL_CAPACITY;
 
-  constructor(circle: THREE.Texture, diamond: THREE.Texture) {
+  constructor(circle: THREE.Texture, diamond: THREE.Texture, triangle: THREE.Texture) {
     this.buffer = instanceBuffer(this.capacity);
     const material = new THREE.ShaderMaterial({
-      uniforms: { uCircle: { value: circle }, uDiamond: { value: diamond } },
+      uniforms: { uCircle: { value: circle }, uDiamond: { value: diamond }, uTriangle: { value: triangle } },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
       transparent: true,
@@ -185,7 +190,7 @@ export class MarkerInstances {
     s[at + 5] = color.g;
     s[at + 6] = color.b;
     s[at + 7] = opacity;
-    s[at + 8] = shape === 'diamond' ? 1 : 0;
+    s[at + 8] = SHAPE_INDEX[shape];
     this.stagedIds.push(id);
   }
 

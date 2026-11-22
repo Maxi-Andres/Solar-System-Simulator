@@ -8,8 +8,11 @@ import {
   ALPHA_CEN_MEMBERS,
   ALPHA_CEN_SYSTEM,
   alphaCenMember,
+  inAlphaCen,
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
+import { fictionOf, realAnchorOf } from '../core/fiction.ts';
+import { FictionTag } from './FictionTag.tsx';
 import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf, type BlackHoleSystem } from '../core/blackHoles.ts';
 import { clusterFramingKm, globularClusterOf } from '../core/globularClusters.ts';
@@ -65,7 +68,8 @@ import { crumbShown, LEVELS, type LevelId } from '../state/levels.ts';
 import { useViewStore, type FramingView } from '../state/store.ts';
 import { Presence, useClosing } from './Presence.tsx';
 import { ReadMore } from './ReadMore.tsx';
-import { CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
+import { CasedName } from './casedName.tsx';
+import { ALPHA_CEN_SYSTEM_DESCRIPTION_ID, CMB_DESCRIPTION_ID, MILKY_WAY_DESCRIPTION_ID } from '../descriptions/subjects.ts';
 
 /**
  * The breadcrumb, and the list of bodies that drops down from it.
@@ -221,7 +225,13 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   if (blackHoleSystemOf(body.id) !== null) {
     return 'black-hole';
   }
-  if (alphaCenMember(body.id) !== null || (body.parent !== null && alphaCenMember(body.parent) !== null)) {
+  // A fictional world of it too, a moon of a planet of A as well (core/fiction.ts).
+  const fiction = fictionOf(body.id);
+  if (
+    alphaCenMember(body.id) !== null ||
+    (body.parent !== null && alphaCenMember(body.parent) !== null) ||
+    (fiction !== null && realAnchorOf(fiction)?.kind === 'alphaCen')
+  ) {
     return 'alpha-centauri';
   }
   if (planetarySystemOf(body.id) !== null) {
@@ -283,7 +293,7 @@ export function BodyPicker({
   const focusBody = store.body(focus);
   const parent = focusBody.parent === null ? null : store.body(focusBody.parent);
   // Alpha Centauri's own level, when one of its stars or their planets is in focus.
-  const inAlphaCen = alphaCenMember(focus) !== null || (parent !== null && alphaCenMember(parent.id) !== null);
+  const inAlphaCenSystem = inAlphaCen(store, focus);
   // Or a planetary system's, when its star or a planet of it is.
   const planetSystem = planetarySystemOf(focus);
   // Or a black hole's, with the star about it.
@@ -633,7 +643,7 @@ export function BodyPicker({
             <Separator />
           </>
         )}
-        {selectedLevel === null && inAlphaCen && alphaCen !== null && (
+        {selectedLevel === null && inAlphaCenSystem && alphaCen !== null && (
           <>
             <Crumb onClick={() => alphaCen.go('A', ALPHA_CEN_FRAMING_KM)}>{ALPHA_CEN_SYSTEM}</Crumb>
             <Separator />
@@ -649,14 +659,16 @@ export function BodyPicker({
         {/* A planet's star, unless the system is called by the star's own name. */}
         {selectedLevel === null && parent !== null && !(planetSystem !== null && parent.name === planetSystem.name) && (
           <>
-            <Crumb onClick={() => onFocus(parent.id)}>{parent.name}</Crumb>
+            <Crumb onClick={() => onFocus(parent.id)}>
+              <CasedName name={parent.name} />
+            </Crumb>
             <Separator />
           </>
         )}
         {/* The focus: dropping down the system it is in, or, a place on its own, only its name. */}
         {selectedLevel !== null ? null : menu === 'none' ? (
           <span aria-current="location" style={{ ...crumbStyle, color: '#fff', cursor: 'default' }}>
-            {focusBody.name}
+            <CasedName name={focusBody.name} />
           </span>
         ) : (
           <button
@@ -673,7 +685,8 @@ export function BodyPicker({
               gap: '0.4rem',
             }}
           >
-            {focusBody.name}
+            {/* Its Greek letters kept lower case under the capitals (casedName.tsx). */}
+            <CasedName name={focusBody.name} />
             <Caret open={open} />
           </button>
         )}
@@ -689,7 +702,7 @@ export function BodyPicker({
             setSystemsOpen(false);
           }}
           inSolarSystem={inSolarSystem}
-          inAlphaCen={inAlphaCen}
+          inAlphaCen={inAlphaCenSystem}
           inPlanetSystem={planetSystem?.key ?? null}
           onPlanetSystem={
             planetSystems === null
@@ -845,6 +858,7 @@ export function BodyPicker({
             toBlackHole(system);
             setOpen(false);
           }}
+          onRead={() => setOpen(false)}
         />
       </Presence>
     </div>
@@ -1000,6 +1014,7 @@ function BodyList({
   onChooseMember,
   onChooseSystem,
   onChooseBlackHole,
+  onRead,
 }: {
   menu: CrumbMenu;
   store: EphemerisStore;
@@ -1012,6 +1027,8 @@ function BodyList({
   onChooseMember: (key: AlphaCenKey) => void;
   onChooseSystem: (key: string) => void;
   onChooseBlackHole: (system: BlackHoleSystem) => void;
+  /** A description opened from the list: the list closes. */
+  onRead: () => void;
 }) {
   const closing = useClosing();
   // Redrawn when a planet's small moons arrive.
@@ -1239,11 +1256,12 @@ function BodyList({
       )}
       {menu === 'alpha-centauri' && alphaCen !== null && (
         <>
+          <ReadMore name="Alpha Centauri system" about={ALPHA_CEN_SYSTEM_DESCRIPTION_ID} onRead={onRead} />
           <div style={TOP_HEADING}>{ALPHA_CEN_SYSTEM}</div>
           {ALPHA_CEN_MEMBERS.map(({ key }) => {
             // The star's planets, once it is a body with planets: Proxima's (D3c).
             const star = store.bodies.find((body) => alphaCenMember(body.id) === key);
-            const planets = star === undefined ? [] : store.bodies.filter((body) => body.parent === star.id);
+            const planets = star === undefined ? [] : systemMembers(store, star.id, visibleKinds);
             return (
               <div key={key}>
                 <MemberRow name={alphaCen.names[key]} active={focusMember === key} onChoose={() => onChooseMember(key)} />
@@ -1267,8 +1285,7 @@ function BodyList({
         <>
           {planetSystem.name !== host.name && <div style={TOP_HEADING}>{planetSystem.name}</div>}
           <MemberRow name={host.name} active={host.id === focus} onChoose={() => onChooseSystem(planetSystem.key)} />
-          {store.bodies
-            .filter((body) => body.parent === host.id)
+          {systemMembers(store, host.id, visibleKinds)
             .map((planet) => (
               <Row
                 key={planet.id}
@@ -2001,6 +2018,23 @@ function MemberRow({
   );
 }
 
+/**
+ * A star's planets for its menu: the real ones, and the fictional ones while the Fiction layer is
+ * on (core/fiction.ts), each followed by its fictional moons -- Polyphemus, then Pandora.
+ */
+function systemMembers(store: EphemerisStore, star: BodyId, visibleKinds: ReadonlySet<string>): BodyDefinition[] {
+  const listed = (body: BodyDefinition): boolean => fictionOf(body.id) === null || isShown(body, visibleKinds);
+  const members: BodyDefinition[] = [];
+  for (const planet of store.bodies) {
+    if (planet.parent !== star || !listed(planet)) continue;
+    members.push(planet);
+    if (fictionOf(planet.id) !== null) {
+      members.push(...store.bodies.filter((moon) => moon.parent === planet.id && fictionOf(moon.id) !== null && listed(moon)));
+    }
+  }
+  return members;
+}
+
 function Row({
   body,
   active,
@@ -2022,6 +2056,7 @@ function Row({
 }) {
   // A satellite is a craft too, and has the craft's diamond, in the scene and here.
   const craft = body.kind === 'spacecraft' || body.kind === 'satellite';
+  const fiction = fictionOf(body.id);
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
       <button
@@ -2071,6 +2106,7 @@ function Row({
           }}
         />
         <span style={{ flex: 1 }}>{body.name}</span>
+        {fiction !== null && <FictionTag record={fiction} />}
         {unavailable !== null && (
           <span style={{ fontSize: '0.6rem', color: '#4e4e4e', letterSpacing: '0.04em' }}>
             {unavailable}

@@ -7,6 +7,8 @@ import { levelReading } from './LevelFacts.tsx';
 import type { Description, DescriptionPhoto, DescriptionPoint } from '../descriptions/types.ts';
 import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
+import { fictionOf } from '../core/fiction.ts';
+import { FictionAboutView } from './FictionAboutView.tsx';
 
 /**
  * A body's description (descriptions/): a page over the scene, as the About is, read from the
@@ -33,7 +35,18 @@ const COLOUR_NOTE: Record<DescriptionPhoto['colour'], string> = {
   false: 'False colour',
 };
 
+/**
+ * The page read from a panel: a fictional thing's "about" (FictionAboutView, its own module and
+ * layout), or a real body's description -- never one mixed into the other.
+ */
 export function DescriptionView({ store }: { store: EphemerisStore }) {
+  const focus = useViewStore((state) => state.focus);
+  const reading = useViewStore((state) => state.reading);
+  const fiction = reading === null ? fictionOf(focus) : null;
+  return fiction !== null ? <FictionAboutView record={fiction} /> : <BodyDescriptionView store={store} />;
+}
+
+function BodyDescriptionView({ store }: { store: EphemerisStore }) {
   const focus = useViewStore((state) => state.focus);
   const reading = useViewStore((state) => state.reading);
   const togglePanel = useViewStore((state) => state.togglePanel);

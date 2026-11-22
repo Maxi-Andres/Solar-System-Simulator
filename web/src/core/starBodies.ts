@@ -208,6 +208,27 @@ export async function addStarBody(
   );
 }
 
+/**
+ * The names some stars are shown by instead of names.json's, by a designation each carries:
+ * where the IAU's proper name alone does not say which star it is. Alpha Centauri A and B by
+ * their Bayer letters first, the proper name after (Maxi, 2026-11-22, read "Toliman" and did
+ * not know it was Alpha Centauri B). The proper name stays in the name, and the star's other
+ * designations are searched too (search.ts), so "Toliman" and "alf Cen B" both find it.
+ */
+const SHOWN_NAMES: ReadonlyMap<string, string> = new Map([
+  ['alf Cen A', 'α Cen A (Rigil Kentaurus)'],
+  ['alf Cen B', 'α Cen B (Toliman)'],
+]);
+
+/** The name a star body is shown by: names.json's `display`, or the one SHOWN_NAMES gives it. */
+export function starShownName(display: string, designations: readonly string[]): string {
+  for (const designation of designations) {
+    const shown = SHOWN_NAMES.get(designation);
+    if (shown !== undefined) return shown;
+  }
+  return display;
+}
+
 /** What names.json says of a star -- or, for one it does not name, what is known of it. */
 export interface StarEntry {
   readonly display: string;
@@ -272,7 +293,7 @@ export async function addStarRecordBody(
     store.addPropagatedBody(
       starBodyDefinition(
         id,
-        entry.display,
+        starShownName(entry.display, entry.designations),
         record[STAR3D.bv]!,
         radiusKm,
         size?.massSun ?? measuredMassSun(at) ?? massSun ?? disc?.massSun ?? null,

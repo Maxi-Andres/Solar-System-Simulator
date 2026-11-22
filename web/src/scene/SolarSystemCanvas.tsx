@@ -97,6 +97,7 @@ const Heliosphere = lazyLayer(() => import('./Heliosphere.tsx').then((m) => m.He
 const Magnetosphere = lazyLayer(() => import('./Magnetosphere.tsx').then((m) => m.Magnetosphere));
 const Aurora = lazyLayer(() => import('./Aurora.tsx').then((m) => m.Aurora));
 const MeteorShowers = lazyLayer(() => import('./MeteorShowers.tsx').then((m) => m.MeteorShowers));
+const FictionLayer = lazyLayer(() => import('./fiction/FictionLayer.tsx').then((m) => m.FictionLayer));
 
 /**
  * The WebGL canvas and camera rig.
@@ -297,6 +298,7 @@ export function SolarSystemCanvas({
   const magnetosphereMounted = useOnceOn(useViewStore((state) => state.layers.magnetosphere));
   const auroraMounted = useOnceOn(useViewStore((state) => state.layers.aurora));
   const meteorShowersMounted = useOnceOn(useViewStore((state) => state.layers.meteorShowers));
+  const fictionMounted = useOnceOn(useViewStore((state) => state.layers.fiction));
   // The sphere the camera never leaves, about the Sun, whatever it is focused on: inside the
   // CMB's, as everyone is (scale.ts MAX_VIEW_DISTANCE_KM, CameraRig's bound).
   const cameraBound = useMemo(
@@ -539,6 +541,8 @@ export function SolarSystemCanvas({
       <LazyLayer>{magnetosphereMounted && <Magnetosphere store={store} clock={clock} focus={focus} />}</LazyLayer>
       <LazyLayer>{auroraMounted && <Aurora store={store} clock={clock} focus={focus} />}</LazyLayer>
       <LazyLayer>{meteorShowersMounted && <MeteorShowers store={store} clock={clock} focus={focus} />}</LazyLayer>
+      {/* Fiction's worlds, made bodies once the layer is first on (core/fiction.ts). */}
+      <LazyLayer>{fictionMounted && <FictionLayer store={store} />}</LazyLayer>
       {/* Its names posted before LabelProjector's declutter, which runs after it. */}
       <LazyLayer>{constellationsMounted && <Constellations store={store} clock={clock} focus={focus} />}</LazyLayer>
       <SolarSystemWatch store={store} clock={clock} focus={focus} />

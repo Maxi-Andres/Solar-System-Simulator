@@ -6,6 +6,7 @@ import { satelliteBodyTag } from './satelliteGroups.ts';
 import { deepSkyLayerKind, deepSkyOf, NOTABLE_STAR_KIND } from './deepSky.ts';
 import { structureKindLabel, structureOf } from './structures.ts';
 import { REGION_LAYER_IDS, regionOf } from './regions.ts';
+import { starBodyFacts } from './starBodies.ts';
 import type { LayerId } from '../state/store.ts';
 import { normalizeName } from './normalizeName.ts';
 
@@ -204,6 +205,14 @@ function wordScore(word: string, field: string): number | null {
   return null;
 }
 
+/** Whether a star body has a designation that is `typed` whole (or `whole`, its spaces gone). */
+function isDesignationOf(id: BodyId, typed: string, whole: string): boolean {
+  return (starBodyFacts(id)?.designations ?? []).some((designation) => {
+    const name = normalizedName(designation);
+    return name === typed || squeezedName(name) === whole;
+  });
+}
+
 export interface SearchResult {
   readonly body: BodyDefinition;
   /** Lower is better; see searchBodies. */
@@ -248,6 +257,8 @@ export function searchBodies(
     // "1998-067A". The International Space Station is "ISS (ZARYA)" in the catalogue, and
     // without that, "iss" found Larissa first.
     // A record-holder by its other names likewise: "Pandora's Cluster", "Tonantzintla 618".
+    // And a catalogue star made a body by its designations (starBodies.ts): once it is one, the
+    // star names list it no more, and "alf Cen B" or "Alpha Centauri A" found nothing.
     const catalogue =
       tag === null
         ? body.kind === 'structure'
@@ -256,11 +267,19 @@ export function searchBodies(
             ? normalizedName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
             : body.kind === 'region'
               ? normalizedName((regionOf(body.id)?.aliases ?? []).join(' '))
-              : ''
+              : body.kind === 'star'
+                ? normalizedName((starBodyFacts(body.id)?.designations ?? []).join(' '))
+                : ''
         : normalizedName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
     const exact = name === typed || squeezedName(name) === whole;
+    // Or against one of a star's designations, whole: "alpha centauri a" is A, before the
+    // planet whose name merely has those words, though run together they would score worse.
+    if (!exact && body.kind === 'star' && isDesignationOf(body.id, typed, whole)) {
+      results.push({ body, score: 0, exact: true });
+      continue;
+    }
     let score = exact ? 0 : 0.5;
     let matched = true;
     for (const word of words) {

@@ -9,7 +9,7 @@ import { createContext, useContext } from 'react';
  * scroll to the place. `goTo` does both; the panel provides it.
  */
 
-export const SECTION_IDS = ['overview', 'glossary', 'address', 'measured', 'estimated', 'physics', 'choices', 'sources'] as const;
+export const SECTION_IDS = ['overview', 'glossary', 'address', 'measured', 'estimated', 'physics', 'choices', 'sources', 'fiction'] as const;
 
 export type SectionId = (typeof SECTION_IDS)[number];
 

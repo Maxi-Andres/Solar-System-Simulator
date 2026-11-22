@@ -15,6 +15,7 @@ import { starBodyDefinition, starBodyId } from '../core/starBodies.ts';
 import { drawnFromData } from './generated.ts';
 import { CATALOGUE_STAR_DESIGNATIONS, DESCRIBED_IDS } from './ids.ts';
 import { DESCRIPTIONS, descriptionByDesignations, descriptionOf } from './index.ts';
+import { ALPHA_CEN_SYSTEM_DESCRIPTION_ID } from './subjects.ts';
 
 const PUBLIC = fileURLToPath(new URL('../../public/', import.meta.url));
 
@@ -181,6 +182,31 @@ describe('the descriptions', () => {
     expect(point.find((entry) => entry.title === 'Its size')?.text).toMatch(/stays a point/);
     expect(disc.find((entry) => entry.title === 'Its size')?.text).toContain('5,634 km');
     for (const text of [...point, ...disc].map((entry) => entry.text)) expect(text).not.toMatch(/surface map|JPL/);
+  });
+
+  it('describes Alpha Centauri as a whole, no body: its three stars, its orbits, its planets, and nothing invented', () => {
+    const system = descriptionOf(ALPHA_CEN_SYSTEM_DESCRIPTION_ID);
+    expect(system?.subject).toEqual({ name: 'Alpha Centauri', kind: 'triple star system' });
+    // Not any one star's: none of its stars' designations finds it.
+    expect(system?.catalogueStar).toBeUndefined();
+    const text = [
+      ...system!.lead,
+      ...(system!.sections ?? []).flatMap((section) => [section.title, ...(section.text ?? []), ...section.points.flatMap((point) => [point.title, point.text])]),
+      ...[...system!.drawnHere, ...system!.measured, ...system!.estimated, ...system!.missing, ...system!.misconceptions].flatMap(
+        (point) => [point.title, point.text],
+      ),
+    ].join(' ');
+    // The triple, the pair's orbit, Proxima's, the distances.
+    for (const fact of ['G2', 'K1', 'M5.5', '79.93 years', 'eccentricity 0.52', '11.3 to 35.8 AU', '13,000 AU', '547,000 years', '4.37 light years', '4.25 light years']) {
+      expect(text, fact).toContain(fact);
+    }
+    // The planets, confirmed and not, the limit of stable orbits, the sky and the one plan to go.
+    for (const fact of ['Proxima b', 'confirmed in 2025', 'Proxima c', 'S1', '2.8 AU', 'Southern Cross', '29° N', 'Breakthrough Starshot']) {
+      expect(text, fact).toContain(fact);
+    }
+    expect(system!.sources.map((source) => source.key)).toContain('holman1999');
+    // Real things only: the fictional worlds set there are kept apart (core/fiction.ts).
+    expect(text).not.toMatch(/fiction|Pandora|Polyphemus|Avatar|Na’vi|Na'vi/i);
   });
 
   it('says how a black hole is drawn: its horizon, its shadow, the lens', () => {

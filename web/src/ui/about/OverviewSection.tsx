@@ -62,6 +62,10 @@ export const overviewSection: AboutSection = {
           Every paper, catalogue and service, numbered; a number in brackets anywhere in this text jumps to
           it. Credits and licences.
         </Item>
+        <Item title={<Xref to="fiction">Fiction</Xref>}>
+          Worlds from novels and films, in a layer of their own, off unless switched on: how they are kept
+          apart from the data, and where each of their numbers comes from.
+        </Item>
       </Items>
 
       <Sub section="overview" id="navigation">

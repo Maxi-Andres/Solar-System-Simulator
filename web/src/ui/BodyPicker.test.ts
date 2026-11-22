@@ -14,6 +14,7 @@ import type { LazySource } from '../core/satellites.ts';
 import { AU_KM, FOV_DEG, NEPTUNE_ORBIT_AU, SOLAR_SYSTEM_FRAMING_KM, SOLAR_SYSTEM_VIEW } from '../scene/scale.ts';
 import { crumbShown, LEVELS, type LevelId } from '../state/levels.ts';
 import { useViewStore } from '../state/store.ts';
+import { fictionBodyId } from '../core/fiction.ts';
 import { BodyPicker, crumbMenuFor, goToLevel, SUN_LEVEL_FRAMINGS, type SunLevel } from './BodyPicker.tsx';
 
 // The breadcrumb's catalogues arrive through useSyncExternalStore, which a server render refuses
@@ -108,6 +109,11 @@ describe('crumbMenuFor', () => {
     expect(crumbMenuFor(body('pulsar-1', 'neutron-star'))).toBe('none');
     expect(crumbMenuFor(body('globular-cluster-1', 'globular-cluster'))).toBe('none');
     expect(crumbMenuFor(body('remnant-crab', 'supernova-remnant'))).toBe('none');
+  });
+
+  it('drops down Alpha Centauri for a fictional world of A, a moon of one too (core/fiction.ts)', () => {
+    expect(crumbMenuFor(body(fictionBodyId('polyphemus'), 'planet', 'star-a'))).toBe('alpha-centauri');
+    expect(crumbMenuFor(body(fictionBodyId('pandora'), 'moon', fictionBodyId('polyphemus')))).toBe('alpha-centauri');
   });
 
   it('has none for a star of the neighbourhood on its own: the Solar Neighbourhood’s lists it', () => {

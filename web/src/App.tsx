@@ -13,6 +13,7 @@ import { isShown, SMALL_MOON_LAYER, systemOf } from './scene/floatingOrigin.ts';
 import { SolarSystemCanvas } from './scene/SolarSystemCanvas.tsx';
 import { setFocusFraming, useViewStore } from './state/store.ts';
 import {
+  ALPHA_CEN_FRAMING_KM,
   ALPHA_CEN_MEMBERS,
   alphaCenEntries,
   alphaCenView,
@@ -45,6 +46,7 @@ import { ensureMeteorShowers } from './core/meteorShowers.ts';
 import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
 import { julianDayToDate, tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
+import { FICTION_COLOR, FICTION_LAYER, fictionOf, fictionTag } from './core/fiction.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -72,7 +74,9 @@ import {
   recordHolderEarthView,
   recordHolderOf,
 } from './core/recordHolders.ts';
-import { BodyPicker, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
+import { BodyPicker, goToLevel, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
+import type { SystemPlace } from './core/systemSearch.ts';
+import { CasedName } from './ui/casedName.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
 import {
   CENSUS_EDGE_COLOR,
@@ -195,6 +199,8 @@ const LAYER_KINDS: Record<string, readonly string[]> = {
   // The interstellar clouds (interstellarClouds.ts), places made bodies as the regions are.
   interstellarClouds: ['region', 'interstellar-cloud'],
   landingSites: ['region', 'landing-site'],
+  // The fictional worlds, planets and moons by kind but this layer's too (floatingOrigin.ts isShown).
+  fiction: [FICTION_LAYER],
 };
 
 export function App() {
@@ -245,7 +251,7 @@ export function App() {
     if (store === null || stars3d === null || starNames === null) {
       return null;
     }
-    const names = Object.fromEntries(ALPHA_CEN_MEMBERS.map((member) => [member.key, member.name])) as Record<
+    const names = Object.fromEntries(ALPHA_CEN_MEMBERS.map((member) => [member.key, member.shown])) as Record<
       AlphaCenKey,
       string
     >;
@@ -369,6 +375,21 @@ export function App() {
 
   // A pulsar clicked on the map or found by search (D6a): made a neutron star of its real
   // size (pulsars.ts) and framed whole.
+  // A star system found by search (core/systemSearch.ts): framed whole, as its breadcrumb entry
+  // frames it -- the Solar System as its level, Alpha Centauri from out of the pair's plane.
+  const goToSystem = useCallback(
+    (place: SystemPlace): void => {
+      if (place.kind === 'solar-system') {
+        goToLevel('solar-system', setFocus);
+      } else if (place.kind === 'alpha-centauri') {
+        alphaCen?.go('A', ALPHA_CEN_FRAMING_KM);
+      } else {
+        planetSystems?.go(place.key);
+      }
+    },
+    [alphaCen, planetSystems, setFocus],
+  );
+
   const goToPulsar = useCallback(
     (k: number): void => {
       if (store === null) {
@@ -967,6 +988,7 @@ export function App() {
               laniakea={laniakea}
               laniakeaNames={laniakeaNames}
               onLaniakeaGalaxy={goToLaniakeaGalaxy}
+              onSystem={goToSystem}
             />
           </Presence>
           <Presence show={openPanel === 'layers'}>
@@ -1215,6 +1237,8 @@ const BodyLabel = memo(function BodyLabel({
   elementRef: (element: HTMLElement | null) => void;
   onFocus: (id: BodyId) => void;
 }) {
+  // A fictional thing says so on its name, wherever it is (core/fiction.ts).
+  const fiction = fictionOf(body.id);
   return (
     <button
       type="button"
@@ -1225,7 +1249,8 @@ const BodyLabel = memo(function BodyLabel({
       onClick={() => onFocus(body.id)}
       style={focused ? FOCUSED_LABEL_STYLE : LABEL_STYLE}
     >
-      <span data-label-name="">{body.name}</span>
+      <span data-label-name=""><CasedName name={body.name} /></span>
+      {fiction !== null && <span style={FICTION_TAG_STYLE}>{fictionTag(fiction)}</span>}
       {/* Shown instead of the name when the label stands for more than its body: a whole
           star system seen from afar, or Alpha Centauri's pair (LabelProjector). */}
       <span data-label-alt="" style={{ display: 'none' }} />
@@ -1265,6 +1290,14 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 const FOCUSED_LABEL_STYLE: React.CSSProperties = { ...LABEL_STYLE, color: '#ffffff' };
+
+/** The FICTION beside a fictional thing's name: small, in fiction's colour. */
+const FICTION_TAG_STYLE: React.CSSProperties = {
+  marginLeft: '0.45em',
+  color: FICTION_COLOR,
+  fontSize: '0.56rem',
+  letterSpacing: '0.14em',
+};
 
 const RING_LABEL_STYLE: React.CSSProperties = {
   position: 'absolute',

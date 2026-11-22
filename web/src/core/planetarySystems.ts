@@ -340,7 +340,7 @@ export function systemFramingKm(system: PlanetarySystem): number {
  * The unit direction from the Sun to a star body, from its catalogue position -- or, for an
  * Archive host not among the 3D stars, the direction it was registered with.
  */
-function towardStar(id: BodyId): Vec3 | null {
+export function towardStar(id: BodyId): Vec3 | null {
   const record = starBodyFacts(id)?.record;
   if (record === undefined) {
     return registeredDirections.get(id) ?? null;

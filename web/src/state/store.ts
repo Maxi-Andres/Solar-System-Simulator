@@ -104,6 +104,7 @@ export type LayerId =
   | 'nuclearCluster'
   | 'spacecraft'
   | 'satellites'
+  | 'fiction'
   | 'constellations'
   | 'trails'
   | 'orbits'
@@ -250,6 +251,11 @@ export const LAYERS: readonly LayerDefinition[] = [
   // is large on the screen. On: real places, with real hardware on them.
   { id: 'landingSites', label: 'Landing Sites', hint: 'Where craft landed on the Moon and Mars.', pending: null },
 
+  // Worlds and things from novels and films, placed by their canon among the real ones
+  // (core/fiction.ts): each tagged FICTION, in a colour and a marker nothing real has. Off,
+  // and a group of its own: fiction is never mixed with data.
+  { id: 'fiction', label: 'Fiction', hint: 'Worlds from novels and films, at their real stars. Not data.', pending: null },
+
   // Spacecraft trajectories, from JPL's own samples. A planet's or a moon's trail would
   // be its orbit drawn twice, so the layer is the craft's alone.
   { id: 'trails', label: 'Trails', hint: "Spacecraft's past paths.", pending: null },
@@ -262,7 +268,7 @@ export const LAYERS: readonly LayerDefinition[] = [
   { id: 'icons', label: 'Icons', hint: 'Marks and rings.', pending: null },
 ];
 
-export type LayerGroupId = 'solarSystem' | 'stars' | 'galaxies' | 'models' | 'display';
+export type LayerGroupId = 'solarSystem' | 'stars' | 'galaxies' | 'models' | 'fiction' | 'display';
 
 /** A section of the Layers panel: its layers, in the order the panel lists them. */
 export interface LayerGroup {
@@ -305,6 +311,12 @@ export const LAYER_GROUPS: readonly LayerGroup[] = [
     label: 'Models & guides',
     // By scale, then the rulers.
     layers: ['magnetosphere', 'lagrangePoints', 'heliosphere', 'localInterstellar', 'galacticBubbles', 'galacticOrbit', 'localStructure', 'basins', 'flowLines', 'distanceRings', 'constellations'],
+    openByDefault: false,
+  },
+  {
+    id: 'fiction',
+    label: 'Fiction',
+    layers: ['fiction'],
     openByDefault: false,
   },
   {
@@ -378,6 +390,8 @@ export const DEFAULT_LAYER_STATE: LayerState = {
   nuclearCluster: true,
   spacecraft: true,
   satellites: false,
+  // Off, always at first: what is on from the start is what is real.
+  fiction: false,
   // Off: the figures are a human convention, and the borders are lines no one sees.
   constellations: false,
   trails: true,

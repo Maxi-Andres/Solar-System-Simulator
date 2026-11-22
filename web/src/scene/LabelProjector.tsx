@@ -8,7 +8,9 @@ import type { SimClock } from '../core/time.ts';
 import { bodiesToResolve, isShown } from './floatingOrigin.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
-import { ALPHA_CEN_SYSTEM, alphaCenMember } from '../core/alphaCenBodies.ts';
+import { ALPHA_CEN_PAIR_LABEL, ALPHA_CEN_SYSTEM, alphaCenMember, inAlphaCen } from '../core/alphaCenBodies.ts';
+import { setCasedText } from '../ui/casedName.tsx';
+import { isFictionBody } from '../core/fiction.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
@@ -410,7 +412,8 @@ export function LabelProjector({
     const planetary = new Map<string, { host: BodyId | null; members: Set<BodyId>; extentKm: number; name: string }>();
     for (const body of store.bodies) {
       const owner = planetarySystemOf(body.id);
-      if (member(body.id) !== null || member(body.parent) !== null) {
+      // Its stars and all about them, a fictional planet's moon too (alphaCenBodies.ts inAlphaCen).
+      if (inAlphaCen(store, body.id)) {
         alphaCen.add(body.id);
       } else if (owner !== null) {
         let entry = planetary.get(owner.key);
@@ -432,7 +435,7 @@ export function LabelProjector({
         hosts.add(entry.host);
       }
     }
-    return { a: a?.id ?? null, b: b?.id ?? null, bName: b?.name ?? '', alphaCen, solar, planetary, hosts };
+    return { a: a?.id ?? null, b: b?.id ?? null, alphaCen, solar, planetary, hosts };
   }, [store, version]);
   // The labels showing another text than their own name this frame, and which.
   const altShown = useMemo(() => new Map<BodyId, string>(), []);
@@ -508,8 +511,9 @@ export function LabelProjector({
     const lineage = focusLineage(store, focus);
 
     for (const body of store.bodies) {
-      // A kind that is switched off has nothing on screen to be labelled.
-      if (!visibleKinds.has(body.kind) || !isShown(body, visibleKinds)) {
+      // A kind that is switched off has nothing on screen to be labelled. A fictional body's
+      // layers are isShown's to say: a Trojan is an asteroid shown with the planets.
+      if ((!visibleKinds.has(body.kind) && !isFictionBody(body.id)) || !isShown(body, visibleKinds)) {
         continue;
       }
 
@@ -591,7 +595,7 @@ export function LabelProjector({
     // so did Rigil Kentaurus for Alpha Centauri. Once a system's extent is a few pixels its
     // names fold into one, on the body it centres on: "Solar System" on the Sun, "Alpha
     // Centauri" on its A. Nearer, Alpha Centauri opens into Proxima and the pair, and the
-    // pair -- A and B, 11 to 36 AU apart -- stays "Rigil Kentaurus + Toliman" until its two
+    // pair -- A and B, 11 to 36 AU apart -- stays "α Cen A + B" until its two
     // markers part. Nearer still, every star is its own name.
     const alt = new Map<BodyId, string>();
     const fold = (members: ReadonlySet<BodyId>, keep: BodyId, extentKm: number, name: string): boolean => {
@@ -687,7 +691,7 @@ export function LabelProjector({
       const b = projected.find((entry) => entry.id === systems.b);
       if (a !== undefined && b !== undefined && Math.hypot(a.x - b.x, a.y - b.y) < PAIR_MERGE_PX) {
         projected.splice(projected.indexOf(b), 1);
-        alt.set(a.id, `${store.body(a.id).name} + ${systems.bName}`);
+        alt.set(a.id, ALPHA_CEN_PAIR_LABEL);
       }
     }
     // The representatives whose own marker is hidden, and which carry no system's name.
@@ -813,7 +817,8 @@ function setAltText(element: HTMLElement | null, text: string | null): void {
   if (name === null || alt === null) {
     return;
   }
-  alt.textContent = text ?? '';
+  // Its Greek letters kept lower case under the labels' capitals: "α Cen A + B" (ui/casedName.tsx).
+  setCasedText(alt, text ?? '');
   alt.style.display = text === null ? 'none' : 'inline';
   name.style.display = text === null ? 'inline' : 'none';
 }

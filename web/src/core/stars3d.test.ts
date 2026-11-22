@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BeltFetchers, BinaryFetchOptions } from './belt.ts';
 import { makeStore } from './satelliteTestFixtures.ts';
-import { addStarBody, isCatalogueStar, parseStarBodyId, starBodyFacts, starBodyId } from './starBodies.ts';
+import { addStarBody, addStarRecordBody, isCatalogueStar, parseStarBodyId, starBodyFacts, starBodyId } from './starBodies.ts';
 import {
   indexStarNames,
   KM_S_TO_PC_PER_YEAR,
@@ -18,7 +18,7 @@ import {
 } from './stars3d.ts';
 import { searchNames } from './beltNames.ts';
 import { isShown } from '../scene/floatingOrigin.ts';
-import { layersFor } from './search.ts';
+import { layersFor, searchBodies } from './search.ts';
 
 /** Two tiers: a Sirius-like star and a faint one, then one more. */
 const TIER0 = new Float32Array([
@@ -215,5 +215,45 @@ describe('a catalogue star made a body', () => {
     expect(isCatalogueStar(star('sun'))).toBe(false);
     expect(isCatalogueStar(star('gaia-bh1-star'))).toBe(false);
     expect(isCatalogueStar(star('s2'))).toBe(false);
+  });
+});
+
+describe('a star made a body, by name', () => {
+  it('shows Alpha Centauri B by its Bayer letter and its proper name, and is found by either and by its designations', async () => {
+    const store = makeStore();
+    const source = new Stars3dSource(fetchers(), 2, '/');
+    // Tier 1's record, named as names.json names B (alphaCenBodies.ts ALPHA_CEN_MEMBERS).
+    const id = await addStarRecordBody(
+      store,
+      source,
+      1,
+      0,
+      {
+        display: 'Toliman',
+        iau: true,
+        designations: ['HR 5460', 'Alpha Centauri B', 'alf Cen B', 'HIP 71681'],
+        system: 'Alpha Centauri',
+        nearest: 1,
+        spectralType: 'K1V',
+      },
+      'sun',
+    );
+    expect(store.body(id).name).toBe('α Cen B (Toliman)');
+    const found = (query: string): string | undefined => searchBodies(store.bodies, query)[0]?.body.id;
+    for (const query of ['toliman', 'α cen b', 'alf cen b', 'alpha centauri b', 'HIP 71681']) {
+      expect(found(query), query).toBe(id);
+    }
+    // A designation typed whole is the star's own name: listed as exactly what was asked for,
+    // before a planet merely named with those words ("Alpha Centauri A S1").
+    expect(searchBodies(store.bodies, 'Alpha Centauri B')[0]).toMatchObject({ score: 0, exact: true });
+    expect(searchBodies(store.bodies, 'alpha centauri')[0]?.exact).toBe(false);
+  });
+
+  it('finds any star body by its designations, once the star names list it no more', async () => {
+    const store = makeStore();
+    const id = await addStarBody(store, new Stars3dSource(fetchers(), 2, '/'), indexStarNames(NAMES), 0, 'sun');
+    expect(store.body(id).name).toBe('Sirius');
+    expect(searchBodies(store.bodies, 'HIP 32349')[0]?.body.id).toBe(id);
+    expect(searchBodies(store.bodies, 'alf CMa')[0]?.body.id).toBe(id);
   });
 });

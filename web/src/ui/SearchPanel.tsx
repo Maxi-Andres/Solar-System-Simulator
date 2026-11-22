@@ -17,7 +17,9 @@ import { addCometBody, cometBodyId } from '../core/cometBodies.ts';
 import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { archivePlanetId, archiveSystemKey, searchEntry, type ExoplanetArchive } from '../core/exoplanetArchive.ts';
-import { registeredSystem } from '../core/planetarySystems.ts';
+import { allPlanetarySystems, registeredSystem } from '../core/planetarySystems.ts';
+import { searchSystems, systemEntries, type SystemEntry, type SystemPlace } from '../core/systemSearch.ts';
+import { hasDescription } from '../descriptions/ids.ts';
 import { formatPeriod, NEUTRON_STAR_COLOR, pulsarBodyId, type PulsarArchive } from '../core/pulsars.ts';
 import {
   CLUSTER_COLOR,
@@ -68,6 +70,9 @@ import { satelliteInstant } from '../core/teme.ts';
 import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { messierSynonym } from '../core/messier.ts';
+import { FICTION_COLOR, fictionBodyId, fictionRecord, isFictionBody, searchFiction, type FictionRecord } from '../core/fiction.ts';
+import { whenPlaced } from '../core/fictionBodies.ts';
+import { FictionTag } from './FictionTag.tsx';
 import { useViewStore } from '../state/store.ts';
 import { choosableElsewhen, craftUnavailability, satelliteUnavailability } from './BodyPicker.tsx';
 import { Panel } from './Panel.tsx';
@@ -127,6 +132,16 @@ import { Panel } from './Panel.tsx';
  * And Laniakea's (G3): its 86,899 galaxies by name and other names ("NGC 4889", "PGC 44715"),
  * from laniakea/names.json, fetched when search opens; its named structures by theirs too
  * ("Abell 1656" the Coma Cluster), which are bodies once the catalogue is in.
+ *
+ * And fiction (core/fiction.ts): its worlds by name, work or creator, or "fiction" for all of
+ * them -- found whether the Fiction layer is on or not, as a small moon is with its layer off,
+ * each row tagged FICTION, after the real bodies of the same name (Saturn's Pandora before
+ * Avatar's). Choosing one switches the layer on, waits for the world to be placed, and goes.
+ *
+ * And the star systems the breadcrumb lists (core/systemSearch.ts): the Solar System, Alpha
+ * Centauri, the planetary systems, each by its name -- "alpha centauri", "tau ceti system" --
+ * first of all, since none is a body and its stars were all that was found. Choosing one frames
+ * it whole, as the breadcrumb does; one with a description offers it beside its name.
  */
 
 /** Results listed at once. More than fit on screen, fewer than make typing lag. */
@@ -184,7 +199,11 @@ type Result =
   /** Record `k` of Laniakea's catalogue. */
   | { readonly kind: 'laniakea'; readonly k: number }
   /** Landmark `k` of laniakea.json, by one of its other names. */
-  | { readonly kind: 'structure'; readonly k: number };
+  | { readonly kind: 'structure'; readonly k: number }
+  /** A fictional thing, by its record's id (core/fiction.ts). */
+  | { readonly kind: 'fiction'; readonly id: string }
+  /** A star system, framed whole (core/systemSearch.ts). */
+  | { readonly kind: 'system'; readonly entry: SystemEntry };
 
 export function SearchPanel({
   store,
@@ -210,6 +229,7 @@ export function SearchPanel({
   laniakea,
   laniakeaNames,
   onLaniakeaGalaxy,
+  onSystem,
 }: {
   readonly store: EphemerisStore;
   readonly clock: SimClock;
@@ -240,10 +260,13 @@ export function SearchPanel({
   readonly laniakeaNames: LazySource<LaniakeaNameIndex>;
   /** Goes to a galaxy of Laniakea's catalogue (App.tsx). */
   readonly onLaniakeaGalaxy: (k: number) => void;
+  /** Goes to a star system, framed whole as the breadcrumb frames it (App.tsx). */
+  readonly onSystem: (place: SystemPlace) => void;
 }) {
   const closePanel = useViewStore((state) => state.closePanel);
   const setFocus = useViewStore((state) => state.setFocus);
   const setLayer = useViewStore((state) => state.setLayer);
+  const readAbout = useViewStore((state) => state.readAbout);
   const satelliteChips = useViewStore((state) => state.satelliteChips);
   const toggleSatelliteChip = useViewStore((state) => state.toggleSatelliteChip);
 
@@ -364,10 +387,19 @@ export function SearchPanel({
 
   const results = useMemo((): Result[] => {
     void version;
-    const bodyResults = searchBodies(store.bodies, searched, RESULT_LIMIT).map(({ body, exact }) => {
-      const item: Result = { kind: 'body', id: body.id };
-      return { item, exact };
-    });
+    // A fictional world placed already is listed as fiction, below, once.
+    const bodyResults = searchBodies(store.bodies, searched, RESULT_LIMIT)
+      .filter(({ body }) => !isFictionBody(body.id))
+      .map(({ body, exact }) => {
+        const item: Result = { kind: 'body', id: body.id };
+        return { item, exact };
+      });
+    // The systems before all else: a place, where the rest are what is in it.
+    const fromSystems: Result[] = searchSystems(systemEntries(allPlanetarySystems()), searched).map(({ entry }) => ({
+      kind: 'system',
+      entry,
+    }));
+    const fromFiction: Result[] = searchFiction(searched).map((record) => ({ kind: 'fiction', id: record.id }));
     const bodies = bodyResults.map(({ item }) => item);
     // A comet or a name already a body is listed as the body, once.
     const fromComets: Result[] =
@@ -472,11 +504,13 @@ export function SearchPanel({
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
     return [
+      ...fromSystems,
       // A catalogue entry named exactly what was typed goes before a body merely like it.
       ...mergeBodiesAndCatalogues(
         bodyResults,
         fromCatalogues.map((item) => ({ item, exact: scored.get(item)! <= EXACT_NAME_SCORE })),
       ),
+      ...fromFiction,
       ...fromComets,
       ...fromSatellites,
       ...fromNames,
@@ -554,6 +588,33 @@ export function SearchPanel({
     }
     if (result.kind === 'body') {
       go(result.id);
+      return;
+    }
+    if (result.kind === 'system') {
+      // A planetary system's planets are in the Planets layer.
+      setLayer('planets', true);
+      onSystem(result.entry.place);
+      closePanel();
+      return;
+    }
+    if (result.kind === 'fiction') {
+      const record = fictionRecord(result.id);
+      if (record !== null) {
+        // Its layer, and its kind's -- a moon's planet's too -- or it would not be drawn.
+        setLayer('fiction', true);
+        setLayer('planets', true);
+        if (record.kind === 'moon') setLayer('moons', true);
+        // Made a body by the layer's chunk once it is in (scene/fiction/FictionLayer.tsx).
+        whenPlaced(store, fictionBodyId(record.id))
+          .then((id) => {
+            setFocus(id);
+            renderDemand.request();
+          })
+          .catch((error: unknown) => {
+            console.error(`Could not go to ${record.name}`, error);
+          });
+      }
+      closePanel();
       return;
     }
     if (result.kind === 'exo') {
@@ -737,7 +798,15 @@ export function SearchPanel({
           );
           return (
             <li
-              key={result.kind === 'body' ? result.id : `${result.kind}-${result.k}`}
+              key={
+                result.kind === 'body'
+                  ? result.id
+                  : result.kind === 'fiction'
+                    ? `fiction-${result.id}`
+                    : result.kind === 'system'
+                      ? `system-${result.entry.name}`
+                      : `${result.kind}-${result.k}`
+              }
               role="option"
               aria-selected={active}
               aria-disabled={!choosableElsewhen(reason)}
@@ -775,6 +844,21 @@ export function SearchPanel({
                   {reason !== null && ` · ${reason}`}
                 </span>
               </span>
+              {row.fiction !== undefined && <FictionTag record={row.fiction} />}
+              {result.kind === 'system' && result.entry.about !== null && hasDescription(result.entry.about) && (
+                <button
+                  type="button"
+                  title={`Read about ${result.entry.name}`}
+                  onClick={(event) => {
+                    // Its page, not the system itself.
+                    event.stopPropagation();
+                    readAbout(result.entry.about);
+                  }}
+                  style={ABOUT_BUTTON_STYLE}
+                >
+                  About
+                </button>
+              )}
             </li>
           );
         })}
@@ -800,7 +884,34 @@ function describeResult(
   volumeArchive: LocalVolumeArchive | null,
   laniakeaCatalogue: LaniakeaCatalogue | null,
   laniakeaIndex: LaniakeaNameIndex | null,
-): { readonly glyph: string; readonly color: string; readonly name: string; readonly detail: string } {
+): {
+  readonly glyph: string;
+  readonly color: string;
+  readonly name: string;
+  readonly detail: string;
+  /** For a fictional thing: its record, for the tag. */
+  readonly fiction?: FictionRecord;
+} {
+  if (result.kind === 'system') {
+    return { glyph: '◎', color: '#e6d8b0', name: result.entry.name, detail: result.entry.detail };
+  }
+  if (result.kind === 'fiction') {
+    const record = fictionRecord(result.id)!;
+    return {
+      glyph: '△',
+      color: FICTION_COLOR,
+      name: record.name,
+      detail: [
+        record.kind === 'trojan'
+          ? 'Trojan'
+          : record.kind === 'moon' && record.anchor.kind === 'fiction'
+            ? `Moon of ${fictionRecord(record.anchor.id)?.name ?? ''}`
+            : 'Planet',
+        `${record.work.title} (${record.work.year})`,
+      ].join(' · '),
+      fiction: record,
+    };
+  }
   if (result.kind === 'laniakea') {
     const k = result.k;
     const r = laniakeaCatalogue?.records;
@@ -969,6 +1080,19 @@ function describeResult(
     detail: ['Asteroid', family?.label, designation ?? undefined].filter((part) => part !== undefined).join(' · '),
   };
 }
+
+/** A system's way into its description, beside its name: small, as a link is. */
+const ABOUT_BUTTON_STYLE: React.CSSProperties = {
+  flex: 'none',
+  background: 'transparent',
+  border: '1px solid #2a2a2a',
+  borderRadius: '0.25rem',
+  padding: '0.1rem 0.4rem',
+  color: '#9fc3e0',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: '0.64rem',
+};
 
 const noSubscribe = (): (() => void) => () => {};
 

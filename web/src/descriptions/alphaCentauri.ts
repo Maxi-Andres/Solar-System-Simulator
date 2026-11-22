@@ -8,7 +8,8 @@ import type { Description, DescriptionPhoto, DescriptionPoint, DescriptionSource
  * its orbit and most of its sources.
  */
 
-const SOUTHERN_CROSS: DescriptionPhoto = {
+/** The system's too (alphaCentauriSystem.ts), as is HUBBLE_PAIR. */
+export const SOUTHERN_CROSS: DescriptionPhoto = {
   file: 'photos/alpha-centauri/southern-cross-film.webp',
   largeFile: 'photos/alpha-centauri/southern-cross-film-large.webp',
   width: 616,
@@ -23,7 +24,7 @@ const SOUTHERN_CROSS: DescriptionPhoto = {
   sourceUrl: 'https://www.eso.org/public/images/eso0542a/',
 };
 
-/** Proxima's too (proximaCentauri.ts). */
+/** Proxima's and the system's too (proximaCentauri.ts, alphaCentauriSystem.ts). */
 export const SKY_SURVEY: DescriptionPhoto = {
   file: 'photos/alpha-centauri/dss2-sky.webp',
   largeFile: 'photos/alpha-centauri/dss2-sky-large.webp',
@@ -39,7 +40,7 @@ export const SKY_SURVEY: DescriptionPhoto = {
   sourceUrl: 'https://www.eso.org/public/images/eso1629i/',
 };
 
-const HUBBLE_PAIR: DescriptionPhoto = {
+export const HUBBLE_PAIR: DescriptionPhoto = {
   file: 'photos/alpha-centauri/hubble-ab.webp',
   largeFile: 'photos/alpha-centauri/hubble-ab-large.webp',
   width: 640,

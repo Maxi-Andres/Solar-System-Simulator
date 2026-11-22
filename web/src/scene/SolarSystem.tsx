@@ -74,6 +74,9 @@ import { projectToScreen } from './screenProjection.ts';
 import { labelRank } from './LabelProjector.tsx';
 import { starDiscExposure, starDiscColorIndex } from '../core/starBodies.ts';
 import { ambientShare, exoplanetMaterial } from './exoplanetSurface.ts';
+import { fictionWorldFor } from './fiction/fictionHooks.ts';
+import type { FictionObject } from './fiction/fictionLooks.ts';
+import { isFictionBody } from '../core/fiction.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import { lensState } from './lens.ts';
 import {
@@ -586,9 +589,30 @@ function disposeHandle(handle: BodyHandles, lateOrbits: THREE.Group): void {
     handle.surfaceGround.dispose();
     handle.surfaceGround = null;
   }
+  // A fictional world's haze and rings, by their own dispose, taken off the sphere first so the
+  // sweep below does not free them twice.
+  const extras = handle.mesh.userData['fictionExtras'] as FictionObject | undefined;
+  if (extras !== undefined) {
+    handle.mesh.remove(extras.object);
+    extras.dispose();
+  }
   // The sphere, its own material, any ring, glare, cloud deck. Its marker is only numbers
   // written into the batch each frame, and a body no longer in the store is not written.
   disposeOwnResources(handle.group, SHARED_RESOURCES);
+}
+
+/**
+ * The star that lights a body of another star: the nearest star up its branch of the frame tree
+ * -- a planet's parent, a moon's planet's. A walk of a link or two, for the few bodies drawn so.
+ */
+function lightingStar(store: EphemerisStore, definition: BodyDefinition): BodyId {
+  let id = definition.parent ?? 'sun';
+  while (store.body(id).kind !== 'star') {
+    const parent = store.body(id).parent;
+    if (parent === null) break;
+    id = parent;
+  }
+  return id;
 }
 
 /** How long a frame may spend building craft trails before leaving the rest to the next, ms. */
@@ -648,8 +672,14 @@ export function SolarSystem({
       const otherStar = definition.kind === 'star' && definition.id !== 'sun';
       // A planet of another star -- its parent a star, where the Sun's planets have none --
       // whether its size is measured or estimated: lit by its own star.
+      // A fictional world (core/fiction.ts) likewise, in its own look: a moon of a planet of
+      // another star, Pandora, as much as a planet.
+      const fiction = fictionWorldFor(definition.id);
+      const fictionMaterial = fiction?.material ?? null;
       const exoplanet =
-        definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null);
+        fictionMaterial !== null ||
+        definition.radiusEstimated === true ||
+        (definition.kind === 'planet' && definition.parent !== null);
       const geometry = sharedSphere || neverSphere
         ? SMALL_MOON_SPHERE
         : sphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
@@ -678,7 +708,7 @@ export function SolarSystem({
                 color: new THREE.Color(definition.color).multiplyScalar(SUN_OVEREXPOSURE),
               })
           : exoplanet
-            ? exoplanetMaterial(definition.color)
+            ? (fictionMaterial ?? exoplanetMaterial(definition.color))
             : definition.id === EARTH_ID
             ? new THREE.MeshPhysicalMaterial({
                 color: definition.color,
@@ -712,9 +742,21 @@ export function SolarSystem({
         mesh.scale.multiplyScalar(radiusUnits);
       }
       group.add(mesh);
+      // A fictional world's haze and rings (fictionLooks.ts), built in its radii about its centre:
+      // a child of the sphere, so they turn, hide and fade out with it, at its radius. They share
+      // its material's uniforms -- its star, its lighting -- so nothing of theirs is set per frame.
+      if (fiction?.extras != null) {
+        fiction.extras.object.scale.setScalar(radiusUnits);
+        mesh.add(fiction.extras.object);
+        mesh.userData['fictionExtras'] = fiction.extras;
+      }
 
-      const markerShape: MarkerShape =
-        definition.kind === 'spacecraft' || definition.kind === 'satellite' ? 'diamond' : 'circle';
+      // Fiction's triangle is a shape nothing real is drawn with (core/fiction.ts).
+      const markerShape: MarkerShape = isFictionBody(definition.id)
+        ? 'triangle'
+        : definition.kind === 'spacecraft' || definition.kind === 'satellite'
+          ? 'diamond'
+          : 'circle';
 
       // Shadowed by its planet and moons: a body of the Sun's lit by it and drawn as a
       // sphere. The patch goes on last, after whatever else the material carries.
@@ -1030,7 +1072,7 @@ export function SolarSystem({
   const heldMarkers = useMemo(() => new Set<BodyId>(), []);
   // Every body's marker, in one draw. See markerInstances.ts.
   const markerBatch = useMemo(() => {
-    const batch = new MarkerInstances(markerTexture('circle'), markerTexture('diamond'));
+    const batch = new MarkerInstances(markerTexture('circle'), markerTexture('diamond'), markerTexture('triangle'));
     // Never moved: each marker's place is in its instance data, in the camera's frame.
     batch.mesh.matrixAutoUpdate = false;
     return batch;
@@ -1282,7 +1324,8 @@ export function SolarSystem({
       const starDirection = (handle.mesh.material as THREE.Material).userData['starDirection'] as
         | THREE.Vector3
         | undefined;
-      const host = handle.definition.parent === null ? undefined : snapshot.bodies.get(handle.definition.parent);
+      // Its star: the parent of a planet, and of a moon the star its planet goes round.
+      const host = starDirection === undefined ? undefined : snapshot.bodies.get(lightingStar(store, handle.definition));
       const ambient = (handle.mesh.material as THREE.Material).userData['ambient'] as { value: number } | undefined;
       if (ambient !== undefined) {
         ambient.value = ambientShare(LIGHTING[lighting]);

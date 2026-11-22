@@ -1,6 +1,7 @@
 import { addressSection } from './AddressSection.tsx';
 import { choicesSection } from './ChoicesSection.tsx';
 import { estimatedSection } from './EstimatedSection.tsx';
+import { fictionSection } from './FictionSection.tsx';
 import { glossarySection } from './GlossarySection.tsx';
 import { measuredSection } from './MeasuredSection.tsx';
 import { SECTION_IDS } from './nav.ts';
@@ -19,6 +20,8 @@ export const ABOUT_SECTIONS: readonly AboutSection[] = [
   physicsSection,
   choicesSection,
   sourcesSection,
+  // Last, after the sources and apart from them: fiction is never mixed with data.
+  fictionSection,
 ];
 
 if (ABOUT_SECTIONS.some((section, index) => section.id !== SECTION_IDS[index])) {
