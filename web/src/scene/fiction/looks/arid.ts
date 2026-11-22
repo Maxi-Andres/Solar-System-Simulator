@@ -86,9 +86,17 @@ export const ARID: SurfaceLook = {
     }
 
     Surface surface(vec3 direction, float footprint, vec3 toCamera, vec3 toStar) {
-      vec4 ground = layer0(direction);
+      // Close, from low orbit, the map is read through a gentle swirl and grain is added live
+      // below its texel: rock and sand, not a blur.
+      float close = magnification(footprint);
+      vec4 ground = layer0(detailWarp(direction, 0.6 * close));
       Surface s;
       s.albedo = decodeAlbedo(ground.rgb);
+      float fine = 0.0;
+      if (close > 0.0) {
+        fine = fbm(direction + 13.0, 1.5 / TEXEL, 3, 0.5, footprint);
+        s.albedo *= 1.0 + close * 0.2 * fine;
+      }
       // The relief's slope by central differences a pixel or a texel apart, from the mipmap
       // level a pixel spans (as airless.ts does, and for the same reasons).
       float spacing = max(footprint, TEXEL);
@@ -98,6 +106,7 @@ export const ARID: SurfaceLook = {
       float dEast = reliefAt(normalize(direction + spacing * east), lod) - reliefAt(normalize(direction - spacing * east), lod);
       float dNorth = reliefAt(normalize(direction + spacing * north), lod) - reliefAt(normalize(direction - spacing * north), lod);
       s.normal = normalize(direction - (dEast * east + dNorth * north) / (2.0 * spacing));
+      if (close > 0.0) s.normal = normalize(s.normal + close * (bumped(direction, fine * TEXEL * 0.1, 1.0) - direction));
       bool wet = ground.a < ${WATER_BELOW.toFixed(3)};
       // Rock and sand: Lambert, a little darker at the limb than the Moon's dust.
       s.minnaert = 0.9;

@@ -11,7 +11,8 @@ import { LOW_DETAIL_BELOW, ShipBuilder, createShipRig } from './shipRig.ts';
  * and parallel in one plane, a gap about their own width between them; each thickest at its
  * middle and tapering to a point at both ends, made of long parallel rods packed tight, of
  * staggered lengths, so its ends are ragged, a few rods reaching farther. Between them at the
- * middle a compact hub, and across both spindles and the hub a set of frames -- parallel,
+ * middle a solid bridge joins them into one ship, a hub at its middle, and across both spindles
+ * and the bridge a set of frames -- parallel,
  * angled bands like ribs clamping it all together, whose peaked tops are the sawtooth seen from
  * the side. Symmetric across the plane between the spindles, and fore and aft. Dark bronze and
  * brown, metal, the star glinting gold along the rods.
@@ -51,7 +52,7 @@ export const AFT_REACH_M = BLIP_A_LENGTH_M / 2;
  */
 export const SPINDLE_WIDTH_M = 46;
 export const SPINDLE_THICKNESS_M = 38;
-export const SPINDLE_GAP_M = 42;
+export const SPINDLE_GAP_M = 34;
 
 /** Across both spindles and the gap. */
 export const BLIP_A_WIDTH_M = 2 * SPINDLE_WIDTH_M + SPINDLE_GAP_M;
@@ -70,8 +71,16 @@ const FRAME_DEPTH_M = 1.2;
 const FRAME_PEAK_M = 12;
 const FRAME_LEAN = 0.55;
 
-/** The hub between the spindles: half-extents. A joint, not a body: half the gap across, the frames' straps meeting on it. */
-const HUB_HALF = new THREE.Vector3(SPINDLE_GAP_M * 0.25, SPINDLE_THICKNESS_M * 0.3, 16);
+/**
+ * The bridge: the solid middle joining the spindles across the gap, as long as the frames' span
+ * (their chevrons included) and a little thinner than the spindles' middle. Its ends are cut to
+ * a point in profile, so from the side it is a flat hexagon.
+ */
+export const BRIDGE_LENGTH_M = 78;
+export const BRIDGE_THICKNESS_M = 30;
+
+/** The hub: a faceted dome rising a few metres from the bridge's middle, above and below. */
+const HUB_HALF = new THREE.Vector3(SPINDLE_GAP_M * 0.3, BRIDGE_THICKNESS_M / 2 + 5, 14);
 
 /** Rods each spindle carries at each level of detail. */
 const RODS_FULL = 800;
@@ -210,7 +219,33 @@ function spindleCores(builder: ShipBuilder, scale: number, finish: number, occlu
 
 /** The hub and the frames: one mesh of flat faces, symmetric across x = 0 and fore and aft. */
 function middleGeometry(builder: ShipBuilder): void {
-  // The hub: a compact, faceted body between the spindles.
+  // The bridge: a flat hexagon in profile (y against z), carried across x from deep inside one
+  // spindle to deep inside the other, so the two are one ship.
+  const bridgeHalfLength = BRIDGE_LENGTH_M / 2;
+  const profile = new THREE.Shape([
+    new THREE.Vector2(-bridgeHalfLength, 0),
+    new THREE.Vector2(-bridgeHalfLength + 12, -BRIDGE_THICKNESS_M / 2),
+    new THREE.Vector2(bridgeHalfLength - 12, -BRIDGE_THICKNESS_M / 2),
+    new THREE.Vector2(bridgeHalfLength, 0),
+    new THREE.Vector2(bridgeHalfLength - 12, BRIDGE_THICKNESS_M / 2),
+    new THREE.Vector2(-bridgeHalfLength + 12, BRIDGE_THICKNESS_M / 2),
+  ]);
+  const span = 2 * SPINDLE_X;
+  const bridge = new THREE.ExtrudeGeometry(profile, { depth: span, bevelEnabled: false, steps: 1 });
+  // The profile's x onto the ship's z, its y onto y, the extrusion onto -x; then centred.
+  const onto = new THREE.Matrix4()
+    .makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(-1, 0, 0))
+    .premultiply(new THREE.Matrix4().makeTranslation(span / 2, 0, 0));
+  builder.add(bridge, onto, FINISH.hull, 0.85);
+  // Orderly rods along the bridge, top and bottom, parallel to the spindles' own.
+  for (let k = -3; k <= 3; k += 1) {
+    for (const ySide of [-1, 1]) {
+      const rod = new THREE.BoxGeometry(1.4, 1.4, BRIDGE_LENGTH_M - 26);
+      builder.add(rod, new THREE.Matrix4().makeTranslation(k * (SPINDLE_GAP_M / 8), ySide * (BRIDGE_THICKNESS_M / 2 + 0.7), 0), FINISH.hull, 0.8);
+    }
+  }
+
+  // The hub: a faceted dome at the bridge's middle, standing out of it above and below.
   const hub = new THREE.IcosahedronGeometry(1, 1);
   builder.add(hub, new THREE.Matrix4().makeScale(HUB_HALF.x, HUB_HALF.y, HUB_HALF.z), FINISH.hull, 0.8);
   // Orderly ribs along the hub's flanks.
@@ -223,7 +258,7 @@ function middleGeometry(builder: ShipBuilder): void {
   }
 
   // The frames: a band hugging each spindle, its top drawn up into a peak, the two bands joined
-  // across the gap above and below the hub. Each band leans back from the middle plane -- the
+  // across the gap over and under the bridge. Each band leans back from the middle plane -- the
   // two of a frame mirror each other -- so seen from above a frame is a chevron.
   for (let i = 0; i < FRAMES; i += 1) {
     const z = (i - (FRAMES - 1) / 2) * FRAME_PITCH_M;
@@ -264,7 +299,7 @@ function middleGeometry(builder: ShipBuilder): void {
     const apex = z + (SPINDLE_WIDTH_M / 2 + 1.2) * Math.sin(FRAME_LEAN);
     for (const ySide of [-1, 1]) {
       const strap = new THREE.BoxGeometry(SPINDLE_GAP_M + 4, FRAME_DEPTH_M, FRAME_BAND_M);
-      builder.add(strap, new THREE.Matrix4().makeTranslation(0, ySide * (HUB_HALF.y + FRAME_DEPTH_M / 2), apex), FINISH.hull, 0.8);
+      builder.add(strap, new THREE.Matrix4().makeTranslation(0, ySide * (BRIDGE_THICKNESS_M / 2 + 1.4 + FRAME_DEPTH_M / 2), apex), FINISH.hull, 0.8);
     }
   }
 }
@@ -286,7 +321,7 @@ function silhouetteGeometry(): THREE.BufferGeometry {
   }
   builder.add(
     new THREE.BoxGeometry(1, 1, 1),
-    new THREE.Matrix4().makeScale(BLIP_A_WIDTH_M, SPINDLE_THICKNESS_M * 0.9, FRAMES * FRAME_PITCH_M),
+    new THREE.Matrix4().makeScale(BLIP_A_WIDTH_M, BRIDGE_THICKNESS_M, BRIDGE_LENGTH_M),
     FINISH.hull,
     0.8,
   );

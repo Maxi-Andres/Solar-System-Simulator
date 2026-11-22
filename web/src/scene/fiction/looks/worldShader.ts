@@ -222,6 +222,29 @@ function fragmentShader(look: SurfaceLook): string {
     return abs(det) < 1e-14 ? direction : normalize(abs(det) * direction - scale * gradient);
   }
 
+  /**
+   * How far the baked maps are magnified here: 0 while a pixel spans a texel or more, 1 from a
+   * quarter of a texel in -- close views from low orbit, where a texel is many pixels wide.
+   */
+  float magnification(float footprint) {
+    return smoothstep(TEXEL, 0.25 * TEXEL, footprint);
+  }
+
+  /**
+   * The direction a magnified map is read at: swirled by about a texel with smooth noise. Blown
+   * up, bilinear filtering draws a map's texel grid as soft squares; read through the swirl, the
+   * same texels come out as flowing shapes, and live detail added on top has no grid to fight.
+   */
+  vec3 detailWarp(vec3 direction, float amount) {
+    if (amount <= 0.0) return direction;
+    // Two noises along the surface's own east and north: a swirl needs no third.
+    vec3 p = direction * (0.45 / TEXEL);
+    vec3 east = normalize(cross(abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), direction));
+    vec3 north = cross(direction, east);
+    vec2 w = vec2(simplex(p + 3.1), simplex(p + 17.3));
+    return normalize(direction + amount * 1.3 * TEXEL * (w.x * east + w.y * north));
+  }
+
   ${look.glsl}
 
   /** GGX's distribution and Schlick's Fresnel: the sun's glint on open water. */

@@ -193,13 +193,22 @@ export const DENSE_HAZE: SurfaceLook = {
   `,
   glsl: /* glsl */ `
     Surface surface(vec3 direction, float footprint, vec3 toCamera, vec3 toStar) {
-      vec4 baked = layer0(direction);
+      // Close, from low orbit, the map's texels are many pixels wide: it is read through a swirl
+      // and finer eddies are added live -- three octaves of noise below the texel, swirled with it.
+      float close = magnification(footprint);
+      vec3 at = detailWarp(direction, close);
+      vec4 baked = layer0(at);
       Surface s;
       s.albedo = decodeAlbedo(baked.rgb);
+      float fine = 0.0;
+      if (close > 0.0) {
+        fine = fbm(at + 7.0, 1.2 / TEXEL, 3, 0.55, footprint);
+        s.albedo *= 1.0 + close * 0.28 * fine;
+      }
       // A cloud deck under haze: flat-ish, its limb darkening softened by the haze above it.
       s.minnaert = 0.85;
-      // The convection cells' relief, lit by the star: puffs and rolls.
-      s.normal = bumped(direction, baked.a, 0.004);
+      // The convection cells' relief, lit by the star: puffs and rolls, and the live eddies' too.
+      s.normal = bumped(direction, baked.a + close * 0.04 * fine, 0.004);
       s.specular = 0.0;
       s.roughness = 1.0;
       s.cloud = 0.0;
