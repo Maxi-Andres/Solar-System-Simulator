@@ -137,6 +137,13 @@ export interface Tessellation {
   readonly firstChord: Int32Array;
 }
 
+/** A group never moved, so never recomposed (three's matrixAutoUpdate): its lines place themselves. */
+function staticGroup(): THREE.Group {
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+  return group;
+}
+
 /** Hermite position of the path at `jd`, which must be inside it. */
 function pathPosition(path: PathTable, jd: number): Vec3 {
   const state = interpolateState(path, jd);
@@ -162,19 +169,39 @@ export function tessellatePath(path: PathTable): Tessellation {
   for (let i = 0; i < intervals; i += 1) {
     const chords = firstChord[i + 1]! - firstChord[i]!;
     const width = (path.t[i + 1]! - path.t[i]!) / chords;
-    let previous: Vec3 = { x: path.x[i]!, y: path.y[i]!, z: path.z[i]! };
+    // Written coordinate by coordinate, not as a six-element array per chord: a trail under
+    // warp is tessellated anew most frames, and those arrays were garbage by the thousand.
+    let previousX = path.x[i]!;
+    let previousY = path.y[i]!;
+    let previousZ = path.z[i]!;
     for (let j = 1; j <= chords; j += 1) {
       const chord = firstChord[i]! + j - 1;
       chordStartJd[chord] = path.t[i]! + (j - 1) * width;
       chordStopJd[chord] = j === chords ? path.t[i + 1]! : path.t[i]! + j * width;
       // The last vertex is the sample itself rather than an interpolation landing on it.
-      const next: Vec3 =
-        j === chords
-          ? { x: path.x[i + 1]!, y: path.y[i + 1]!, z: path.z[i + 1]! }
-          : pathPosition(path, path.t[i]! + ((path.t[i + 1]! - path.t[i]!) * j) / chords);
-      pointsKm.set([previous.x, previous.y, previous.z, next.x, next.y, next.z], offset);
+      let nextX: number;
+      let nextY: number;
+      let nextZ: number;
+      if (j === chords) {
+        nextX = path.x[i + 1]!;
+        nextY = path.y[i + 1]!;
+        nextZ = path.z[i + 1]!;
+      } else {
+        const next = pathPosition(path, path.t[i]! + ((path.t[i + 1]! - path.t[i]!) * j) / chords);
+        nextX = next.x;
+        nextY = next.y;
+        nextZ = next.z;
+      }
+      pointsKm[offset] = previousX;
+      pointsKm[offset + 1] = previousY;
+      pointsKm[offset + 2] = previousZ;
+      pointsKm[offset + 3] = nextX;
+      pointsKm[offset + 4] = nextY;
+      pointsKm[offset + 5] = nextZ;
       offset += 6;
-      previous = next;
+      previousX = nextX;
+      previousY = nextY;
+      previousZ = nextZ;
     }
   }
   return { pointsKm, chordStartJd, chordStopJd, firstChord };
@@ -356,7 +383,7 @@ export const PATH_HEADROOM = 0.5;
 
 export class TrajectoryLine {
   /** Everything this line draws; add it to the scene once. */
-  readonly object = new THREE.Group();
+  readonly object = staticGroup();
 
   #path!: PathTable;
   /** The tessellation's index, kept; its float64 points are not, once split. */
@@ -407,6 +434,9 @@ export class TrajectoryLine {
   #prepare<T extends THREE.Line>(line: T): T {
     unbounded(line.geometry);
     line.frustumCulled = false;
+    // Never moved: its frame's origin is a uniform, and the stretch at the craft is written
+    // into its buffer where it is. Its matrix is not recomposed each frame.
+    line.matrixAutoUpdate = false;
     this.object.add(line);
     return line;
   }
@@ -674,7 +704,7 @@ export const TABLE_TRAIL_FALLBACK_DAYS = 1;
  * not cost is new GPU objects, and with setPath it does not.
  */
 export class TableTrail {
-  readonly object = new THREE.Group();
+  readonly object = staticGroup();
 
   readonly #source: PathSource;
   readonly #color: string;

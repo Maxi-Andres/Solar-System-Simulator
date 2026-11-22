@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +10,7 @@ import {
 import { clusterPopulation } from '../core/globularClusters.ts';
 import { faintLightShare, HALF_LIGHT_RADIUS_PC } from '../core/nuclearClusterLight.ts';
 import {
+  drawIntoGlow,
   GLOW_DISPLAY_GLSL,
   GLOW_FLOOR,
   GLOW_MAX,
@@ -18,6 +20,8 @@ import {
   haloPyramid,
   haloShares,
   keptLight,
+  releaseFromGlow,
+  shownGlows,
   WHITE_X,
 } from './glowBuffer.ts';
 import { linearToSrgb } from './shading.ts';
@@ -270,4 +274,55 @@ describe('a cluster’s unresolved light, coming in as it shrinks on the screen'
       expect(drawnLight(far * 3, halfLightPc, share)).toBeCloseTo(1, 12);
     });
   }
+});
+
+describe('the glows the composite draws', () => {
+  const mesh = (): THREE.Mesh => new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+
+  it('finds what three would draw on GLOW_LAYER: visible, in the scene, each glow whole, in order', () => {
+    const scene = new THREE.Scene();
+    const shown = new THREE.Group();
+    const hidden = new THREE.Group();
+    hidden.visible = false;
+    scene.add(shown, hidden);
+    const a = mesh();
+    const b = mesh();
+    const c = mesh();
+    const off = mesh();
+    const notGlow = mesh();
+    for (const object of [a, b, c, off]) drawIntoGlow(object);
+    shown.add(a, notGlow);
+    // A glow inside a glow is drawn with it, once.
+    a.add(c);
+    shown.add(b);
+    hidden.add(off);
+    const outside = mesh();
+    drawIntoGlow(outside);
+    const glows: THREE.Object3D[] = [];
+    const volumes: THREE.Object3D[] = [];
+    shownGlows(scene, glows, volumes, false);
+    expect(glows).toEqual([a, b]);
+    expect(volumes).toEqual([]);
+    // Let go of and kept, as React's strict mode does once: still drawn while in the scene.
+    releaseFromGlow(b);
+    shownGlows(scene, glows, volumes, false);
+    expect(glows).toEqual([a, b]);
+  });
+
+  it('puts the volumes apart only when asked, and starts both lists afresh each time', () => {
+    const scene = new THREE.Scene();
+    const sprite = mesh();
+    const volume = mesh();
+    drawIntoGlow(sprite);
+    drawIntoGlow(volume, { volume: true });
+    scene.add(sprite, volume);
+    const glows: THREE.Object3D[] = [];
+    const volumes: THREE.Object3D[] = [];
+    shownGlows(scene, glows, volumes, true);
+    expect(glows).toEqual([sprite]);
+    expect(volumes).toEqual([volume]);
+    shownGlows(scene, glows, volumes, false);
+    expect(glows).toEqual([sprite, volume]);
+    expect(volumes).toEqual([]);
+  });
 });

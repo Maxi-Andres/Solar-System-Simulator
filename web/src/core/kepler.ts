@@ -320,28 +320,51 @@ export function eccentricFromTrueAnomaly(trueAnomalyRad: number, e: number): num
  *
  * `around`, when given, refines the polyline at that eccentric anomaly; see
  * orbitAnomalies.
+ *
+ * `out`, when it is the right length, is filled and returned instead of a new array: an
+ * orbit line rebuilt under warp reuses its buffer rather than leaving a few hundred kB a
+ * frame to the garbage collector. The rotation into the reference frame is worked out once,
+ * not once a point -- six cosines and sines fewer per vertex -- and with the very operations
+ * perifocalToReference does, so the points are the same to the bit.
  */
 export function orbitPointsKm(
   elements: OsculatingElements,
   segments: number,
   around: number | null = null,
+  out?: Float64Array,
 ): Float64Array {
-  const anomalies = orbitAnomalies(segments, around);
-  const points = new Float64Array(anomalies.length * 3);
+  // The uniform grid is i * step, as orbitAnomalies has it, without the array.
+  const anomalies = around === null ? null : orbitAnomalies(segments, around);
+  const count = anomalies === null ? segments : anomalies.length;
+  const step = (2 * Math.PI) / segments;
+  const points = out !== undefined && out.length === count * 3 ? out : new Float64Array(count * 3);
   const e = elements.eccentricity;
   const a = elements.semiMajorAxisKm;
   const sqrtOneMinusESquared = Math.sqrt(1 - e * e);
 
-  for (let i = 0; i < anomalies.length; i += 1) {
-    const E = anomalies[i]!;
-    const point = perifocalToReference(
-      a * (Math.cos(E) - e),
-      a * sqrtOneMinusESquared * Math.sin(E),
-      elements,
-    );
-    points[i * 3] = point.x;
-    points[i * 3 + 1] = point.y;
-    points[i * 3 + 2] = point.z;
+  const omega = elements.argPeriapsisDeg * DEG_TO_RAD;
+  const inclination = elements.inclinationDeg * DEG_TO_RAD;
+  const node = elements.ascendingNodeDeg * DEG_TO_RAD;
+  const cosOmega = Math.cos(omega);
+  const sinOmega = Math.sin(omega);
+  const cosI = Math.cos(inclination);
+  const sinI = Math.sin(inclination);
+  const cosNode = Math.cos(node);
+  const sinNode = Math.sin(node);
+  const xx = cosNode * cosOmega - sinNode * sinOmega * cosI;
+  const xy = -cosNode * sinOmega - sinNode * cosOmega * cosI;
+  const yx = sinNode * cosOmega + cosNode * sinOmega * cosI;
+  const yy = -sinNode * sinOmega + cosNode * cosOmega * cosI;
+  const zx = sinOmega * sinI;
+  const zy = cosOmega * sinI;
+
+  for (let i = 0; i < count; i += 1) {
+    const E = anomalies === null ? i * step : anomalies[i]!;
+    const xPerifocal = a * (Math.cos(E) - e);
+    const yPerifocal = a * sqrtOneMinusESquared * Math.sin(E);
+    points[i * 3] = xx * xPerifocal + xy * yPerifocal;
+    points[i * 3 + 1] = yx * xPerifocal + yy * yPerifocal;
+    points[i * 3 + 2] = zx * xPerifocal + zy * yPerifocal;
   }
 
   return points;

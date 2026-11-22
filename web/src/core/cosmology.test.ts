@@ -75,3 +75,17 @@ describe('Planck 2018 cosmology', () => {
     expect(comovingDistanceMpc(0.17) / comovingDistanceMpc(0.17, CF4_COSMOLOGY)).toBeCloseTo(1.1, 1);
   });
 });
+
+describe('redshiftDistances in one pass', () => {
+  it('gives the same numbers, to the bit, as the integrals one at a time', () => {
+    for (const c of [PLANCK18, CF4_COSMOLOGY]) {
+      for (const z of [0.0012, 0.158339, 1, 7.64, 14.44, Z_LAST_SCATTERING]) {
+        const d = redshiftDistances(z, c);
+        expect(d.comovingMpc).toBe(comovingDistanceMpc(z, c));
+        expect(d.lookbackGyr).toBe(lookbackTimeGyr(z, c));
+        expect(d.ageAtEmissionGyr).toBe(lookbackTimeGyr(Infinity, c) - lookbackTimeGyr(z, c));
+      }
+      expect(ageGyr(c)).toBe(lookbackTimeGyr(Infinity, c));
+    }
+  });
+});

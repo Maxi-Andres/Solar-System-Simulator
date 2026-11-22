@@ -320,6 +320,33 @@ export function pinnedHosts(focus: BodyId): number[] {
 const last = { x: NaN, y: NaN, z: NaN, scale: NaN, focus: '' as BodyId, count: -1 };
 
 /**
+ * Two cameras this close, as a share of the camera's distance from the Sun (or of a
+ * parsec, whichever is more), are the same camera: each catalogue works the camera out
+ * from the scene in its own order of operations -- one dividing by a parsec, another
+ * multiplying by its inverse -- so the same frame's camera arrives a few units in the last
+ * place apart, and without this every caller redid the work for the frame. A billionth of
+ * a share is far below anything a fold can show, and far above any rounding.
+ */
+const SAME_CAMERA_SHARE = 1e-9;
+
+/** Whether `updateMarkHosts` with these numbers would find its work done (see SAME_CAMERA_SHARE). */
+export function sameMarkHostsInput(
+  cameraPc: readonly [number, number, number],
+  pixelsPerRadian: number,
+  focus: BodyId,
+  count: number,
+): boolean {
+  if (last.focus !== focus || last.count !== count) return false;
+  if (!(Math.abs(last.scale - pixelsPerRadian) <= SAME_CAMERA_SHARE * Math.abs(pixelsPerRadian))) return false;
+  const tolerance = SAME_CAMERA_SHARE * Math.max(1, Math.abs(cameraPc[0]), Math.abs(cameraPc[1]), Math.abs(cameraPc[2]));
+  return (
+    Math.abs(last.x - cameraPc[0]) <= tolerance &&
+    Math.abs(last.y - cameraPc[1]) <= tolerance &&
+    Math.abs(last.z - cameraPc[2]) <= tolerance
+  );
+}
+
+/**
  * This frame's numbers for every host, from the camera about the Sun, parsecs, and the view's
  * pixels per radian, CSS pixels. Each catalogue calls it from its own frame: the first does the
  * work, the rest find it done.
@@ -330,14 +357,7 @@ export function updateMarkHosts(cameraPc: readonly [number, number, number], pix
   if (c !== null) volumeFolds(c);
   const lc = laniakeaCatalogue();
   if (lc !== null) laniakeaFolds(lc);
-  if (
-    last.x === cameraPc[0] &&
-    last.y === cameraPc[1] &&
-    last.z === cameraPc[2] &&
-    last.scale === pixelsPerRadian &&
-    last.focus === focus &&
-    last.count === MARK_HOSTS.count
-  ) {
+  if (sameMarkHostsInput(cameraPc, pixelsPerRadian, focus, MARK_HOSTS.count)) {
     return;
   }
   MARK_HOSTS.update(cameraPc, pixelsPerRadian, pinnedHosts(focus));

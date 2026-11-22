@@ -68,14 +68,137 @@ export function refinementAnomaly(elements: OsculatingElements, bodyRadiusKm: nu
     : null;
 }
 
-/** The points an OrbitLine draws for these elements: the one rule, for it and the tests. */
-export function orbitLinePointsKm(elements: OsculatingElements, bodyRadiusKm: number): Float64Array {
+/**
+ * The points an OrbitLine draws for these elements: the one rule, for it and the tests.
+ * `out`, when the right length, is refilled instead of a new array (orbitPointsKm).
+ */
+export function orbitLinePointsKm(
+  elements: OsculatingElements,
+  bodyRadiusKm: number,
+  out?: Float64Array,
+): Float64Array {
   return orbitPointsKm(
     elements,
     orbitSegmentsFor(elements.apoapsisKm, bodyRadiusKm),
     refinementAnomaly(elements, bodyRadiusKm),
+    out,
   );
 }
+
+/**
+ * How far an orbit line may be off and nobody see it, in pixels where it comes nearest the
+ * camera. A quarter, as live mode's step (renderDemand.ts LIVE_STEP_PX).
+ */
+export const ORBIT_UNSEEN_PX = 0.25;
+
+/**
+ * The most an orbit line may move, km, and stay under ORBIT_UNSEEN_PX on screen: what that
+ * many pixels span `nearestKm` away, where the line comes nearest the camera (OrbitLine's
+ * `nearestKm`). A move seen from farther away shows smaller, so a move under this is under
+ * the threshold everywhere on the line.
+ *
+ * Under warp, from the whole Solar System, the planets' osculating ellipses breathe by tens
+ * of thousands of kilometres a month -- Earth's with the Moon, Pluto's with Charon -- and a
+ * comet's, a few kilometres across, by far more than its size; each was rebuilt every frame,
+ * up to sixteen thousand points, to move a ten-thousandth of a pixel. Held to this they are
+ * rebuilt when it shows.
+ */
+export function orbitUnseenKm(nearestKm: number, pixelsPerRadian: number): number {
+  return (Math.max(nearestKm, 0) * ORBIT_UNSEEN_PX) / pixelsPerRadian;
+}
+
+/** An ellipse as a curve: its centre, semi-axes, periapsis direction and pole, km. */
+interface EllipseShape {
+  readonly cx: number;
+  readonly cy: number;
+  readonly cz: number;
+  readonly a: number;
+  readonly b: number;
+  /** Unit vectors: toward periapsis, and along the orbit's normal. */
+  readonly px: number;
+  readonly py: number;
+  readonly pz: number;
+  readonly wx: number;
+  readonly wy: number;
+  readonly wz: number;
+}
+
+function ellipseShape(elements: OsculatingElements): EllipseShape {
+  const rad = Math.PI / 180;
+  const node = elements.ascendingNodeDeg * rad;
+  const inclination = elements.inclinationDeg * rad;
+  const omega = elements.argPeriapsisDeg * rad;
+  const cosNode = Math.cos(node);
+  const sinNode = Math.sin(node);
+  const cosI = Math.cos(inclination);
+  const sinI = Math.sin(inclination);
+  const cosOmega = Math.cos(omega);
+  const sinOmega = Math.sin(omega);
+  const a = elements.semiMajorAxisKm;
+  const e = elements.eccentricity;
+  const px = cosNode * cosOmega - sinNode * sinOmega * cosI;
+  const py = sinNode * cosOmega + cosNode * sinOmega * cosI;
+  const pz = sinOmega * sinI;
+  // The centre is a·e from the focus, away from periapsis.
+  return {
+    cx: -a * e * px,
+    cy: -a * e * py,
+    cz: -a * e * pz,
+    a,
+    b: a * Math.sqrt(1 - e * e),
+    px,
+    py,
+    pz,
+    wx: sinNode * sinI,
+    wy: -cosNode * sinI,
+    wz: cosI,
+  };
+}
+
+/** The angle between two unit vectors, radians: atan2, which holds up for tiny angles. */
+function angleBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
+  const cx = ay * bz - az * by;
+  const cy = az * bx - ax * bz;
+  const cz = ax * by - ay * bx;
+  return Math.atan2(Math.sqrt(cx * cx + cy * cy + cz * cz), ax * bx + ay * by + az * bz);
+}
+
+/**
+ * How far the curve drawn for `from` is, at most, from the one for `to`, km: no point of
+ * either more than this from the other.
+ *
+ * The ellipse is its centre plus a circle of the minor semi-axis, plus (a - b) cos t along
+ * periapsis. Moving the centre moves every point by as much; the circle changes only with b
+ * and with a tilt of its plane, by b times the tilt; turning it within its plane changes
+ * nothing -- the same circle -- and the stretch along periapsis, (a - b), moves by its own
+ * change and by (a - b) times the turn, twice over for the shift in t that keeps the circle
+ * still. So: |dc| + |db| + |d(a - b)| + a·tilt + 2(a - b)·turn.
+ *
+ * Under warp it stands in for a guess (OrbitLine's #legacyShiftKm) that takes a turn of
+ * periapsis as sweeping the whole curve through a·dtheta. For a near-circle that is nearly
+ * nothing -- Venus, e = 0.007 -- and in the plane of the ecliptic the node and periapsis
+ * trade off with no change at all; Earth's line, whose osculating periapsis swings with the
+ * Moon, was taken to move five million km a frame, and rebuilt every frame for it.
+ */
+export function ellipseShiftKm(from: OsculatingElements, to: OsculatingElements): number {
+  const p = ellipseShape(from);
+  const n = ellipseShape(to);
+  const tilt = angleBetween(p.wx, p.wy, p.wz, n.wx, n.wy, n.wz);
+  const turn = angleBetween(p.px, p.py, p.pz, n.px, n.py, n.pz);
+  return (
+    Math.hypot(n.cx - p.cx, n.cy - p.cy, n.cz - p.cz) +
+    Math.abs(n.b - p.b) +
+    Math.abs(n.a - n.b - (p.a - p.b)) +
+    Math.max(p.a, n.a) * tilt +
+    2 * Math.max(p.a - p.b, n.a - n.b) * turn
+  );
+}
+
+/**
+ * Float32's relative precision, with a factor of two for the matrix and the vertex each
+ * rounding: what an anchor's drift costs a line's points, as a share of the drift.
+ */
+const FLOAT32_DRIFT_ERROR = 2 * 2 ** -24;
 
 export class OrbitLine {
   readonly line: THREE.LineLoop;
@@ -89,6 +212,16 @@ export class OrbitLine {
   #anchored = false;
   /** How far the anchor may drift before the buffer is rebuilt, in km. */
   #toleranceKm = 1;
+  /** The longest chord of the uniform grid can be, km: a·ΔE, since |dr/dE| is at most a. */
+  #chordKm = 0;
+  /**
+   * The camera's distance from the line, less half a chord, when last measured -- and from
+   * where, relative to the body orbited: see nearestKm. NaN when the line has changed since.
+   */
+  #nearestKm = Number.NaN;
+  #nearestFromX = 0;
+  #nearestFromY = 0;
+  #nearestFromZ = 0;
   /**
    * The eccentric anomaly the polyline is refined at -- where the body was when it was
    * built -- or null for a body the uniform grid already holds.
@@ -112,7 +245,7 @@ export class OrbitLine {
 
   constructor(elements: OsculatingElements, bodyRadiusKm: number, color: string) {
     this.#bodyRadiusKm = bodyRadiusKm;
-    this.#pointsKm = this.#pointsFor(elements);
+    this.#pointsKm = this.#pointsFor(elements, 0);
     this.#positions = new Float32Array(this.#pointsKm.length);
     this.#builtFrom = elements;
 
@@ -139,17 +272,64 @@ export class OrbitLine {
   }
 
   /** The authoritative points for these elements, refined at the body where it needs it. */
-  #pointsFor(elements: OsculatingElements): Float64Array {
+  #pointsFor(elements: OsculatingElements, unseenKm: number): Float64Array {
     const r = this.#bodyRadiusKm;
     this.#builtE = refinementAnomaly(elements, r);
+    // The sagitta allowed at the body: a quarter of its radius, or what cannot be seen from
+    // where the camera is, whichever is more.
     this.#recentreE =
       this.#builtE === null
         ? Infinity
         : Math.sqrt(
-            (8 * ORBIT_SAGITTA_RADII * r * (1 - elements.eccentricity ** 2)) /
+            (8 * Math.max(ORBIT_SAGITTA_RADII * r, unseenKm) * (1 - elements.eccentricity ** 2)) /
               elements.semiMajorAxisKm,
           );
-    return orbitLinePointsKm(elements, r);
+    this.#chordKm =
+      (elements.semiMajorAxisKm * 2 * Math.PI) / orbitSegmentsFor(elements.apoapsisKm, r);
+    this.#nearestKm = Number.NaN;
+    // The old points' buffer refilled, when the count is unchanged -- it always is for a
+    // given body, but for a refined line crossing between the grid's two rules.
+    return orbitLinePointsKm(elements, r, this.#pointsKm);
+  }
+
+  /**
+   * How near the line comes to the camera, km, at least: the camera given relative to the
+   * body orbited, as the points are.
+   *
+   * Measured against every point, less half the longest chord -- the most a chord between
+   * two points can come nearer than both -- and kept: the camera may move by half of it
+   * before it is measured again, the distance shrinking by what it moved meanwhile. So from
+   * afar it is measured when the line is rebuilt and little else, and a pass over the points
+   * is a fraction of what a rebuild costs. With the camera at the line it is measured every
+   * frame, and is nothing -- the body's own orbit, seen from beside the body.
+   */
+  nearestKm(cameraX: number, cameraY: number, cameraZ: number): number {
+    if (this.#nearestKm === this.#nearestKm) {
+      const moved = Math.hypot(
+        cameraX - this.#nearestFromX,
+        cameraY - this.#nearestFromY,
+        cameraZ - this.#nearestFromZ,
+      );
+      if (moved < this.#nearestKm / 2) {
+        return this.#nearestKm - moved;
+      }
+    }
+    const points = this.#pointsKm;
+    let nearest = Infinity;
+    for (let i = 0; i < points.length; i += 3) {
+      const dx = points[i]! - cameraX;
+      const dy = points[i + 1]! - cameraY;
+      const dz = points[i + 2]! - cameraZ;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < nearest) {
+        nearest = d2;
+      }
+    }
+    this.#nearestKm = Math.max(0, Math.sqrt(nearest) - this.#chordKm / 2);
+    this.#nearestFromX = cameraX;
+    this.#nearestFromY = cameraY;
+    this.#nearestFromZ = cameraZ;
+    return this.#nearestKm;
   }
 
   /** How far the body is from where the refinement is, in eccentric anomaly. */
@@ -178,17 +358,29 @@ export class OrbitLine {
    * elements themselves are a few dozen operations, and only the polyline — up to
    * eleven thousand points for Pluto — is expensive. This rebuilds exactly when the
    * shift crosses what the eye could resolve.
+   *
+   * What the eye could resolve is four tenths of the body's radius, where the camera is by
+   * the line, by a guess at the shift that errs high (#legacyShiftKm).
+   *
+   * **Under warp, `unseenKm`**: what a quarter of a pixel spans where the line comes nearest
+   * the camera (orbitUnseenKm), when that is more -- and the shift measured as the curve
+   * really moves (ellipseShiftKm). There the guess rebuilt every planet every frame from
+   * afar, for nothing on screen. Not with the clock at real time or paused: there the line is
+   * rebuilt as it always was, so a still view is the very picture it was. Leaving warp, the
+   * next frame holds the line to that again, measured from what it was last built from.
    */
-  setElements(elements: OsculatingElements): void {
+  setElements(elements: OsculatingElements, unseenKm: number | null = null): void {
     if (
       this.#builtFrom !== null &&
-      this.#shiftKm(elements) < this.#bodyRadiusKm * 0.4 &&
+      (unseenKm === null
+        ? this.#legacyShiftKm(elements) < this.#bodyRadiusKm * 0.4
+        : ellipseShiftKm(this.#builtFrom, elements) < Math.max(this.#bodyRadiusKm * 0.4, unseenKm)) &&
       this.#movedE(elements) < this.#recentreE
     ) {
       return;
     }
 
-    this.#pointsKm = this.#pointsFor(elements);
+    this.#pointsKm = this.#pointsFor(elements, unseenKm ?? 0);
     this.#builtFrom = elements;
 
     if (this.#positions.length !== this.#pointsKm.length) {
@@ -209,8 +401,12 @@ export class OrbitLine {
    * in semi-major axis moves the curve directly, a shift in eccentricity moves the
    * focus by a*de, and a rotation of the orbital plane or of periapsis sweeps the
    * curve through a*dtheta. Taking the largest is enough for a threshold test.
+   *
+   * It errs high -- a turn of a near-circle's periapsis moves the curve hardly at all --
+   * and so rebuilds sooner than the 0.4 radii it is held to; the line at real time and
+   * paused is the line that makes. Under warp, ellipseShiftKm instead.
    */
-  #shiftKm(next: OsculatingElements): number {
+  #legacyShiftKm(next: OsculatingElements): number {
     const previous = this.#builtFrom;
     if (previous === null) {
       return Infinity;
@@ -241,9 +437,15 @@ export class OrbitLine {
    * `toleranceKm` should scale with what is currently visible; the focused body's
    * radius is a good proxy, since that is the smallest thing on screen worth
    * resolving.
+   *
+   * `unseenKm` is setElements's, under warp only: the anchor matters for float32's precision alone, and a
+   * drift D since the buffer was filled costs the points nearest the camera about D times
+   * float32's precision. Held under what cannot be seen it may run about nine hundred times
+   * as far as the line is from the camera -- millions of km, from afar, where the focus's own
+   * motion had the buffer refilled every frame under warp.
    */
-  update(sunRelativeToFocusKm: Vec3, toleranceKm: number): void {
-    this.#toleranceKm = Math.max(toleranceKm, 1);
+  update(sunRelativeToFocusKm: Vec3, toleranceKm: number, unseenKm: number | null = null): void {
+    this.#toleranceKm = Math.max(toleranceKm, 1, (unseenKm ?? 0) / FLOAT32_DRIFT_ERROR);
 
     const drift = this.#anchored
       ? Math.hypot(

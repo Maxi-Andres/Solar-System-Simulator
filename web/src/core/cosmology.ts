@@ -140,9 +140,43 @@ export function lookbackTimeGyr(z: number, c: Cosmology = PLANCK18): number {
   return hubbleTimeGyr(c) * integrate(aFrom, (a) => a / Math.sqrt(r + m * a + l * a ** 4));
 }
 
+/**
+ * Both integrals at once, comoving distance's and lookback time's, Mpc and billions of years:
+ * one pass, one square root a step for the two -- each sum made with exactly the operations
+ * comovingDistanceMpc and lookbackTimeGyr make it with, so the same numbers to the bit.
+ */
+function distanceAndLookback(z: number, c: Cosmology): { readonly comovingMpc: number; readonly lookbackGyr: number } {
+  const { r, m, l } = shares(c);
+  const aFrom = Number.isFinite(z) ? 1 / (1 + z) : 0;
+  const u0 = Math.sqrt(Math.max(0, aFrom));
+  const h = (1 - u0) / STEPS;
+  let distance = 0;
+  let lookback = 0;
+  for (let i = 0; i <= STEPS; i += 1) {
+    const u = u0 + i * h;
+    const weight = i === 0 || i === STEPS ? 1 : i % 2 === 1 ? 4 : 2;
+    const a = u * u;
+    const root = Math.sqrt(r + m * a + l * a ** 4);
+    distance += weight * (1 / root) * 2 * u;
+    lookback += weight * (a / root) * 2 * u;
+  }
+  return {
+    comovingMpc: hubbleDistanceMpc(c) * ((distance * h) / 3),
+    lookbackGyr: hubbleTimeGyr(c) * ((lookback * h) / 3),
+  };
+}
+
+/** Each cosmology's age, worked out once: it is every redshift's `ageAtEmissionGyr`. */
+const ages = new WeakMap<Cosmology, number>();
+
 /** The universe's age today, billions of years. */
 export function ageGyr(c: Cosmology = PLANCK18): number {
-  return lookbackTimeGyr(Infinity, c);
+  let age = ages.get(c);
+  if (age === undefined) {
+    age = lookbackTimeGyr(Infinity, c);
+    ages.set(c, age);
+  }
+  return age;
 }
 
 /**
@@ -193,9 +227,13 @@ export interface RedshiftDistances {
   readonly ageAtEmissionGyr: number;
 }
 
+/**
+ * Three integrals of 20,000 steps each it was, the age among them for every redshift: the
+ * forty record-holders and landmarks took a tenth of a second (recordHolders.ts). Now one pass and
+ * the age once, a third of that, and the same numbers.
+ */
 export function redshiftDistances(z: number, c: Cosmology = PLANCK18): RedshiftDistances {
-  const comovingMpc = comovingDistanceMpc(z, c);
-  const lookbackGyr = lookbackTimeGyr(z, c);
+  const { comovingMpc, lookbackGyr } = distanceAndLookback(z, c);
   return {
     z,
     comovingMpc,

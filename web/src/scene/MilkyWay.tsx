@@ -21,9 +21,12 @@ import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { beginLoading, wantLoading } from '../core/loading.ts';
 import { milkyWayAhead } from '../core/prefetch.ts';
 import { renderDemand } from '../core/renderDemand.ts';
-import { skyCapture } from './lens.ts';
+import { lensState, skyCapture } from './lens.ts';
+import { binIntoCubes, reorder, slabRanges, type Cubes } from './milkyWaySlabs.ts';
+import { sameView, underFloor, warpBetween, WARP_PX, type GlowView } from './milkyWayView.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { GLOW_DISPLAY_GLSL, GLOW_FLOOR, milkyWayGlow } from './glowBuffer.ts';
+import { ViewMotion } from './viewMotion.ts';
 import { srgbToLinear } from './starRendering.ts';
 import { splitHigh, splitLow } from './stars3dShader.ts';
 
@@ -75,6 +78,9 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  * it is mixed with: an error of half a slab's depth, a few kiloparsecs, where the slabs
  * are thinnest -- across the disc.
  *
+ * Each slab's pass is handed only the points that can fall in it, cubes of them at a time
+ * (milkyWaySlabs.ts), not every point for the vertex shader to turn five in six away.
+ *
  * **The slabs' edges are soft.** With hard ones the light just behind an edge took all
  * the dust of the slab in front and the light just in front of it took none, and that
  * step showed: a dark line across the disc where the edge -- a sphere about the camera --
@@ -89,6 +95,27 @@ import { splitHigh, splitLow } from './stars3dShader.ts';
  *
  * Precision is the 3D stars' (stars3dShader.ts): points are float32 parsecs about the
  * Sun, the group sits at the camera, and the camera about the Sun comes as a float32 pair.
+ *
+ * ## Drawn when it changes, and smaller while it moves
+ *
+ * The six slabs of sprites are the dearest thing in the picture -- 25 ms a frame with the galaxy
+ * filling the screen, 7 or 8 with it a speck, on the integrated GPU it was measured on -- and the
+ * galaxy never changes: only where it is seen from does. So the buffer is drawn only when the
+ * view has changed (milkyWayView.ts):
+ *
+ * - **still**, the buffer from the last drawing is this frame's, bit for bit, and is kept;
+ * - **too faint to draw**, from where every sprite is under the buffer's floor, nothing is drawn;
+ * - **moving, the galaxy small on screen**, the last drawing is laid where this frame puts it, as
+ *   long as no part of the galaxy lands more than half a pixel of the buffer -- one of the
+ *   screen's -- from where a fresh one would;
+ * - **moving otherwise**, it is drawn into a buffer half as wide and half as tall (MOVING_SCALE),
+ *   a quarter of the fragments, its sprites sized for that buffer and capped at the same share of
+ *   their light (uMaxSpritePx);
+ * - and once the camera has been at rest for a tenth of a second it is drawn in full again
+ *   (viewMotion.ts), and kept.
+ *
+ * While a black hole's lens is on, which reads this buffer as the main camera saw it
+ * (BlackHoleLens.tsx), it is always drawn in full for the frame in hand.
  */
 
 /** How many points the model's light is drawn with; each population's size is its own. */
@@ -137,6 +164,9 @@ const MIN_SPRITE_PX = 1.5;
  * instead of smooth. The points at their own radius, near the camera, are cut as they were.
  */
 const MAX_SPRITE_PX = 16;
+
+/** The buffer drawn while the camera moves, against the full one, each way (see the header). */
+export const MOVING_SCALE = 0.5;
 
 /** The model fades in between these camera distances from the Sun, light years. */
 export const GALAXY_FROM_LY = 1000;
@@ -256,6 +286,9 @@ uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uPeak;
 uniform float uNearFadePc;
+// MAX_SPRITE_PX in this buffer's pixels: the same share of the sprite's light kept in the
+// smaller buffer drawn while the camera moves (see the header).
+uniform float uMaxSpritePx;
 // This pass's slab: nearest edge and depth of a slab, pc; its index; how many there are.
 // Points outside it wait for theirs; points near an edge go into both (see the header).
 uniform vec4 uSlab;
@@ -286,7 +319,7 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(rel * uUnitsPerPc, 1.0);
 
   float diameterPx = 2.0 * radiusPc / max(distancePc, 1e-3) * uPixelsPerRadian;
-  float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, ${MAX_SPRITE_PX.toFixed(1)} * spread);
+  float drawnPx = clamp(diameterPx, ${MIN_SPRITE_PX.toFixed(1)}, uMaxSpritePx * spread);
   // Below the floor the light goes, not the size: constant flux per point.
   float coverage = min(1.0, (diameterPx * diameterPx) / (drawnPx * drawnPx));
   vPeak = uPeak * share * coverage * smoothstep(0.5 * uNearFadePc, uNearFadePc, distancePc);
@@ -337,6 +370,26 @@ void main() {
   gl_FragColor = vec4(glowDisplay(texture2D(uGlow, vUv).rgb), 1.0);
 }
 `;
+
+/**
+ * A kept drawing laid where this frame puts it (milkyWayView.ts warpBetween): each pixel of the
+ * buffer looks up its place in the kept one through the homography, and what falls outside the
+ * kept one is dark -- the galaxy was wholly inside it.
+ */
+const CARRY_FRAGMENT_SHADER = /* glsl */ `
+uniform sampler2D uKept;
+uniform mat3 uWarp;
+varying vec2 vUv;
+void main() {
+  vec3 at = uWarp * vec3(vUv, 1.0);
+  vec2 uv = at.xy / at.z;
+  bool inside = at.z > 0.0 && all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+  gl_FragColor = inside ? vec4(texture2D(uKept, uv).rgb, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
+}
+`;
+
+/** The brightest a sprite's profile is, at its centre (FRAGMENT_SHADER). */
+const PROFILE_CENTRE = (1 - SPRITE_KERNEL.edge) * SPRITE_KERNEL.scale;
 
 const scratchCamera = new THREE.Vector3();
 const scratchClear = new THREE.Color();
@@ -393,7 +446,7 @@ export const BALMER_HUE = emissionHue([
  * its population is sparse), its colour times its gain taken down by the square of the widening,
  * so that its light, peak times area, is the same however wide it is drawn.
  */
-function buildGeometry(sample: MilkyWaySample, spread: Float32Array): THREE.BufferGeometry {
+function buildGeometry(sample: MilkyWaySample, spread: Float32Array): { cloud: SlabbedCloud; bounds: GalaxyBounds } {
   const positions = new Float32Array(sample.count * 3);
   const colors = new Float32Array(sample.count * 3);
   const radii = new Float32Array(sample.count);
@@ -413,27 +466,81 @@ function buildGeometry(sample: MilkyWaySample, spread: Float32Array): THREE.Buff
     radii[i] = radius;
     spreads[i] = radius / look.radius;
   }
+  return { cloud: slabbedCloud(positions, colors, radii, spreads), bounds: galaxyBounds(positions, radii) };
+}
+
+/**
+ * A set of points as drawn, binned into cubes, with the index that hands each slab's pass only
+ * the cubes reaching into it (milkyWaySlabs.ts) and each slab's range of it, worked out for
+ * `filledFor` -- the slabs and the camera's place -- and again whenever those change.
+ */
+interface SlabbedCloud {
+  readonly geometry: THREE.BufferGeometry;
+  readonly cubes: Cubes;
+  readonly ranges: Int32Array;
+  filledFor: readonly number[] | null;
+}
+
+function slabbedCloud(positions: Float32Array, colors: Float32Array, radii: Float32Array, spreads: Float32Array): SlabbedCloud {
+  const { order, cubes } = binIntoCubes(positions);
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.setAttribute('radiusPc', new THREE.BufferAttribute(radii, 1));
-  geometry.setAttribute('spread', new THREE.BufferAttribute(spreads, 1));
-  return geometry;
+  geometry.setAttribute('position', new THREE.BufferAttribute(reorder(positions, 3, order), 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(reorder(colors, 3, order), 3));
+  geometry.setAttribute('radiusPc', new THREE.BufferAttribute(reorder(radii, 1, order), 1));
+  geometry.setAttribute('spread', new THREE.BufferAttribute(reorder(spreads, 1, order), 1));
+  // A cube reaches at most two slabs (milkyWaySlabs.ts CUBE_PC): room for every point three times.
+  const index = new THREE.BufferAttribute(new Uint32Array(order.length * 3), 1);
+  index.setUsage(THREE.DynamicDrawUsage);
+  geometry.setIndex(index);
+  return { geometry, cubes, ranges: new Int32Array(2 * DEPTH_SLICES), filledFor: null };
+}
+
+/** The cloud's index and ranges for these slabs from this place, if they are not already. */
+function fillSlabs(cloud: SlabbedCloud, key: readonly number[]): void {
+  const last = cloud.filledFor;
+  if (last !== null && last.every((value, i) => value === key[i])) return;
+  const [nearest, step, x, y, z] = key as [number, number, number, number, number];
+  const index = cloud.geometry.getIndex()!;
+  const written = slabRanges(cloud.cubes, [x, y, z], nearest, step, DEPTH_SLICES, SLAB_BLEND, index.array as Uint32Array, cloud.ranges);
+  index.clearUpdateRanges();
+  index.addUpdateRange(0, written);
+  index.needsUpdate = true;
+  cloud.filledFor = key.slice();
+}
+
+/** A sphere holding every point of the light, about the model's centre, and the widest sprite: for milkyWayView.ts. */
+interface GalaxyBounds {
+  readonly centre: readonly [number, number, number];
+  readonly radiusPc: number;
+  readonly largestPc: number;
+}
+
+function galaxyBounds(positions: Float32Array, radii: Float32Array): GalaxyBounds {
+  const centre = LABEL_POINTS[0]! as [number, number, number];
+  let farthest = 0;
+  for (let i = 0; i < radii.length; i += 1) {
+    const d = Math.hypot(positions[i * 3]! - centre[0], positions[i * 3 + 1]! - centre[1], positions[i * 3 + 2]! - centre[2]);
+    farthest = Math.max(farthest, d);
+  }
+  let largest = 0;
+  for (let i = 0; i < radii.length; i += 1) largest = Math.max(largest, radii[i]!);
+  // A parsec over, for float32's rounding of the positions.
+  return { centre, radiusPc: farthest + 1, largestPc: largest };
 }
 
 /** The dust's points: grey, so the multiply darkens every channel alike. */
-function buildDustGeometry(dust: Float32Array): THREE.BufferGeometry {
+function buildDustGeometry(dust: Float32Array): SlabbedCloud {
   const count = dust.length / 3;
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i += 1) {
     toEcliptic(dust[i * 3]!, dust[i * 3 + 1]!, dust[i * 3 + 2]!, positions, i * 3);
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
-  geometry.setAttribute('radiusPc', new THREE.BufferAttribute(new Float32Array(count).fill(DUST_RADIUS_PC), 1));
-  geometry.setAttribute('spread', new THREE.BufferAttribute(new Float32Array(count).fill(1), 1));
-  return geometry;
+  return slabbedCloud(
+    positions,
+    new Float32Array(count * 3).fill(1),
+    new Float32Array(count).fill(DUST_RADIUS_PC),
+    new Float32Array(count).fill(1),
+  );
 }
 
 /** The names on the model: the Galactic Centre first, then the arms in SPIRAL_ARMS order, then the bar. */
@@ -471,20 +578,22 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
   // The sample's name on the loading line while the worker makes it (core/loading.ts).
   const sampleLoading = useRef<(() => void) | null>(null);
 
-  // The glow's own scene and buffer; see the header.
+  // The glow's own scene and buffers: the full one, and the one drawn while the camera moves,
+  // which also takes a kept drawing carried over from the full one (see the header).
   const glowScene = useMemo(() => new THREE.Scene(), []);
-  const target = useMemo(
-    () =>
+  const [target, movingTarget] = useMemo(() => {
+    const make = (): THREE.WebGLRenderTarget =>
       new THREE.WebGLRenderTarget(1, 1, {
         type: THREE.HalfFloatType,
         depthBuffer: false,
         stencilBuffer: false,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
-      }),
-    [],
-  );
-  // The buffer, for the one composite that lays every glow over the frame (GlowComposite.tsx).
+      });
+    return [make(), make()] as const;
+  }, []);
+  // The buffer shown this frame, for the one composite that lays every glow over the frame
+  // (GlowComposite.tsx): set each frame to whichever holds it.
   useEffect(() => {
     milkyWayGlow.texture = target.texture;
     return () => {
@@ -492,6 +601,36 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       milkyWayGlow.on = false;
     };
   }, [target]);
+
+  // Carrying a kept drawing to this frame's view: a quad over the buffer (CARRY_FRAGMENT_SHADER).
+  const carry = useMemo(() => {
+    const scene = new THREE.Scene();
+    const material = new THREE.ShaderMaterial({
+      uniforms: { uKept: { value: null }, uWarp: { value: new THREE.Matrix3() } },
+      vertexShader: COMPOSITE_VERTEX_SHADER,
+      fragmentShader: CARRY_FRAGMENT_SHADER,
+      blending: THREE.NoBlending,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    quad.frustumCulled = false;
+    scene.add(quad);
+    return { scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad, material };
+  }, []);
+  useEffect(
+    () => () => {
+      carry.quad.geometry.dispose();
+      carry.material.dispose();
+    },
+    [carry],
+  );
+
+  // The last drawing: what it was drawn from, into which buffer, and whether in full.
+  const kept = useRef<{ view: GlowView; into: THREE.WebGLRenderTarget; full: boolean } | null>(null);
+  const motion = useMemo(() => new ViewMotion(), []);
+  const bounds = useRef<GalaxyBounds | null>(null);
 
   // The light and the dust share every uniform but their peak.
   const [material, dustMaterial] = useMemo(() => {
@@ -501,6 +640,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       uUnitsPerPc: { value: PARSEC_KM / KM_PER_UNIT },
       uPixelsPerRadian: { value: 1 },
       uNearFadePc: { value: 0 },
+      uMaxSpritePx: { value: MAX_SPRITE_PX },
       uSlab: { value: new THREE.Vector4(0, 1e30, 0, 1) },
     };
     const common = { depthWrite: false, transparent: true, toneMapped: false } as const;
@@ -541,12 +681,16 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       material.dispose();
       dustMaterial.dispose();
       target.dispose();
+      movingTarget.dispose();
     },
-    [material, dustMaterial, target],
+    [material, dustMaterial, target, movingTarget],
   );
 
-  // This frame's slabs: worked out in the frame, read again by the lens's capture.
-  const slabs = useRef({ nearest: 0, step: 1 });
+  // This frame's slabs and the camera's place about the Sun, pc: worked out in the frame, read
+  // again by the lens's capture.
+  const slabs = useRef({ nearest: 0, step: 1, camera: [0, 0, 0] as [number, number, number] });
+  // The light's and the dust's points, binned for the slabs (milkyWaySlabs.ts).
+  const clouds = useRef<{ light: SlabbedCloud; dust: SlabbedCloud } | null>(null);
 
   /** The glow into `into`, through `through`, with the uniforms as this frame set them. */
   const drawGlow = (renderer: THREE.WebGLRenderer, through: THREE.Camera, into: THREE.WebGLRenderTarget): void => {
@@ -557,11 +701,24 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, false, false);
     const slab = material.uniforms['uSlab']!.value as THREE.Vector4;
+    // Each slab's pass is handed only the points that can have a share of it.
+    const { nearest, step, camera: at } = slabs.current;
+    const key = [nearest, step, at[0], at[1], at[2]];
+    const both = clouds.current;
+    if (both !== null) {
+      fillSlabs(both.light, key);
+      fillSlabs(both.dust, key);
+    }
     // Each pass draws over the last: the renderer must not clear between them.
     const autoClear = renderer.autoClear;
     renderer.autoClear = false;
     for (let index = DEPTH_SLICES - 1; index >= 0; index -= 1) {
-      slab.set(slabs.current.nearest, slabs.current.step, index, DEPTH_SLICES);
+      slab.set(nearest, step, index, DEPTH_SLICES);
+      if (both !== null) {
+        for (const cloud of [both.light, both.dust]) {
+          cloud.geometry.setDrawRange(cloud.ranges[2 * index]!, cloud.ranges[2 * index + 1]!);
+        }
+      }
       renderer.render(glowScene, through);
     }
     renderer.autoClear = autoClear;
@@ -574,10 +731,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
   useEffect(() => {
     skyCapture.paint = (renderer, through, into, pixelsPerRadian) => {
       const uniform = material.uniforms['uPixelsPerRadian']!;
-      const kept = uniform.value as number;
+      const cap = material.uniforms['uMaxSpritePx']!;
+      const keptPixels = uniform.value as number;
+      const keptCap = cap.value as number;
       uniform.value = pixelsPerRadian;
+      cap.value = MAX_SPRITE_PX;
       drawGlow(renderer, through, into);
-      uniform.value = kept;
+      uniform.value = keptPixels;
+      cap.value = keptCap;
     };
     skyCapture.screen = target.texture;
     return () => {
@@ -611,14 +772,20 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       worker.current = made;
       sampleLoading.current = beginLoading('the Milky Way', !sampleWanted);
       made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; radii: Float32Array; dust: Float32Array }>) => {
-        const cloud = new THREE.Points(buildGeometry(event.data.light, event.data.radii), material);
+        const built = buildGeometry(event.data.light, event.data.radii);
+        bounds.current = built.bounds;
+        // Whatever was drawn before was drawn without it.
+        kept.current = null;
+        const builtDust = buildDustGeometry(event.data.dust);
+        clouds.current = { light: built.cloud, dust: builtDust };
+        const cloud = new THREE.Points(built.cloud.geometry, material);
         cloud.frustumCulled = false;
         // In each slab, after its dust: see the header.
         cloud.renderOrder = 1;
         group.add(cloud);
         points.current = cloud;
         // Before its slab's light, after every slab behind.
-        const dust = new THREE.Points(buildDustGeometry(event.data.dust), dustMaterial);
+        const dust = new THREE.Points(builtDust.geometry, dustMaterial);
         dust.frustumCulled = false;
         dust.renderOrder = 0;
         group.add(dust);
@@ -637,6 +804,7 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     skyCapture.visibility = visibility;
     if (visibility === 0) {
       milkyWayGlow.on = false;
+      kept.current = null;
       for (const element of elements) {
         hide(element);
       }
@@ -654,8 +822,11 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     const height = Math.max(1, Math.round(size.height * gl.getPixelRatio() * GLOW_SCALE));
     if (target.width !== width || target.height !== height) {
       target.setSize(width, height);
+      // Its drawing went with its old size.
+      if (kept.current?.into === target) kept.current = null;
     }
-    uniforms['uPixelsPerRadian']!.value = height / (2 * Math.tan((fov * Math.PI) / 360));
+    const tanHalfFov = Math.tan((fov * Math.PI) / 360);
+    const pixelsPerRadian = height / (2 * tanHalfFov);
     uniforms['uPeak']!.value = GALAXY_POINT_PEAK * visibility;
     dustMaterial.uniforms['uPeak']!.value = DUST_TAU * visibility;
     uniforms['uNearFadePc']!.value = NEAR_FADE_SHARE * cameraPc.length();
@@ -668,10 +839,60 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     const toCentre = Math.hypot(centre[0]! - cameraPc.x, centre[1]! - cameraPc.y, centre[2]! - cameraPc.z);
     slabs.current.nearest = Math.max(0, toCentre - GALAXY_DEPTH_PC);
     slabs.current.step = (toCentre + GALAXY_DEPTH_PC - slabs.current.nearest) / DEPTH_SLICES;
-    drawGlow(gl, camera, target);
+    slabs.current.camera = [cameraPc.x, cameraPc.y, cameraPc.z];
+
+    // Drawn only when the view has changed, and smaller or carried over while it moves: see
+    // the header and milkyWayView.ts.
+    camera.updateMatrixWorld();
+    const moving = motion.moved(camera);
+    const extent = bounds.current!;
+    const galaxyDistancePc = Math.hypot(extent.centre[0] - cameraPc.x, extent.centre[1] - cameraPc.y, extent.centre[2] - cameraPc.z);
+    const peak = uniforms['uPeak']!.value as number;
+    if (underFloor(peak, galaxyDistancePc, extent.radiusPc, extent.largestPc, pixelsPerRadian, MIN_SPRITE_PX, PROFILE_CENTRE, GLOW_FLOOR)) {
+      // Every sprite would be discarded: an empty buffer, so none at all.
+      milkyWayGlow.on = false;
+      kept.current = null;
+    } else {
+      const view: GlowView = {
+        position: [cameraPc.x, cameraPc.y, cameraPc.z],
+        world: camera.matrixWorld.elements.slice(),
+        projection: camera.projectionMatrix.elements.slice(),
+        width,
+        height,
+        visibility,
+      };
+      const last = kept.current;
+      let shown: THREE.WebGLRenderTarget;
+      if (last !== null && last.full && sameView(last.view, view)) {
+        shown = last.into;
+      } else {
+        const warp = moving && !lensState.on && last !== null ? warpBetween(last.view, view, extent.centre, extent.radiusPc) : null;
+        if (warp !== null && warp.errorPx <= WARP_PX) {
+          // Into the other buffer: the kept drawing stays where it is, for the next frame.
+          const into = last!.into === target ? movingTarget : target;
+          if (into === movingTarget) sizeMoving(movingTarget, width, height);
+          carry.material.uniforms['uKept']!.value = last!.into.texture;
+          (carry.material.uniforms['uWarp']!.value as THREE.Matrix3).fromArray(warp.uv).transpose();
+          const previous = gl.getRenderTarget();
+          gl.setRenderTarget(into);
+          gl.render(carry.scene, carry.camera);
+          gl.setRenderTarget(previous);
+          shown = into;
+        } else {
+          const full = !moving || lensState.on;
+          const into = full ? target : movingTarget;
+          if (!full) sizeMoving(movingTarget, width, height);
+          uniforms['uPixelsPerRadian']!.value = into.height / (2 * tanHalfFov);
+          uniforms['uMaxSpritePx']!.value = (MAX_SPRITE_PX * into.height) / height;
+          drawGlow(gl, camera, into);
+          kept.current = { view, into, full };
+          shown = into;
+        }
+      }
+      milkyWayGlow.texture = shown.texture;
+    }
 
     // The names: the Sun's place plus each label's parsecs, in scene units.
-    camera.updateMatrixWorld();
     const unitsPerPc = PARSEC_KM / KM_PER_UNIT;
     // How far out of the plane the camera looks from, as seen from the Sun.
     const pole = GALACTIC_BASIS.z;
@@ -756,5 +977,14 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
 function hide(element: HTMLElement | null | undefined): void {
   if (element != null && element.style.display !== 'none') {
     element.style.display = 'none';
+  }
+}
+
+/** The moving buffer at MOVING_SCALE of the full one, `width` by `height`, each way. */
+function sizeMoving(buffer: THREE.WebGLRenderTarget, width: number, height: number): void {
+  const w = Math.max(1, Math.round(width * MOVING_SCALE));
+  const h = Math.max(1, Math.round(height * MOVING_SCALE));
+  if (buffer.width !== w || buffer.height !== h) {
+    buffer.setSize(w, h);
   }
 }

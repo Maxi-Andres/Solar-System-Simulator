@@ -186,6 +186,8 @@ const BeltTierPoints = memo(function BeltTierPoints({
       frustumCulled={false}
       raycast={noRaycast}
       onBeforeRender={onBeforeRender}
+      // Never moved: the Sun's offset is a uniform. Its matrix is not recomposed each frame.
+      matrixAutoUpdate={false}
     />
   );
 });

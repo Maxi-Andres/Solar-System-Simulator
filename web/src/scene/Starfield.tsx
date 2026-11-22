@@ -19,7 +19,7 @@ import {
 import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { angularRadiusPixels, KM_PER_UNIT, meshOpacity, NEIGHBOURHOOD_FROM_KM } from './scale.ts';
-import { DISPLAY_FLOOR } from './shading.ts';
+import { DISPLAY_FLOOR, linearToSrgb } from './shading.ts';
 import { SUN_COLOR_INDEX } from './solarGlare.ts';
 import {
   buildStarAttributes,
@@ -33,7 +33,15 @@ import {
   STAR_FRAGMENT_SHADER,
   STAR_VERTEX_SHADER,
 } from './starRendering.ts';
-import { mapDotPeak, splitHigh, splitLow, STAR3D_VERTEX_SHADER, UNITS_PER_PC } from './stars3dShader.ts';
+import {
+  LIMIT_SLACK,
+  mapDotPeak,
+  peakLinear,
+  splitHigh,
+  splitLow,
+  STAR3D_VERTEX_SHADER,
+  UNITS_PER_PC,
+} from './stars3dShader.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { isProximaRecord } from '../core/alphaCentauri.ts';
 import { matchOrbitingStar, orbitingStarState, type OrbitingStar } from '../core/orbitingStars.ts';
@@ -101,6 +109,65 @@ export const SUN_ABSOLUTE_V = 4.81;
  * So anywhere a body is being looked at, the sky is the photometric one and nothing else.
  */
 export const MAP_FULL_FROM_KM = 10 * NEIGHBOURHOOD_FROM_KM;
+
+/**
+ * Under this a star's light, added to the canvas, rounds to nothing: half of one of its 8-bit
+ * steps, less a tenth of a step for the GPU's rounding, which may be off by that much.
+ */
+export const UNSEEN_DISPLAY = 0.4 / 255;
+
+/** What a tier can do at most, worked out once as it lands: for tiersUnseen. */
+export interface TierReach {
+  /** Its brightest absolute magnitude. */
+  readonly brightestAbsMag: number;
+  /** Its farthest star from the Sun, pc, at J2000. */
+  readonly farthestPc: number;
+  /** Its fastest star, km/s. */
+  readonly fastestKmS: number;
+  /** The brightest channel of any of its colours. */
+  readonly brightestChannel: number;
+}
+
+export function tierReach(records: Float32Array, colors: Float32Array): TierReach {
+  let brightestAbsMag = Infinity;
+  let farthestPc = 0;
+  let fastestKmS = 0;
+  for (let base = 0; base < records.length; base += STAR3D_FLOATS) {
+    brightestAbsMag = Math.min(brightestAbsMag, records[base + STAR3D.Mv]!);
+    farthestPc = Math.max(farthestPc, Math.hypot(records[base + STAR3D.x]!, records[base + STAR3D.y]!, records[base + STAR3D.z]!));
+    fastestKmS = Math.max(fastestKmS, Math.hypot(records[base + STAR3D.vx]!, records[base + STAR3D.vy]!, records[base + STAR3D.vz]!));
+  }
+  let brightestChannel = 0;
+  for (let i = 0; i < colors.length; i += 1) brightestChannel = Math.max(brightestChannel, colors[i]!);
+  return { brightestAbsMag, farthestPc, fastestKmS, brightestChannel };
+}
+
+/**
+ * Whether nothing of a tier can show from `cameraFromSunPc`: from far enough out -- the Local
+ * Group and beyond -- its brightest star at the nearest any of its stars can be is fainter than
+ * the limit (the shader's own test, STAR3D_VERTEX_SHADER, with a hundredth of a magnitude to
+ * spare for float32), and its map dot, crowded down to its share of a pixel (mapDotPeak), adds
+ * less than UNSEEN_DISPLAY at its brightest fragment, colour and all. Then every fragment
+ * rounds to nothing on the canvas and the tier, a quarter of a million points, is not drawn.
+ * `motion` is the shader's uMotion, pc per km/s; never while a black hole's lens is on, which
+ * brightens stars.
+ */
+export function tiersUnseen(
+  reach: TierReach,
+  cameraFromSunPc: number,
+  motion: number,
+  limitMagnitude: number,
+  dotPeak: number,
+): boolean {
+  const nearest = cameraFromSunPc - reach.farthestPc - reach.fastestKmS * Math.abs(motion);
+  if (!(nearest > 0)) return false;
+  const brightest = reach.brightestAbsMag + 5 * (Math.log10(nearest) - 1);
+  if (!(brightest > limitMagnitude + LIMIT_SLACK + 0.01)) return false;
+  if (dotPeak <= 0) return true;
+  // The dot's brightest fragment as the shaders work it: its peak to linear light, times the
+  // colour, back to display (STAR_FRAGMENT_SHADER), the profile 1 at its centre.
+  return linearToSrgb(peakLinear(dotPeak) * reach.brightestChannel) < UNSEEN_DISPLAY;
+}
 
 /** How strong the map is at a camera distance from its focus, 0 to 1. */
 export function mapStrength(cameraFromFocusKm: number): number {
@@ -302,6 +369,8 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
   const tierPoints = useMemo(() => new Map<number, THREE.Points>(), [tierMaterial]);
   // And each tier's far-side images: the same geometry, drawn by the twin material.
   const tierTwins = useMemo(() => new Map<number, THREE.Points>(), [tierMaterial]);
+  // And what each can show at most, for skipping it where it can show nothing (tiersUnseen).
+  const tierReaches = useMemo(() => new Map<number, TierReach>(), [tierMaterial]);
 
   // Alpha Centauri's three, each its own Points (alphaCentauri.ts): A and B on their orbit
   // rather than their records' straight lines, and all three placed by the camera's
@@ -394,6 +463,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       points.frustumCulled = false;
       points.renderOrder = -1;
       tierPoints.set(tier.index, points);
+      tierReaches.set(tier.index, tierReach(tier.records, points.geometry.getAttribute('starColor').array as Float32Array));
       group.add(points);
       const twin = new THREE.Points(points.geometry, tierMaterialTwin);
       twin.frustumCulled = false;
@@ -414,7 +484,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (changed) {
       sky.placed.needsUpdate = true;
     }
-  }, [view, tierPoints, tierTwins, pairPoints, hiddenByTier, discStars, tierMaterial, tierMaterialTwin, tierUniforms, sky]);
+  }, [view, tierPoints, tierTwins, tierReaches, pairPoints, hiddenByTier, discStars, tierMaterial, tierMaterialTwin, tierUniforms, sky]);
 
   // Everything made here goes with the component.
   useEffect(
@@ -424,6 +494,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       }
       tierPoints.clear();
       tierTwins.clear();
+      tierReaches.clear();
       for (const { points, twin } of pairPoints.values()) {
         points.geometry.dispose();
         (points.material as THREE.Material).dispose();
@@ -435,7 +506,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       tierMaterial.dispose();
       tierMaterialTwin.dispose();
     },
-    [tierPoints, tierTwins, pairPoints, hiddenByTier, tierMaterial, tierMaterialTwin],
+    [tierPoints, tierTwins, tierReaches, pairPoints, hiddenByTier, tierMaterial, tierMaterialTwin],
   );
   useEffect(
     () => () => {
@@ -569,6 +640,15 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     tierUniforms['uMapDotPeak']!.value = dotPeak;
     sunUniforms['uMapDotPeak']!.value = dotPeak;
     group.visible = tierPoints.size > 0;
+    // A tier is not drawn from where none of it can show (tiersUnseen): from the Local Group
+    // out, a quarter of a million points that would each round to nothing.
+    for (const [index, points] of tierPoints) {
+      const reach = tierReaches.get(index);
+      points.visible =
+        lensOn ||
+        reach === undefined ||
+        !tiersUnseen(reach, cameraPc.length(), motion, catalog.magnitudeLimit, dotPeak);
+    }
 
     // The Sun's point, as its sphere goes: see the header.
     const sunPixelRadius = angularRadiusPixels(

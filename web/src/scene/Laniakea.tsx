@@ -47,7 +47,6 @@ import { basinPartsAhead, basinPartsGeometry, type BasinParts, type BasinRequest
 import {
   boxMatrix,
   CLICK_SLOP_PX,
-  declutterMarks,
   DWARF_FRAGMENT,
   DWARF_VERTEX,
   FAINT_GALAXY_FLOOR,
@@ -62,9 +61,10 @@ import {
   TIP_STYLE,
   UNRESOLVED_PX,
   WHITE_MU,
-  type Marks,
 } from './LocalGroup.tsx';
-import { systemStrength } from './markFolding.ts';
+import { MarkState, laniakeaMarkIndex } from './laniakeaMarks.ts';
+import { declutterMarks, type Marks } from './markDeclutter.ts';
+import { cellCandidates, pointCells } from './pointCells.ts';
 import { GALACTIC_CENTRE_SCENE_PC, laniakeaFolds, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, structuresFade, updateMarkHosts } from './markHosts.ts';
 import { setMarkerPointer } from './markerPointer.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
@@ -110,7 +110,7 @@ import { useFrame } from './lazyLayer.tsx';
  * in, marks and all, as the camera nears it. A named cluster's galaxies fold into the cluster's
  * mark, a body of its own (laniakea.ts ensureStructureBodies), which with every named structure
  * is marked and named by the scene's bodies' own marks and labels. Decluttered most luminous
- * first, as the Local Volume's (LocalGroup.tsx declutterMarks).
+ * first, as the Local Volume's (markDeclutter.ts).
  *
  * ## The basins
  *
@@ -1002,7 +1002,20 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     object.frustumCulled = false;
     object.raycast = noRaycast;
     drawIntoGlow(object);
-    return { object, halfLight, floor, floorAttribute, halfCountPc: halfCountRadiusPc(centre, count) };
+    // The galaxies that have a size, in cells by it, so a frame looks for those large enough on
+    // the screen to be volumes only where there could be one (pointCells.ts).
+    const sized: number[] = [];
+    for (let k = 0; k < count; k += 1) if (halfLight[k]! > 0) sized.push(k);
+    const cells = pointCells(records, 12, sized, count, (k) => halfLight[k]!);
+    return {
+      object,
+      halfLight,
+      floor,
+      floorAttribute,
+      halfCountPc: halfCountRadiusPc(centre, count),
+      cells,
+      near: new Int32Array(sized.length),
+    };
   }, [catalogue, pointUniforms]);
 
   // Each galaxy's faint dot weighed by its neighbours (floorWeights), FLOOR_SLICE galaxies a tick.
@@ -1133,7 +1146,9 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     for (let k = 0; k < count; k += 1) {
       reachPc[k] = FIELD_GALAXY_REACH * Math.max(1000, records[k * 12 + FIELD.rePc]! || 0);
     }
-    return { object, set, folds, value, reachPc };
+    // Only the marks that can be anything are worked out each frame (laniakeaMarks.ts): their
+    // index made the first frame they are wanted, not with everything else as the catalogue lands.
+    return { object, set, folds, value, reachPc, state: null as MarkState | null, bodies: [] as number[] };
   }, [catalogue, markUniforms]);
 
   // A galaxy made a body has its body's mark and name: its own steps aside.
@@ -1141,10 +1156,14 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     void version;
     if (marks === null) return;
     marks.set.body.fill(0);
+    marks.bodies.length = 0;
     for (const body of store.bodies) {
       if (body.kind !== 'galaxy' || !body.id.startsWith('galaxy-lk-')) continue;
       const k = Number(body.id.slice('galaxy-lk-'.length));
-      if (Number.isInteger(k) && k >= 0 && k < marks.set.body.length) marks.set.body[k] = 1;
+      if (Number.isInteger(k) && k >= 0 && k < marks.set.body.length && marks.set.body[k] === 0) {
+        marks.set.body[k] = 1;
+        marks.bodies.push(k);
+      }
     }
     renderDemand.request();
   }, [marks, store, version]);
@@ -1460,13 +1479,17 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     resolved.k.length = 0;
     resolved.px.length = 0;
     if (fade > 0 && points !== null) {
-      const { records, count } = catalogue;
+      const { records } = catalogue;
       const cx = cameraPc.x;
       const cy = cameraPc.y;
       const cz = cameraPc.z;
       const limit = pixelsPerRadian / UNRESOLVED_PX;
       const halfLight = points.halfLight;
-      for (let k = 0; k < count; k += 1) {
+      // Only the galaxies in cells that could hold one large enough (pointCells.ts).
+      const near = points.near;
+      const found = cellCandidates(points.cells, [cx, cy, cz], limit, near);
+      for (let i = 0; i < found; i += 1) {
+        const k = near[i]!;
         const h = halfLight[k]!;
         if (h === 0) continue;
         const reach = h * limit;
@@ -1483,7 +1506,11 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         }
       }
     }
-    const byPx = resolved.k.map((k, i) => [k, resolved.px[i]!] as const).sort((a, b) => b[1] - a[1]);
+    // In the records' order first, as a pass over all of them found them, so equals keep theirs.
+    const byPx = resolved.k
+      .map((k, i) => [k, resolved.px[i]!] as const)
+      .sort((a, b) => a[0] - b[0])
+      .sort((a, b) => b[1] - a[1]);
     const counts = { disc: 0, sersic: 0, plummer: 0 };
     for (const [k] of byPx) {
       let fixed = fixedCache.get(k);
@@ -1624,27 +1651,14 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         const element = renderer.domElement;
         const cssPerRadian = viewPixelsPerRadian(element.clientHeight, fov);
         updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], cssPerRadian, focus);
-        const { records, count } = catalogue;
-        const own = marks.folds.marks;
-        const host = marks.folds.host;
-        const separation = marks.folds.separationPc;
-        const value = marks.value;
         const focusIndex = focus.startsWith('galaxy-lk-') ? Number(focus.slice('galaxy-lk-'.length)) : -1;
-        for (let k = 0; k < count; k += 1) {
-          let s: number;
-          if (k === focusIndex) {
-            s = 1;
-          } else if (own[k]! >= 0) {
-            s = MARK_HOSTS.strength[own[k]!] ?? 0;
-          } else if (host[k]! >= 0) {
-            s = MARK_HOSTS.member(host[k]!, separation[k]!);
-          } else {
-            const d = Math.hypot(records[k * 12]! - cameraPc.x, records[k * 12 + 1]! - cameraPc.y, records[k * 12 + 2]! - cameraPc.z);
-            s = systemStrength((marks.reachPc[k]! / d) * cssPerRadian);
-          }
-          value[k] = s;
-        }
-        declutterMarks(marks.set, frameCamera, cameraPc, element.clientWidth, element.clientHeight);
+        // Each mark's strength: the focus whole; a group's brightest its host's; a member its
+        // fold into it; a galaxy of no group by its reach on the screen -- worked out only for
+        // those that can be other than 0, the rest 0 (laniakeaMarks.ts).
+        const state = (marks.state ??= new MarkState(laniakeaMarkIndex(catalogue.records, 12, marks.folds, marks.reachPc)));
+        state.strengths(MARK_HOSTS, catalogue.records, 12, marks.reachPc, [cameraPc.x, cameraPc.y, cameraPc.z], cssPerRadian, focusIndex, marks.value);
+        declutterMarks(marks.set, frameCamera, cameraPc, element.clientWidth, element.clientHeight, state.candidates(marks.bodies));
+        state.settle(marks.set.shown.array as Float32Array, marks.set.kept);
       }
     }
   });

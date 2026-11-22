@@ -292,13 +292,14 @@ export function useSimulation(refreshHz = 10): Simulation {
       lastTime = time;
       clock.tick(deltaSeconds);
 
-      // The scene only redraws when the instant it shows has moved: every frame while
-      // the clock runs, live or warped, and once when a date is typed in while paused --
-      // which happens between ticks, so it is the instant that is compared, not whether
-      // this tick moved it. Paused, this loop costs a comparison and draws nothing.
+      // The scene only redraws when the instant it shows has moved: every frame under warp,
+      // in live mode as often as something on screen moves enough to see (renderDemand.ts
+      // clockMoved), and once when a date is typed in while paused -- which happens between
+      // ticks, so it is the instant that is compared, not whether this tick moved it.
+      // Paused, this loop costs a comparison and draws nothing.
       if (clock.epochMs !== lastEpochMs) {
         lastEpochMs = clock.epochMs;
-        renderDemand.request();
+        renderDemand.clockMoved(clock.mode === 'live', clock.rate);
       }
 
       // The readout beat, only when something it shows may have moved: the clock's instant

@@ -167,46 +167,63 @@ vec4 glowLight(vec3 x) {
 }
 `;
 
-/** The glows drawn into the buffer, so the composite knows whether there is anything to lay over the frame. */
-const members = new Set<THREE.Object3D>();
+/** The ray-marched volumes among the glows (drawIntoGlow); weak, so nothing has to be forgotten. */
+const volumeGlows = new WeakSet<THREE.Object3D>();
 
-/** Draws `object` into the glow buffer instead of onto the frame. */
-export function drawIntoGlow(object: THREE.Object3D): void {
-  object.layers.set(GLOW_LAYER);
-  members.add(object);
+export interface GlowOptions {
+  /**
+   * A ray-marched volume, whose light is worked out per pixel and is smooth at the scale of
+   * one: drawn at half the resolution while the camera moves (GlowComposite.tsx), in full when
+   * it stops. Not for points or sprites, whose sizes are in pixels.
+   */
+  readonly volume?: boolean;
 }
 
-/** Takes `object` out of the glow buffer's list (when it is disposed of). */
+/** Draws `object` into the glow buffer instead of onto the frame. */
+export function drawIntoGlow(object: THREE.Object3D, options: GlowOptions = {}): void {
+  object.layers.set(GLOW_LAYER);
+  if (options.volume === true) volumeGlows.add(object);
+}
+
+/**
+ * For a glow being disposed of. Nothing to do: the composite finds the glows by their layer in
+ * the scene it draws (shownGlows), so one taken out of the scene is gone from the glow with it.
+ * A list kept by hand was tried, and lost the glows whose component let go of them in an effect
+ * and kept them -- as React's strict mode does to every effect, once, in development.
+ */
 export function releaseFromGlow(object: THREE.Object3D): void {
-  members.delete(object);
+  void object;
+}
+
+const walk: THREE.Object3D[] = [];
+
+/**
+ * The glows `scene` draws this frame, into `glows` -- and, if `apart`, the volumes among them
+ * into `volumes` instead: exactly what three's walk of the scene on GLOW_LAYER reaches
+ * (WebGLRenderer projectObject), each visible object's children walked and an invisible one's
+ * not, each object on the layer taken whole -- three walks its children from it -- but without
+ * three's matrix update and render list for everything else.
+ */
+export function shownGlows(scene: THREE.Object3D, glows: THREE.Object3D[], volumes: THREE.Object3D[], apart: boolean): void {
+  glows.length = 0;
+  volumes.length = 0;
+  const mask = 1 << GLOW_LAYER;
+  walk.length = 0;
+  walk.push(scene);
+  while (walk.length > 0) {
+    const node = walk.pop()!;
+    if (!node.visible) continue;
+    if (node !== scene && (node.layers.mask & mask) !== 0) {
+      (apart && volumeGlows.has(node) ? volumes : glows).push(node);
+      continue;
+    }
+    const children = node.children;
+    for (let i = children.length - 1; i >= 0; i -= 1) walk.push(children[i]!);
+  }
 }
 
 /** The Milky Way's own buffer (MilkyWay.tsx), half the canvas each way, added to the glow before its light is spilled and shown. */
 export const milkyWayGlow: { texture: THREE.Texture | null; on: boolean } = { texture: null, on: false };
-
-/** Whether any glow would draw this frame: one of them visible, in a scene, or the Milky Way's buffer on. */
-export function anyGlow(): boolean {
-  if (milkyWayGlow.on && milkyWayGlow.texture !== null) {
-    return true;
-  }
-  for (const object of members) {
-    let node: THREE.Object3D | null = object;
-    let shown = true;
-    let root: THREE.Object3D = object;
-    while (node !== null) {
-      if (!node.visible) {
-        shown = false;
-        break;
-      }
-      root = node;
-      node = node.parent;
-    }
-    if (shown && (root as THREE.Scene).isScene === true) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
  * The halo, worked on the CPU exactly as the GPU passes do (GlowComposite.tsx) -- for one

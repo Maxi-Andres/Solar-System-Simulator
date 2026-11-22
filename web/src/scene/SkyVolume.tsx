@@ -387,7 +387,8 @@ export function SkyVolume({ galaxyKey, store, clock, focus, visible }: SkyVolume
     box.raycast = noRaycast;
     box.matrixAutoUpdate = false;
     box.visible = false;
-    drawIntoGlow(box);
+    // A march per pixel: at half the resolution while the camera moves (GlowComposite.tsx).
+    drawIntoGlow(box, { volume: true });
     return box;
   }, [uniforms]);
   // What the loaded maps fix: the frame, the box, the light per unit before the hand-off to a point.

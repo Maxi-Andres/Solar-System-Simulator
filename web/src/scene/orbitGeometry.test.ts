@@ -12,7 +12,14 @@ import {
   propagate,
   stateToOsculatingElements,
 } from '../core/kepler.ts';
-import { OrbitLine, orbitLinePointsKm, refinementAnomaly } from './orbitGeometry.ts';
+import {
+  ellipseShiftKm,
+  OrbitLine,
+  orbitLinePointsKm,
+  ORBIT_UNSEEN_PX,
+  orbitUnseenKm,
+  refinementAnomaly,
+} from './orbitGeometry.ts';
 
 /**
  * Regression tests for the "the orbit does not pass through the planet" bug.
@@ -312,5 +319,150 @@ describe('the refinement at a body no uniform line can hold', () => {
     line.update(sun, 1);
     expect(version()).toBeGreaterThan(built);
     line.dispose();
+  });
+});
+
+describe('orbitPointsKm, refilled', () => {
+  /** The points as they were made before the rotation was hoisted: one call a point. */
+  function reference(elements: OsculatingElements, segments: number): Float64Array {
+    const rad = Math.PI / 180;
+    const w = elements.argPeriapsisDeg * rad;
+    const i = elements.inclinationDeg * rad;
+    const n = elements.ascendingNodeDeg * rad;
+    const e = elements.eccentricity;
+    const a = elements.semiMajorAxisKm;
+    const out = new Float64Array(segments * 3);
+    for (let k = 0; k < segments; k += 1) {
+      const E = k * ((2 * Math.PI) / segments);
+      const x = a * (Math.cos(E) - e);
+      const y = a * Math.sqrt(1 - e * e) * Math.sin(E);
+      const cw = Math.cos(w);
+      const sw = Math.sin(w);
+      const ci = Math.cos(i);
+      const si = Math.sin(i);
+      const cn = Math.cos(n);
+      const sn = Math.sin(n);
+      out[k * 3] = (cn * cw - sn * sw * ci) * x + (-cn * sw - sn * cw * ci) * y;
+      out[k * 3 + 1] = (sn * cw + cn * sw * ci) * x + (-sn * sw + cn * cw * ci) * y;
+      out[k * 3 + 2] = sw * si * x + cw * si * y;
+    }
+    return out;
+  }
+
+  it('makes the same points to the bit, into the buffer it is given', () => {
+    const expected = reference(PLUTO, 2048);
+    const buffer = new Float64Array(2048 * 3);
+    const points = orbitPointsKm(PLUTO, 2048, null, buffer);
+    expect(points).toBe(buffer);
+    for (let k = 0; k < expected.length; k += 1) {
+      expect(Object.is(points[k], expected[k])).toBe(true);
+    }
+    // A buffer of the wrong length is not written: a new one is made.
+    const short = new Float64Array(3);
+    expect(orbitPointsKm(PLUTO, 2048, null, short)).not.toBe(short);
+  });
+});
+
+describe('how near an orbit line comes, and what may move unseen there', () => {
+  const ppr = 2290; // 1080 px over 27 degrees
+
+  it('is what a quarter of a pixel spans where the line comes nearest', () => {
+    expect(orbitUnseenKm(7.5e9, ppr)).toBeCloseTo((7.5e9 * ORBIT_UNSEEN_PX) / ppr, -3);
+    expect(orbitUnseenKm(0, ppr)).toBe(0);
+  });
+
+  it('measures the line against the camera, never farther than it is', () => {
+    const line = new OrbitLine(PLUTO, PLUTO_RADIUS_KM, '#ffffff');
+    const points = orbitLinePointsKm(PLUTO, PLUTO_RADIUS_KM);
+    const trueNearest = (x: number, y: number, z: number): number => {
+      let best = Infinity;
+      for (let k = 0; k < points.length; k += 3) {
+        best = Math.min(best, Math.hypot(points[k]! - x, points[k + 1]! - y, points[k + 2]! - z));
+      }
+      return best;
+    };
+    // From far above the Solar System, from the Sun, and from beside Pluto itself.
+    for (const [x, y, z] of [
+      [0, 0, 5e10],
+      [0, 0, 0],
+      [points[0]! + 10_000, points[1]!, points[2]!],
+    ] as const) {
+      const nearest = line.nearestKm(x, y, z);
+      expect(nearest).toBeLessThanOrEqual(trueNearest(x, y, z));
+      expect(nearest).toBeGreaterThan(trueNearest(x, y, z) * 0.5 - 1e7);
+    }
+    // Kept while the camera moves a little, and still a bound.
+    const far = line.nearestKm(0, 0, 5e10);
+    const moved = line.nearestKm(1e9, 0, 5e10);
+    expect(moved).toBeLessThan(far);
+    expect(moved).toBeLessThanOrEqual(trueNearest(1e9, 0, 5e10));
+    line.dispose();
+  });
+
+  it('keeps a line seen from afar until its shift shows', () => {
+    const line = new OrbitLine(PLUTO, PLUTO_RADIUS_KM, '#ffffff');
+    const version = (): number =>
+      (line.line.geometry.getAttribute('position') as THREE.BufferAttribute).version;
+    const sun = { x: 0, y: 0, z: 0 };
+    line.update(sun, 1);
+    const built = version();
+    // Charon's pull moves Pluto's osculating ellipse by thousands of km: a hundred radii.
+    const shifted = { ...PLUTO, semiMajorAxisKm: PLUTO.semiMajorAxisKm + 100 * PLUTO_RADIUS_KM };
+    const unseen = orbitUnseenKm(line.nearestKm(0, 0, 5e10), ppr);
+    expect(unseen).toBeGreaterThan(100 * PLUTO_RADIUS_KM);
+    line.setElements(shifted, unseen);
+    line.update(sun, 1, unseen);
+    expect(version()).toBe(built);
+    // From nearby the same shift is rebuilt.
+    line.setElements(shifted, 0);
+    line.update(sun, 1, 0);
+    expect(version()).toBeGreaterThan(built);
+    line.dispose();
+  });
+});
+
+describe('ellipseShiftKm', () => {
+  /** How far the farthest point of either curve is from the other, sampled densely. */
+  function hausdorff(a: OsculatingElements, b: OsculatingElements): number {
+    const pa = orbitPointsKm(a, 4096);
+    const pb = orbitPointsKm(b, 4096);
+    const oneWay = (from: Float64Array, to: Float64Array): number => {
+      let worst = 0;
+      for (let i = 0; i < from.length; i += 3 * 8) {
+        let best = Infinity;
+        for (let j = 0; j < to.length; j += 3) {
+          best = Math.min(best, Math.hypot(from[i]! - to[j]!, from[i + 1]! - to[j + 1]!, from[i + 2]! - to[j + 2]!));
+        }
+        worst = Math.max(worst, best);
+      }
+      return worst;
+    };
+    return Math.max(oneWay(pa, pb), oneWay(pb, pa));
+  }
+
+  it('bounds how far the curve really moves, for every kind of change', () => {
+    const changes: Partial<OsculatingElements>[] = [
+      { semiMajorAxisKm: PLUTO.semiMajorAxisKm * 1.001 },
+      { eccentricity: PLUTO.eccentricity + 0.002 },
+      { inclinationDeg: PLUTO.inclinationDeg + 0.3 },
+      { ascendingNodeDeg: PLUTO.ascendingNodeDeg + 0.3 },
+      { argPeriapsisDeg: PLUTO.argPeriapsisDeg + 0.3 },
+      { argPeriapsisDeg: PLUTO.argPeriapsisDeg + 0.2, ascendingNodeDeg: PLUTO.ascendingNodeDeg - 0.1, eccentricity: 0.25 },
+    ];
+    // The grid's own chord sag, which the sampled distance carries.
+    const sag = PLUTO.apoapsisKm * (1 - Math.cos(Math.PI / 4096));
+    for (const change of changes) {
+      const to = { ...PLUTO, ...change };
+      expect(ellipseShiftKm(PLUTO, to) + sag).toBeGreaterThanOrEqual(hausdorff(PLUTO, to));
+    }
+  });
+
+  it('sees that turning a near-circle, or trading node for periapsis in its plane, moves little', () => {
+    const circle = { ...PLUTO, eccentricity: 0.007, inclinationDeg: 0 };
+    const turned = { ...circle, argPeriapsisDeg: circle.argPeriapsisDeg + 1 };
+    // a·dtheta, the old guess, would be a hundred million km.
+    expect(ellipseShiftKm(circle, turned)).toBeLessThan(circle.semiMajorAxisKm * 0.007 * 0.02 * 3);
+    const traded = { ...circle, ascendingNodeDeg: circle.ascendingNodeDeg + 30, argPeriapsisDeg: circle.argPeriapsisDeg - 30 };
+    expect(ellipseShiftKm(circle, traded)).toBeLessThan(1);
   });
 });

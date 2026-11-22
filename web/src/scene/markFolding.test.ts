@@ -182,3 +182,65 @@ describe('a host present only while its system is large on the screen', () => {
     expect(h.strength[g]).toBe(1);
   });
 });
+
+describe('the hosts’ numbers each frame', () => {
+  /** As FoldHosts.update had them, through Math.hypot and each host's presence weighed on its own. */
+  function referenceUpdate(
+    hosts: { x: number[]; y: number[]; z: number[]; parent: number[]; separation: number[]; reach: number[]; presence: number[] },
+    camera: readonly [number, number, number],
+    pixelsPerRadian: number,
+    pinned: readonly number[],
+  ) {
+    const n = hosts.x.length;
+    const scale = new Float64Array(n);
+    const system = new Float64Array(n);
+    const strength = new Float64Array(n);
+    const member = (h: number, separation: number) =>
+      h < 0 ? 1 : Math.min(foldStrength(separation * scale[h]!), strength[h]!, system[h]!);
+    for (let h = 0; h < n; h += 1) {
+      const d = Math.hypot(camera[0] - hosts.x[h]!, camera[1] - hosts.y[h]!, camera[2] - hosts.z[h]!);
+      scale[h] = d > 0 ? pixelsPerRadian / d : Infinity;
+      system[h] = Number.isFinite(hosts.reach[h]!) ? systemStrength(hosts.reach[h]! * scale[h]!) : 1;
+      const p = hosts.parent[h]!;
+      const isPinned = pinned.includes(h);
+      const own = isPinned || p < 0 ? 1 : hosts.separation[h] === 0 ? strength[p]! : member(p, hosts.separation[h]!);
+      strength[h] = hosts.presence[h]! > 0 && !isPinned ? Math.min(own, systemStrength(hosts.presence[h]! * scale[h]!)) : own;
+    }
+    return { scale, system, strength };
+  }
+
+  it('are what they were, to a unit in the last place', () => {
+    let s = 9;
+    const next = () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+    const h = new FoldHosts();
+    const plain = { x: [] as number[], y: [] as number[], z: [] as number[], parent: [] as number[], separation: [] as number[], reach: [] as number[], presence: [] as number[] };
+    for (let i = 0; i < 400; i += 1) {
+      const at: [number, number, number] = [(next() - 0.5) * 1e8, (next() - 0.5) * 1e8, (next() - 0.5) * 1e7];
+      const parent = i > 0 && next() < 0.5 ? Math.floor(next() * i) : -1;
+      const radius = next() < 0.5 ? 1e5 + next() * 3e6 : Infinity;
+      const presence = next() < 0.4 ? (next() < 0.5 ? radius : 2e5 + next() * 1e6) : 0;
+      h.add(`h${i}`, at, parent < 0 ? null : `h${parent}`, radius, Number.isFinite(presence) ? presence : 0);
+      plain.x.push(at[0]);
+      plain.y.push(at[1]);
+      plain.z.push(at[2]);
+      plain.parent.push(parent);
+      plain.separation.push(parent < 0 ? Infinity : h.distancePc(parent, at));
+      plain.reach.push(radius);
+      plain.presence.push(Number.isFinite(presence) ? presence : 0);
+    }
+    for (let trial = 0; trial < 30; trial += 1) {
+      const camera: [number, number, number] = [(next() - 0.5) * 2e8, (next() - 0.5) * 2e8, (next() - 0.5) * 2e7];
+      const pinned = trial % 3 === 0 ? [Math.floor(next() * 400)] : [];
+      h.update(camera, 1200, pinned);
+      const want = referenceUpdate(plain, camera, 1200, pinned);
+      for (let i = 0; i < 400; i += 1) {
+        expect(h.scale[i]).toBeCloseTo(want.scale[i]!, 12);
+        expect(Math.abs(h.system[i]! - want.system[i]!)).toBeLessThan(1e-12);
+        expect(Math.abs(h.strength[i]! - want.strength[i]!)).toBeLessThan(1e-12);
+      }
+    }
+  });
+});

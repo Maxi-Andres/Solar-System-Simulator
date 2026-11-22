@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 import {
-  anyGlow,
   GLOW_DISPLAY_GLSL,
   GLOW_LAYER,
   GLOW_MAX,
@@ -10,8 +9,10 @@ import {
   haloLevels,
   haloShares,
   milkyWayGlow,
+  shownGlows,
   WHITE_X,
 } from './glowBuffer.ts';
+import { ViewMotion } from './viewMotion.ts';
 
 /**
  * The glow buffer laid over the frame, once (glowBuffer.ts for what and why).
@@ -20,8 +21,16 @@ import {
  * every body is drawn over it, the stars add on top. Just before it is drawn, from its own
  * onBeforeRender, it fills what it shows:
  *
- * 1. the glows -- the scene again, through this frame's camera, on GLOW_LAYER alone -- into a
- *    half-float buffer the canvas's size, added;
+ * 1. the glows -- the objects drawn into the glow (glowBuffer.ts drawIntoGlow), through this
+ *    frame's camera, on GLOW_LAYER -- into a half-float buffer the canvas's size, added. Found
+ *    by a walk of the scene that tests only each object's visibility and layer (shownGlows) and
+ *    drawn under a root of their own, not by rendering the whole scene a second time: three
+ *    would update every matrix in the scene again, which the frame's render has just done, and
+ *    put every object through its culling to keep the few dozen that are glows -- a millisecond
+ *    and more of the main thread at the galactic scales. While the camera moves, the
+ *    ray-marched volumes among them -- the Clouds' and the giants', a full-screen march each --
+ *    go into a buffer of half the size each way instead, added back as it is read
+ *    (viewMotion.ts): a quarter of their cost, and the first still frame has them in full again;
  * 2. the light each pixel holds past WHITE_X, the Milky Way's buffer added in, into the first
  *    level of a pyramid, halving down to haloLevels; then back up, each level's share of the
  *    wing (haloShares) added as it goes;
@@ -52,6 +61,8 @@ const DOWN_FRAGMENT = /* glsl */ `
 uniform sampler2D uSource;
 uniform sampler2D uMilkyWay;
 uniform float uMilkyWayOn;
+uniform sampler2D uVolumes;
+uniform float uVolumesOn;
 uniform float uFirst;
 uniform vec2 uSourceSize;
 
@@ -59,6 +70,7 @@ vec3 excess(ivec2 at) {
   ivec2 c = min(at, ivec2(uSourceSize) - 1);
   vec3 x = texelFetch(uSource, c, 0).rgb;
   vec2 uv = (vec2(c) + 0.5) / uSourceSize;
+  x += uVolumesOn * texture2D(uVolumes, uv).rgb;
   x = min(x + uMilkyWayOn * texture2D(uMilkyWay, uv).rgb, vec3(${GLOW_MAX.toFixed(1)}));
   float peak = max(x.r, max(x.g, x.b));
   return peak > ${WHITE_X.toFixed(6)} ? x * (1.0 - ${WHITE_X.toFixed(6)} / peak) : vec3(0.0);
@@ -114,6 +126,8 @@ const COMPOSITE_FRAGMENT = /* glsl */ `
 uniform sampler2D uGlow;
 uniform sampler2D uMilkyWay;
 uniform float uMilkyWayOn;
+uniform sampler2D uVolumes;
+uniform float uVolumesOn;
 uniform sampler2D uHalo;
 uniform vec2 uHaloTexel;
 uniform float uCore;
@@ -123,7 +137,8 @@ ${TENT_GLSL}
 ${GLOW_DISPLAY_GLSL}
 void main() {
   if (uOn < 0.5) discard;
-  vec3 x = min(texture2D(uGlow, vUv).rgb + uMilkyWayOn * texture2D(uMilkyWay, vUv).rgb, vec3(${GLOW_MAX.toFixed(1)}));
+  vec3 x = texture2D(uGlow, vUv).rgb + uVolumesOn * texture2D(uVolumes, vUv).rgb;
+  x = min(x + uMilkyWayOn * texture2D(uMilkyWay, vUv).rgb, vec3(${GLOW_MAX.toFixed(1)}));
   float peak = max(x.r, max(x.g, x.b));
   vec3 kept = peak > ${WHITE_X.toFixed(6)} ? x * (${WHITE_X.toFixed(6)} / peak) : x;
   vec3 total = kept + uCore * (x - kept) + tent(uHalo, vUv, uHaloTexel);
@@ -162,6 +177,8 @@ export function GlowComposite() {
         uSource: { value: null },
         uMilkyWay: { value: null },
         uMilkyWayOn: { value: 0 },
+        uVolumes: { value: null },
+        uVolumesOn: { value: 0 },
         uFirst: { value: 0 },
         uSourceSize: { value: new THREE.Vector2(1, 1) },
       },
@@ -185,6 +202,10 @@ export function GlowComposite() {
       depthWrite: false,
       toneMapped: false,
     });
+    // The glows' own root: its children are this frame's list, set before each draw. Its
+    // matrices are not updated -- the frame's render has just updated every one of them.
+    const root = new THREE.Scene();
+    root.matrixWorldAutoUpdate = false;
     return {
       quadScene,
       quadCamera,
@@ -192,8 +213,13 @@ export function GlowComposite() {
       down,
       up,
       glow: halfFloatTarget(),
+      volumes: halfFloatTarget(),
       downs: [] as THREE.WebGLRenderTarget[],
       ups: [] as THREE.WebGLRenderTarget[],
+      root,
+      glows: [] as THREE.Object3D[],
+      volumeList: [] as THREE.Object3D[],
+      motion: new ViewMotion(),
     };
   }, []);
 
@@ -203,6 +229,8 @@ export function GlowComposite() {
         uGlow: { value: passes.glow.texture },
         uMilkyWay: { value: null },
         uMilkyWayOn: { value: 0 },
+        uVolumes: { value: passes.volumes.texture },
+        uVolumesOn: { value: 0 },
         uHalo: { value: null },
         uHaloTexel: { value: new THREE.Vector2() },
         uCore: { value: 1 },
@@ -227,12 +255,16 @@ export function GlowComposite() {
   useEffect(() => {
     const uniforms = (composite.material as THREE.ShaderMaterial).uniforms;
     composite.onBeforeRender = (renderer, scene, camera) => {
-      const on = anyGlow();
+      // The volumes apart only while the camera moves; still, every glow in one buffer as before.
+      const moving = passes.motion.moved(camera);
+      shownGlows(scene, passes.glows, passes.volumeList, moving);
+      const on =
+        (milkyWayGlow.on && milkyWayGlow.texture !== null) || passes.glows.length > 0 || passes.volumeList.length > 0;
       uniforms['uOn']!.value = on ? 1 : 0;
       if (!on) {
         return;
       }
-      fill(renderer, scene, camera, passes, uniforms);
+      fill(renderer, camera, passes, uniforms);
     };
     return () => {
       composite.onBeforeRender = () => {};
@@ -247,6 +279,8 @@ export function GlowComposite() {
       passes.down.dispose();
       passes.up.dispose();
       passes.glow.dispose();
+      passes.volumes.dispose();
+      passes.root.children = [];
       for (const target of [...passes.downs, ...passes.ups]) target.dispose();
     },
     [composite, passes],
@@ -262,14 +296,17 @@ interface Passes {
   readonly down: THREE.ShaderMaterial;
   readonly up: THREE.ShaderMaterial;
   readonly glow: THREE.WebGLRenderTarget;
+  readonly volumes: THREE.WebGLRenderTarget;
   readonly downs: THREE.WebGLRenderTarget[];
   readonly ups: THREE.WebGLRenderTarget[];
+  readonly root: THREE.Scene;
+  readonly glows: THREE.Object3D[];
+  readonly volumeList: THREE.Object3D[];
 }
 
 /** Steps 1 and 2 of the header, into the passes' buffers; the composite's uniforms pointed at them. */
 function fill(
   renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
   camera: THREE.Camera,
   passes: Passes,
   uniforms: Record<string, THREE.IUniform>,
@@ -302,12 +339,25 @@ function fill(
   renderer.autoClear = false;
   renderer.setClearColor(0x000000, 0);
 
-  // 1. The glows, through this frame's camera, on their layer alone.
+  // 1. The glows, through this frame's camera, on their layer alone, from their list; the
+  // volumes apart, at half the size each way, while the camera moves.
   const mask = camera.layers.mask;
   camera.layers.set(GLOW_LAYER);
   renderer.setRenderTarget(passes.glow);
   renderer.clear(true, false, false);
-  renderer.render(scene, camera);
+  passes.root.children = passes.glows;
+  renderer.render(passes.root, camera);
+  const volumes = passes.volumeList.length > 0;
+  if (volumes) {
+    const w = Math.max(1, Math.round(width / 2));
+    const h = Math.max(1, Math.round(height / 2));
+    if (passes.volumes.width !== w || passes.volumes.height !== h) passes.volumes.setSize(w, h);
+    renderer.setRenderTarget(passes.volumes);
+    renderer.clear(true, false, false);
+    passes.root.children = passes.volumeList;
+    renderer.render(passes.root, camera);
+  }
+  passes.root.children = [];
   camera.layers.mask = mask;
 
   // 2. Down the pyramid, the excess first; then up it, each level's share added.
@@ -315,6 +365,8 @@ function fill(
   const down = passes.down.uniforms;
   down['uMilkyWay']!.value = milkyWayGlow.texture;
   down['uMilkyWayOn']!.value = mw ? 1 : 0;
+  down['uVolumes']!.value = passes.volumes.texture;
+  down['uVolumesOn']!.value = volumes ? 1 : 0;
   passes.quad.material = passes.down;
   let source = passes.glow;
   for (let k = 0; k < count; k += 1) {
@@ -346,6 +398,7 @@ function fill(
   const top = passes.ups[0]!;
   uniforms['uMilkyWay']!.value = milkyWayGlow.texture;
   uniforms['uMilkyWayOn']!.value = mw ? 1 : 0;
+  uniforms['uVolumesOn']!.value = volumes ? 1 : 0;
   uniforms['uHalo']!.value = top.texture;
   (uniforms['uHaloTexel']!.value as THREE.Vector2).set(1 / top.width, 1 / top.height);
   uniforms['uCore']!.value = shares.core;

@@ -7,8 +7,8 @@
  * react-three-fiber's `frameloop="demand"`, and everything that can change the picture
  * asks for frames here:
  *
- *  - the clock, whenever its instant moved (see useSimulation.ts) -- which in live mode
- *    and under warp is every frame, so a running clock renders exactly as before;
+ *  - the clock, whenever its instant moved (see useSimulation.ts): under warp every frame,
+ *    and in live mode as often as the scene says something on it moves (`clockMoved`);
  *  - the camera, on input and for as long as it is still easing (CameraRig.tsx);
  *  - data and maps arriving, any change to the view store or the scene's props, and a
  *    resized canvas (RenderOnDemand.tsx).
@@ -48,10 +48,67 @@ export const SETTLE_FRAMES = 30;
  */
 export const IDLE_FRAME_MS = 1000;
 
+/**
+ * In live mode, how far anything on screen may move between two frames, in pixels.
+ *
+ * At real time almost nothing moves: from the default view of Earth the ISS crosses a third
+ * of a pixel a second, Earth's surface a fortieth. Sixty frames a second of that was half a
+ * core and the GPU never resting, on a laptop, to draw sixty pictures no eye could tell
+ * apart. So in live mode a frame is drawn once the fastest thing the scene knows of has
+ * moved this far since the last -- a quarter of a pixel, under what antialiasing lets a
+ * moving edge show -- and every vsync when it moves faster than that.
+ */
+export const LIVE_STEP_PX = 0.25;
+
+/**
+ * In live mode, the longest wait between frames however still the scene says it is,
+ * milliseconds: ten frames a second.
+ *
+ * The scene's estimate covers what it draws and can bound -- the bodies, their markers and
+ * names, their turning surfaces and clouds, eclipse shadows, the satellites. Not every line:
+ * an orbit or a trail moves with what it is drawn about, by less than a pixel a second in
+ * every case worked out, and a dot of the belt or a comet comes close enough to the camera
+ * to move faster only rarely. Those are held to this, which is smooth for anything under two
+ * and a half pixels a second, and still a sixth of the old cost.
+ */
+export const LIVE_FRAME_MAX_MS = 100;
+
+/** One frame at 60 Hz, milliseconds. */
+const VSYNC_MS = 1000 / 60;
+
+/**
+ * How long live mode waits between frames for this much motion, in pixels per second of
+ * real time: long enough for it to cover LIVE_STEP_PX, and none (every vsync) when that is
+ * under a frame -- at most LIVE_FRAME_MAX_MS. Not finite, a scene that cannot bound what it
+ * shows, is every vsync.
+ */
+export function liveFrameIntervalMs(pixelsPerSecond: number): number {
+  if (!(pixelsPerSecond >= 0) || !Number.isFinite(pixelsPerSecond)) {
+    return 0;
+  }
+  const ms = (LIVE_STEP_PX / pixelsPerSecond) * 1000;
+  return ms < VSYNC_MS ? 0 : Math.min(ms, LIVE_FRAME_MAX_MS);
+}
+
+/**
+ * Slack on the live interval, milliseconds: half a vsync. The clock's frame callback and the
+ * canvas's run in the same animation frame but not at the same instant, and frames come only
+ * on vsyncs; without it a wait due a millisecond after one would slip to the next, and ten
+ * frames a second come out as eight and a half.
+ */
+const LIVE_SLACK_MS = VSYNC_MS / 2;
+
 export class RenderDemand {
   #remaining = 0;
   #requests = 0;
   #wake: (() => void) | null = null;
+  /** When the last frame was drawn, performance.now() milliseconds. */
+  #lastFrameMs = -Infinity;
+  /**
+   * The fastest on-screen motion the last frame found, pixels per simulated second; not
+   * finite until a frame has said. See `setMotion`.
+   */
+  #motion = Infinity;
 
   /**
    * How many requests there have been. Whatever asks for a frame -- data landing, the view
@@ -98,8 +155,44 @@ export class RenderDemand {
     };
   }
 
+  /**
+   * The clock's instant has moved; `rate` is how many simulated seconds go by in a real one,
+   * and `live` whether the clock is following real time.
+   *
+   * Under warp it is `request()`: every frame, and a tail after. In live mode it asks for one
+   * frame, and only once the motion the last frame reported has had time to cover
+   * LIVE_STEP_PX (see `liveFrameIntervalMs`); a frame already owed for anything else is
+   * drawn at the clock's instant anyway, so it asks for nothing then. No tail: the clock
+   * moving things by a quarter of a pixel settles nothing.
+   */
+  clockMoved(live: boolean, rate: number, nowMs: number = performance.now()): void {
+    if (!live) {
+      this.request();
+      return;
+    }
+    if (this.#remaining > 0) {
+      return;
+    }
+    // The frame asked for now is drawn on the next vsync, not this one: ask one early.
+    const due = liveFrameIntervalMs(this.#motion * Math.abs(rate)) - VSYNC_MS - LIVE_SLACK_MS;
+    if (nowMs - this.#lastFrameMs >= due) {
+      this.#remaining = 1;
+      this.#wake?.();
+    }
+  }
+
+  /**
+   * How fast the fastest thing on screen moves, pixels per simulated second, as the frame
+   * being drawn found it: the scene says, every frame (SolarSystem.tsx), and Infinity when it
+   * cannot bound it. Live mode spaces its frames by this; see `clockMoved`.
+   */
+  setMotion(pixelsPerSimSecond: number): void {
+    this.#motion = pixelsPerSimSecond;
+  }
+
   /** Called once for every frame drawn. True while frames are still owed after it. */
-  frameDrawn(): boolean {
+  frameDrawn(nowMs: number = performance.now()): boolean {
+    this.#lastFrameMs = nowMs;
     if (this.#remaining > 0) {
       this.#remaining -= 1;
     }

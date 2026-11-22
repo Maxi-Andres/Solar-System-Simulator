@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { IDLE_FRAME_MS, RenderDemand, SETTLE_FRAMES } from './renderDemand.ts';
+import {
+  IDLE_FRAME_MS,
+  LIVE_FRAME_MAX_MS,
+  LIVE_STEP_PX,
+  liveFrameIntervalMs,
+  RenderDemand,
+  SETTLE_FRAMES,
+} from './renderDemand.ts';
 
 /** Draws frames the way the canvas does, until none is owed; returns how many. */
 function drawUntilIdle(demand: RenderDemand, limit = 10_000): number {
@@ -101,5 +108,68 @@ describe('rendering on demand', () => {
     expect(SETTLE_FRAMES).toBeGreaterThanOrEqual(3);
     expect(IDLE_FRAME_MS).toBeGreaterThanOrEqual(250);
     expect(IDLE_FRAME_MS).toBeLessThanOrEqual(30_000 / 10);
+  });
+
+});
+
+describe('the live clock', () => {
+  /** A demand whose last frame was drawn at t = 0 with this much motion, px per second. */
+  function settled(motion: number): { demand: RenderDemand; wakes: () => number } {
+    const demand = new RenderDemand();
+    let wakes = 0;
+    demand.connect(() => (wakes += 1));
+    demand.setMotion(motion);
+    demand.frameDrawn(0);
+    return { demand, wakes: () => wakes };
+  }
+
+  it('asks for a frame once the fastest thing has moved a quarter of a pixel', () => {
+    // 1 px/s: a quarter of a pixel takes 250 ms, past the 100 ms most it waits. Asked a vsync
+    // and a half early, since the frame asked for comes on the vsync after.
+    const slow = settled(1);
+    slow.demand.clockMoved(true, 1, 50);
+    expect(slow.wakes()).toBe(0);
+    slow.demand.clockMoved(true, 1, LIVE_FRAME_MAX_MS);
+    expect(slow.wakes()).toBe(1);
+    expect(slow.demand.remaining).toBe(1);
+    // One frame, no tail.
+    expect(slow.demand.frameDrawn(LIVE_FRAME_MAX_MS)).toBe(false);
+
+    // 5 px/s: every 50 ms -- asked for a vsync and a half early, drawn on the vsync after.
+    const faster = settled(5);
+    faster.demand.clockMoved(true, 1, 20);
+    expect(faster.wakes()).toBe(0);
+    faster.demand.clockMoved(true, 1, 50);
+    expect(faster.wakes()).toBe(1);
+  });
+
+  it('draws every vsync when things move fast, or when the scene cannot say', () => {
+    for (const motion of [100, Infinity, Number.NaN]) {
+      const { demand, wakes } = settled(motion);
+      demand.clockMoved(true, 1, 1);
+      expect(wakes()).toBe(1);
+    }
+  });
+
+  it('runs every frame, with a tail, under warp', () => {
+    const { demand, wakes } = settled(0);
+    demand.clockMoved(false, 86_400, 1);
+    expect(wakes()).toBe(1);
+    expect(demand.remaining).toBe(SETTLE_FRAMES);
+  });
+
+  it('asks for nothing more while frames are owed for anything else', () => {
+    const { demand, wakes } = settled(0);
+    demand.request(3);
+    demand.clockMoved(true, 1, 1_000);
+    expect(wakes()).toBe(1);
+    expect(demand.remaining).toBe(3);
+  });
+
+  it('spaces frames by the motion, between a vsync and a tenth of a second', () => {
+    expect(liveFrameIntervalMs(LIVE_STEP_PX * 10)).toBeCloseTo(100);
+    expect(liveFrameIntervalMs(LIVE_STEP_PX * 20)).toBeCloseTo(50);
+    expect(liveFrameIntervalMs(0)).toBe(LIVE_FRAME_MAX_MS);
+    expect(liveFrameIntervalMs(LIVE_STEP_PX * 100)).toBe(0);
   });
 });

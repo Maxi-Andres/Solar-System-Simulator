@@ -22,6 +22,7 @@ import { useEffect, useMemo, type RefObject } from 'react';
 
 import { renderDemand } from '../core/renderDemand.ts';
 
+import { AdaptiveResolution } from './AdaptiveResolution.tsx';
 import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { BlackHoleLens } from './BlackHoleLens.tsx';
 import { CameraRig } from './CameraRig.tsx';
@@ -99,9 +100,11 @@ const MeteorShowers = lazyLayer(() => import('./MeteorShowers.tsx').then((m) => 
  * And two settings decide how much of the machine it takes:
  *
  *  - `frameloop="demand"`: a frame is drawn when something may have changed, not sixty
- *    times a second regardless. With the clock running that is every frame anyway; paused
- *    and untouched, it is none. See renderDemand.ts and RenderOnDemand.tsx.
- *  - `dpr`, capped at `MAX_PIXEL_RATIO`.
+ *    times a second regardless. Under warp that is every frame; at real time, as often as
+ *    something on screen moves a quarter of a pixel; paused and untouched, none. See
+ *    renderDemand.ts and RenderOnDemand.tsx.
+ *  - `dpr`, capped at `MAX_PIXEL_RATIO` -- and cut while the camera moves, on a GPU that
+ *    cannot keep up, back in full when it stops (AdaptiveResolution.tsx).
  */
 
 /**
@@ -338,6 +341,26 @@ export function SolarSystemCanvas({
         toneMapping: 3, // THREE.ACESFilmicToneMapping
       }}
       camera={{ fov: FOV_DEG, near: CAMERA_NEAR_UNITS, far: CAMERA_FAR_UNITS }}
+      onCreated={({ gl, scene }) => {
+        // The scene itself never moves. Left to recompose its matrix every frame, three takes
+        // that as its world having changed and updates every object's world matrix under it,
+        // whatever each asks: a hidden body, a static group (matrixWorldAutoUpdate,
+        // matrixAutoUpdate) recomputed with the rest. Static, each object updates when it
+        // moves or its parent does -- every object here that sets its matrix by hand says so
+        // with matrixWorldNeedsUpdate, as three asks.
+        scene.matrixAutoUpdate = false;
+        // three checks every program it links for errors, and to do so asks the driver for
+        // its log as soon as it is linked: a wait, on the main thread, for each compile to
+        // finish -- 178 ms of the first frame's 290, measured. In development the check
+        // stays, so a broken shader still says why; a published build runs shaders that
+        // development has compiled first.
+        gl.debug.checkShaderErrors = import.meta.env.DEV;
+        // Asked of the driver now, while it has nothing else to do. A question to the GPU
+        // waits for everything sent before it, and the first frame used to ask it (a map's
+        // filtering, SolarSystem.tsx) behind the first frame's shader compiles: 104 ms of
+        // waiting for one number, measured on a production build. three keeps the answer.
+        gl.capabilities.getMaxAnisotropy();
+      }}
       style={{ position: 'absolute', inset: 0, background: '#000' }}
     >
       <Starfield
@@ -537,6 +560,8 @@ export function SolarSystemCanvas({
         bound={cameraBound}
       />
       <ScaleBarProbe elements={scaleBar} />
+      {/* Fewer pixels while the camera moves on a GPU that cannot keep up; all of them at rest. */}
+      <AdaptiveResolution />
       {/* Decides whether another frame follows this one. See renderDemand.ts. */}
       <RenderOnDemand store={store} />
       {/* The first frame's shaders compiled before it is drawn, off the main thread. */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 
 import { SimClock, WARP_RATES } from '../core/time.ts';
 
@@ -46,19 +46,23 @@ export interface TimeControlsProps {
   readonly tick: number;
 }
 
+/**
+ * Re-rendered on every readout beat, ten times a second while the clock runs: so only the date
+ * is worked out here, read straight from the clock while nobody is typing in it -- a draft
+ * kept in state and copied from the clock after each render was a second render every beat.
+ * The transport row, a dozen buttons that change only with the rate, is a component of its
+ * own that the beat passes by (TransportRow).
+ */
 export function TimeControls({ clock, exact, tick }: TimeControlsProps) {
+  void tick;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   // Folded until asked for. LIVE and the date stay on screen, which is what most visits
   // need; the rates and transport buttons are one click on the chevron away.
   const [open, setOpen] = useState(false);
 
-  // Keep the field in sync while the clock runs, without fighting typing.
-  useEffect(() => {
-    if (!editing) {
-      setDraft(clock.date.toISOString().slice(0, 19));
-    }
-  }, [editing, clock, tick]);
+  // The clock's date while the field is not being typed in; what is typed while it is.
+  const shown = editing ? draft : clock.date.toISOString().slice(0, 19);
 
   const applyDate = (value: string): void => {
     const parsed = new Date(`${value}Z`);
@@ -66,19 +70,6 @@ export function TimeControls({ clock, exact, tick }: TimeControlsProps) {
       clock.setDate(parsed);
     }
   };
-
-  const reversed = clock.mode === 'warp' && clock.rate < 0;
-  const paused = clock.mode === 'paused';
-  const forward = clock.mode !== 'paused' && !reversed;
-  const activeRate = RATES.find(
-    ([, rate]) => clock.mode === 'warp' && Math.abs(clock.rate) === rate,
-  );
-
-  const summary = paused
-    ? 'paused'
-    : activeRate === undefined
-      ? 'real time'
-      : `${reversed ? '−' : ''}${activeRate[0]}/s`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -115,8 +106,11 @@ export function TimeControls({ clock, exact, tick }: TimeControlsProps) {
         <input
           type="datetime-local"
           step="1"
-          value={draft}
-          onFocus={() => setEditing(true)}
+          value={shown}
+          onFocus={() => {
+            setDraft(shown);
+            setEditing(true);
+          }}
           onBlur={(event) => {
             setEditing(false);
             applyDate(event.target.value);
@@ -154,119 +148,152 @@ export function TimeControls({ clock, exact, tick }: TimeControlsProps) {
         )}
       </div>
 
-      {/* Bottom row: one chevron folds all of it away. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => setOpen((wasOpen) => !wasOpen)}
-          title={open ? 'Hide time controls' : 'Show time controls'}
-          aria-label={open ? 'Hide time controls' : 'Show time controls'}
-          aria-expanded={open}
-          style={{
-            display: 'grid',
-            placeItems: 'center',
-            width: '1.15rem',
-            height: '1.55rem',
-            background: 'transparent',
-            border: 'none',
-            color: '#5a5a5a',
-            cursor: 'pointer',
-            padding: 0,
-            flexShrink: 0,
-          }}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ transform: open ? 'rotate(0deg)' : 'rotate(180deg)' }}
-            aria-hidden="true"
-          >
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-
-        {open ? (
-          <>
-            {/* Pause and play: two buttons, no ambiguity about what resume means. */}
-            <div style={{ display: 'flex', gap: '0.28rem' }}>
-              <TimeButton onClick={() => clock.pause()} active={paused} title="Pause">
-                <Glyph>
-                  <path d="M9 5v14" strokeWidth="2.4" />
-                  <path d="M15 5v14" strokeWidth="2.4" />
-                </Glyph>
-              </TimeButton>
-
-              <TimeButton
-                onClick={() => clock.setRate(WARP_RATES.realTime)}
-                active={forward && Math.abs(clock.rate) === WARP_RATES.realTime}
-                title="Play forward from here, at real time"
-              >
-                <Glyph>
-                  <path d="M7 5l12 7-12 7V5Z" />
-                </Glyph>
-              </TimeButton>
-            </div>
-
-            {/* Rewind and fast-forward: each press steps one rung up the ladder. */}
-            <div style={{ display: 'flex', gap: '0.28rem' }}>
-              <TimeButton
-                onClick={() => stepRate(clock, -1)}
-                active={reversed}
-                title="Rewind, or go faster if already rewinding"
-              >
-                <Glyph>
-                  <path d="M11 5 4 12l7 7V5Z" />
-                  <path d="M20 5l-7 7 7 7V5Z" />
-                </Glyph>
-              </TimeButton>
-
-              <TimeButton
-                onClick={() => stepRate(clock, 1)}
-                active={forward && clock.mode === 'warp' && Math.abs(clock.rate) !== WARP_RATES.realTime}
-                title="Fast forward, or go faster if already forward"
-              >
-                <Glyph>
-                  <path d="M4 5l7 7-7 7V5Z" />
-                  <path d="M13 5l7 7-7 7V5Z" />
-                </Glyph>
-              </TimeButton>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.28rem', flexWrap: 'wrap' }}>
-              {RATES.map(([label, rate]) => (
-                <TimeButton
-                  key={label}
-                  onClick={() => clock.setRate(reversed ? -rate : rate)}
-                  active={clock.mode === 'warp' && Math.abs(clock.rate) === rate}
-                  title={`${label} of simulated time per real second`}
-                >
-                  {label}/s
-                </TimeButton>
-              ))}
-            </div>
-          </>
-        ) : (
-          <span
-            style={{
-              color: '#5a5a5a',
-              fontSize: '0.7rem',
-              letterSpacing: '0.06em',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {summary}
-          </span>
-        )}
-      </div>
+      <TransportRow clock={clock} mode={clock.mode} rate={clock.rate} open={open} setOpen={setOpen} />
     </div>
   );
 }
+
+/**
+ * The bottom row: one chevron folds all of it away. Its props are what it shows -- the
+ * clock's mode and rate, and whether it is open -- so the readout beat, which changes none
+ * of them, does not re-render it.
+ */
+const TransportRow = memo(function TransportRow({
+  clock,
+  mode,
+  rate: clockRate,
+  open,
+  setOpen,
+}: {
+  readonly clock: SimClock;
+  readonly mode: SimClock['mode'];
+  readonly rate: number;
+  readonly open: boolean;
+  readonly setOpen: (update: (wasOpen: boolean) => boolean) => void;
+}) {
+  const reversed = mode === 'warp' && clockRate < 0;
+  const paused = mode === 'paused';
+  const forward = mode !== 'paused' && !reversed;
+  const activeRate = RATES.find(([, rate]) => mode === 'warp' && Math.abs(clockRate) === rate);
+
+  const summary = paused
+    ? 'paused'
+    : activeRate === undefined
+      ? 'real time'
+      : `${reversed ? '−' : ''}${activeRate[0]}/s`;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        title={open ? 'Hide time controls' : 'Show time controls'}
+        aria-label={open ? 'Hide time controls' : 'Show time controls'}
+        aria-expanded={open}
+        style={{
+          display: 'grid',
+          placeItems: 'center',
+          width: '1.15rem',
+          height: '1.55rem',
+          background: 'transparent',
+          border: 'none',
+          color: '#5a5a5a',
+          cursor: 'pointer',
+          padding: 0,
+          flexShrink: 0,
+        }}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ transform: open ? 'rotate(0deg)' : 'rotate(180deg)' }}
+          aria-hidden="true"
+        >
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+      </button>
+
+      {open ? (
+        <>
+          {/* Pause and play: two buttons, no ambiguity about what resume means. */}
+          <div style={{ display: 'flex', gap: '0.28rem' }}>
+            <TimeButton onClick={() => clock.pause()} active={paused} title="Pause">
+              <Glyph>
+                <path d="M9 5v14" strokeWidth="2.4" />
+                <path d="M15 5v14" strokeWidth="2.4" />
+              </Glyph>
+            </TimeButton>
+
+            <TimeButton
+              onClick={() => clock.setRate(WARP_RATES.realTime)}
+              active={forward && Math.abs(clockRate) === WARP_RATES.realTime}
+              title="Play forward from here, at real time"
+            >
+              <Glyph>
+                <path d="M7 5l12 7-12 7V5Z" />
+              </Glyph>
+            </TimeButton>
+          </div>
+
+          {/* Rewind and fast-forward: each press steps one rung up the ladder. */}
+          <div style={{ display: 'flex', gap: '0.28rem' }}>
+            <TimeButton
+              onClick={() => stepRate(clock, -1)}
+              active={reversed}
+              title="Rewind, or go faster if already rewinding"
+            >
+              <Glyph>
+                <path d="M11 5 4 12l7 7V5Z" />
+                <path d="M20 5l-7 7 7 7V5Z" />
+              </Glyph>
+            </TimeButton>
+
+            <TimeButton
+              onClick={() => stepRate(clock, 1)}
+              active={forward && mode === 'warp' && Math.abs(clockRate) !== WARP_RATES.realTime}
+              title="Fast forward, or go faster if already forward"
+            >
+              <Glyph>
+                <path d="M4 5l7 7-7 7V5Z" />
+                <path d="M13 5l7 7-7 7V5Z" />
+              </Glyph>
+            </TimeButton>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.28rem', flexWrap: 'wrap' }}>
+            {RATES.map(([label, rate]) => (
+              <TimeButton
+                key={label}
+                onClick={() => clock.setRate(reversed ? -rate : rate)}
+                active={mode === 'warp' && Math.abs(clockRate) === rate}
+                title={`${label} of simulated time per real second`}
+              >
+                {label}/s
+              </TimeButton>
+            ))}
+          </div>
+        </>
+      ) : (
+        <span
+          style={{
+            color: '#5a5a5a',
+            fontSize: '0.7rem',
+            letterSpacing: '0.06em',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {summary}
+        </span>
+      )}
+    </div>
+  );
+});
 
 /** Filled triangles and bars for the transport controls. */
 function Glyph({ children }: { children: React.ReactNode }) {

@@ -20,8 +20,8 @@ import {
   type ClusterSample,
   type GlobularClusterArchive,
 } from '../core/globularClusters.ts';
+import { ClusterDust, type ClusterDustCatalog, type DustPort } from '../core/globularClusterDust.ts';
 import { columnAt } from '../core/localGroup.ts';
-import { dustColumn } from '../core/nuclearCluster.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import type { LazySource } from '../core/satellites.ts';
 import { brightestMagnitude } from '../core/starCatalog.ts';
@@ -30,6 +30,7 @@ import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
+import { GALACTIC_BASIS } from './galactic.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { lensState } from './lens.ts';
 import { MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
@@ -78,8 +79,9 @@ import { useFrame } from './lazyLayer.tsx';
  * are in a photograph, on the exposure the Clouds beside them are drawn with.
  *
  * - **Dimmed by the dust in front**, as its stars are: its A_V from the Sun times the share of
- *   that dust column between the camera and it, worked out again as the camera moves. Grey,
- *   as the stars' is: the reddening is not drawn.
+ *   that dust column between the camera and it, worked out again as the camera moves -- in a
+ *   worker, the Sun's column kept (core/globularClusterDust.ts), so the dimming follows the
+ *   camera a frame or so behind. Grey, as the stars' is: the reddening is not drawn.
  * - **Giving way to its stars**: for the cluster whose stars are drawn the point holds only
  *   the light of those too faint to be -- fainter than the picture's limit from the camera, or
  *   than the sample's limit at its half-light radius (unresolvedShare) -- so no light is
@@ -379,6 +381,34 @@ export function GlobularClusters({
     };
   }, [points, lightGroup]);
 
+  // The dust in front of each, worked out in a worker as the camera moves (globularClusterDust.ts).
+  const dust = useMemo(() => {
+    if (archive === null) return null;
+    const c = archive.catalog;
+    const catalog: ClusterDustCatalog = {
+      count: c.count,
+      x: c.x,
+      y: c.y,
+      z: c.z,
+      vx: c.vx,
+      vy: c.vy,
+      vz: c.vz,
+      extinctionV: Array.from({ length: c.count }, (_, k) => clusterExtinctionV(c, k) ?? Number.NaN),
+      basis: { x: { ...GALACTIC_BASIS.x }, y: { ...GALACTIC_BASIS.y }, z: { ...GALACTIC_BASIS.z } },
+    };
+    return new ClusterDust(catalog);
+  }, [archive]);
+  useEffect(() => {
+    if (dust === null || typeof Worker === 'undefined') return;
+    try {
+      dust.attach(new Worker(new URL('../core/globularClusterDust.worker.ts', import.meta.url), { type: 'module' }) as unknown as DustPort);
+    } catch {
+      // No worker: the dust is worked out here.
+      return;
+    }
+    return () => dust.detach();
+  }, [dust]);
+
   // The stars of the cluster the camera is near.
   const coefficients = useMemo(
     () => magnitudeToPeakCoefficients(brightestMagnitude(catalog), catalog.magnitudeLimit),
@@ -393,6 +423,11 @@ export function GlobularClusters({
   const pending = useRef<number | null>(null);
   const worker = useRef<Worker | null>(null);
   const extinction = useRef<{ k: number; value: number; cameraKm: THREE.Vector3 | null }>({ k: -1, value: 0, cameraKm: null });
+  // Where the camera was when the points' dust being worked out was asked for, and the points
+  // it is for: an answer for points since replaced is dropped.
+  const dustAsked = useMemo(() => new THREE.Vector3(), []);
+  const pointsRef = useRef(points);
+  pointsRef.current = points;
 
   useEffect(
     () => () => {
@@ -520,24 +555,35 @@ export function GlobularClusters({
       const viewport = renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
       const pixelsPerRadian = viewport.y / (2 * Math.tan(((frameCamera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
-      // The dust between, again once the camera has moved enough to change it.
+      // The dust between, again once the camera has moved enough to change it: the first time
+      // here, after that in the worker, taken a frame or so later when it answers.
       let nearestPc = Infinity;
       for (let k = 0; k < c.count; k += 1) nearestPc = Math.min(nearestPc, points.distancePc[k]!);
-      if (points.dustFrom === null || points.dustFrom.distanceTo(cameraPc) > POINT_DUST_REFRESH_SHARE * nearestPc) {
+      if (
+        dust !== null &&
+        !dust.busy &&
+        (points.dustFrom === null || points.dustFrom.distanceTo(cameraPc) > POINT_DUST_REFRESH_SHARE * nearestPc)
+      ) {
         const cameraGalactic = sceneToGalacticPc(scratchSun);
-        for (let k = 0; k < c.count; k += 1) {
-          const fromSun = clusterExtinctionV(c, k);
-          let value = 0;
-          if (fromSun !== null && fromSun > 0) {
-            scratchCluster.set(c.x[k]! + c.vx[k]! * motion, c.y[k]! + c.vy[k]! * motion, c.z[k]! + c.vz[k]! * motion);
-            const centre = sceneToGalacticPc(scratchCluster.multiplyScalar(PARSEC_KM));
-            const share = dustColumn(cameraGalactic, centre) / Math.max(dustColumn([0, 0, 0], centre), 1e-30);
-            value = fromSun * Math.min(1, share);
+        const take = (values: Float64Array, from: THREE.Vector3): void => {
+          for (let k = 0; k < c.count; k += 1) {
+            points.extinction[k] = values[k]!;
+            points.transmission[k] = 10 ** (-0.4 * values[k]!);
           }
-          points.extinction[k] = value;
-          points.transmission[k] = 10 ** (-0.4 * value);
+          points.dustFrom = (points.dustFrom ?? new THREE.Vector3()).copy(from);
+        };
+        if (points.dustFrom === null) {
+          take(dust.now(cameraGalactic, motion), cameraPc);
+        } else {
+          const askedFor = points;
+          dustAsked.copy(cameraPc);
+          dust.ask(cameraGalactic, motion, (values) => {
+            // Dropped if the catalogue was replaced meanwhile.
+            if (pointsRef.current !== askedFor) return;
+            take(values, dustAsked);
+            renderDemand.request();
+          });
         }
-        points.dustFrom = (points.dustFrom ?? new THREE.Vector3()).copy(cameraPc);
       }
       const resolved = starsGroup.visible ? current : null;
       for (let k = 0; k < c.count; k += 1) {
@@ -575,14 +621,8 @@ export function GlobularClusters({
     const refresh = EXTINCTION_REFRESH_SHARE * Math.max(cameraKm.length(), PARSEC_KM);
     if (last.k !== k || last.cameraKm === null || last.cameraKm.distanceTo(cameraKm) > refresh) {
       const fromSun = clusterExtinctionV(c, k);
-      if (fromSun === null || fromSun === 0) {
-        last.value = 0;
-      } else {
-        const centre = sceneToGalacticPc(scratchCluster.clone().multiplyScalar(PARSEC_KM));
-        const cameraGalactic = sceneToGalacticPc(scratchSun);
-        const share = dustColumn(cameraGalactic, centre) / Math.max(dustColumn([0, 0, 0], centre), 1e-30);
-        last.value = fromSun * Math.min(1, share);
-      }
+      // The Sun's column kept (globularClusterDust.ts SunColumns): only the camera's worked out.
+      last.value = fromSun === null || fromSun === 0 || dust === null ? 0 : dust.one(k, sceneToGalacticPc(scratchSun), motion);
       last.k = k;
       last.cameraKm = cameraKm;
     }

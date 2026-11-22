@@ -37,8 +37,9 @@ import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaus
 import { floorKept, halfCountRadiusPc } from './crowding.ts';
 import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { setMarkerPointer } from './markerPointer.ts';
+import { declutterMarks, GALAXY_MARK_PX } from './markDeclutter.ts';
 import { foldMembers } from './markFolding.ts';
-import { galaxyMembers, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, updateMarkHosts, type MemberFolds } from './markHosts.ts';
+import { galaxyMembers, MARK_HOSTS, pixelsPerRadian as viewPixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import type { FramingView } from '../state/store.ts';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { faceOnLevels, faceOnTexture, pngPixels } from './faceOnTexture.ts';
@@ -228,11 +229,8 @@ export const MARKS_FULL_LY = 100_000;
  */
 export const VOLUME_FROM_LY = 3e6;
 
-/** How near a held mark may let another come before it goes, as a share of the mark's size. */
-const MARK_HELD_FRACTION = 0.7;
-
-/** The marks: an ellipse, the old sign for a nebula, and its size, CSS pixels. */
-const SPRITE_PX = 15;
+/** The marks: an ellipse, the old sign for a nebula, and its size, CSS pixels (decluttered by it: markDeclutter.ts). */
+const SPRITE_PX = GALAXY_MARK_PX;
 export const CLICK_SLOP_PX = 5;
 
 export function outOfDiscStrength(cameraFromSunKm: number): number {
@@ -684,110 +682,6 @@ interface Entry {
 const noRaycast = (): void => {};
 const scratchMatrix = new THREE.Matrix4();
 const scratchSize = new THREE.Vector2();
-const scratchQuaternion = new THREE.Quaternion();
-const scratchVector = new THREE.Vector3();
-
-/** The marks as the declutter reads and writes them. */
-export interface Marks {
-  readonly centres: readonly { readonly x: number; readonly y: number; readonly z: number }[];
-  readonly shown: THREE.BufferAttribute;
-  /** Most luminous first. */
-  readonly order: readonly number[];
-  /** 1 where the galaxy is a body, whose own marker stands for it. */
-  readonly body: Uint8Array;
-  /** 1 where the mark kept its place last frame. */
-  readonly kept: Uint8Array;
-  /** Each one's host, and this frame's fold into it (markFolding.ts). */
-  readonly folds: MemberFolds;
-}
-
-/**
- * Which marks show: the bodies' places taken first, then each galaxy's, most luminous first,
- * where no mark already placed lies within a mark's size, SPRITE_PX -- one already shown
- * holding its place unless another comes within MARK_HELD_FRACTION of that, so a pair at the
- * threshold does not swap each frame. `width` and `height` are the canvas's, CSS pixels.
- *
- * A mark folded into its host's (markFolding.ts) takes no place; one folding is drawn as much
- * as it is there, its fold this frame.
- */
-export function declutterMarks(marks: Marks, frameCamera: THREE.Camera, cameraPc: THREE.Vector3, width: number, height: number): void {
-  frameCamera.updateMatrixWorld();
-  scratchQuaternion.copy(frameCamera.quaternion).invert();
-  const e = (frameCamera as THREE.PerspectiveCamera).projectionMatrix.elements;
-  const cells = new Map<number, number[]>();
-  const cellKey = (cx: number, cy: number) => cx * 100_003 + cy;
-  const clear = (x: number, y: number, gap: number): boolean => {
-    const cx = Math.floor(x / SPRITE_PX);
-    const cy = Math.floor(y / SPRITE_PX);
-    for (let i = -1; i <= 1; i += 1) {
-      for (let j = -1; j <= 1; j += 1) {
-        const placed = cells.get(cellKey(cx + i, cy + j));
-        if (placed === undefined) continue;
-        for (let p = 0; p < placed.length; p += 2) {
-          if (Math.abs(placed[p]! - x) < gap && Math.abs(placed[p + 1]! - y) < gap) return false;
-        }
-      }
-    }
-    return true;
-  };
-  const place = (x: number, y: number): void => {
-    const key = cellKey(Math.floor(x / SPRITE_PX), Math.floor(y / SPRITE_PX));
-    const list = cells.get(key);
-    if (list === undefined) cells.set(key, [x, y]);
-    else list.push(x, y);
-  };
-  const onScreen = (i: number): readonly [number, number] | null => {
-    const centre = marks.centres[i]!;
-    scratchVector.set(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z).applyQuaternion(scratchQuaternion);
-    const depth = -scratchVector.z;
-    if (depth <= 0) return null;
-    const x = ((e[0]! * scratchVector.x) / depth + 1) * 0.5 * width;
-    const y = (1 - (e[5]! * scratchVector.y) / depth) * 0.5 * height;
-    return x < -SPRITE_PX || y < -SPRITE_PX || x > width + SPRITE_PX || y > height + SPRITE_PX ? null : [x, y];
-  };
-  let changed = false;
-  const set = (i: number, keep: boolean): void => {
-    marks.kept[i] = keep ? 1 : 0;
-    const show = keep && marks.body[i] === 0 ? marks.folds.value[i]! : 0;
-    const was = marks.shown.getX(i);
-    if (was !== show && (Math.abs(was - show) > 1 / 512 || show === 0 || show === 1)) {
-      marks.shown.setX(i, show);
-      changed = true;
-    }
-  };
-  for (const i of marks.order) {
-    if (marks.body[i] === 1) {
-      const at = onScreen(i);
-      if (at !== null) place(at[0], at[1]);
-      set(i, true);
-    }
-  }
-  for (const i of marks.order) {
-    if (marks.body[i] === 1) continue;
-    if (marks.folds.value[i] === 0) {
-      // Folded away: kept, so it comes back as it was.
-      marks.kept[i] = 1;
-      if (marks.shown.getX(i) !== 0) {
-        marks.shown.setX(i, 0);
-        changed = true;
-      }
-      continue;
-    }
-    const at = onScreen(i);
-    if (at === null) {
-      // Off the screen: kept, so it comes back as it was.
-      set(i, true);
-      continue;
-    }
-    const keep = clear(at[0], at[1], marks.kept[i] === 1 ? SPRITE_PX * MARK_HELD_FRACTION : SPRITE_PX);
-    if (keep) place(at[0], at[1]);
-    set(i, keep);
-  }
-  if (changed) {
-    marks.shown.needsUpdate = true;
-  }
-}
-
 export function LocalGroup({ source, store, clock, focus, visible, showMarks, onPick, volume, onPickVolume }: LocalGroupProps) {
   const { gl, camera } = useThree();
   const loaded = useSyncExternalStore(source.subscribe, () => source.value);
@@ -1046,7 +940,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), material);
         mesh.frustumCulled = false;
         mesh.raycast = noRaycast;
-        drawIntoGlow(mesh);
+        drawIntoGlow(mesh, { volume: true });
         const scale = model.kind === 'disc' ? model.scaleLengthPc : model.majorPc;
         return [
           {

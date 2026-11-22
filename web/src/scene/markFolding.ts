@@ -197,22 +197,34 @@ export class FoldHosts {
       this.system = new Float64Array(n);
       this.pinned = new Uint8Array(n);
     }
-    this.pinned.fill(0);
+    const pinnedOf = this.pinned;
+    pinnedOf.fill(0);
     for (const h of pinned) {
-      if (h >= 0 && h < n) this.pinned[h] = 1;
+      if (h >= 0 && h < n) pinnedOf[h] = 1;
     }
+    // Ten thousand hosts with Laniakea's groups, every frame the camera moves: the loop is kept
+    // to plain arithmetic -- a square root rather than Math.hypot, a tenth of its cost and the
+    // same distance to a unit in the last place -- and a group's presence, its reach as well,
+    // weighed once.
+    const [cx, cy, cz] = cameraPc;
+    const { x, y, z, parent, separation, reach: reachOf, presence: presenceOf, scale, system, strength } = this;
     for (let h = 0; h < n; h += 1) {
-      const d = Math.hypot(cameraPc[0] - this.x[h]!, cameraPc[1] - this.y[h]!, cameraPc[2] - this.z[h]!);
-      this.scale[h] = d > 0 ? pixelsPerRadian / d : Infinity;
-      const reach = this.reach[h]!;
-      this.system[h] = Number.isFinite(reach) ? systemStrength(reach * this.scale[h]!) : 1;
-      const p = this.parent[h]!;
+      const dx = cx - x[h]!;
+      const dy = cy - y[h]!;
+      const dz = cz - z[h]!;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const s = d > 0 ? pixelsPerRadian / d : Infinity;
+      scale[h] = s;
+      const reach = reachOf[h]!;
+      const systemH = Number.isFinite(reach) ? systemStrength(reach * s) : 1;
+      system[h] = systemH;
+      const p = parent[h]!;
       // A host where its own host is -- the Milky Way inside the Local Group whose mark is its
       // own -- is that mark: as much there as it is.
-      const own =
-        this.pinned[h] === 1 || p < 0 ? 1 : this.separation[h] === 0 ? this.strength[p]! : this.member(p, this.separation[h]!);
-      const presence = this.presence[h]!;
-      this.strength[h] = presence > 0 && this.pinned[h] === 0 ? Math.min(own, systemStrength(presence * this.scale[h]!)) : own;
+      const own = pinnedOf[h] === 1 || p < 0 ? 1 : separation[h] === 0 ? strength[p]! : this.member(p, separation[h]!);
+      const presence = presenceOf[h]!;
+      strength[h] =
+        presence > 0 && pinnedOf[h] === 0 ? Math.min(own, presence === reach ? systemH : systemStrength(presence * s)) : own;
     }
   }
 

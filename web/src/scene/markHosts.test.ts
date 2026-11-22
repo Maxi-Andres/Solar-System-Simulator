@@ -24,6 +24,7 @@ import {
   structuresFade,
   STRUCTURES_FROM_LY,
   STRUCTURES_FULL_LY,
+  sameMarkHostsInput,
   updateMarkHosts,
 } from './markHosts.ts';
 import { indexLaniakea } from '../core/laniakea.ts';
@@ -264,5 +265,27 @@ describe('Laniakea’s (G3)', () => {
     expect(structuresFade(1e6)).toBe(0);
     expect(structuresFade((STRUCTURES_FROM_LY * 0.99) / 3.2616)).toBe(0);
     expect(structuresFade((STRUCTURES_FULL_LY * 1.01) / 3.2616)).toBe(1);
+  });
+});
+
+describe('updateMarkHosts each frame', () => {
+  it('does the work once for a frame’s camera, however each caller rounded it', () => {
+    const camera: [number, number, number] = [8123.456789, -21.5, 3e-5];
+    updateMarkHosts(camera, 1000, 'earth');
+    // One caller divides by a parsec, another multiplies by its inverse: a unit in the last place apart.
+    const rounded: [number, number, number] = [camera[0] * (1 + 2 ** -52), camera[1], camera[2] * (1 - 2 ** -52)];
+    expect(sameMarkHostsInput(rounded, 1000, 'earth', MARK_HOSTS.count)).toBe(true);
+    const strength = Float64Array.from(MARK_HOSTS.strength);
+    updateMarkHosts(rounded, 1000, 'earth');
+    expect(Array.from(MARK_HOSTS.strength)).toEqual(Array.from(strength));
+  });
+
+  it('does it again once the camera, the view, the focus or the hosts change', () => {
+    const camera: [number, number, number] = [8123.456789, -21.5, 3e-5];
+    updateMarkHosts(camera, 1000, 'earth');
+    expect(sameMarkHostsInput([camera[0] + 1e-3, camera[1], camera[2]], 1000, 'earth', MARK_HOSTS.count)).toBe(false);
+    expect(sameMarkHostsInput(camera, 1001, 'earth', MARK_HOSTS.count)).toBe(false);
+    expect(sameMarkHostsInput(camera, 1000, 'moon', MARK_HOSTS.count)).toBe(false);
+    expect(sameMarkHostsInput(camera, 1000, 'earth', MARK_HOSTS.count + 1)).toBe(false);
   });
 });

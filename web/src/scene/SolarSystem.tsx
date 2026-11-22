@@ -17,6 +17,7 @@ import {
   applyCloudDensity,
   applyEarthExtras,
   cloudDriftDeg,
+  cloudDriftDegPerDay,
   CLOUD_SEGMENTS,
   CLOUD_TOP_ALTITUDE_KM,
   EARTH_CLOUD_MAP,
@@ -30,9 +31,10 @@ import { bodiesToResolve, isShown, isSmallMoon } from './floatingOrigin.ts';
 import { markerTexture, type MarkerShape } from './markerTexture.ts';
 import { MarkerInstances } from './markerInstances.ts';
 import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
-import { OrbitLine } from './orbitGeometry.ts';
+import { OrbitLine, orbitUnseenKm } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
-import { cloudTopDriftDeg, cloudTopMapOffset } from './cloudRotation.ts';
+import { cloudTopDriftDeg, cloudTopDriftRateDegPerDay, cloudTopMapOffset } from './cloudRotation.ts';
+import { degPerDayToRadPerSec, pixelsPerRadian, surfaceRate, swarmRate, transverseRate } from './screenMotion.ts';
 import { drawnTexture, mapColourGain } from './drawnTexture.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
 import { ringFlatRadianceFactor, ringShadowSettings, ringStripTexture } from './ringBands.ts';
@@ -137,6 +139,59 @@ const scratchQuaternion = new THREE.Quaternion();
 const scratchDrift = new THREE.Quaternion();
 
 const DEG = Math.PI / 180;
+
+/** The objects freezeMatrices stopped, to be started again: only those it stopped. */
+const frozenByUs = new WeakSet<THREE.Object3D>();
+const frozenGroups = new WeakSet<THREE.Object3D>();
+
+/**
+ * Stops three recomposing the matrices of a body nothing of which is drawn, or starts it again.
+ *
+ * Each frame the render walks the whole scene and recomposes every object's matrix from its
+ * position, rotation and scale (matrixAutoUpdate), drawn or not: five hundred bodies, a
+ * group, a sphere, a glare and more each, where a few dozen are drawn -- most are a marker,
+ * drawn by the batch, or not there at all. Frozen, an object keeps the matrices it had; its
+ * position may go on being set, and is composed again the frame it is unfrozen, before it is
+ * drawn. Nothing reads these matrices but the render: this file places by positions.
+ *
+ * Only the group and what it was built with -- the sphere, clouds, sky, rings, glare, never
+ * taken out of it -- and only what was composing, so what composes by hand stays as it was.
+ * A model or ground patch added later is left to compose: it can be taken out and put back,
+ * and one put back frozen would be drawn where it was.
+ */
+function freezeMatrices(handle: BodyHandles, frozen: boolean): void {
+  const group = handle.group;
+  if (frozenGroups.has(group) === frozen) {
+    return;
+  }
+  if (frozen) {
+    frozenGroups.add(group);
+  } else {
+    frozenGroups.delete(group);
+  }
+  const added = [handle.craftShape, handle.bodyShape?.object ?? null, handle.surfaceGround?.object ?? null];
+  for (const object of [group, ...group.children]) {
+    if (added.includes(object)) {
+      continue;
+    }
+    if (frozen && object.matrixAutoUpdate) {
+      object.matrixAutoUpdate = false;
+      frozenByUs.add(object);
+    } else if (!frozen && frozenByUs.delete(object)) {
+      object.matrixAutoUpdate = true;
+    }
+  }
+}
+
+/**
+ * A group that is never moved: what it holds carries its own place. Its matrix is not
+ * recomposed each frame (three's matrixAutoUpdate), only its children's.
+ */
+function staticGroup(): THREE.Group {
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+  return group;
+}
 
 /** The one body with night lights, clouds and oceans. See earthExtras.ts. */
 const EARTH_ID = 'earth';
@@ -889,7 +944,7 @@ export function SolarSystem({
         orbitParent,
         orbitMu,
         orbitCenter,
-        trajectoryGroup: definition.kind === 'spacecraft' ? new THREE.Group() : null,
+        trajectoryGroup: definition.kind === 'spacecraft' ? staticGroup() : null,
         trajectory: null,
         ring,
         ringShadow,
@@ -938,7 +993,12 @@ export function SolarSystem({
     return built;
   }, [store, version, handleCache]);
   // Orbits made after the first render -- a small moon's, once focused -- hang here.
-  const lateOrbits = useMemo(() => new THREE.Group(), []);
+  // Never moved: its lines carry their own positions (matrixAutoUpdate, see the root below).
+  const lateOrbits = useMemo(() => {
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    return group;
+  }, []);
   // A body taken out of the store (removePropagatedBody) leaves its handle in the cache;
   // once React has committed the scene without it, its memory is given back. After the
   // commit, not while building, so no frame draws a freed handle.
@@ -963,7 +1023,12 @@ export function SolarSystem({
   // The markers shown last frame, which keep their places. See markerDeclutter.ts.
   const heldMarkers = useMemo(() => new Set<BodyId>(), []);
   // Every body's marker, in one draw. See markerInstances.ts.
-  const markerBatch = useMemo(() => new MarkerInstances(markerTexture('circle'), markerTexture('diamond')), []);
+  const markerBatch = useMemo(() => {
+    const batch = new MarkerInstances(markerTexture('circle'), markerTexture('diamond'));
+    // Never moved: each marker's place is in its instance data, in the camera's frame.
+    batch.mesh.matrixAutoUpdate = false;
+    return batch;
+  }, []);
   useEffect(() => () => markerBatch.dispose(), [markerBatch]);
 
   useFrame(() => {
@@ -1005,11 +1070,20 @@ export function SolarSystem({
     let trailWorkMs = 0;
     let trailsPutOff = false;
     markerBatch.begin();
+    // The fastest anything drawn here crosses the view, radians per simulated second: live
+    // mode draws a frame once it has moved a quarter of a pixel (renderDemand.ts clockMoved).
+    // The camera in km from the focus, as the snapshot's positions are.
+    let fastest = 0;
+    const cameraKmX = camera.position.x * KM_PER_UNIT;
+    const cameraKmY = camera.position.y * KM_PER_UNIT;
+    const cameraKmZ = camera.position.z * KM_PER_UNIT;
 
     for (const handle of handles) {
       const rebased = snapshot.bodies.get(handle.definition.id);
       if (rebased === undefined) {
         handle.group.visible = false;
+        // Nothing of it is drawn: its matrices are left as they are (see freezeMatrices).
+        freezeMatrices(handle, true);
         if (handle.orbit !== null) {
           handle.orbit.line.visible = false;
         }
@@ -1024,6 +1098,7 @@ export function SolarSystem({
       const kindVisible = isShown(handle.definition, visibleKinds);
       handle.group.visible = kindVisible;
       if (!kindVisible) {
+        freezeMatrices(handle, true);
         if (handle.orbit !== null) {
           handle.orbit.line.visible = false;
         }
@@ -1095,6 +1170,19 @@ export function SolarSystem({
       // decides whether a sphere is big enough to be worth drawing.
       const distanceUnits = handle.group.position.distanceTo(camera.position);
       const distanceKm = distanceUnits * 1000;
+      // Its marker, its name, its disc: all where it is, so as fast as it crosses the view.
+      // Every body shown counts, on screen or not -- one just off it is a pixel from it.
+      fastest = Math.max(
+        fastest,
+        transverseRate(
+          rebased.positionKm.x - cameraKmX,
+          rebased.positionKm.y - cameraKmY,
+          rebased.positionKm.z - cameraKmZ,
+          rebased.velocityKmS.x,
+          rebased.velocityKmS.y,
+          rebased.velocityKmS.z,
+        ),
+      );
 
       // A black hole is drawn as its shadow, not its horizon (schwarzschildLens.ts): a
       // sphere that hides exactly what the shadow hides from here, b_c sqrt(1 - r_s/D) --
@@ -1360,6 +1448,43 @@ export function SolarSystem({
         sphereOpacity > 0.005 &&
         !lensState.drawnByLens.has(handle.definition.id) &&
         !NOT_A_SPHERE_KINDS.has(handle.definition.kind);
+      // A surface drawn turns with the body, and its map's clouds drift over it: its
+      // equator's speed at the nearest it comes to the camera. A craft's model turns to keep
+      // pointing where it points, about as fast as it goes round what it orbits; one on the
+      // ground turns with the ground.
+      if (
+        handle.mesh.visible ||
+        handle.bodyShape?.object.visible === true ||
+        handle.craftShape?.visible === true
+      ) {
+        let spin = handle.definition.rotation === null ? 0 : degPerDayToRadPerSec(handle.definition.rotation.rotationRateDegPerDay);
+        spin = Math.abs(spin);
+        if (cloudDrift !== null) {
+          spin += Math.abs(degPerDayToRadPerSec(cloudTopDriftRateDegPerDay(handle.definition) ?? 0));
+        }
+        if (handle.earth !== null) {
+          spin += Math.abs(degPerDayToRadPerSec(cloudDriftDegPerDay(handle.earth.deckRadiusKm)));
+        }
+        if (craft !== null) {
+          const about = snapshot.bodies.get(handle.definition.parent ?? 'sun');
+          if (about !== undefined) {
+            spin += transverseRate(
+              rebased.positionKm.x - about.positionKm.x,
+              rebased.positionKm.y - about.positionKm.y,
+              rebased.positionKm.z - about.positionKm.z,
+              rebased.velocityKmS.x - about.velocityKmS.x,
+              rebased.velocityKmS.y - about.velocityKmS.y,
+              rebased.velocityKmS.z - about.velocityKmS.z,
+            );
+          }
+          const ground = site === null || site === undefined ? null : store.body(site.host).rotation;
+          if (ground !== null) {
+            spin += Math.abs(degPerDayToRadPerSec(ground.rotationRateDegPerDay));
+          }
+        }
+        const radiusKm = handle.definition.radiusEquatorialKm;
+        fastest = Math.max(fastest, surfaceRate(spin * radiusKm, radiusKm, distanceKm));
+      }
       const meshMaterial = handle.mesh.material as
         | THREE.MeshBasicMaterial
         | THREE.MeshStandardMaterial;
@@ -1405,6 +1530,24 @@ export function SolarSystem({
               there.velocityKmS.z + frameVz,
               occludingRadiusKm(other.definition),
             );
+          }
+          // A shadow on it moves over it with the body casting it -- twice that, for the
+          // edge's run across a surface it meets at a slant.
+          if (eclipse.uniforms.uEclipseCount.value > 0) {
+            for (const other of handle.eclipseCandidates) {
+              const there = snapshot.bodies.get(other.definition.id);
+              if (there !== undefined) {
+                const relative = Math.hypot(
+                  there.velocityKmS.x - rebased.velocityKmS.x,
+                  there.velocityKmS.y - rebased.velocityKmS.y,
+                  there.velocityKmS.z - rebased.velocityKmS.z,
+                );
+                fastest = Math.max(
+                  fastest,
+                  surfaceRate(2 * relative, handle.definition.radiusEquatorialKm, distanceKm),
+                );
+              }
+            }
           }
         }
       }
@@ -1706,6 +1849,10 @@ export function SolarSystem({
           // the osculating ellipse of this instant passes through the body by
           // definition. OrbitLine throttles the rebuild internally.
           const relative = store.stateRelativeTo(handle.definition.id, handle.orbitParent, jd);
+          // Under warp, how far the line may move unseen from where the camera is
+          // (orbitUnseenKm): from afar, far more than the body's radius it is otherwise held
+          // to. At real time and paused, null: rebuilt as it always was (OrbitLine.setElements).
+          let unseenKm: number | null = null;
           if (relative !== null) {
             const live = stateToOsculatingElements(
               relative,
@@ -1716,15 +1863,25 @@ export function SolarSystem({
               handle.definition.id,
               handle.orbitCenter,
             );
+            if (live !== null && clock.mode === 'warp') {
+              unseenKm = orbitUnseenKm(
+                handle.orbit.nearestKm(
+                  cameraKmX - parent.positionKm.x,
+                  cameraKmY - parent.positionKm.y,
+                  cameraKmZ - parent.positionKm.z,
+                ),
+                pixelsPerRadian(size.height, fov),
+              );
+            }
             if (live !== null) {
-              handle.orbit.setElements(live);
+              handle.orbit.setElements(live, unseenKm);
             }
           }
 
           // Rebuild tolerance scales with the focused body's radius: that is the
           // smallest thing on screen worth resolving, so drifting by less than that
           // cannot be seen.
-          handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25);
+          handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25, unseenKm);
         }
       }
 
@@ -1811,11 +1968,34 @@ export function SolarSystem({
           }
         }
       }
+
+      // Its matrices worked out by the render only while something in it is drawn: most
+      // bodies are a marker, drawn by the batch, with their sphere, glare and the rest hidden.
+      let drawn = false;
+      for (const child of handle.group.children) {
+        drawn ||= child.visible;
+      }
+      freezeMatrices(handle, !drawn);
     }
 
     if (trailsPutOff) {
       renderDemand.request(1);
     }
+
+    // Earth's satellites, drawn as a swarm of dots (SatelliteSwarm.tsx) and not as bodies: as
+    // fast as any of them could be, from where Earth is (screenMotion.ts swarmRate).
+    const earthNow = snapshot.bodies.get(EARTH_ID);
+    if (visibleKinds.has('satellite') && earthNow !== undefined) {
+      fastest = Math.max(
+        fastest,
+        swarmRate(
+          Math.hypot(earthNow.positionKm.x - cameraKmX, earthNow.positionKm.y - cameraKmY, earthNow.positionKm.z - cameraKmZ),
+          store.body(EARTH_ID).gmBodyOnlyKm3S2,
+          Math.hypot(earthNow.velocityKmS.x, earthNow.velocityKmS.y, earthNow.velocityKmS.z),
+        ),
+      );
+    }
+    renderDemand.setMotion(fastest * pixelsPerRadian(size.height, fov));
 
     // Every body, shown or not: one switched off or out of its coverage was skipped
     // above, and that is exactly the one whose detail should go.
@@ -1852,7 +2032,10 @@ export function SolarSystem({
   });
 
   return (
-    <group ref={rootRef}>
+    // Never moved, so never recomposed: the scene's root is static too (SolarSystemCanvas), and
+    // with every ancestor static three no longer forces a world update on each body each
+    // frame -- only on those that move, and not on those not drawn (freezeMatrices).
+    <group ref={rootRef} matrixAutoUpdate={false}>
       {/*
         Point light with no distance falloff: inverse-square over interplanetary
         distances would underflow to black long before Neptune. Real illuminance
