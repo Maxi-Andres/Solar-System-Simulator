@@ -448,7 +448,13 @@ describe('the spacecraft models', () => {
   });
 
   it('ships every model it uses, credited, and nothing it does not use', async () => {
-    const files = (await readdir(MODELS)).filter((file) => file.endsWith('.glb')).sort();
+    // The real craft only: the top level of public/models. The fiction layer's models live in
+    // models/fiction/, are loaded by their own looks (scene/fiction/looks/) and tested there,
+    // and are not credited here by the owner's decision -- so the folder is left out on purpose.
+    const files = (await readdir(MODELS, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.glb'))
+      .map((entry) => entry.name)
+      .sort();
     const used = [...new Set(shapes.flatMap(({ shape }) => (shape.model === null ? [] : [shape.model])))].sort();
     expect(files).toEqual(used);
 

@@ -3,14 +3,15 @@ import * as THREE from 'three';
 import { LIGHTING } from '../../shading.ts';
 
 /**
- * The one material every part of a fictional ship is drawn with: physically based shading
- * from its own star, the surface's metal, paint, foil and wear carried per vertex.
+ * The material a fictional ship's model is drawn with: physically based shading from its own
+ * star, each vertex pointing into a small table of finishes.
  *
- * **Why one material.** A ship of a few hundred parts drawn with a material per kind of surface
- * is a draw call and a program per kind, each compiled before it can be seen. Here the parts
- * are merged into a few meshes, and what each vertex is made of rides on the vertex: base
- * colour, metalness, roughness, brushing, glow, how its plates are laid out, its markings, how
- * much of the sky it sees. One program, one draw per mesh.
+ * **Why one material.** The model brings eighteen materials; drawn as they are, that is a draw
+ * call and a program per material, each lit by the scene's Sun. Here the model's meshes are
+ * merged into a few, and each vertex carries only its position, normal, how much of the sky it
+ * sees, which finish it is painted with and which section of the ship it belongs to. The
+ * finishes themselves -- base colour, metalness, roughness, brushing, glow, wear -- sit in
+ * uniform arrays (setShipFinishes). One program, one draw per section, 24 bytes a vertex.
  *
  * **Why its own light.** The scene's one light is the Sun; a ship at tau Ceti is lit by tau
  * Ceti, as the exoplanets are (exoplanetSurface.ts). The light's direction is a uniform, set
@@ -18,88 +19,46 @@ import { LIGHTING } from '../../shading.ts';
  * position is a number in a scene 1e23 km across, which float32 cannot hold to a metre.
  *
  * **Metal.** GGX microfacets with Smith masking and Schlick's Fresnel, anisotropic where the
- * metal is brushed (Burley's form): a brushed plate's highlight is a streak across the brushing,
- * and turning the view slides it from plate to plate, because the plates are brushed in
- * different directions. What a metal shows away from its highlight is what it reflects: here a
- * dark sky with a faint band of galaxy and, on the smoothest parts, its stars -- not a grey
- * ambient, which is what made bare metal read as grey plastic. Fresnel lifts that reflection
- * toward grazing angles, rough surfaces less (the "roughness-aware" Schlick of split-sum
- * lighting).
- *
- * **Plates are drawn, not modelled.** Each part's plates are laid out in the shader on its own
- * cylinder, around and along its axis in metres: rows of varied height, plates of varied width
- * staggered from row to row like brickwork, now and then one split in two or set in a different
- * temper, welds along some row joints. Seams and welds fade out where a pixel spans several,
- * so nothing shimmers.
+ * metal is brushed (Burley's form). What a metal shows away from its highlight is what it
+ * reflects: here a dark sky with a faint band of galaxy and, on the smoothest parts, its stars --
+ * not a grey ambient, which is what makes bare metal read as grey plastic. Fresnel lifts that
+ * reflection toward grazing angles, rough surfaces less.
  *
  * **Shadows and occlusion.** The star's shadow comes from a small shadow map of the ship alone
  * (hailMary.ts draws it only when the ship is large on screen and something has moved); how much
- * of the sky each vertex sees is worked out once, when the ship is built (shipOcclusion.ts), and
- * dims what it reflects and, a little, what it is lit by -- crevices, the gaps between the
- * tanks, under the faring.
+ * of the sky each vertex sees was baked into the model file, and dims what it reflects and, a
+ * little, what it is lit by.
  */
 
-/** Markings, coded in a finish's plate size. */
-export const MARKING = { hazard: -1, stencil: -2, foil: -3 } as const;
+/** Surface patterns drawn in the shader, coded in a finish's fourth component. */
+export const MARKING = { foil: -3, weathered: -5 } as const;
 
-/** The characters a stencil can spell, in the order of their codes (0 is a space). */
-export const STENCIL_CHARACTERS = ' 0123456789ABCEFHILMNORSTUY-';
-
-/**
- * A 3 x 5 pixel font, rows top to bottom, three bits a row (4 = left), for the characters
- * above. Plain block capitals, as stencils are.
- */
-const FONT: readonly number[][] = [
-  [0, 0, 0, 0, 0], // space
-  [7, 5, 5, 5, 7], // 0
-  [2, 6, 2, 2, 7], // 1
-  [7, 1, 7, 4, 7], // 2
-  [7, 1, 7, 1, 7], // 3
-  [5, 5, 7, 1, 1], // 4
-  [7, 4, 7, 1, 7], // 5
-  [7, 4, 7, 5, 7], // 6
-  [7, 1, 1, 1, 1], // 7
-  [7, 5, 7, 5, 7], // 8
-  [7, 5, 7, 1, 7], // 9
-  [2, 5, 7, 5, 5], // A
-  [6, 5, 6, 5, 6], // B
-  [7, 4, 4, 4, 7], // C
-  [7, 4, 6, 4, 7], // E
-  [7, 4, 6, 4, 4], // F
-  [5, 5, 7, 5, 5], // H
-  [7, 2, 2, 2, 7], // I
-  [4, 4, 4, 4, 7], // L
-  [5, 7, 7, 5, 5], // M
-  [6, 5, 5, 5, 5], // N
-  [7, 5, 5, 5, 7], // O
-  [6, 5, 6, 5, 5], // R
-  [7, 4, 7, 1, 7], // S
-  [7, 2, 2, 2, 2], // T
-  [5, 5, 5, 5, 7], // U
-  [5, 5, 2, 2, 2], // Y
-  [0, 0, 7, 0, 0], // -
-];
-
-/** The font as one integer per character, fifteen bits, for the shader. */
-const FONT_BITS = FONT.map((rows) => rows.reduce((bits, row) => (bits << 3) | row, 0));
-
-/** A label of up to eight characters as two floats of four six-bit codes each. */
-export function encodeLabel(text: string): [number, number] {
-  const codes = Array.from({ length: 8 }, (_, i) => Math.max(0, STENCIL_CHARACTERS.indexOf(text[i] ?? ' ')));
-  const pack = (part: number[]): number => part.reduce((value, code) => value * 64 + code, 0);
-  return [pack(codes.slice(0, 4)), pack(codes.slice(4, 8))];
+/** A finish: base colour (linear), metalness, roughness, and the optional rest. */
+export interface ShipFinish {
+  readonly color: readonly [number, number, number];
+  readonly metal: number;
+  readonly rough: number;
+  /** A MARKING code; absent for plain. */
+  readonly pattern?: number;
+  /** Brushing, 0 to 1: how much narrower the highlight is across it than along. */
+  readonly aniso?: number;
+  /** Radiance of a lamp, in its own colour. */
+  readonly glow?: number;
 }
+
+/** How many finishes the table holds. */
+export const SHIP_FINISH_SLOTS = 24;
 
 const VERTEX_SHADER = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
 
-  attribute vec3 surface;
-  attribute vec4 finish;
-  attribute vec2 axis;
+  // x: sky visibility; y: finish index / 255; z: section / 255 (eight bits, normalised).
   attribute vec4 detail;
-  attribute vec2 label;
 
+  uniform vec3 uSurface[${SHIP_FINISH_SLOTS}];
+  uniform vec4 uFinish[${SHIP_FINISH_SLOTS}];
+  uniform float uAniso[${SHIP_FINISH_SLOTS}];
   uniform mat4 uShadowView[3];
   uniform mat4 uShadowProjection;
 
@@ -109,23 +68,19 @@ const VERTEX_SHADER = /* glsl */ `
   varying vec3 vViewPosition;
   varying vec3 vSurface;
   varying vec4 vFinish;
-  varying vec2 vAxis;
   varying vec4 vDetail;
-  varying vec2 vUv;
-  varying vec2 vLabel;
   varying vec3 vShadow;
 
   void main() {
+    int finish = int(detail.y * 255.0 + 0.5);
+    int section = int(detail.z * 255.0 + 0.5);
     vLocal = position;
-    vSurface = surface;
-    vFinish = finish;
-    vAxis = axis;
-    vDetail = detail;
-    vUv = uv;
-    vLabel = label;
+    vSurface = uSurface[finish];
+    vFinish = uFinish[finish];
+    vDetail = vec4(detail.x, 1.0, uAniso[finish], float(section));
     vNormal = normalize(normalMatrix * normal);
-    // Brushing runs round each part's own axis.
-    vec2 relative = position.xy - axis;
+    // Brushing runs round the ship's long axis.
+    vec2 relative = position.xy;
     vec3 around = length(relative) > 1e-4 ? vec3(-relative.y, relative.x, 0.0) : vec3(1.0, 0.0, 0.0);
     vTangent = normalize(mat3(modelViewMatrix) * normalize(around));
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
@@ -133,7 +88,6 @@ const VERTEX_SHADER = /* glsl */ `
 
     // Where this point falls in the star's shadow map, pushed a few centimetres out along its
     // normal so a surface does not shadow itself.
-    int section = int(detail.w + 0.5);
     vec4 lightView = uShadowView[section] * vec4(position + normal * 0.05, 1.0);
     vec4 lightClip = uShadowProjection * lightView;
     vShadow = vec3(lightClip.xy * 0.5 + 0.5, -lightView.z);
@@ -150,7 +104,6 @@ const FRAGMENT_SHADER = /* glsl */ `
 
   uniform vec3 uLight;
   uniform float uIrradiance;
-  uniform float uDriveGlow;
   uniform float uShadowOn;
   uniform sampler2D uShadowMap;
   uniform float uShadowTexel;
@@ -160,7 +113,6 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uFillDirection;
   uniform vec3 uFillColor;
   uniform float uFillIrradiance;
-  uniform int uFont[${FONT_BITS.length}];
 
   varying vec3 vLocal;
   varying vec3 vNormal;
@@ -168,10 +120,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   varying vec3 vViewPosition;
   varying vec3 vSurface;
   varying vec4 vFinish;
-  varying vec2 vAxis;
   varying vec4 vDetail;
-  varying vec2 vUv;
-  varying vec2 vLabel;
   varying vec3 vShadow;
 
   // The broad lobe's share of a bare metal's reflection.
@@ -193,12 +142,6 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec2 f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
-  }
-
-  /** 1 on a line \`width\` wide at 0 of \`d\`, antialiased by \`pixel\`, faded when sub-pixel. */
-  float line(float d, float width, float pixel) {
-    float shown = 1.0 - smoothstep(0.3, 1.0, pixel / max(width, 1e-5) * 0.25);
-    return (1.0 - smoothstep(width, width + pixel, abs(d))) * shown + (1.0 - shown) * min(width / max(pixel, 1e-5), 1.0) * 0.5;
   }
 
   /** The star, a dark sky and a faint galaxy, as a surface of roughness \`rough\` reflects them. */
@@ -232,14 +175,6 @@ const FRAGMENT_SHADER = /* glsl */ `
     return mix(mix(lit00, lit10, f.x), mix(lit01, lit11, f.x), f.y);
   }
 
-  /** Whether stencil pixel (column, row) of character \`code\` is painted. */
-  float glyph(int code, int column, int row) {
-    if (code <= 0 || column < 0 || column > 2 || row < 0 || row > 4) return 0.0;
-    int bits = uFont[code];
-    int shift = (4 - row) * 3 + (2 - column);
-    return float((bits >> shift) & 1);
-  }
-
   void main() {
     #include <logdepthbuf_fragment>
 
@@ -254,54 +189,17 @@ const FRAGMENT_SHADER = /* glsl */ `
     if (!gl_FrontFacing) n = -n;
     vec3 t = normalize(vTangent - n * dot(vTangent, n));
 
-    vec2 relative = vLocal.xy - vAxis;
+    vec2 relative = vLocal.xy;
     float radius = max(length(relative), 0.3);
-    // Metres round and along the part's own axis.
+    // Metres round and along the long axis: where wear and foil are laid out.
     vec2 surfaceMetres = vec2(atan(relative.y, relative.x) * radius, vLocal.z);
     vec2 pixelMetres = fwidth(surfaceMetres);
 
-    if (pattern > 0.0) {
-      // Rows of varied height: a row joint every 1.4 m, each kept or dropped by its hash.
-      float rowPitch = 1.4 * pattern;
-      float rowCoordinate = surfaceMetres.y / rowPitch;
-      float row = floor(rowCoordinate);
-      float rowFraction = rowCoordinate - row;
-      // Now and then a row runs on into the one above it -- no joint between them -- so the
-      // rows are not all one height; the merged pair is laid out as one row.
-      float merged = step(hash2(vec2(row, 3.0)), 0.35);
-      float rowSeamDistance = min(merged > 0.5 ? 1.0 : rowFraction, 1.0 - rowFraction) * rowPitch;
-      float layoutRow = row - merged;
-      // Plates in the row: varied width, the joints staggered from row to row.
-      float plateWidth = rowPitch * mix(0.8, 1.7, hash2(vec2(layoutRow, 11.0)));
-      float plateCoordinate = surfaceMetres.x / plateWidth + hash2(vec2(layoutRow, 5.0));
-      float plate = floor(plateCoordinate);
-      float plateFraction = plateCoordinate - plate;
-      float plateSeamDistance = min(plateFraction, 1.0 - plateFraction) * plateWidth;
-      // A few plates split once more.
-      float split = step(0.8, hash2(vec2(plate, layoutRow + 41.0)));
-      if (split > 0.5) plateSeamDistance = min(plateSeamDistance, abs(plateFraction - 0.5) * plateWidth);
-      float seam = max(line(rowSeamDistance, 0.006, pixelMetres.y), line(plateSeamDistance, 0.006, pixelMetres.x));
-      // Welds: a bead along every fourth row joint, wider and duller than a seam.
-      float weld = step(hash2(vec2(row, 29.0)), 0.25) * line(rowSeamDistance, 0.02, pixelMetres.y);
-
-      float temper = hash2(vec2(plate, layoutRow));
-      float temper2 = hash2(vec2(plate + 13.0, layoutRow + 7.0));
-      albedo *= 0.96 + 0.06 * temper;
-      // One plate in twelve from another batch: a shade darker, duller.
-      float odd = step(0.92, temper2);
-      albedo *= mix(1.0, 0.86, odd);
-      rough = clamp(rough + (temper2 - 0.5) * 0.12 + odd * 0.12, 0.05, 1.0);
-      // Brushed round the axis, or along it on about a third of the plates.
-      if (temper > 0.8) t = normalize(cross(n, t));
-      albedo *= 1.0 - 0.5 * seam - 0.15 * weld;
-      // Paint weathers: faint grime in broad, soft patches, a little heavier along the plates'
-      // lower edges where handling and outgassing leave it. Metal is left clean.
+    if (pattern < -4.5) {
+      // Weathered paint: faint grime in broad, soft patches, faded out where a pixel spans them.
       float grime = valueNoise(surfaceMetres * vec2(0.45, 0.3)) * valueNoise(surfaceMetres * vec2(1.9, 1.3) + 5.0);
       float grimeShown = 1.0 - smoothstep(0.2, 0.8, max(pixelMetres.x, pixelMetres.y));
-      albedo *= 1.0 - (1.0 - metal) * grimeShown * (0.14 * grime + 0.05 * smoothstep(0.35, 0.0, rowFraction));
-      rough = mix(rough, 0.75, weld);
-      aniso *= 1.0 - weld;
-      occlusion *= 1.0 - 0.35 * seam;
+      albedo *= 1.0 - (1.0 - metal) * grimeShown * 0.13 * grime;
     } else if (pattern < -2.5) {
       // Foil: crinkled, its normal wandering at a few centimetres and a few millimetres.
       vec2 p = surfaceMetres * vec2(9.0, 7.0);
@@ -310,23 +208,6 @@ const FRAGMENT_SHADER = /* glsl */ `
       vec3 b = cross(n, t);
       n = normalize(n + shown * 0.45 * ((crinkle.x - 0.75) * t + (crinkle.y - 0.75) * b));
       rough = clamp(rough + 0.15 * (crinkle.x - 0.75), 0.1, 1.0);
-    } else if (pattern < -1.5) {
-      // A stencil: up to eight characters across the decal's face, black paint.
-      vec2 cell = vUv * vec2(8.0 * 4.0, 7.0);
-      int index = int(floor(cell.x / 4.0));
-      float packed = index < 4 ? vLabel.x : vLabel.y;
-      int slot = index < 4 ? index : index - 4;
-      int code = int(mod(floor(packed / pow(64.0, float(3 - slot))), 64.0));
-      float painted = glyph(code, int(floor(mod(cell.x, 4.0))), int(floor(6.0 - cell.y)));
-      albedo = mix(albedo, vec3(0.03), painted);
-      metal = mix(metal, 0.0, painted);
-      rough = mix(rough, 0.6, painted);
-    } else if (pattern < -0.5) {
-      // Hazard stripes: yellow and black paint, diagonal, 15 cm.
-      float stripe = step(0.5, fract((surfaceMetres.x + surfaceMetres.y) / 0.3));
-      albedo = mix(vec3(0.75, 0.5, 0.02), vec3(0.025), stripe);
-      metal = 0.0;
-      rough = 0.55;
     }
 
     vec3 v = normalize(-vViewPosition);
@@ -391,8 +272,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     // edge on the dark side still separates from black space.
     radiance += pow(1.0 - nv, 5.0) * sky(r, 1.0) * uIrradiance * 2.0 * occlusion;
 
-    // Lights glow in their own colour; the drive plates' warmth (negative) is a dull red.
-    radiance += glow > 0.0 ? albedo * glow : vec3(1.0, 0.22, 0.06) * (-glow * uDriveGlow);
+    // Lamps glow in their own colour.
+    radiance += albedo * glow;
 
     gl_FragColor = vec4(radiance, 1.0);
 
@@ -412,7 +293,6 @@ export function shipMaterial(): THREE.ShaderMaterial {
     uniforms: {
       uLight: { value: new THREE.Vector3(1, 0, 0) },
       uIrradiance: { value: LIGHTING.natural.sun },
-      uDriveGlow: { value: 1 },
       uShadowOn: { value: 0 },
       uShadowMap: { value: null },
       uShadowTexel: { value: 1 / 1024 },
@@ -425,7 +305,9 @@ export function shipMaterial(): THREE.ShaderMaterial {
       uFillDirection: { value: new THREE.Vector3(0, -1, 0) },
       uFillColor: { value: new THREE.Color(1, 1, 1) },
       uFillIrradiance: { value: 0 },
-      uFont: { value: FONT_BITS },
+      uSurface: { value: Array.from({ length: SHIP_FINISH_SLOTS }, () => new THREE.Vector3(0.5, 0.5, 0.5)) },
+      uFinish: { value: Array.from({ length: SHIP_FINISH_SLOTS }, () => new THREE.Vector4(0, 0.6, 0, 0)) },
+      uAniso: { value: new Array<number>(SHIP_FINISH_SLOTS).fill(0) },
     },
   });
 }
@@ -433,7 +315,6 @@ export function shipMaterial(): THREE.ShaderMaterial {
 const GALAXY_POLE = new THREE.Vector3(0.3, 0.85, 0.43).normalize();
 const WHITE = new THREE.Color(1, 1, 1);
 
-/** Points the material's light along world-space `toLight`, in `camera`'s view space. */
 /**
  * Light from a nearby world on a ship: the direction to the world (world space), its strength as
  * a share of the star's irradiance (`planetshineStrength`), and its colour.
@@ -459,6 +340,7 @@ export function planetshineStrength(albedo: number, litFraction: number, angular
   return albedo * Math.min(Math.max(litFraction, 0), 1) * sine * sine;
 }
 
+/** Points the material's light along world-space `toLight`, in `camera`'s view space, with the lighting mode's star and ambient. */
 export function setShipLight(
   material: THREE.ShaderMaterial,
   toLight: THREE.Vector3,
@@ -479,101 +361,15 @@ export function setShipLight(
   (material.uniforms['uGalaxyPole']!.value as THREE.Vector3).copy(GALAXY_POLE).transformDirection(camera.matrixWorldInverse);
 }
 
-/** What a part is made of. */
-export interface Finish {
-  /** Base colour, linear. */
-  readonly color: readonly [number, number, number];
-  readonly metal: number;
-  readonly rough: number;
-  /** Radiance of a light (positive), or of the drive plates' heat at full drive (negative). */
-  readonly glow?: number;
-  /** Plate size as a factor of the default; or a MARKING code; 0 or absent for neither. */
-  readonly plates?: number;
-  /** Brushing, 0 to 1: how much narrower the highlight is across it than along. */
-  readonly aniso?: number;
-  /** A fixed occlusion for small recessed parts the sky-visibility pass does not resolve. */
-  readonly cavity?: number;
-}
-
-/** Options for a part beyond its finish. */
-export interface PartOptions {
-  /** The axis its plates and brushing run round, (x, y) in metres. */
-  readonly axis?: readonly [number, number];
-  /** Whether the part takes part in the sky-visibility pass (large surfaces); default true. */
-  readonly occluded?: boolean;
-  /** A stencil's text. */
-  readonly label?: string;
-}
-
-/**
- * Builds merged geometry from parts, each with its finish. Everything is made non-indexed and
- * concatenated: one geometry, one draw. `section` says which of the ship's moving parts it is,
- * for the shadow map's per-section transforms.
- */
-export class PartBuilder {
-  #positions: number[] = [];
-  #normals: number[] = [];
-  #uvs: number[] = [];
-  #surface: number[] = [];
-  #finish: number[] = [];
-  #axis: number[] = [];
-  #detail: number[] = [];
-  #label: number[] = [];
-  /** Vertex ranges, [start, end), that the sky-visibility pass computes. */
-  readonly occludedRanges: [number, number][] = [];
-  readonly #normalMatrix = new THREE.Matrix3();
-  readonly #v = new THREE.Vector3();
-
-  constructor(readonly section: number) {}
-
-  /** Adds `geometry` placed by `matrix`. */
-  add(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4, finish: Finish, options: PartOptions = {}): void {
-    const flat = geometry.index === null ? geometry : geometry.toNonIndexed();
-    const position = flat.getAttribute('position');
-    const normal = flat.getAttribute('normal');
-    const uv = flat.getAttribute('uv');
-    const axis = options.axis ?? [0, 0];
-    const label: [number, number] = options.label === undefined ? [0, 0] : encodeLabel(options.label);
-    this.#normalMatrix.getNormalMatrix(matrix);
-    const start = this.#positions.length / 3;
-    const metal = finish.metal;
-    const rough = finish.rough;
-    const glow = finish.glow ?? 0;
-    const plates = finish.plates ?? 0;
-    const cavity = finish.cavity ?? 1;
-    const aniso = finish.aniso ?? 0;
-    for (let i = 0; i < position.count; i += 1) {
-      this.#v.fromBufferAttribute(position, i).applyMatrix4(matrix);
-      this.#positions.push(this.#v.x, this.#v.y, this.#v.z);
-      this.#v.fromBufferAttribute(normal, i).applyMatrix3(this.#normalMatrix).normalize();
-      this.#normals.push(this.#v.x, this.#v.y, this.#v.z);
-      this.#uvs.push(uv === undefined ? 0 : uv.getX(i), uv === undefined ? 0 : uv.getY(i));
-      this.#surface.push(finish.color[0], finish.color[1], finish.color[2]);
-      this.#finish.push(metal, rough, glow, plates);
-      this.#axis.push(axis[0], axis[1]);
-      this.#detail.push(1, cavity, aniso, this.section);
-      this.#label.push(label[0], label[1]);
-    }
-    if (options.occluded !== false) this.occludedRanges.push([start, this.#positions.length / 3]);
-    if (flat !== geometry) flat.dispose();
-    geometry.dispose();
-  }
-
-  get triangles(): number {
-    return this.#positions.length / 9;
-  }
-
-  build(): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.#positions, 3));
-    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.#normals, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.#uvs, 2));
-    geometry.setAttribute('surface', new THREE.Float32BufferAttribute(this.#surface, 3));
-    geometry.setAttribute('finish', new THREE.Float32BufferAttribute(this.#finish, 4));
-    geometry.setAttribute('axis', new THREE.Float32BufferAttribute(this.#axis, 2));
-    geometry.setAttribute('detail', new THREE.Float32BufferAttribute(this.#detail, 4));
-    geometry.setAttribute('label', new THREE.Float32BufferAttribute(this.#label, 2));
-    geometry.computeBoundingSphere();
-    return geometry;
-  }
+/** Fills the material's table of finishes: a vertex of finish index i is painted with `finishes[i]`. */
+export function setShipFinishes(material: THREE.ShaderMaterial, finishes: readonly ShipFinish[]): void {
+  if (finishes.length > SHIP_FINISH_SLOTS) throw new Error(`a ship has at most ${SHIP_FINISH_SLOTS} finishes`);
+  const surface = material.uniforms['uSurface']!.value as THREE.Vector3[];
+  const finish = material.uniforms['uFinish']!.value as THREE.Vector4[];
+  const aniso = material.uniforms['uAniso']!.value as number[];
+  finishes.forEach((look, i) => {
+    surface[i]!.set(look.color[0], look.color[1], look.color[2]);
+    finish[i]!.set(look.metal, look.rough, look.glow ?? 0, look.pattern ?? 0);
+    aniso[i] = look.aniso ?? 0;
+  });
 }

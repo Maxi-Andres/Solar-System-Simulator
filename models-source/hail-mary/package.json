@@ -1,0 +1,13 @@
+{
+  "name": "hail-mary-model-build",
+  "private": true,
+  "description": "Builds web/public/models/fiction/hail-mary.glb from project-hail-mary.glb: node build.mjs project-hail-mary.glb <outDir> 0.015 0.12",
+  "type": "module",
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "gl-matrix": "^3.4.4",
+    "meshoptimizer": "^0.22.0"
+  }
+}

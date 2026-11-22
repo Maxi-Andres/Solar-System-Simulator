@@ -12,8 +12,9 @@ import { ringAnnulus, ringMaterial } from './looks/rings.ts';
 import { worldMaterial, type Haze, type SurfaceLook, type WorldLook } from './looks/worldShader.ts';
 
 /**
- * The fictional objects' looks (core/fictionLook.ts): our own procedural surfaces and shapes,
- * made from what each canon describes -- never a franchise's model, texture or artwork.
+ * The fictional objects' looks (core/fictionLook.ts): the worlds' surfaces our own, procedural,
+ * made from what each canon describes -- never a franchise's texture or artwork. The Hail Mary
+ * is a fan-made model of the ship, given to the project (looks/hailMary.ts).
  *
  * A world's palette is a surface look (looks/), drawn by the shared world shader
  * (looks/worldShader.ts) with the house's lighting and a haze; each look is one program, the
