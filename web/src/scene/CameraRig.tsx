@@ -55,6 +55,12 @@ const ROTATE_SPEED = 0.005;
  * hundred-thousandth: a hundredth of a pixel across a planet that fills the window. A
  * wheel notch is about 13 %, which closes to this in under fifty frames. See
  * renderDemand.ts.
+ *
+ * Once there, the camera is put at its target exactly, and left alone: eased on forever, a still
+ * camera came out a part in 10^17 different every frame -- its offset renormalised, its distance
+ * a step closer to a target it never reaches -- and the glow pass, which keeps its buffers only
+ * while the camera is the same to the bit (glowStill.ts), drew them all again every frame. The
+ * last step is the hundred-thousandth above, the size the easing's own steps have come down to.
  */
 const SETTLED_FRACTION = 1e-5;
 
@@ -103,6 +109,8 @@ export function CameraRig({
   const offset = useRef(new THREE.Vector3(0, 0, 1));
   const up = useRef(new THREE.Vector3(0, 1, 0));
   const targetDistance = useRef(1);
+  /** The distance the offset was last set to, once settled; NaN while easing (see SETTLED_FRACTION). */
+  const settledAt = useRef(Number.NaN);
   const initialised = useRef(false);
   /** The focus the camera was last framed for. */
   const framedFocus = useRef<string | null>(null);
@@ -293,8 +301,15 @@ export function CameraRig({
     // Ease the distance, in its logarithm (see zoom.ts); direction is applied immediately
     // so dragging stays crisp.
     const current = offset.current.length();
-    const eased = Math.min(limit, easeDistance(current, targetDistance.current));
-    offset.current.setLength(eased);
+    let eased = Math.min(limit, easeDistance(current, targetDistance.current));
+    if (Math.abs(targetDistance.current - eased) <= targetDistance.current * SETTLED_FRACTION) {
+      eased = targetDistance.current;
+    }
+    // Its length read back is not exactly what it was set to: what it was set to is kept.
+    if (eased !== settledAt.current) {
+      offset.current.setLength(eased);
+      settledAt.current = eased === targetDistance.current ? eased : Number.NaN;
+    }
     // Still on its way: the next frame is part of the motion, whatever else is idle. The
     // toolbar's impulse needs nothing here -- it changed the view store, which asked.
     if (Math.abs(targetDistance.current - eased) > targetDistance.current * SETTLED_FRACTION) {

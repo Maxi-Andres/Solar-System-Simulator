@@ -618,6 +618,10 @@ export function App() {
   // names and marks with them -- unless one is the focus, flown to from home.
   const focusKind = store === null ? null : store.body(focus).kind;
   const galacticHidden = inSolarSystem && focusKind !== 'nebula' && focusKind !== 'supernova-remnant';
+  // The same set as long as the same kinds are in it: a switch that changes no kind -- the orbits,
+  // the icons, the Milky Way -- leaves every body list worked out from it (the scene's, the
+  // labels', what is on screen) as it was, instead of each worked out again over every body.
+  const lastKinds = useRef<ReadonlySet<string>>(new Set());
   const visibleKinds = useMemo(() => {
     const kinds = new Set<string>();
     for (const [layerId, kindList] of Object.entries(LAYER_KINDS)) {
@@ -635,6 +639,11 @@ export function App() {
         kinds.add(satelliteChipLayer(index));
       }
     });
+    const last = lastKinds.current;
+    if (kinds.size === last.size && [...kinds].every((kind) => last.has(kind))) {
+      return last;
+    }
+    lastKinds.current = kinds;
     return kinds;
   }, [layers, satelliteChips, galacticHidden]);
 

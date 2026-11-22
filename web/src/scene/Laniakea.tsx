@@ -38,6 +38,7 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
 import { FLOOR_THIN_GLSL, floorKept, halfCountRadiusPc } from './crowding.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
+import { flowPulseWaitMs, pulsePcPerSecond, type FlowPulseBound } from './flowPulse.ts';
 import { galacticDirection } from './galactic.ts';
 import { DISC_VOLUME_FRAGMENT, DISC_VOLUME_VERTEX, SERSIC_VOLUME_FRAGMENT, SERSIC_VOLUME_VERTEX, sersicAtlas } from './galaxyColumns.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
@@ -1325,6 +1326,33 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     return object;
   }, [catalogue]);
 
+  // Where the flow lines are and how fast their brightening runs, for how often it needs a frame
+  // (flowPulse.ts); the timer that asks for the next one when that is not every vsync.
+  const flowBound = useMemo<FlowPulseBound | null>(() => {
+    const lines = catalogue?.flows ?? null;
+    if (flows === null || lines === null) return null;
+    flows.geometry.computeBoundingSphere();
+    const sphere = flows.geometry.boundingSphere!;
+    // flowGeometry's speed between two points is at least 5 km/s and at most the faster's.
+    let fastest = 5;
+    for (const speed of lines.speeds) fastest = Math.max(fastest, speed);
+    return {
+      centreX: sphere.center.x,
+      centreY: sphere.center.y,
+      centreZ: sphere.center.z,
+      radiusPc: sphere.radius,
+      pcPerSecond: pulsePcPerSecond(fastest, FLOW_GYR_PER_SECOND, GYR_PER_PC_AT_KMS),
+    };
+  }, [flows, catalogue]);
+  const flowTimer = useRef<{ handle: ReturnType<typeof setTimeout>; dueMs: number } | null>(null);
+  useEffect(
+    () => () => {
+      if (flowTimer.current !== null) clearTimeout(flowTimer.current.handle);
+      flowTimer.current = null;
+    },
+    [],
+  );
+
   // ---- "You are here": the Milky Way's mark once home is a speck (homeName.ts).
   const here = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
@@ -1625,8 +1653,26 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         const uniforms = (flows.material as THREE.ShaderMaterial).uniforms;
         uniforms['uClockGyr']!.value = ((performance.now() / 1000) * FLOW_GYR_PER_SECOND) % (FLOW_PULSE_GYR * 1000);
         renderer.getDrawingBufferSize(uniforms['uViewportPx']!.value as THREE.Vector2);
-        // Moving, so a frame is wanted while they are shown.
-        renderDemand.request(2);
+        // Moving, so a frame is wanted while they are shown: once the brightening may have moved
+        // a quarter of a pixel (flowPulse.ts) -- every vsync from among the lines, a few a second
+        // from far enough out to see them whole.
+        const wait = flowBound === null ? 0 : flowPulseWaitMs(flowBound, cameraPc.x, cameraPc.y, cameraPc.z, pixelsPerRadian);
+        if (wait <= 0) {
+          renderDemand.request(2);
+        } else {
+          // A frame comes at least once a second whatever asks (renderDemand.ts IDLE_FRAME_MS).
+          const now = performance.now();
+          const dueMs = now + Math.min(wait, 1000);
+          // One timer, the soonest wanted: a camera come nearer brings it forward.
+          if (flowTimer.current === null || dueMs < flowTimer.current.dueMs) {
+            if (flowTimer.current !== null) clearTimeout(flowTimer.current.handle);
+            const handle = setTimeout(() => {
+              flowTimer.current = null;
+              renderDemand.request(1);
+            }, dueMs - now);
+            flowTimer.current = { handle, dueMs };
+          }
+        }
       }
     }
 

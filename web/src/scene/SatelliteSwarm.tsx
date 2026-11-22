@@ -4,6 +4,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
+import { LIVE_FRAME_MAX_MS, LIVE_STEP_PX } from '../core/renderDemand.ts';
 import {
   parseBulkSatelliteBodyId,
   parseSgpSatelliteBodyId,
@@ -24,6 +25,7 @@ import type { SimClock } from '../core/time.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { satelliteLight, writeSatelliteCrowding, type RegimeLight } from './satelliteCrowding.ts';
+import { measureSwarm, PASS_EVERY_MS, swarmMotion } from './satelliteMotion.ts';
 import {
   BULK_VERTEX_SHADER,
   CHIP_SLOTS,
@@ -36,6 +38,8 @@ import {
 } from './satelliteShader.ts';
 import type { SharedFrame } from './satellites.ts';
 import { KM_PER_UNIT } from './scale.ts';
+import { pixelsPerRadian } from './screenMotion.ts';
+import { useCompiled } from './useCompiled.ts';
 
 /**
  * Earth's satellites as dots: the bulk, placed by the GPU from its mean elements, and the
@@ -315,6 +319,8 @@ export function SatelliteSwarm({ source, store, clock, focus, visible, chips, sh
 
   useFrame(({ gl, camera, size }) => {
     if (satellites === null || (bulk === null && placed === null)) {
+      // Nothing of the swarm to go by: the scene's frame falls back on the shells' bound.
+      swarmMotion.atMs = Number.NaN;
       return;
     }
     const jd = clock.tdbJulianDay;
@@ -336,6 +342,8 @@ export function SatelliteSwarm({ source, store, clock, focus, visible, chips, sh
       placed.points.visible = anywhere;
     }
     if (earth === undefined) {
+      swarmMotion.any = false;
+      swarmMotion.atMs = performance.now();
       return;
     }
 
@@ -361,6 +369,8 @@ export function SatelliteSwarm({ source, store, clock, focus, visible, chips, sh
       if (placed !== null) {
         placed.points.visible = false;
       }
+      swarmMotion.any = false;
+      swarmMotion.atMs = performance.now();
       return;
     }
 
@@ -391,12 +401,49 @@ export function SatelliteSwarm({ source, store, clock, focus, visible, chips, sh
       placed.tier.position.needsUpdate = true;
       placed.tier.info.needsUpdate = true;
     }
+
+    // How fast the dots can cross the view, for live mode's frame rate (satelliteMotion.ts):
+    // worked out again every PASS_EVERY_MS. In between the scene carries the last pass
+    // forward, loosening it by the time gone by and by however far the camera has moved.
+    const now = performance.now();
+    if (!(now - swarmMotion.atMs < PASS_EVERY_MS)) {
+      const bulkDrawn = bulk !== null && bulk.visible;
+      measureSwarm(
+        {
+          records: satellites.records,
+          bulkCount: bulkDrawn ? satellites.info.bulk.count : 0,
+          dtDays: dt,
+          matrix: m,
+          chips: satellites.chips,
+          chipVisible: uniforms.chipVisible,
+          hiddenRecords: hidden.bulkRecords,
+          placed: placed === null ? null : (placed.tier.position.array as Float32Array),
+          placedInfo: placed === null ? null : (placed.tier.info.array as Float32Array),
+          cameraX: cameraFromEarth.x,
+          cameraY: cameraFromEarth.y,
+          cameraZ: cameraFromEarth.z,
+          muKm3S2: store.body('earth').gmBodyOnlyKm3S2,
+          // Below a quarter of the rate live mode's slowest frames already cover, a dot's
+          // range alone is enough (see measureSwarm).
+          settledRate:
+            LIVE_STEP_PX /
+            (LIVE_FRAME_MAX_MS / 1000) /
+            pixelsPerRadian(size.height, (camera as THREE.PerspectiveCamera).fov) /
+            4,
+        },
+        now,
+        swarmMotion,
+      );
+    }
   });
 
+  // Each on screen once its shader has compiled beside the page (useCompiled.ts).
+  const bulkShown = useCompiled(bulk);
+  const placedShown = useCompiled(placed === null ? null : placed.points);
   return (
     <>
-      {bulk !== null && <primitive object={bulk} />}
-      {placed !== null && <primitive object={placed.points} />}
+      {bulkShown !== null && <primitive object={bulkShown} />}
+      {placedShown !== null && <primitive object={placedShown} />}
     </>
   );
 }

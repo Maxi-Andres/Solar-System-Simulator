@@ -1,5 +1,8 @@
+import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+
+import { renderDemand } from '../core/renderDemand.ts';
 
 import {
   GLOW_DISPLAY_GLSL,
@@ -12,6 +15,8 @@ import {
   shownGlows,
   WHITE_X,
 } from './glowBuffer.ts';
+import { GlowStill } from './glowStill.ts';
+import { askedFor, compiledFor, compileFor, drawnIntoGlow, materialsOf } from './shaderPrecompile.ts';
 import { ViewMotion } from './viewMotion.ts';
 
 /**
@@ -40,6 +45,19 @@ import { ViewMotion } from './viewMotion.ts';
  *
  * Nested inside the frame's render, as three's Reflector draws its mirror: the frame's own
  * uniforms are set by then, whichever component set them.
+ *
+ * **Step 1 is kept when nothing in it changed** (glowStill.ts): the camera, the buffer and every
+ * input of every glow the same to the bit, the buffers already hold what drawing them again
+ * would make -- at real time, from the Local Group out, that is nearly every frame. Steps 2 and
+ * 3 are drawn every time: they read the Milky Way's buffer, which keeps or redraws itself
+ * (MilkyWay.tsx), and cost a millisecond or two.
+ *
+ * **A glow is drawn once its program for the buffer is compiled** (shaderPrecompile.ts). One
+ * whose program has not been compiled for the glow -- a layer's object made and shown in the
+ * same frame -- is left out of the buffer, its compile started off the main thread, and drawn
+ * in the frame after it is done: it comes in a moment late instead of holding the page while
+ * its shader compiles. Everything mounted is compiled ahead in idle moments (ShaderWarmup.tsx),
+ * so this is the exception.
  */
 
 /** Every pass's vertex: a quad over its target. */
@@ -220,6 +238,11 @@ export function GlowComposite() {
       glows: [] as THREE.Object3D[],
       volumeList: [] as THREE.Object3D[],
       motion: new ViewMotion(),
+      still: new GlowStill(),
+      /** Glows left out until their program for the buffer is compiled; see the header. */
+      waiting: new Set<THREE.Object3D>(),
+      /** The passes' own programs asked for: once. */
+      passesCompiled: false,
     };
   }, []);
 
@@ -258,6 +281,12 @@ export function GlowComposite() {
       // The volumes apart only while the camera moves; still, every glow in one buffer as before.
       const moving = passes.motion.moved(camera);
       shownGlows(scene, passes.glows, passes.volumeList, moving);
+      // Not drawn until compiled for the buffer: the frame callback below starts the compile,
+      // which cannot run here, inside the frame's render -- a frame asked for it to run in. One
+      // already compiling asks for its own frame when it is done.
+      if (holdUncompiled(passes.glows, passes.waiting) + holdUncompiled(passes.volumeList, passes.waiting) > 0) {
+        renderDemand.request(1);
+      }
       const on =
         (milkyWayGlow.on && milkyWayGlow.texture !== null) || passes.glows.length > 0 || passes.volumeList.length > 0;
       uniforms['uOn']!.value = on ? 1 : 0;
@@ -270,6 +299,26 @@ export function GlowComposite() {
       composite.onBeforeRender = () => {};
     };
   }, [composite, passes]);
+
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  useFrame(({ camera }) => {
+    if (!passes.passesCompiled) {
+      passes.passesCompiled = true;
+      // The halo's own passes, into the pyramid's targets: compiled ahead too, as the glows are.
+      const quads = [passes.down, passes.up].map((material) => new THREE.Mesh(passes.quad.geometry, material));
+      void compileFor(gl, passes.quadCamera, passes.quadScene, quads, 'glow');
+    }
+    if (passes.waiting.size === 0) return;
+    const asked: THREE.Object3D[] = [];
+    for (const object of passes.waiting) {
+      if (materialsOf(object).some((material) => !askedFor(material, 'glow'))) asked.push(object);
+    }
+    passes.waiting.clear();
+    if (asked.length > 0) {
+      void compileFor(gl, camera, scene, asked, 'glow').then(() => renderDemand.request());
+    }
+  });
 
   useEffect(
     () => () => {
@@ -302,6 +351,60 @@ interface Passes {
   readonly root: THREE.Scene;
   readonly glows: THREE.Object3D[];
   readonly volumeList: THREE.Object3D[];
+  readonly still: GlowStill;
+}
+
+/** Each object drawn with a glow, on the glow's layer: the glow, and any of its children on it. */
+function eachDrawnGlow(root: THREE.Object3D, callback: (object: THREE.Object3D) => void): void {
+  root.traverseVisible((object) => {
+    if (drawnIntoGlow(object) && materialsOf(object).length > 0) callback(object);
+  });
+}
+
+/**
+ * Takes out of `glows` each one with a program not yet compiled for the buffer (see the header),
+ * and into `waiting` those whose compile is still to be started. Returns how many of those.
+ */
+function holdUncompiled(glows: THREE.Object3D[], waiting: Set<THREE.Object3D>): number {
+  let kept = 0;
+  let toStart = 0;
+  for (const glow of glows) {
+    let ready = true;
+    eachDrawnGlow(glow, (object) => {
+      for (const material of materialsOf(object)) {
+        if (compiledFor(material, 'glow')) continue;
+        ready = false;
+        if (!askedFor(material, 'glow') && !waiting.has(object)) {
+          waiting.add(object);
+          toStart += 1;
+        }
+      }
+    });
+    if (ready) glows[kept++] = glow;
+  }
+  glows.length = kept;
+  return toStart;
+}
+
+/** Step 1 of the header: the glows into their buffer, and the volumes into theirs if apart. */
+function drawGlows(renderer: THREE.WebGLRenderer, camera: THREE.Camera, passes: Passes, width: number, height: number): void {
+  const mask = camera.layers.mask;
+  camera.layers.set(GLOW_LAYER);
+  renderer.setRenderTarget(passes.glow);
+  renderer.clear(true, false, false);
+  passes.root.children = passes.glows;
+  renderer.render(passes.root, camera);
+  if (passes.volumeList.length > 0) {
+    const w = Math.max(1, Math.round(width / 2));
+    const h = Math.max(1, Math.round(height / 2));
+    if (passes.volumes.width !== w || passes.volumes.height !== h) passes.volumes.setSize(w, h);
+    renderer.setRenderTarget(passes.volumes);
+    renderer.clear(true, false, false);
+    passes.root.children = passes.volumeList;
+    renderer.render(passes.root, camera);
+  }
+  passes.root.children = [];
+  camera.layers.mask = mask;
 }
 
 /** Steps 1 and 2 of the header, into the passes' buffers; the composite's uniforms pointed at them. */
@@ -316,6 +419,7 @@ function fill(
   const height = Math.max(1, Math.round(size.y));
   const count = haloLevels(width, height);
   if (passes.glow.width !== width || passes.glow.height !== height || passes.downs.length !== count) {
+    passes.still.forget();
     passes.glow.setSize(width, height);
     let w = width;
     let h = height;
@@ -340,25 +444,12 @@ function fill(
   renderer.setClearColor(0x000000, 0);
 
   // 1. The glows, through this frame's camera, on their layer alone, from their list; the
-  // volumes apart, at half the size each way, while the camera moves.
-  const mask = camera.layers.mask;
-  camera.layers.set(GLOW_LAYER);
-  renderer.setRenderTarget(passes.glow);
-  renderer.clear(true, false, false);
-  passes.root.children = passes.glows;
-  renderer.render(passes.root, camera);
+  // volumes apart, at half the size each way, while the camera moves. Kept as they are when
+  // drawing them again would draw the same (see the header).
   const volumes = passes.volumeList.length > 0;
-  if (volumes) {
-    const w = Math.max(1, Math.round(width / 2));
-    const h = Math.max(1, Math.round(height / 2));
-    if (passes.volumes.width !== w || passes.volumes.height !== h) passes.volumes.setSize(w, h);
-    renderer.setRenderTarget(passes.volumes);
-    renderer.clear(true, false, false);
-    passes.root.children = passes.volumeList;
-    renderer.render(passes.root, camera);
+  if (!passes.still.same(camera, width, height, volumes, passes.glows, passes.volumeList)) {
+    drawGlows(renderer, camera, passes, width, height);
   }
-  passes.root.children = [];
-  camera.layers.mask = mask;
 
   // 2. Down the pyramid, the excess first; then up it, each level's share added.
   const mw = milkyWayGlow.on && milkyWayGlow.texture !== null;

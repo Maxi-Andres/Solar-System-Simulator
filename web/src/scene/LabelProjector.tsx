@@ -333,6 +333,19 @@ const BLACK_HOLE_MEMBERS: readonly ReadonlySet<BodyId>[] = BLACK_HOLE_SYSTEMS.ma
  */
 const placedAt = new WeakMap<HTMLElement, { x: number; y: number }>();
 
+/**
+ * The body labels this frame loop has shown and not hidden since, with their ids: the only
+ * ones it can have to hide or measure. Kept here rather than read back off each element:
+ * `element.style.display` is a trip into the style declaration, and asked of every one of a
+ * thousand labels twice a frame it was most of a millisecond at the Milky Way's view. Only
+ * this loop shows a body label (App.tsx starts each hidden), so the set is the truth -- but
+ * for labels a previous mount of this component left shown, which its first frame sweeps.
+ */
+interface LabelDisplay {
+  readonly shown: Map<HTMLElement, BodyId>;
+  swept: boolean;
+}
+
 export function labelRank(kind: string, parent: BodyId | null): number {
   // A region (regions.ts) is a place, not a body: never ahead of one in the declutter. Nor a
   // star or Messier object marked (deepSky.ts): a catalogue's mark.
@@ -423,6 +436,10 @@ export function LabelProjector({
   }, [store, version]);
   // The labels showing another text than their own name this frame, and which.
   const altShown = useMemo(() => new Map<BodyId, string>(), []);
+  // The body labels shown, by element; see LabelDisplay.
+  const display = useMemo<LabelDisplay>(() => ({ shown: new Map(), swept: false }), []);
+  // This frame's shown elements, kept between frames only to be cleared and refilled.
+  const shownElements = useMemo(() => new Set<HTMLElement>(), []);
 
   useFrame(() => {
     const map = elements.current;
@@ -438,11 +455,20 @@ export function LabelProjector({
     const posted = labelBoard.posted;
     labelBoard.posted = [];
 
-    if (!visible) {
-      labelsShown.active = false;
+    if (!display.swept) {
+      // Once: whatever an earlier mount left shown is hidden, so the set starts true.
+      display.swept = true;
       for (const element of map.values()) {
         hide(element);
       }
+    }
+
+    if (!visible) {
+      labelsShown.active = false;
+      for (const element of display.shown.keys()) {
+        hideShown(element);
+      }
+      display.shown.clear();
       for (const label of posted) {
         hide(label.element);
       }
@@ -451,8 +477,8 @@ export function LabelProjector({
     }
 
     // Read every width before anything is written, so the layout is computed once.
-    for (const [id, element] of map) {
-      if (element !== null && element.style.display === 'block' && !widths.has(id)) {
+    for (const [element, id] of display.shown) {
+      if (!widths.has(id)) {
         const width = element.offsetWidth;
         if (width > 0) {
           widths.set(id, width);
@@ -721,12 +747,11 @@ export function LabelProjector({
       if (element == null) {
         continue;
       }
-      if (element.style.display !== 'block') {
-        element.style.display = 'block';
-      }
+      shownElements.add(element);
+      // Placed before it is shown, so it never appears for a frame where it last was.
       const x = candidate.x + candidate.offset;
       const last = placedAt.get(element);
-      if (last === undefined || last.x !== x || last.y !== candidate.y || element.style.transform === '') {
+      if (last === undefined || last.x !== x || last.y !== candidate.y) {
         element.style.transform = `translate(${x}px, ${candidate.y}px) translateY(-50%)`;
         if (last === undefined) {
           placedAt.set(element, { x, y: candidate.y });
@@ -735,13 +760,20 @@ export function LabelProjector({
           last.y = candidate.y;
         }
       }
-    }
-
-    for (const [id, element] of map) {
-      if (!shown.has(id)) {
-        hide(element);
+      if (!display.shown.has(element)) {
+        element.style.display = 'block';
+        display.shown.set(element, candidate.id);
       }
     }
+
+    // Only a label shown before can need hiding.
+    for (const element of display.shown.keys()) {
+      if (!shownElements.has(element)) {
+        hideShown(element);
+        display.shown.delete(element);
+      }
+    }
+    shownElements.clear();
     for (const [id, element] of boardElements) {
       if (!shown.has(id)) {
         hide(element);
@@ -788,4 +820,9 @@ function hide(element: HTMLElement | null): void {
   if (element !== null && element.style.display !== 'none') {
     element.style.display = 'none';
   }
+}
+
+/** Hides a body label this loop knows it shows: no need to ask the element. */
+function hideShown(element: HTMLElement): void {
+  element.style.display = 'none';
 }

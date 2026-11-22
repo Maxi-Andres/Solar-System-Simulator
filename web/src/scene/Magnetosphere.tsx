@@ -25,6 +25,7 @@ import { useViewStore } from '../state/store.ts';
 import { longitudeDirection, poleDirection } from './orientation.ts';
 import { hideLabel, makeLabel, placeShellLabel, revolutionGeometry, rimMaterial, smoothRamp, sphereGeometry } from './regionSurface.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
+import { useCompiled } from './useCompiled.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -213,5 +214,7 @@ export function Magnetosphere({ store, clock, focus }: { store: EphemerisStore; 
     placeShellLabel(labels.karman, group.position, kmToUnits(body.radiusEquatorialKm + KARMAN_LINE_KM), camera, size, karman);
   });
 
-  return <primitive object={parts.group} />;
+  // In the scene once its shaders have compiled beside the page (useCompiled.ts).
+  const shown = useCompiled(parts.group);
+  return shown === null ? null : <primitive object={shown} />;
 }

@@ -28,6 +28,7 @@ import { CELL_PX, CROWDING_SAMPLE, crowdingGrid, measureCrowding, type CrowdingG
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT } from './scale.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
+import { useCompiled } from './useCompiled.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -101,6 +102,9 @@ export const MALAVASI_NEAR_PC = 6e6;
  */
 export const FILAMENT_DEPTH_LEAST = 0.12;
 export const FILAMENT_DEPTH_FROM_PC = 30e6;
+
+/** Under this, a filament's fragment is discarded (FILAMENT_FRAGMENT), and a segment that has none over it is not drawn. */
+const FILAMENT_DISCARD = 0.002;
 
 const UNIT = 32767 * COSMIC_WEB_POSITION_UNIT_PC;
 /** The whole sky, square degrees. */
@@ -185,6 +189,16 @@ varying float vAcrossPx;
 varying float vSigmaPx;
 varying vec3 vLight;
 
+// A filament's strength at one end of a segment, before its colour: main()'s own sum, for the cull.
+float strengthAt(vec4 v, float weight, bool tempel) {
+  float distancePc = max(length(v.xyz) / uUnitsPerPc, 1.0);
+  float sigmaPx = max(${FILAMENT_SIGMA_PX.toFixed(2)}, (tempel ? uRadiusPc.x : uRadiusPc.y) / distancePc * uPixelsPerRadian);
+  float nearPc = tempel ? uNearPc.x : uNearPc.y;
+  float near = smoothstep(0.5 * nearPc, nearPc, distancePc);
+  float depth = clamp(uDepthPc / distancePc, ${FILAMENT_DEPTH_LEAST.toFixed(2)}, 1.0);
+  return (tempel ? uOpacity.x : uOpacity.y) * weight * near * depth * ${FILAMENT_SIGMA_PX.toFixed(2)} / sigmaPx;
+}
+
 void main() {
   vec3 a = aA.xyz * ${UNIT.toExponential(6)} - uCameraPc;
   vec3 b = aB.xyz * ${UNIT.toExponential(6)} - uCameraPc;
@@ -204,6 +218,24 @@ void main() {
   }
   if (za < uNearUnits) va = mix(va, vb, (uNearUnits - za) / (zb - za));
   else if (zb < uNearUnits) vb = mix(vb, va, (uNearUnits - zb) / (za - zb));
+  // Not drawn where no pixel of it would be: a fragment's light is its two ends' mixed, times
+  // the profile, which peaks at ${(1 - HALO_SHARE).toFixed(1)} + ${(HALO_SHARE / HALO_WIDTH).toFixed(1)}; under the fragment's discard at both
+  // ends (with a tenth to spare for rounding), every fragment is discarded anyway. These are
+  // the segments within a few megaparsecs of the camera, wide and faint or faded out entirely,
+  // whose quads span the screen: the picture is the same, the fill they cost is not spent.
+  bool tempelSegment = catalogue < 0.5;
+  vec3 hue = tempelSegment ? uColor0 : uColor1;
+  float peak = max(
+    strengthAt(va, floor(aA.w * 32767.0 + 0.5) / 255.0, tempelSegment),
+    strengthAt(vb, mod(bw, 256.0) / 255.0, tempelSegment)
+  ) * max(hue.r, max(hue.g, hue.b)) * ${(1 - HALO_SHARE + HALO_SHARE / HALO_WIDTH).toFixed(3)};
+  if (peak < ${(0.9 * FILAMENT_DISCARD).toFixed(4)}) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    vLight = vec3(0.0);
+    vAcrossPx = 0.0;
+    vSigmaPx = 1.0;
+    return;
+  }
   vec4 ca = projectionMatrix * va;
   vec4 cb = projectionMatrix * vb;
   vec2 d = (cb.xy / cb.w - ca.xy / ca.w) * uViewportPx;
@@ -241,7 +273,7 @@ void main() {
   float profile = ${(1 - HALO_SHARE).toFixed(3)} * exp(-0.5 * x * x)
     + ${HALO_SHARE.toFixed(3)} / ${HALO_WIDTH.toFixed(1)} * exp(-0.5 * x * x / ${(HALO_WIDTH * HALO_WIDTH).toFixed(1)});
   vec3 c = vLight * profile;
-  if (max(c.r, max(c.g, c.b)) < 0.002) discard;
+  if (max(c.r, max(c.g, c.b)) < ${FILAMENT_DISCARD.toFixed(3)}) discard;
   gl_FragColor = vec4(c, 1.0);
 }
 `;
@@ -532,17 +564,20 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
     return [share(/Tempel/), share(/Malavasi/)];
   }, [info]);
 
+  // The filaments in the scene once their shader has compiled beside the page (useCompiled.ts).
+  // Not the galaxies: they are drawn into the glow buffer, a program of its own.
+  const filamentsShown = useCompiled(filaments);
   useEffect(() => {
     const objects: THREE.Object3D[] = [];
     if (galaxies !== null) objects.push(galaxies.object);
-    if (filaments !== null) objects.push(filaments);
+    if (filamentsShown !== null) objects.push(filamentsShown);
     if (objects.length === 0) return;
     group.add(...objects);
     renderDemand.request();
     return () => {
       group.remove(...objects);
     };
-  }, [group, galaxies, filaments]);
+  }, [group, galaxies, filamentsShown]);
 
   useFrame(({ camera, gl: renderer }) => {
     const sun = store.sunFromFocus(focus, clock.tdbJulianDay);

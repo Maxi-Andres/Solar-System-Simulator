@@ -22,7 +22,7 @@ import { beginLoading, wantLoading } from '../core/loading.ts';
 import { milkyWayAhead } from '../core/prefetch.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { lensState, skyCapture } from './lens.ts';
-import { binIntoCubes, reorder, slabRanges, type Cubes } from './milkyWaySlabs.ts';
+import { binIntoCubes, reorder, slabRanges, slabReach, SLABS_UNCHANGED, type Cubes, type SlabReach } from './milkyWaySlabs.ts';
 import { sameView, underFloor, warpBetween, WARP_PX, type GlowView } from './milkyWayView.ts';
 import { projectToScreen } from './screenProjection.ts';
 import { GLOW_DISPLAY_GLSL, GLOW_FLOOR, milkyWayGlow } from './glowBuffer.ts';
@@ -478,6 +478,8 @@ interface SlabbedCloud {
   readonly geometry: THREE.BufferGeometry;
   readonly cubes: Cubes;
   readonly ranges: Int32Array;
+  /** The slabs each cube was handed when the index was last filled (slabRanges' `reach`). */
+  readonly reach: SlabReach;
   filledFor: readonly number[] | null;
 }
 
@@ -492,20 +494,34 @@ function slabbedCloud(positions: Float32Array, colors: Float32Array, radii: Floa
   const index = new THREE.BufferAttribute(new Uint32Array(order.length * 3), 1);
   index.setUsage(THREE.DynamicDrawUsage);
   geometry.setIndex(index);
-  return { geometry, cubes, ranges: new Int32Array(2 * DEPTH_SLICES), filledFor: null };
+  return { geometry, cubes, ranges: new Int32Array(2 * DEPTH_SLICES), reach: slabReach(cubes), filledFor: null };
 }
 
-/** The cloud's index and ranges for these slabs from this place, if they are not already. */
+/**
+ * The cloud's index and ranges for these slabs from this place, if they are not already --
+ * written and uploaded only when a cube now reaches otherwise than it did (slabRanges).
+ */
 function fillSlabs(cloud: SlabbedCloud, key: readonly number[]): void {
   const last = cloud.filledFor;
   if (last !== null && last.every((value, i) => value === key[i])) return;
   const [nearest, step, x, y, z] = key as [number, number, number, number, number];
   const index = cloud.geometry.getIndex()!;
-  const written = slabRanges(cloud.cubes, [x, y, z], nearest, step, DEPTH_SLICES, SLAB_BLEND, index.array as Uint32Array, cloud.ranges);
+  const written = slabRanges(
+    cloud.cubes,
+    [x, y, z],
+    nearest,
+    step,
+    DEPTH_SLICES,
+    SLAB_BLEND,
+    index.array as Uint32Array,
+    cloud.ranges,
+    cloud.reach,
+  );
+  cloud.filledFor = key.slice();
+  if (written === SLABS_UNCHANGED) return;
   index.clearUpdateRanges();
   index.addUpdateRange(0, written);
   index.needsUpdate = true;
-  cloud.filledFor = key.slice();
 }
 
 /** A sphere holding every point of the light, about the model's centre, and the widest sprite: for milkyWayView.ts. */

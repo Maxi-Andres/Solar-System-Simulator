@@ -439,7 +439,7 @@ export function GlobularClusters({
     [materials],
   );
 
-  useFrame(({ camera: frameCamera, gl: renderer }) => {
+  useFrame(({ camera: frameCamera, gl: renderer, size }) => {
     const markersGroup = markersRef.current;
     const jd = clock.tdbJulianDay;
     const sun = store.sunFromFocus(focus, jd);
@@ -483,7 +483,7 @@ export function GlobularClusters({
     markerUniforms['uFade']!.value = fade;
     if (fade > 0) {
       const fov = (frameCamera as THREE.PerspectiveCamera).fov;
-      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(size.height, fov), focus);
       const pinned = globularClusterIndexOf(focus) ?? -1;
       if (foldMembers(MARK_HOSTS, markers.folds.host, markers.folds.separationPc, markers.folds.value, pinned)) {
         markers.fold.needsUpdate = true;

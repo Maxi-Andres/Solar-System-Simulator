@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { degPerDayToRadPerSec, pixelsPerRadian, surfaceRate, swarmRate, transverseRate } from './screenMotion.ts';
+import { degPerDayToRadPerSec, pixelsPerRadian, solarSystemRate, surfaceRate, swarmRate, transverseRate } from './screenMotion.ts';
 
 const EARTH_MU = 398_600.4418;
 
@@ -37,5 +37,21 @@ describe('screen motion', () => {
     expect(far).toBeLessThan(1e-5);
     // Among the satellites, one may pass at any distance.
     expect(swarmRate(30_000, EARTH_MU)).toBe(Infinity);
+  });
+
+  it('bounds everything the Sun holds from outside its reach, and gives up within it', () => {
+    const SUN_MU = 1.327_124_400_18e11;
+    const PARSEC_KM = 3.085_677_581e13;
+    // From Laniakea's scale, a hundred megaparsecs: not a millionth of a pixel a year.
+    const laniakea = solarSystemRate(1e8 * PARSEC_KM, SUN_MU, 0) * pixelsPerRadian(1620, 50);
+    expect(laniakea * 3.156e7).toBeLessThan(1e-6);
+    // From the Milky Way's, 30 kpc, the Sun on its orbit about the camera: not a ten-thousandth.
+    expect(solarSystemRate(3e4 * PARSEC_KM, SUN_MU, 250) * pixelsPerRadian(1620, 50) * 3.156e7).toBeLessThan(1e-4);
+    // Never less than the fastest it could be: the Sun's surface escape speed over the gap.
+    const twoPc = solarSystemRate(2 * PARSEC_KM, SUN_MU, 0);
+    expect(twoPc).toBeGreaterThan(Math.sqrt((2 * SUN_MU) / 696_000) / (2 * PARSEC_KM));
+    // Within the Oort cloud, and among the planets, a comet may pass at any distance.
+    expect(solarSystemRate(1e12, SUN_MU, 0)).toBe(Infinity);
+    expect(solarSystemRate(1.5e8, SUN_MU, 30)).toBe(Infinity);
   });
 });

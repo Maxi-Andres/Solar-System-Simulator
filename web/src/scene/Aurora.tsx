@@ -18,6 +18,7 @@ import { useViewStore } from '../state/store.ts';
 import { longitudeDirection, poleDirection } from './orientation.ts';
 import { smoothRamp } from './regionSurface.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
+import { useCompiled } from './useCompiled.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -291,5 +292,7 @@ export function Aurora({ store, clock, focus }: { store: EphemerisStore; clock: 
     material.side = inside ? THREE.BackSide : THREE.FrontSide;
   });
 
-  return <primitive object={parts.mesh} />;
+  // In the scene once its shader has compiled beside the page (useCompiled.ts).
+  const shown = useCompiled(parts.mesh);
+  return shown === null ? null : <primitive object={shown} />;
 }

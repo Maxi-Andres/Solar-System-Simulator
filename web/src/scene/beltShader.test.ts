@@ -28,6 +28,7 @@ import {
   spriteFragments,
   KEPLER_ITERATIONS,
   meanAnomalyF32,
+  sinCosF32,
   solveKeplerF32,
 } from './beltShader.ts';
 import { AU_KM } from './scale.ts';
@@ -129,9 +130,10 @@ describe("Kepler's equation in float32", () => {
         worst = error <= worst ? worst : error;
       }
     }
-    // 1.7e-6 rad on the full grid, at e = 0.999 a hair before perihelion, where one
-    // float32 step of the residual is five hundred of E. Elsewhere well under a micro-radian.
-    expect(worst).toBeLessThan(2e-6);
+    // 2.9e-7 rad on the full grid, about one float32 step of E. With the residual written
+    // as E - e·sin E it was 1.7e-6 at e = 0.999 a hair before perihelion, where one float32
+    // step of that difference is five hundred of E.
+    expect(worst).toBeLessThan(4e-7);
   });
 
   it('needs the cubic start: the plain one diverges near perihelion above e = 0.99', () => {
@@ -160,6 +162,14 @@ describe("Kepler's equation in float32", () => {
     expect(cubicStartF32(0, 0.99)).toBe(0);
   });
 
+  it('leaves a mean anomaly already in range exactly as it is', () => {
+    // As mod(M + π, 2π) - π it was rounded to a step of π, 2.4e-7 rad: near perihelion
+    // that was a sixth of a 14,000-AU orbit's M of 5.8e-5, and four million km of its place.
+    for (const M0 of [-5.779392449767329e-5, 1e-9, -3.1, 0.5, 3.14]) {
+      expect(meanAnomalyF32(M0, 1e-8, 0)).toBe(Math.fround(M0));
+    }
+  });
+
   it('wraps the mean anomaly into [-π, π), forward and back', () => {
     for (const dt of [-36_525, -3652.5, -1, 0, 0.5, 365.25, 3652.5, 36_525]) {
       const M = meanAnomalyF32(4, 0.0038, dt);
@@ -169,6 +179,41 @@ describe("Kepler's equation in float32", () => {
       const exact = 4 + 0.0038 * dt;
       const turns = (exact - M) / (2 * Math.PI);
       expect(Math.abs(turns - Math.round(turns)) * 2 * Math.PI).toBeLessThan(2e-5);
+    }
+  });
+});
+
+describe('sinCos, the shader’s sine and cosine', () => {
+  it('is within a float32 step or so of the exact ones wherever the shader asks', () => {
+    // Measured over [-4, 4] in two million steps: 7.7e-8 for sin, 8.3e-8 for cos.
+    let worst = 0;
+    for (let k = 0; k <= 200_000; k += 1) {
+      const x = Math.fround(-4 + (8 * k) / 200_000);
+      const [s, c] = sinCosF32(x);
+      const error = Math.max(Math.abs(s - Math.sin(x)), Math.abs(c - Math.cos(x)));
+      worst = error <= worst ? worst : error;
+    }
+    expect(worst).toBeLessThan(1e-7);
+  });
+
+  it('gives sin x - x and 1 - cos x near zero without cancelling', () => {
+    // At 1e-3, sin x - x is -1.7e-10, a thousandth of a float32 step of x: the plain
+    // difference would be all rounding. The tails are good to a few parts in a million.
+    // The references by their own series: in float64 too, sin x - x cancels for small x.
+    const series = (x: number, first: number) => {
+      let term = x ** first / [1, 1, 2, 6][first]!;
+      let sum = 0;
+      for (let n = first; n < first + 12; n += 2) {
+        sum += term;
+        term *= (-x * x) / ((n + 1) * (n + 2));
+      }
+      return sum;
+    };
+    for (const x of [1e-6, -1e-3, 0.01, 0.3, -0.7]) {
+      const [, , sinTail, cosTail] = sinCosF32(x);
+      const fx = Math.fround(x);
+      expect(Math.abs(sinTail / -series(fx, 3) - 1)).toBeLessThan(1e-5);
+      expect(Math.abs(cosTail / series(fx, 2) - 1)).toBeLessThan(1e-5);
     }
   });
 });
@@ -272,25 +317,41 @@ describe('beltPosition, against kepler.ts', () => {
   }
 
   it('agrees at the reference instant to a few float32 steps of the orbit', () => {
-    // Measured: 3.2e-7 of the orbit at worst, 80 km. A float32 holds 6e-8 of a number,
+    // Measured: 9.4e-8 of the orbit at worst, 73 km. A float32 holds 6e-8 of a number,
     // and the chain from M to the rotated ellipse is a dozen operations long.
-    expect(worstError([0]).relative).toBeLessThan(5e-7);
+    expect(worstError([0]).relative).toBeLessThan(2e-7);
   });
 
-  it('agrees within a year either side to under 200 km', () => {
-    // Measured worst: 141 km. The two-body model itself is off by 40,000 to 190,000 km
-    // at a year, so the GPU's share of the error is a tenth of a percent.
-    expect(worstError([-365.25, -30, -1, 0.25, 1, 30, 365.25]).km).toBeLessThan(200);
+  it('agrees within a year either side to under 100 km', () => {
+    // Measured worst: 71 km. The two-body model itself is off by 40,000 to 190,000 km
+    // at a year, so the GPU's share of the error is a twentieth of a percent.
+    expect(worstError([-365.25, -30, -1, 0.25, 1, 30, 365.25]).km).toBeLessThan(100);
   });
 
   it('agrees ten years and a century out to what float32 holds of n·Δt', () => {
     // From here the float32 rounding of n·Δt is nearly all of it: n·Δt reaches 14 rad
     // for a main-belt orbit in ten years, where a float32 step is 1e-6 rad. Measured:
-    // 2.4e-6 of the orbit at ten years (404 km for a Ceres-like one), 3.1e-5 at a
-    // century (13,000 km at 2.8 AU) -- against two-body drift of about a degree at ten
+    // 1.8e-6 of the orbit at ten years (405 km for a Ceres-like one), 3.8e-5 at a
+    // century (6,200 km, at 1.08 AU) -- against two-body drift of about a degree at ten
     // years already, millions of km.
     expect(worstError([-3652.5, 3652.5]).relative).toBeLessThan(3e-6);
     expect(worstError([-36_525, 36_525]).relative).toBeLessThan(4e-5);
+  });
+
+  it('holds a near-parabolic orbit at perihelion to float32 of its distance', () => {
+    // The belt's worst case before: a = 13,940 AU, e = 0.99616, 55 AU from the Sun just
+    // before perihelion, where M is 5.8e-5 rad. It was off by 5e-4 of its distance --
+    // 4.5 million km -- from M rounded in the wrap and E - e·sin E cancelling. Measured
+    // now: 6.0e-8 at the reference instant, 1.4e-7 a year on.
+    const far = new Float32Array([
+      13_939.76 * AU_KM, 0.9961639642715454, 0.3, 1.1, -2, -5.779392449767329e-5, 1.045197528526387e-8, 10, 0,
+    ]);
+    for (const dt of [0, 0.37, 365.25]) {
+      const got = beltPosition(far, 0, dt);
+      const want = propagate(elementsOf(far, 0), REFERENCE_JD + dt).position;
+      const r = Math.hypot(want.x, want.y, want.z);
+      expect(Math.hypot(got.x - want.x, got.y - want.y, got.z - want.z) / r).toBeLessThan(3e-7);
+    }
   });
 
   it('is in the ecliptic frame kepler.ts uses: the node on the x-y plane, rising', () => {
@@ -543,14 +604,20 @@ describe('the shaders', () => {
     expect(BELT_VERTEX_SHADER).toContain('gl_VertexID == uHidden[0] || gl_VertexID == uHidden[1]');
   });
 
+  it('leave the GPU its own sin and cos only for the start', () => {
+    // Every other sine and cosine is sinCos(), + - * / alone; see beltShader.ts.
+    const builtins = BELT_VERTEX_SHADER.match(/\b(sin|cos|tan)\([^)]*\)/g);
+    expect(builtins).toEqual(['sin(M)']);
+  });
+
   it('cost a fixed, counted amount of arithmetic per asteroid', () => {
     // What the GPU does per asteroid per frame, counted off the mirror: every sin, cos,
-    // sqrt and pow beltPosition calls is one the shader makes, plus the dot's one pow.
-    // Measured: 17 trigonometric calls and one square root on an orbit below e = 0.5,
-    // 16, two square roots and two pows above it; the dot itself adds none since the
-    // faint ones lost their pow. For the whole catalogue, 1,575,460 asteroids, that is
-    // about 30 million transcendental evaluations a frame -- nothing on the CPU, which
-    // does none of it, and a figure for the GPU to be held to.
+    // sqrt and pow beltPosition calls is one the shader makes. Measured: the start's one
+    // sin and one square root on an orbit below e = 0.5, two square roots and two pows
+    // above it -- the rest is seven sinCos (four iterations and three angles), a dozen
+    // multiply-adds each. Before sinCos it was 17 of the GPU's sin and cos an asteroid;
+    // the whole catalogue costs the GPU about 6% more for it (measured on an AMD iGPU,
+    // 1.58 million asteroids, vertex work alone).
     const counted = ['sin', 'cos', 'sqrt', 'pow'] as const;
     const records = recordsOf(ORBITS);
     const calls = (index: number): Record<(typeof counted)[number], number> => {
@@ -569,8 +636,8 @@ describe('the shaders', () => {
       return tally;
     };
     // ORBITS[1] is at e = 0.1, ORBITS[3] at 0.9.
-    expect(calls(1)).toEqual({ sin: 9, cos: 8, sqrt: 1, pow: 0 });
-    expect(calls(3)).toEqual({ sin: 8, cos: 8, sqrt: 2, pow: 2 });
+    expect(calls(1)).toEqual({ sin: 1, cos: 0, sqrt: 1, pow: 0 });
+    expect(calls(3)).toEqual({ sin: 0, cos: 0, sqrt: 2, pow: 2 });
   });
 });
 

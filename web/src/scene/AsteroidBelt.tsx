@@ -19,6 +19,7 @@ import {
 import { beltLight, CLASS_SLOTS, writeCrowding, type PopulationLight } from './beltCrowding.ts';
 import type { SharedFrame } from './satellites.ts';
 import { KM_PER_UNIT } from './scale.ts';
+import { useCompiled } from './useCompiled.ts';
 
 /**
  * The asteroid belt: every asteroid in the tiers loaded so far, at its real position.
@@ -221,6 +222,15 @@ export function AsteroidBelt({
   }, [store, version]);
   const built = useMemo(() => (info === null ? null : buildBeltMaterial(info)), [info]);
   useEffect(() => () => built?.material.dispose(), [built]);
+  // The tiers drawn once the material's program has compiled beside the page (useCompiled.ts):
+  // switched on, the belt held the page 119 ms for it. Every tier shares the one material, so
+  // one stand-in Points compiles it for all; it is never drawn, and has nothing to upload.
+  const compileProbe = useMemo(
+    () => (built === null ? null : new THREE.Points(new THREE.BufferGeometry(), built.material)),
+    [built],
+  );
+  useEffect(() => () => compileProbe?.geometry.dispose(), [compileProbe]);
+  const compiled = useCompiled(compileProbe) !== null;
 
   // The faint magnitudes share their light among the dots in hand, so it is worked out
   // again whenever a tier arrives or goes: one pass over the records, ten milliseconds or
@@ -312,7 +322,7 @@ export function AsteroidBelt({
     }
   });
 
-  if (built === null) {
+  if (built === null || !compiled) {
     return null;
   }
   return (

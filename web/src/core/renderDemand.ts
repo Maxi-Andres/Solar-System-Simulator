@@ -61,8 +61,8 @@ export const IDLE_FRAME_MS = 1000;
 export const LIVE_STEP_PX = 0.25;
 
 /**
- * In live mode, the longest wait between frames however still the scene says it is,
- * milliseconds: ten frames a second.
+ * In live mode, the longest wait between frames while something the scene does not bound one by
+ * one may be moving, milliseconds: ten frames a second -- the floor.
  *
  * The scene's estimate covers what it draws and can bound -- the bodies, their markers and
  * names, their turning surfaces and clouds, eclipse shadows, the satellites. Not every line:
@@ -70,6 +70,14 @@ export const LIVE_STEP_PX = 0.25;
  * every case worked out, and a dot of the belt or a comet comes close enough to the camera
  * to move faster only rarely. Those are held to this, which is smooth for anything under two
  * and a half pixels a second, and still a sixth of the old cost.
+ *
+ * **Only while they could show it.** All of them are the Sun's, and the scene bounds them as a
+ * whole too, loosely: nothing the Sun holds moves faster than it could escape from where it is,
+ * nor lies past its reach (screenMotion.ts solarSystemRate). From the Milky Way out that bound
+ * is not a pixel in ten thousand years, and the floor gave a still galaxy -- or Laniakea, with
+ * its ray-marched volumes -- ten full frames a second of nothing; so the floor waits as long as
+ * that bound allows, never less than this (`liveFrameIntervalMs`), and from far enough away
+ * only the idle frame is left.
  */
 export const LIVE_FRAME_MAX_MS = 100;
 
@@ -79,15 +87,24 @@ const VSYNC_MS = 1000 / 60;
 /**
  * How long live mode waits between frames for this much motion, in pixels per second of
  * real time: long enough for it to cover LIVE_STEP_PX, and none (every vsync) when that is
- * under a frame -- at most LIVE_FRAME_MAX_MS. Not finite, a scene that cannot bound what it
- * shows, is every vsync.
+ * under a frame. Not finite, a scene that cannot bound what it shows, is every vsync.
+ *
+ * `floorPixelsPerSecond` bounds what the floor is for (LIVE_FRAME_MAX_MS): the wait is never
+ * longer than it takes that to cover LIVE_STEP_PX, nor than LIVE_FRAME_MAX_MS while it could --
+ * Infinity, or anything not a number, is the floor as it always was. Nothing moving, at either,
+ * is no frame at all: Infinity.
  */
-export function liveFrameIntervalMs(pixelsPerSecond: number): number {
+export function liveFrameIntervalMs(pixelsPerSecond: number, floorPixelsPerSecond = Infinity): number {
   if (!(pixelsPerSecond >= 0) || !Number.isFinite(pixelsPerSecond)) {
     return 0;
   }
   const ms = (LIVE_STEP_PX / pixelsPerSecond) * 1000;
-  return ms < VSYNC_MS ? 0 : Math.min(ms, LIVE_FRAME_MAX_MS);
+  if (ms < VSYNC_MS) {
+    return 0;
+  }
+  const floorMs =
+    floorPixelsPerSecond >= 0 ? Math.max(LIVE_FRAME_MAX_MS, (LIVE_STEP_PX / floorPixelsPerSecond) * 1000) : LIVE_FRAME_MAX_MS;
+  return Math.min(ms, floorMs);
 }
 
 /**
@@ -109,6 +126,8 @@ export class RenderDemand {
    * finite until a frame has said. See `setMotion`.
    */
   #motion = Infinity;
+  /** What the floor is for, bounded as a whole, pixels per simulated second; see `setMotion`. */
+  #floorMotion = Infinity;
 
   /**
    * How many requests there have been. Whatever asks for a frame -- data landing, the view
@@ -174,7 +193,8 @@ export class RenderDemand {
       return;
     }
     // The frame asked for now is drawn on the next vsync, not this one: ask one early.
-    const due = liveFrameIntervalMs(this.#motion * Math.abs(rate)) - VSYNC_MS - LIVE_SLACK_MS;
+    const due =
+      liveFrameIntervalMs(this.#motion * Math.abs(rate), this.#floorMotion * Math.abs(rate)) - VSYNC_MS - LIVE_SLACK_MS;
     if (nowMs - this.#lastFrameMs >= due) {
       this.#remaining = 1;
       this.#wake?.();
@@ -185,9 +205,14 @@ export class RenderDemand {
    * How fast the fastest thing on screen moves, pixels per simulated second, as the frame
    * being drawn found it: the scene says, every frame (SolarSystem.tsx), and Infinity when it
    * cannot bound it. Live mode spaces its frames by this; see `clockMoved`.
+   *
+   * `floorPixelsPerSimSecond` is the same for what the floor is for -- the belt, the comets,
+   * the orbit and trail lines -- bounded as a whole (LIVE_FRAME_MAX_MS); left out, the floor
+   * holds as it always has.
    */
-  setMotion(pixelsPerSimSecond: number): void {
+  setMotion(pixelsPerSimSecond: number, floorPixelsPerSimSecond = Infinity): void {
     this.#motion = pixelsPerSimSecond;
+    this.#floorMotion = floorPixelsPerSimSecond;
   }
 
   /** Called once for every frame drawn. True while frames are still owed after it. */

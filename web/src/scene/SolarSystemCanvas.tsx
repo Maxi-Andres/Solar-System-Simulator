@@ -18,26 +18,26 @@ import { exoPlanetOf } from '../core/planetarySystems.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
 import { useViewStore, type LightingMode } from '../state/store.ts';
-import { useEffect, useMemo, type RefObject } from 'react';
+import { memo, useEffect, useMemo, type RefObject } from 'react';
 
 import { renderDemand } from '../core/renderDemand.ts';
 
 import { AdaptiveResolution } from './AdaptiveResolution.tsx';
-import { AsteroidBelt } from './AsteroidBelt.tsx';
+import { AsteroidBelt as AsteroidBeltLayer } from './AsteroidBelt.tsx';
 import { BlackHoleLens } from './BlackHoleLens.tsx';
 import { CameraRig } from './CameraRig.tsx';
-import { CometField } from './Comets.tsx';
-import { DistanceRings } from './DistanceRings.tsx';
+import { CometField as CometFieldLayer } from './Comets.tsx';
+import { DistanceRings as DistanceRingsLayer } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
 import { GlowComposite } from './GlowComposite.tsx';
 import { SolarSystemWatch } from './SolarSystemWatch.tsx';
 import type { GalaxyFeatureLayers } from './GalaxyFeatures.tsx';
-import { LocalGroup } from './LocalGroup.tsx';
-import { DwarfStars } from './DwarfStars.tsx';
-import { MilkyWay } from './MilkyWay.tsx';
-import { NuclearCluster } from './NuclearCluster.tsx';
-import { SatelliteSwarm } from './SatelliteSwarm.tsx';
-import { LabelProjector } from './LabelProjector.tsx';
+import { LocalGroup as LocalGroupLayer } from './LocalGroup.tsx';
+import { DwarfStars as DwarfStarsLayer } from './DwarfStars.tsx';
+import { MilkyWay as MilkyWayLayer } from './MilkyWay.tsx';
+import { NuclearCluster as NuclearClusterLayer } from './NuclearCluster.tsx';
+import { SatelliteSwarm as SatelliteSwarmLayer } from './SatelliteSwarm.tsx';
+import { LabelProjector as LabelProjectorLayer } from './LabelProjector.tsx';
 import { LazyLayer, lazyLayer, useOnceOn } from './lazyLayer.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
 import { ScaleBarProbe } from './ScaleBarProbe.tsx';
@@ -47,8 +47,26 @@ import type { SharedFrame } from './satellites.ts';
 // Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
-import { SolarSystem } from './SolarSystem.tsx';
-import { Starfield } from './Starfield.tsx';
+import { SolarSystem as SolarSystemLayer } from './SolarSystem.tsx';
+import { Starfield as StarfieldLayer } from './Starfield.tsx';
+
+/**
+ * The scene's layers that are always mounted, each rendered again only when one of its own props
+ * changes. A layer switched on or off re-renders the app, and with it this canvas; unmemoised,
+ * every layer under it rendered again too -- the scene's few hundred bodies' hooks among them --
+ * for a switch most of them never read.
+ */
+const AsteroidBelt = memo(AsteroidBeltLayer);
+const CometField = memo(CometFieldLayer);
+const DistanceRings = memo(DistanceRingsLayer);
+const LocalGroup = memo(LocalGroupLayer);
+const DwarfStars = memo(DwarfStarsLayer);
+const MilkyWay = memo(MilkyWayLayer);
+const NuclearCluster = memo(NuclearClusterLayer);
+const SatelliteSwarm = memo(SatelliteSwarmLayer);
+const LabelProjector = memo(LabelProjectorLayer);
+const SolarSystem = memo(SolarSystemLayer);
+const Starfield = memo(StarfieldLayer);
 
 /**
  * The layers drawn far from the Sun, or off until switched on, each in a chunk of its own

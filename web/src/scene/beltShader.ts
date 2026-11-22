@@ -17,9 +17,15 @@ import type { Vec3 } from '../core/vec3.ts';
  * arithmetic against kepler.ts, the app's float64 two-body propagator, and measure what
  * float32 costs. Change one and change the other: nothing else checks the shader.
  *
- * What the mirror cannot reproduce is the GPU's own sin and cos, which GLSL leaves to the
- * implementation; it rounds the exact ones to float32. On a desktop GPU the built-ins are
- * good to a few float32 steps over [-π, π], which is all the range they are given here.
+ * **And no answer that rests on the GPU's sin or cos.** GLSL sets them no precision, and
+ * they can have little: SwiftShader's are good to about 5e-4, which moved every asteroid
+ * by that share of its distance, and a desktop GPU's own differ from the mirror's by up
+ * to 4e-5 of it on the eccentric orbits (measured on an AMD iGPU by transform feedback).
+ * So every sine and cosine an answer depends on -- Kepler's iterations, the final
+ * position, the three angles of the orbit's plane -- is sinCos(): a range reduction by
+ * π/2 in two parts and Cephes's minimax polynomials, + - * / only, which every GPU does
+ * the same to a rounding. The GPU's own sin, like its pow, is left to the start, a guess
+ * Newton corrects.
  */
 
 /**
@@ -29,34 +35,48 @@ import type { Vec3 } from '../core/vec3.ts';
  * kepler.ts's, and fine for every planet -- Newton diverges outright for e above about
  * 0.99 just before perihelion: at e = 0.994 and M = -0.045 it overshoots to the far side
  * of the orbit and never comes back. The belt has such orbits: the scattered and
- * detached objects far past Neptune, up to e = 0.9996 with a semi-major axis of 14,500 AU. Starting from π for every e > 0.8, the usual cure, always converges
- * but slowly: eleven iterations to reach an asteroid at perihelion.
+ * detached objects far past Neptune, up to e = 0.9996 with a semi-major axis of 14,500
+ * AU. Starting from π for every e > 0.8, the usual cure, always converges but slowly:
+ * eleven iterations to reach an asteroid at perihelion.
  *
  * So for e > CUBIC_START_E the start is the root of Kepler's equation with sin E cut at
  * its cubic term, (e/6)·E³ + (1 - e)·E = M -- exact in the limit that matters, a nearly
  * parabolic orbit near perihelion, where E races ahead of M -- solved in closed form by
  * Cardano and clamped to [-π, π]. Below it, the plain start is already close.
  *
- * Measured in float32 emulation (`solveKeplerF32`) over e in [0, 0.999] at steps of 0.001,
- * plus 0.9965, 0.9996 and on to 0.99999, and M at 6,000 steps across [-π, π) plus logarithmic runs down to 1e-9 from
- * both sides of perihelion and of aphelion:
+ * Measured in float32 emulation (`solveKeplerF32`) over e in [0, 0.999] at steps of
+ * 0.001, plus 0.9965, 0.9996 and on to 0.99999, and M at 6,000 steps across [-π, π) plus
+ * logarithmic runs down to 1e-9 from both sides of perihelion and of aphelion:
  *
  *   iterations   worst |E - e·sin E - M|
  *       2              6.0e-5 rad
- *       3              3.8e-7 rad
- *       4, 5, 6        3.8e-7 rad
+ *       3              3.9e-7 rad
+ *       4, 5, 6        3.8e-7 to 4.0e-7 rad
  *
- * Three reach the floor: 3.8e-7 rad is one and a half float32 steps of E near 2 rad, as
- * close as float32 can write the answer down, and more iterations only move it around
- * inside that step. Four ship, one to spare, because the GPU's sin, cos and pow are not
- * the mirror's correctly rounded ones and Newton is what absorbs the difference. At four
- * the worst error in E itself, against a float64 bisection, is 1.7e-6 rad, at e = 0.999
- * a hair before perihelion -- not the iteration but the equation: there 1 - e·cos E is
- * 0.002, so one float32 step of the residual is five hundred of E.
+ * Three reach the floor: 4e-7 rad is about one and a half float32 steps of E near 2 rad,
+ * as close as float32 can write the answer down, and more iterations only move it around
+ * inside that step. Four ship, one to spare, because the start is the GPU's own sin or
+ * pow, not the mirror's, and Newton is what absorbs the difference. (Three for the low
+ * eccentricities alone, where two reach the floor, was tried: a loop of varying length is
+ * not unrolled, and cost the GPU more than the iteration saved.)
+ *
+ * **The residual is written so it does not cancel near perihelion.** E - e·sin E for e
+ * near 1 and E small subtracts two nearly equal numbers, and a float32 step of the
+ * difference is then hundreds of E's: within NEAR_ZERO of perihelion it is written as
+ * (1 - e)·E - e·(sin E - E), with sin E - E taken from the series' own terms (see
+ * sinCos), and subtracts nothing -- 1 - e is exact in float32 for e over a half. The
+ * slope and the position likewise use 1 - cos E from the series there, and √(1 - e²) is
+ * √((1 - e)(1 + e)). At four iterations the worst error in E against a float64 bisection
+ * is then 2.9e-7 rad, about a float32 step; it was 1.7e-6, at e = 0.999 a hair before
+ * perihelion.
  *
  * And M is wrapped into [-π, π), the range the file stores it in, for the reason the file
  * does: perihelion is then at zero, where float32 is finest, instead of at a seam near
- * 2π. The wrap accepts M0 in either range.
+ * 2π. The wrap subtracts whole turns and nothing else, so an M already in range comes out
+ * exactly as it went in -- the wrap there was, as mod(M + π, 2π) - π, which rounds M to a
+ * step of π, 2.4e-7 rad: near perihelion at e = 0.996 that moved E by 2.4e-5 rad and a
+ * 14,000-AU orbit's asteroid by four million kilometres. The wrap accepts M0 in either
+ * range.
  */
 export const KEPLER_ITERATIONS = 4;
 
@@ -68,6 +88,40 @@ const PI_F32 = Math.fround(Math.PI);
 const PI2_F32 = Math.fround(2 * Math.PI);
 
 const f = Math.fround;
+
+/**
+ * π/2 and 2π each in two parts for range reduction: the first short enough (8 significant
+ * bits) that a whole number of turns or quadrants times it is exact in float32, the second
+ * the float32 of what is left -- so x - k·c loses nothing to c's own rounding, which for 2π
+ * is 1.7e-7 rad a turn.
+ */
+const PIO2_HIGH = 1.5703125;
+const PIO2_LOW = f(Math.PI / 2 - PIO2_HIGH);
+const PI2_HIGH = 6.28125;
+const PI2_LOW = f(2 * Math.PI - PI2_HIGH);
+const TWO_OVER_PI = f(2 / Math.PI);
+
+/**
+ * Within this of perihelion, |E| in radians, Kepler's residual and the position are
+ * written without cancelling (see KEPLER_ITERATIONS); outside it, plainly, which rounds
+ * less where there is nothing to cancel. Under π/4, so sinCos's tails there are sin E - E
+ * and 1 - cos E themselves.
+ */
+const NEAR_ZERO = 0.78;
+
+/**
+ * Cephes's single-precision minimax polynomials for sin and cos on [-π/4, π/4]: sin r =
+ * r + r·z·(S0 + z·(S1 + z·S2)) and 1 - cos r = z·(1/2 - z·(C0 + z·(C1 + z·C2))), z = r².
+ * Good to a float32 step on that range; outside it, sinCos reduces to it first.
+ */
+const SIN_COEFFICIENTS = [-1.6666654611e-1, 8.3321608736e-3, -1.9515295891e-4].map(f);
+const COS_COEFFICIENTS = [4.166664568298827e-2, -1.388731625493765e-3, 2.443315711809948e-5].map(f);
+
+/** A float32 as a GLSL literal that reads back as the same float32. */
+function glslFloat(x: number): string {
+  const text = f(x).toPrecision(9);
+  return text.includes('.') || text.includes('e') ? text : `${text}.0`;
+}
 
 /**
  * Display colour of a belt dot, before its alpha: a dim, slightly warm grey.
@@ -287,8 +341,10 @@ export function spriteFragments(H: number, pixelRatio: number): number {
  * Δt arrives as one float32 and is multiplied by n in float32, and past a few years that
  * product's rounding is most of the error: a main-belt n·Δt reaches 14 rad in ten years,
  * where one float32 step is 1e-6 rad. Measured against kepler.ts in float64, the whole
- * chain is off by at most 141 km within a year of the reference instant, 2.4e-6 of the
- * orbit at ten years (404 km at Ceres's distance) and 3.1e-5 at a century. Splitting Δt
+ * chain is off by at most 71 km within a year of the reference instant, 1.8e-6 of the
+ * orbit at ten years (405 km at Ceres's distance) and 3.8e-5 at a century; over the whole
+ * catalogue at the reference instant, by 3.3e-7 of each asteroid's distance at worst and
+ * 7.5e-8 typically, the same on the GPU as in the mirror. Splitting Δt
  * into two floats would not touch it -- the rounding is in the product, not in Δt -- and
  * a per-asteroid wrap is what the CPU must not do. It is left, because the two-body
  * model's own drift is 40,000 to 190,000 km in the first year alone.
@@ -334,6 +390,24 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
     return clamp(cbrtSigned(D + h) - cbrtSigned(D - h), -PI, PI);
   }
 
+  // sinCosF32(), in TypeScript: sin x and cos x from + - * / alone; and sin r - r and
+  // 1 - cos r of the reduced r, which within π/4 of zero are sin x - x and 1 - cos x
+  // straight from the series' own terms, with nothing cancelled.
+  void sinCos(float x, out float s, out float c, out float sinTail, out float cosTail) {
+    float q = floor(x * ${glslFloat(TWO_OVER_PI)} + 0.5);
+    float r = (x - q * ${glslFloat(PIO2_HIGH)}) - q * ${glslFloat(PIO2_LOW)};
+    float z = r * r;
+    sinTail = (r * z) * (${glslFloat(SIN_COEFFICIENTS[0]!)} + z * (${glslFloat(SIN_COEFFICIENTS[1]!)} + z * ${glslFloat(SIN_COEFFICIENTS[2]!)}));
+    cosTail = z * (0.5 - z * (${glslFloat(COS_COEFFICIENTS[0]!)} + z * (${glslFloat(COS_COEFFICIENTS[1]!)} + z * ${glslFloat(COS_COEFFICIENTS[2]!)})));
+    float sr = r + sinTail;
+    float cr = 1.0 - cosTail;
+    int quadrant = int(q) & 3;
+    bool odd = (quadrant & 1) == 1;
+    float flip = quadrant >= 2 ? -1.0 : 1.0;
+    s = flip * (odd ? cr : sr);
+    c = flip * (odd ? -sr : cr);
+  }
+
   void main() {
     // A population faded out with its region (see beltCrowding.ts), or hidden with its
     // family, is put outside the clip volume before anything is worked out for it: no
@@ -353,20 +427,42 @@ export const BELT_VERTEX_SHADER = /* glsl */ `
     // beltPosition(), below in beltShader.ts, is these lines in TypeScript.
     float a = aShape.x;
     float e = aShape.y;
-    float M = mod(aAngles.z + aMotion.x * uDtDays + PI, PI2) - PI;
+    float oneMinusE = 1.0 - e;
+    float Mraw = aAngles.z + aMotion.x * uDtDays;
+    float turns = floor((Mraw + PI) / PI2);
+    float M = (Mraw - turns * ${glslFloat(PI2_HIGH)}) - turns * ${glslFloat(PI2_LOW)};
     float E = e > ${CUBIC_START_E.toFixed(2)} ? cubicStart(M, e) : M + e * sin(M);
+    float sinE;
+    float cosE;
+    float sinTail;
+    float cosTail;
+    bool nearZero = false;
+    float newtonStep = 0.0;
     for (int k = 0; k < ${KEPLER_ITERATIONS}; k++) {
-      E = E - (E - e * sin(E) - M) / (1.0 - e * cos(E));
+      sinCos(E, sinE, cosE, sinTail, cosTail);
+      nearZero = abs(E) < ${glslFloat(NEAR_ZERO)};
+      float residual = nearZero ? (oneMinusE * E - e * sinTail) - M : (E - e * sinE) - M;
+      float slope = nearZero ? oneMinusE + e * cosTail : 1.0 - e * cosE;
+      newtonStep = -residual / slope;
+      E = E + newtonStep;
     }
-    float xp = a * (cos(E) - e);
-    float yp = a * sqrt(1.0 - e * e) * sin(E);
+    // The answer's sin E and cos E: the last iteration's, turned through its step.
+    float halfStep2 = 0.5 * (newtonStep * newtonStep);
+    float xp = nearZero
+      ? a * (oneMinusE - ((cosTail + sinE * newtonStep) + cosE * halfStep2))
+      : a * (((cosE - sinE * newtonStep) - cosE * halfStep2) - e);
+    float yp = (a * sqrt(oneMinusE * (1.0 + e))) * ((sinE + cosE * newtonStep) - sinE * halfStep2);
 
-    float cosNode = cos(aAngles.x);
-    float sinNode = sin(aAngles.x);
-    float cosPeri = cos(aAngles.y);
-    float sinPeri = sin(aAngles.y);
-    float cosI = cos(aShape.z);
-    float sinI = sin(aShape.z);
+    float unused;
+    float cosNode;
+    float sinNode;
+    float cosPeri;
+    float sinPeri;
+    float cosI;
+    float sinI;
+    sinCos(aAngles.x, sinNode, cosNode, unused, unused);
+    sinCos(aAngles.y, sinPeri, cosPeri, unused, unused);
+    sinCos(aShape.z, sinI, cosI, unused, unused);
     vec3 helio = vec3(
       (cosNode * cosPeri - sinNode * sinPeri * cosI) * xp +
         (-cosNode * sinPeri - sinNode * cosPeri * cosI) * yp,
@@ -456,6 +552,32 @@ export function cubicStartF32(M: number, e: number): number {
   return Math.min(PI_F32, Math.max(-PI_F32, f(cbrtSignedF32(f(D + h)) - cbrtSignedF32(f(D - h)))));
 }
 
+/** What sinCosF32 returns: sin x, cos x, and sin r - r and 1 - cos r of the reduced r. */
+export type SinCos = readonly [sin: number, cos: number, sinTail: number, cosTail: number];
+
+/**
+ * The shader's sinCos(), in float32: x reduced to r within π/4 of the nearest multiple of
+ * π/2, Cephes's polynomials for r, and the quadrant's swap and signs. The tails are the
+ * polynomials' own terms past r and past 1: for |x| under π/4, where r is x, they are
+ * sin x - x and 1 - cos x with no cancellation however small x is.
+ */
+export function sinCosF32(x: number): SinCos {
+  x = f(x);
+  const q = Math.floor(f(f(x * TWO_OVER_PI) + 0.5));
+  const r = f(f(x - f(q * PIO2_HIGH)) - f(q * PIO2_LOW));
+  const z = f(r * r);
+  const [s0, s1, s2] = SIN_COEFFICIENTS as [number, number, number];
+  const [c0, c1, c2] = COS_COEFFICIENTS as [number, number, number];
+  const sinTail = f(f(r * z) * f(s0 + f(z * f(s1 + f(z * s2)))));
+  const cosTail = f(z * f(0.5 - f(z * f(c0 + f(z * f(c1 + f(z * c2)))))));
+  const sr = f(r + sinTail);
+  const cr = f(1 - cosTail);
+  const quadrant = ((q % 4) + 4) % 4;
+  const odd = quadrant % 2 === 1;
+  const flip = quadrant >= 2 ? -1 : 1;
+  return [flip * (odd ? cr : sr), flip * (odd ? -sr : cr), sinTail, cosTail];
+}
+
 /**
  * Kepler's equation in float32, as the shader solves it: E from M in [-π, π) and e.
  *
@@ -463,18 +585,65 @@ export function cubicStartF32(M: number, e: number): number {
  * the one.
  */
 export function solveKeplerF32(M: number, e: number, iterations = KEPLER_ITERATIONS): number {
-  let E = e > CUBIC_START_E ? cubicStartF32(M, e) : f(M + f(e * f(Math.sin(M))));
-  for (let k = 0; k < iterations; k += 1) {
-    E = f(E - f(f(f(E - f(e * f(Math.sin(E)))) - M) / f(1 - f(e * f(Math.cos(E))))));
-  }
-  return E;
+  return keplerF32(M, e, iterations).E;
 }
 
-/** The shader's mean anomaly: moved on by n·Δt and wrapped into [-π, π), in float32. */
+/** What the shader's Kepler solve leaves: E, and the perifocal x and y over a. */
+export interface KeplerF32 {
+  readonly E: number;
+  /** cos E - e: the perifocal x, in semi-major axes. */
+  readonly cosEMinusE: number;
+  readonly sinE: number;
+}
+
+/**
+ * The shader's Kepler solve, statement for statement.
+ *
+ * Near perihelion the residual is (1 - e)·E - e·(sin E - E) and the slope (1 - e) +
+ * e·(1 - cos E), the tails from sinCos; elsewhere E - e·sin E and 1 - e·cos E, which round
+ * less where nothing cancels. sin E and cos E at the answer are not worked out afresh:
+ * they are the last iteration's, turned through its step by the angle-sum formulas to
+ * second order. That step is a few float32 steps of E -- the iteration before reached the
+ * floor (see KEPLER_ITERATIONS) -- so the third-order terms left out are under 1e-17, and
+ * it saves the GPU one sinCos an asteroid.
+ */
+export function keplerF32(M: number, e: number, iterations = KEPLER_ITERATIONS): KeplerF32 {
+  const oneMinusE = f(1 - e);
+  let E = e > CUBIC_START_E ? cubicStartF32(M, e) : f(M + f(e * f(Math.sin(M))));
+  let sinE = 0;
+  let cosE = 1;
+  let cosTail = 0;
+  let nearZero = false;
+  let step = 0;
+  for (let k = 0; k < iterations; k += 1) {
+    let sinTail: number;
+    [sinE, cosE, sinTail, cosTail] = sinCosF32(E);
+    nearZero = Math.abs(E) < f(NEAR_ZERO);
+    const residual = nearZero
+      ? f(f(f(oneMinusE * E) - f(e * sinTail)) - M)
+      : f(f(E - f(e * sinE)) - M);
+    const slope = nearZero ? f(oneMinusE + f(e * cosTail)) : f(1 - f(e * cosE));
+    step = -f(residual / slope);
+    E = f(E + step);
+  }
+  const halfStep2 = f(0.5 * f(step * step));
+  return {
+    E,
+    cosEMinusE: nearZero
+      ? f(oneMinusE - f(f(cosTail + f(sinE * step)) + f(cosE * halfStep2)))
+      : f(f(f(cosE - f(sinE * step)) - f(cosE * halfStep2)) - e),
+    sinE: f(f(sinE + f(cosE * step)) - f(sinE * halfStep2)),
+  };
+}
+
+/**
+ * The shader's mean anomaly: moved on by n·Δt and wrapped into [-π, π), in float32, by
+ * whole turns of 2π in two parts -- none at all when M is already in range.
+ */
 export function meanAnomalyF32(M0: number, n: number, dtDays: number): number {
-  const x = f(f(f(M0) + f(f(n) * f(dtDays))) + PI_F32);
-  // GLSL's mod(x, y) is x - y·floor(x / y).
-  return f(f(x - f(PI2_F32 * Math.floor(f(x / PI2_F32)))) - PI_F32);
+  const raw = f(f(M0) + f(f(n) * f(dtDays)));
+  const turns = Math.floor(f(f(raw + PI_F32) / PI2_F32));
+  return f(f(raw - f(turns * PI2_HIGH)) - f(turns * PI2_LOW));
 }
 
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
@@ -497,16 +666,13 @@ export function beltPosition(
   const a = records[base + RECORD.a]!;
   const e = records[base + RECORD.e]!;
   const M = meanAnomalyF32(records[base + RECORD.M]!, records[base + RECORD.n]!, dtDays);
-  const E = solveKeplerF32(M, e);
-  const xp = f(a * f(f(Math.cos(E)) - e));
-  const yp = f(f(a * f(Math.sqrt(f(1 - f(e * e))))) * f(Math.sin(E)));
+  const { cosEMinusE, sinE } = keplerF32(M, e);
+  const xp = f(a * cosEMinusE);
+  const yp = f(f(a * f(Math.sqrt(f(f(1 - e) * f(1 + e))))) * sinE);
 
-  const cosNode = f(Math.cos(records[base + RECORD.node]!));
-  const sinNode = f(Math.sin(records[base + RECORD.node]!));
-  const cosPeri = f(Math.cos(records[base + RECORD.peri]!));
-  const sinPeri = f(Math.sin(records[base + RECORD.peri]!));
-  const cosI = f(Math.cos(records[base + RECORD.i]!));
-  const sinI = f(Math.sin(records[base + RECORD.i]!));
+  const [sinNode, cosNode] = sinCosF32(records[base + RECORD.node]!);
+  const [sinPeri, cosPeri] = sinCosF32(records[base + RECORD.peri]!);
+  const [sinI, cosI] = sinCosF32(records[base + RECORD.i]!);
   const helio = {
     x: f(
       f(f(f(cosNode * cosPeri) - f(f(sinNode * sinPeri) * cosI)) * xp) +

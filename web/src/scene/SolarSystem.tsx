@@ -34,7 +34,8 @@ import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
 import { OrbitLine, orbitUnseenKm } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
 import { cloudTopDriftDeg, cloudTopDriftRateDegPerDay, cloudTopMapOffset } from './cloudRotation.ts';
-import { degPerDayToRadPerSec, pixelsPerRadian, surfaceRate, swarmRate, transverseRate } from './screenMotion.ts';
+import { degPerDayToRadPerSec, pixelsPerRadian, solarSystemRate, surfaceRate, transverseRate } from './screenMotion.ts';
+import { satelliteSwarmRate } from './satelliteMotion.ts';
 import { drawnTexture, mapColourGain } from './drawnTexture.ts';
 import { MAX_RING_ALPHA, ringMaterial } from './ringMaterial.ts';
 import { ringFlatRadianceFactor, ringShadowSettings, ringStripTexture } from './ringBands.ts';
@@ -1983,19 +1984,34 @@ export function SolarSystem({
     }
 
     // Earth's satellites, drawn as a swarm of dots (SatelliteSwarm.tsx) and not as bodies: as
-    // fast as any of them could be, from where Earth is (screenMotion.ts swarmRate).
+    // fast as any of them could be, from where Earth is (satelliteMotion.ts: measured, never above screenMotion.ts swarmRate).
     const earthNow = snapshot.bodies.get(EARTH_ID);
     if (visibleKinds.has('satellite') && earthNow !== undefined) {
       fastest = Math.max(
         fastest,
-        swarmRate(
-          Math.hypot(earthNow.positionKm.x - cameraKmX, earthNow.positionKm.y - cameraKmY, earthNow.positionKm.z - cameraKmZ),
+        satelliteSwarmRate(
+          cameraKmX - earthNow.positionKm.x,
+          cameraKmY - earthNow.positionKm.y,
+          cameraKmZ - earthNow.positionKm.z,
           store.body(EARTH_ID).gmBodyOnlyKm3S2,
           Math.hypot(earthNow.velocityKmS.x, earthNow.velocityKmS.y, earthNow.velocityKmS.z),
         ),
       );
     }
-    renderDemand.setMotion(fastest * pixelsPerRadian(size.height, fov));
+    // And what the scene does not bound one by one -- the belt's and the comets' dots, the orbit
+    // and trail lines, all of them the Sun's -- as a whole, from where the Sun is: the live floor
+    // holds only while they could show motion (renderDemand.ts LIVE_FRAME_MAX_MS).
+    const sunNow = store.sunFromFocus(focus, jd);
+    const floor =
+      sunNow === null
+        ? 0
+        : solarSystemRate(
+            Math.hypot(sunNow.position.x - cameraKmX, sunNow.position.y - cameraKmY, sunNow.position.z - cameraKmZ),
+            store.body('sun').gmBodyOnlyKm3S2,
+            Math.hypot(sunNow.velocity.x, sunNow.velocity.y, sunNow.velocity.z),
+          );
+    const pxPerRadian = pixelsPerRadian(size.height, fov);
+    renderDemand.setMotion(fastest * pxPerRadian, floor * pxPerRadian);
 
     // Every body, shown or not: one switched off or out of its coverage was skipped
     // above, and that is exactly the one whose detail should go.

@@ -204,7 +204,10 @@ export const RESOLVED_PX = 4;
 /** The narrowest a point's Gaussian is drawn, device pixels: narrower falls between pixels. */
 export const MIN_SIGMA_PX = 0.7;
 
-/** The share of a galaxy's light drawn as a point, its half-light radius `halfLightPx` across. */
+/**
+ * The share of a galaxy's light drawn as a point, its half-light radius `halfLightPx` across.
+ * POINT_VERTEX works out the same for each point on the GPU; change one, change both.
+ */
 export function pointShare(halfLightPx: number): number {
   const t = Math.min(1, Math.max(0, (halfLightPx - UNRESOLVED_PX) / (RESOLVED_PX - UNRESOLVED_PX)));
   return 1 - t * t * (3 - 2 * t);
@@ -549,12 +552,15 @@ uniform float uUnitsPerPc;
 uniform float uPixelsPerRadian;
 uniform float uFade;
 uniform float uFloorKept;
+// The one galaxy whose stars are drawn one by one (DwarfStars.tsx), by instance, or -1; and
+// the share of its light they leave to its point.
+uniform int uKeptInstance;
+uniform float uKeptShare;
 // Where it is, pc; the colour times the luminosity over the white column; the half-light
-// radius, pc; the share drawn as a point (pointShare, worked out on the CPU each frame).
+// radius, pc.
 attribute vec3 aCentre;
 attribute vec3 aLight;
 attribute float aHalfLightPc;
-attribute float aShare;
 varying vec3 vPeak;
 varying float vSigmaPx;
 ${SPRITE_VERTEX_GLSL}
@@ -562,6 +568,10 @@ ${SPRITE_VERTEX_GLSL}
 void main() {
   vec3 rel = aCentre - uCameraPc;
   float distancePc = length(rel);
+  // The share drawn as a point: pointShare(), here rather than on the CPU for 1,900 galaxies
+  // a frame, less what its stars drawn one by one carry.
+  float resolved = clamp((aHalfLightPc / distancePc * uPixelsPerRadian - ${UNRESOLVED_PX.toFixed(2)}) / ${(RESOLVED_PX - UNRESOLVED_PX).toFixed(2)}, 0.0, 1.0);
+  float aShare = (1.0 - resolved * resolved * (3.0 - 2.0 * resolved)) * (gl_InstanceID == uKeptInstance ? uKeptShare : 1.0);
   float sigmaPx = max(${MIN_SIGMA_PX.toFixed(2)}, aHalfLightPc / distancePc * uPixelsPerRadian / 1.1774);
   float sigmaPc = sigmaPx / uPixelsPerRadian * distancePc;
   // pointPeak: L / (2 pi sigma^2).
@@ -1024,6 +1034,8 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
       uViewportPx: { value: new THREE.Vector2(1, 1) },
       uFade: { value: 0 },
       uFloorKept: { value: 1 },
+      uKeptInstance: { value: -1 },
+      uKeptShare: { value: 1 },
     }),
     [],
   );
@@ -1047,9 +1059,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     geometry.setAttribute('aCentre', new THREE.InstancedBufferAttribute(position, 3));
     geometry.setAttribute('aLight', new THREE.InstancedBufferAttribute(light, 3));
     geometry.setAttribute('aHalfLightPc', new THREE.InstancedBufferAttribute(new Float32Array(halfLightPc), 1));
-    const share = new THREE.InstancedBufferAttribute(new Float32Array(list.length), 1);
-    share.setUsage(THREE.DynamicDrawUsage);
-    geometry.setAttribute('aShare', share);
+    const instanceOf = new Map(keys.map((key, i) => [key, i]));
     const object = new THREE.Mesh(
       geometry,
       new THREE.ShaderMaterial({
@@ -1065,7 +1075,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     object.frustumCulled = false;
     object.raycast = noRaycast;
     drawIntoGlow(object);
-    return { object, centres, halfLightPc, keys, share, halfCountPc: halfCountRadiusPc(position, list.length) };
+    return { object, centres, instanceOf, halfCountPc: halfCountRadiusPc(position, list.length) };
   }, [entries, pointUniforms]);
 
   // The dwarfs' marks.
@@ -1160,7 +1170,7 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     [giants],
   );
 
-  useFrame(({ camera: frameCamera, gl: renderer }) => {
+  useFrame(({ camera: frameCamera, gl: renderer, size }) => {
     const jd = clock.tdbJulianDay;
     const sun = store.sunFromFocus(focus, jd);
     if (sun === null || !visible) {
@@ -1314,12 +1324,10 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     // The points: what the volumes do not draw.
     points.object.visible = fade > 0;
     if (fade > 0) {
-      points.centres.forEach((centre, i) => {
-        const distancePc = Math.hypot(centre.x - cameraPc.x, centre.y - cameraPc.y, centre.z - cameraPc.z);
-        const kept = points.keys[i] === dwarfStarsDrawn.key ? dwarfStarsDrawn.glowShare : 1;
-        points.share.setX(i, (1 - volumeShare(points.halfLightPc[i]!, distancePc)) * kept);
-      });
-      points.share.needsUpdate = true;
+      // Each point's share is worked out in its shader (POINT_VERTEX).
+      pointUniforms['uKeptInstance']!.value =
+        dwarfStarsDrawn.key === null ? -1 : (points.instanceOf.get(dwarfStarsDrawn.key) ?? -1);
+      pointUniforms['uKeptShare']!.value = dwarfStarsDrawn.glowShare;
       (pointUniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
       pointUniforms['uPixelsPerRadian']!.value = pixelsPerRadian;
       renderer.getDrawingBufferSize(pointUniforms['uViewportPx']!.value as THREE.Vector2);
@@ -1333,11 +1341,13 @@ export function LocalGroup({ source, store, clock, focus, visible, showMarks, on
     markUniforms['uPixelRatio']!.value = renderer.getPixelRatio();
     markUniforms['uFade']!.value = markFade;
     if (markFade > 0) {
-      const element = renderer.domElement;
       const fov = (frameCamera as THREE.PerspectiveCamera).fov;
-      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], viewPixelsPerRadian(element.clientHeight, fov), focus);
+      // The canvas's size as the scene keeps it, not read off the element: asked for its
+      // clientHeight after other layers had written their labels' styles this frame, the
+      // browser laid the page out again to answer, half a millisecond a frame.
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], viewPixelsPerRadian(size.height, fov), focus);
       foldMembers(MARK_HOSTS, marks.folds.host, marks.folds.separationPc, marks.folds.value, -1);
-      declutterMarks(marks, frameCamera, cameraPc, element.clientWidth, element.clientHeight);
+      declutterMarks(marks, frameCamera, cameraPc, size.width, size.height);
     }
   });
 

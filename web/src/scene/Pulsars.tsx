@@ -16,6 +16,7 @@ import { setMarkerPointer } from './markerPointer.ts';
 import { foldMembers } from './markFolding.ts';
 import { MARK_HOSTS, milkyWayMembers, pixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import { mapStrength } from './Starfield.tsx';
+import { useCompiled } from './useCompiled.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -173,18 +174,27 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     return { object, folds, fold };
   }, [markers, uniforms]);
   useEffect(() => {
-    const group = groupRef.current;
-    if (group === null || points === null) {
+    if (points === null) {
       return;
     }
-    group.add(points.object);
-    renderDemand.request();
     return () => {
-      group.remove(points.object);
       points.object.geometry.dispose();
       (points.object.material as THREE.Material).dispose();
     };
   }, [points]);
+  // In the scene once its shader has compiled beside the page (useCompiled.ts).
+  const compiled = useCompiled(points === null ? null : points.object);
+  useEffect(() => {
+    const group = groupRef.current;
+    if (group === null || compiled === null) {
+      return;
+    }
+    group.add(compiled);
+    renderDemand.request();
+    return () => {
+      group.remove(compiled);
+    };
+  }, [compiled]);
 
   useFrame(({ camera: frameCamera, gl: renderer }) => {
     const group = groupRef.current;

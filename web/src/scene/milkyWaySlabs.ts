@@ -109,17 +109,96 @@ export function reaches(
   step: number,
   slices: number,
   blend: number,
+  extra = 0,
 ): boolean {
-  const uNear = (nearPc - nearest) / step;
-  const uFar = (farPc - nearest) / step;
-  return (k === 0 || uFar > k - blend - REACH_MARGIN) && (k === slices - 1 || uNear < k + 1 + blend + REACH_MARGIN);
+  return reachesInSlabs((nearPc - nearest) / step, (farPc - nearest) / step, k, slices, blend, extra);
 }
+
+/** `reaches`, the distances already in slabs from the first slab's near edge. */
+function reachesInSlabs(uNear: number, uFar: number, k: number, slices: number, blend: number, extra: number): boolean {
+  const margin = REACH_MARGIN + extra;
+  return (k === 0 || uFar > k - blend - margin) && (k === slices - 1 || uNear < k + 1 + blend + margin);
+}
+
+/**
+ * With a record of what reached (slabRanges' `reach`), a cube is handed to a slab it comes
+ * within FILL_EXTRA slabs of, and kept there until it is DROP_EXTRA away: the index is a
+ * superset of what the shader needs, so the picture is the same, and it is rewritten only when
+ * a cube that does reach is missing from it or one far out is still in it -- not each time
+ * the camera's turn carries some cube of thousands across an edge. A slab is 3.3 kpc deep at
+ * the least, so a tenth of one hands a pass a few more cubes than it needs.
+ */
+const FILL_EXTRA = 0.1;
+const DROP_EXTRA = 0.3;
+/** Drift (driftSinceWritten) under which the record holds without a look: half of FILL_EXTRA. */
+const SURE_DRIFT = FILL_EXTRA / 2;
+
+/** What slabRanges returns when `reach` shows nothing changed: index and ranges are as they were. */
+export const SLABS_UNCHANGED = -1;
+
+/**
+ * What slabRanges handed each cube when it last wrote the index (`spans`, each cube's first
+ * and last slab), and the last place it found them still serving (`at`): the camera, the first
+ * slab's near edge and the slabs' depth, the widest |distance in slabs| of any cube, and how far
+ * in slabs every cube's distances could move from there before the spans stopped serving.
+ */
+export interface SlabReach {
+  readonly spans: Uint8Array;
+  readonly at: Float64Array;
+  /** Whether `spans` were written: false until the first write. */
+  written: boolean;
+}
+
+/** A record for slabRanges' `record`, nothing handed yet. */
+export function slabReach(cubes: Cubes): SlabReach {
+  return { spans: new Uint8Array(cubes.start.length * 2).fill(NOTHING_HANDED), at: new Float64Array(7), written: false };
+}
+
+/**
+ * How far, in slabs, any cube's distance may have moved since the place in the record, at most:
+ * a distance to a box moves no more than the camera, the slabs' start moves by its own change,
+ * and a distance of u slabs is u times the change in the slab's depth.
+ */
+function driftSinceWritten(reach: SlabReach, camera: readonly [number, number, number], nearest: number, step: number): number {
+  const at = reach.at;
+  const moved = Math.hypot(camera[0] - at[0]!, camera[1] - at[1]!, camera[2] - at[2]!);
+  return at[5]! * Math.abs(at[4]! / step - 1) + (moved + Math.abs(nearest - at[3]!)) / step;
+}
+
+/** A cube's span in a record before anything was handed: no span holds a reaching cube. */
+const NOTHING_HANDED = 255;
+
+/** 0, 1, 2, ...: copied from, a cube's run of the index is one memory copy. */
+let counting = new Uint32Array(0);
+let near = new Float64Array(0);
+let far = new Float64Array(0);
+
+/**
+ * The slabs a cube reaches, as `reachesInSlabs` decides each, first and last into `span`: the
+ * first condition holds for every slab up to a last, the second for every slab from a first,
+ * so they are a run, found without asking slab by slab.
+ */
+export function slabSpan(uNear: number, uFar: number, slices: number, blend: number, extra: number, span: Int32Array): void {
+  const margin = REACH_MARGIN + extra;
+  // k < uFar + blend + margin, or k the first; k > uNear - 1 - blend - margin, or k the last.
+  span[0] = Math.min(slices - 1, Math.max(0, Math.floor(uNear - 1 - blend - margin) + 1));
+  span[1] = Math.max(0, Math.min(slices - 1, Math.ceil(uFar + blend + margin) - 1));
+}
+
+const fillSpan = new Int32Array(2);
 
 /**
  * Each slab's points as ranges of `index`: for each slab k, `ranges[2k]` its first entry and
  * `ranges[2k + 1]` how many, the points of every cube that reaches it. Returns how many entries
  * were written; if they would not fit, every slab gets every point instead (the index then the
  * points in order), as before the cubes.
+ *
+ * `record`, if given (slabReach), holds the slabs each cube was handed the last time, its first
+ * and last, with the margins of FILL_EXTRA. While that still holds every slab each cube
+ * reaches and none it is DROP_EXTRA short of, nothing is written and
+ * SLABS_UNCHANGED is returned: the index and the ranges from then serve this place too.
+ * Rewritten and uploaded every frame the camera turned, the same half a million entries were
+ * a millisecond and a half of the main thread at the Milky Way's view.
  */
 export function slabRanges(
   cubes: Cubes,
@@ -130,35 +209,104 @@ export function slabRanges(
   blend: number,
   index: Uint32Array,
   ranges: Int32Array,
+  record?: SlabReach,
 ): number {
   const m = cubes.start.length;
-  const near = new Float64Array(m);
-  const far = new Float64Array(m);
+  if (near.length < m) {
+    near = new Float64Array(m);
+    far = new Float64Array(m);
+  }
+  // Moved so little since the record was written that no cube can have come within reach of a
+  // slab it was not handed (FILL_EXTRA away then) or gone out of all reach of one it was: the
+  // index serves as it is, with no cube looked at.
+  if (record?.written === true && driftSinceWritten(record, camera, nearest, step) < record.at[6]!) {
+    return SLABS_UNCHANGED;
+  }
+  const reach = record?.spans;
+  const box = cubes.box;
+  const [cx, cy, cz] = camera;
+  // The spans' edges as slabSpan works them out, less the first and last slabs' clamps.
+  const lastSlab = slices - 1;
+  const strictBelow = 1 + blend + REACH_MARGIN;
+  const strictAbove = blend + REACH_MARGIN;
+  const dropBelow = strictBelow + DROP_EXTRA;
+  const dropAbove = strictAbove + DROP_EXTRA;
+  let holds = reach !== undefined;
+  let widest = 0;
+  let slack = Infinity;
   for (let c = 0; c < m; c += 1) {
-    let n2 = 0;
-    let f2 = 0;
-    for (let a = 0; a < 3; a += 1) {
-      const lo = cubes.box[c * 6 + a]! - camera[a]!;
-      const hi = cubes.box[c * 6 + 3 + a]! - camera[a]!;
-      const outside = lo > 0 ? lo : hi < 0 ? -hi : 0;
-      n2 += outside * outside;
-      const most = Math.max(Math.abs(lo), Math.abs(hi));
-      f2 += most * most;
+    const b = c * 6;
+    // Each axis: how far outside the box the camera is, and the farthest the box reaches.
+    const lx = box[b]! - cx;
+    const hx = box[b + 3]! - cx;
+    const ly = box[b + 1]! - cy;
+    const hy = box[b + 4]! - cy;
+    const lz = box[b + 2]! - cz;
+    const hz = box[b + 5]! - cz;
+    const ox = lx > 0 ? lx : hx < 0 ? -hx : 0;
+    const oy = ly > 0 ? ly : hy < 0 ? -hy : 0;
+    const oz = lz > 0 ? lz : hz < 0 ? -hz : 0;
+    const fx = Math.max(Math.abs(lx), Math.abs(hx));
+    const fy = Math.max(Math.abs(ly), Math.abs(hy));
+    const fz = Math.max(Math.abs(lz), Math.abs(hz));
+    // In slabs from the first one's near edge, as `reaches` works them out.
+    const uNear = (Math.sqrt(ox * ox + oy * oy + oz * oz) - nearest) / step;
+    const uFar = (Math.sqrt(fx * fx + fy * fy + fz * fz) - nearest) / step;
+    near[c] = uNear;
+    far[c] = uFar;
+    widest = Math.max(widest, Math.abs(uNear), Math.abs(uFar));
+    if (holds) {
+      // What was handed must hold every slab the cube reaches, and none it is DROP_EXTRA short of.
+      const first = reach![2 * c]!;
+      const last = reach![2 * c + 1]!;
+      const needFirst = Math.min(lastSlab, Math.max(0, Math.floor(uNear - strictBelow) + 1));
+      const needLast = Math.max(0, Math.min(lastSlab, Math.ceil(uFar + strictAbove) - 1));
+      const mayFirst = Math.min(lastSlab, Math.max(0, Math.floor(uNear - dropBelow) + 1));
+      const mayLast = Math.max(0, Math.min(lastSlab, Math.ceil(uFar + dropAbove) - 1));
+      holds = first !== NOTHING_HANDED && first <= needFirst && last >= needLast && first >= mayFirst && last <= mayLast;
+      // And how much farther this cube's distances may move before it would not.
+      if (first > 0) slack = Math.min(slack, uNear - (first - 1 + strictBelow));
+      if (last < lastSlab) slack = Math.min(slack, last + 1 - strictAbove - uFar);
+      if (first < lastSlab) slack = Math.min(slack, first + dropBelow - uNear);
+      if (last > 0) slack = Math.min(slack, uFar + dropAbove - last);
     }
-    near[c] = Math.sqrt(n2);
-    far[c] = Math.sqrt(f2);
+  }
+  if (record !== undefined && reach !== undefined) {
+    if (holds) {
+      // Still serving from here, with `slack` to spare: the next frames measure from here.
+      record.at.set([camera[0], camera[1], camera[2], nearest, step, widest, slack]);
+      return SLABS_UNCHANGED;
+    }
+    for (let c = 0; c < m; c += 1) {
+      slabSpan(near[c]!, far[c]!, slices, blend, FILL_EXTRA, fillSpan);
+      reach[2 * c] = fillSpan[0]!;
+      reach[2 * c + 1] = fillSpan[1]!;
+    }
+    // Handed FILL_EXTRA wide, every cube has at least that before a slab it reaches is missed.
+    record.at.set([camera[0], camera[1], camera[2], nearest, step, widest, SURE_DRIFT]);
+    record.written = true;
+  }
+  const points = m === 0 ? 0 : cubes.start[m - 1]! + cubes.count[m - 1]!;
+  if (counting.length < points) {
+    counting = new Uint32Array(points);
+    for (let j = 0; j < points; j += 1) counting[j] = j;
   }
   let written = 0;
   for (let k = 0; k < slices; k += 1) {
     ranges[2 * k] = written;
     for (let c = 0; c < m; c += 1) {
-      if (!reaches(near[c]!, far[c]!, k, nearest, step, slices, blend)) continue;
+      if (reach !== undefined ? k < reach[2 * c]! || k > reach[2 * c + 1]! : !reachesInSlabs(near[c]!, far[c]!, k, slices, blend, 0)) continue;
       const from = cubes.start[c]!;
       const count = cubes.count[c]!;
       if (written + count > index.length) {
+        // Forget what reached: the next call, whatever reaches, writes the index again.
+        if (record !== undefined) {
+          record.spans.fill(NOTHING_HANDED);
+          record.written = false;
+        }
         return everyPoint(cubes, index, ranges, slices);
       }
-      for (let j = 0; j < count; j += 1) index[written + j] = from + j;
+      index.set(counting.subarray(from, from + count), written);
       written += count;
     }
     ranges[2 * k + 1] = written - ranges[2 * k]!;

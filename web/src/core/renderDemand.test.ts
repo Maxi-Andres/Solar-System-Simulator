@@ -172,4 +172,31 @@ describe('the live clock', () => {
     expect(liveFrameIntervalMs(0)).toBe(LIVE_FRAME_MAX_MS);
     expect(liveFrameIntervalMs(LIVE_STEP_PX * 100)).toBe(0);
   });
+
+  it('holds the floor only while what it is for could show motion', () => {
+    // Unbounded, or not said: ten frames a second, as always.
+    expect(liveFrameIntervalMs(0, Infinity)).toBe(LIVE_FRAME_MAX_MS);
+    expect(liveFrameIntervalMs(0, Number.NaN)).toBe(LIVE_FRAME_MAX_MS);
+    // Bounded at a quarter of a pixel a second: once a second, the scene's own motion permitting.
+    expect(liveFrameIntervalMs(0, LIVE_STEP_PX)).toBeCloseTo(1000);
+    expect(liveFrameIntervalMs(LIVE_STEP_PX * 4, LIVE_STEP_PX)).toBeCloseTo(250);
+    // Faster than the floor allows: still the floor, never oftener.
+    expect(liveFrameIntervalMs(0, LIVE_STEP_PX * 1000)).toBe(LIVE_FRAME_MAX_MS);
+    // Nothing moving anywhere: no frame from the clock at all.
+    expect(liveFrameIntervalMs(0, 0)).toBe(Infinity);
+  });
+
+  it('asks the clock for nothing from far enough away that nothing can move', () => {
+    const demand = new RenderDemand();
+    let wakes = 0;
+    demand.connect(() => (wakes += 1));
+    demand.setMotion(1e-12, 1e-15);
+    demand.frameDrawn(0);
+    for (const t of [100, 1_000, 60_000]) demand.clockMoved(true, 1, t);
+    expect(wakes).toBe(0);
+    // And the floor back the moment the camera comes within reach.
+    demand.setMotion(1e-12, Infinity);
+    demand.clockMoved(true, 1, 60_100);
+    expect(wakes).toBe(1);
+  });
 });

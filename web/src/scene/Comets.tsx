@@ -22,6 +22,7 @@ import {
 } from './cometShader.ts';
 import type { SharedFrame } from './satellites.ts';
 import { KM_PER_UNIT } from './scale.ts';
+import { useCompiled } from './useCompiled.ts';
 
 /**
  * The comets, as one draw call of dots.
@@ -197,5 +198,8 @@ export function CometField({ source, store, clock, focus, visible, sharedFrame }
     built.sunLow.set(Math.fround(sun.x - xHigh), Math.fround(sun.y - yHigh), Math.fround(sun.z - zHigh));
   });
 
-  return built === null ? null : <primitive object={built.points} />;
+  // On screen once its shader has compiled beside the page (useCompiled.ts): the conic's
+  // solve is the slowest program here to compile, and held the page for it otherwise.
+  const shown = useCompiled(built === null ? null : built.points);
+  return shown === null ? null : <primitive object={shown} />;
 }

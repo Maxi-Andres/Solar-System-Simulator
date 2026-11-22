@@ -69,6 +69,42 @@ export function swarmRate(distanceKm: number, muKm3S2: number, extraKmS = 0): nu
   return rate;
 }
 
+/**
+ * The shells everything the Sun holds lies in, km from its centre: from its surface out to its
+ * reach in the Galaxy's tide, its Hill sphere of some 230,000 AU, past which nothing stays bound
+ * to it -- the Oort cloud's comets inside, the Voyagers far inside.
+ */
+const SOLAR_SHELLS_KM = [696_000, 3e6, 1e7, 3e7, 1e8, 3e8, 1e9, 3e9, 1e10, 3e10, 1e11, 1e12, 1e13, 3.44e13];
+
+/**
+ * The most anything moves on top of escape speed from where it is, km/s: what an interstellar
+ * object brings in -- 3I/ATLAS, the fastest known, came at 58 -- and what a moon or a craft
+ * adds about a planet, Jupiter's escape speed 60 at most.
+ */
+const SOLAR_EXCESS_KMS = 100;
+
+/**
+ * The fastest anything the Sun holds -- a planet, a moon, a dot of the belt, a comet, a craft,
+ * and so the orbit and trail lines drawn about them -- can cross the view, radians a second, the
+ * Sun `distanceKm` from the camera and moving at `sunSpeedKmS` about it: as swarmRate, shell by
+ * shell, each at escape speed from its inner radius plus SOLAR_EXCESS_KMS over its nearest edge.
+ * Infinite with the camera within the Sun's reach. Far looser than the scene's own estimate,
+ * body by body; it is for what that estimate leaves out (renderDemand.ts LIVE_FRAME_MAX_MS).
+ */
+export function solarSystemRate(distanceKm: number, muSunKm3S2: number, sunSpeedKmS: number): number {
+  let rate = 0;
+  for (let i = 0; i + 1 < SOLAR_SHELLS_KM.length; i += 1) {
+    const inner = SOLAR_SHELLS_KM[i]!;
+    const outer = SOLAR_SHELLS_KM[i + 1]!;
+    const gap = distanceKm > outer ? distanceKm - outer : distanceKm < inner ? inner - distanceKm : 0;
+    if (gap <= 0) {
+      return Infinity;
+    }
+    rate = Math.max(rate, (Math.sqrt((2 * muSunKm3S2) / inner) + SOLAR_EXCESS_KMS + sunSpeedKmS) / gap);
+  }
+  return rate;
+}
+
 /** Pixels per radian at the centre of a view `heightPx` tall with a vertical field `fovDeg`. */
 export function pixelsPerRadian(heightPx: number, fovDeg: number): number {
   return heightPx / (2 * Math.tan((fovDeg * Math.PI) / 360));
