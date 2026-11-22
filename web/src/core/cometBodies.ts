@@ -141,7 +141,7 @@ export function cometBodyDefinition(id: BodyId, name: string, closed: boolean): 
     axialTiltDeg: null,
     rotation: null,
     triaxialRadiiKm: null,
-    // The comet dots' pale blue (see Comets.tsx), as a marker.
+    // The comet dots' pale blue (COMET_COLOR, scene/cometShader.ts), as a marker.
     color: '#9ecbe6',
     drawOrbit: closed,
     textures: null,

@@ -21,7 +21,7 @@ import {
 import { describeWithData as withData } from './describeWithData.ts';
 import { propagate } from './kepler.ts';
 import { SECONDS_PER_DAY } from './time.ts';
-import { COMET_FAINT_ALPHA, cometLook, writeComets } from '../scene/Comets.tsx';
+import { COMET_FAINT_ALPHA, cometLook } from '../scene/cometShader.ts';
 
 const MU = 1.32712440041e11;
 const AU = 149_597_870.7;
@@ -187,19 +187,6 @@ describe('how bright a comet is drawn', () => {
     expect(cometLook(40).alpha).toBe(COMET_FAINT_ALPHA);
     expect(cometLook(0).alpha).toBe(1);
     expect(cometLook(13).sizePx).toBeCloseTo(1.5, 12);
-  });
-
-  it('writes positions relative to the focus, and a look for every comet', async () => {
-    const comets = await loaded();
-    const sun = { x: 1e8, y: -2e8, z: 3e6 };
-    const helio = new Float64Array(9);
-    const positions = new Float32Array(9);
-    const looks = new Float32Array(6);
-    writeComets(comets, REFERENCE_JD, sun, MU, helio, positions, looks);
-    for (let k = 0; k < 3; k += 1) {
-      expect(positions[k * 3]).toBeCloseTo((helio[k * 3]! + sun.x) / 1000, 0);
-      expect(looks[k * 2 + 1]).toBeGreaterThanOrEqual(COMET_FAINT_ALPHA);
-    }
   });
 });
 

@@ -1,5 +1,4 @@
 import { COSMIC_WEB_FILAMENT_CATALOGUES, COSMIC_WEB_POSITION_UNIT_PC, type BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -29,6 +28,8 @@ import { CELL_PX, CROWDING_SAMPLE, crowdingGrid, measureCrowding, type CrowdingG
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT } from './scale.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The cosmic web past Laniakea's catalogue (core/cosmicWeb.ts): the SDSS's galaxies and the

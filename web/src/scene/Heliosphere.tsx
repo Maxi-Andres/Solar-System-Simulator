@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -19,6 +19,8 @@ import type { SimClock } from '../core/time.ts';
 import { useViewStore } from '../state/store.ts';
 import { hideLabel, makeLabel, placeShellLabel, revolutionGeometry, rimMaterial, smoothRamp, sphereGeometry } from './regionSurface.ts';
 import { AU_KM, KM_PER_UNIT, kmToUnits, LIGHT_YEAR_KM } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The heliosphere's two boundaries and the Oort cloud about the Sun (core/heliosphere.ts says what

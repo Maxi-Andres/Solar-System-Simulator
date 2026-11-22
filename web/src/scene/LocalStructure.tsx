@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -15,6 +15,8 @@ import { sphereOutline } from './distanceRings.ts';
 import type { FeatureProps } from './GalaxyFeatures.tsx';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Local Structure layer (core/localStructure.ts): three outlines, none of them anything

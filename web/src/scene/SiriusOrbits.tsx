@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -15,6 +15,8 @@ import { lineFrom, ramp } from './AlphaCentauriOrbits.tsx';
 import { starColor } from './blackbody.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * Sirius A's and B's orbits about their barycentre (sirius.ts): one orbit, B's about A,

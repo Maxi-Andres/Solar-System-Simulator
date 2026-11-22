@@ -19,7 +19,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Mondays at 06:00 UTC: everything, fetched fresh.
+    # Mondays at 06:00 UTC: everything, fetched fresh -- but Horizons' answers about the
+    # far past, kept for a few weeks (see "Restore Horizons' answers about the past").
     - cron: '0 6 * * 1'
     # Every day at 06:30 UTC: the Earth satellites only. Their elements are fitted for a
     # few days either side of the run (the bulk model is measured for ±3 days, see
@@ -170,18 +171,50 @@ jobs:
           restore-keys: |
             catalogue-downloads-
 
-      # A full run: the ephemerides always fetched fresh, never from cache -- the whole point
-      # of it is to publish a window centred on today -- and a Horizons failure still fails
-      # it (fetchData.ts says why). Also the daily run's fallback when no saved data came
-      # back (the cache is evicted after a week unused); it has no last good data to fall
-      # back on then, so there a catalogue that cannot be read fails it as before.
+      # Horizons' answers about the far past (tools/src/horizons/responseCache.ts): a query
+      # whose every instant is at least 90 days back -- a finished mission's path, the past
+      # refinements of a craft or a small moon -- answered from the last run's answer, if
+      # that was fetched in its body's current 28-day period. Anything nearer the present or
+      # in the future is always asked. A full run keeps only the answers it used, so this is
+      # one run's working set, saved under a key per run; the newest comes back.
+      - name: Restore Horizons' answers about the past
+        if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v6
+        with:
+          path: tools/.cache/horizons
+          key: horizons-answers-none
+          restore-keys: |
+            horizons-answers-
+
+      # A full run: the window centred on today -- the whole point of it -- every query that
+      # reaches the present asked afresh, and only answers about the far past from the cache
+      # above, at most four weeks old; a Horizons failure still fails it (fetchData.ts says
+      # why). Also the daily run's fallback when no saved data came back (the cache is evicted
+      # after a week unused); it has no last good data to fall back on then, so there a
+      # catalogue that cannot be read fails it as before. At most three requests to Horizons
+      # at once (HORIZONS_MAX_CONCURRENT in tools/src/config.ts; an env variable of that name
+      # in this step overrides it, and HORIZONS_MIN_SPACING_MS would space their starts).
       - name: Fetch ephemerides from JPL Horizons
         if: steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == ''
         env:
           STAR_CATALOGUE_CACHE: ${{ github.workspace }}/tools/.cache/star-catalogues
           DOWNLOAD_CACHE: ${{ github.workspace }}/tools/.cache/downloads
+          HORIZONS_CACHE: ${{ github.workspace }}/tools/.cache/horizons
           DATA_FALLBACK: ${{ github.workspace }}/tools/.cache/last-data
         run: pnpm fetch:data
+
+      # Kept even when the fetch failed further on: what it did ask about the past need not be
+      # asked again within the period. Saved every full run, as it changes every run; the
+      # older ones are evicted by GitHub after a week unused. Not hashed to decide, as the
+      # catalogues' downloads are: thousands of files, and a different set every run anyway.
+      # With none written (HORIZONS_CACHE=off), the save fails harmlessly.
+      - name: Save Horizons' answers about the past
+        if: always() && (steps.mode.outputs.satellites_only != 'true' || steps.restore.outputs.cache-matched-key == '')
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: tools/.cache/horizons
+          key: horizons-answers-${{ github.run_id }}
 
       # Kept even when the fetch failed further on: the stars it did read need not be asked
       # for again.

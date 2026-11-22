@@ -74,6 +74,80 @@ export interface TextureOptions {
 }
 
 /**
+ * Whether pictures can be decoded off the main thread here, as ImageBitmaps three uploads
+ * as they are: `createImageBitmap` with the options used below. three's own GLTFLoader asks
+ * the same of the browser, by the same versions -- Safari before 17 and Firefox before 98
+ * take the options and do not honour them all.
+ */
+function bitmapsUsable(): boolean {
+  if (typeof createImageBitmap === 'undefined' || typeof fetch === 'undefined') {
+    return false;
+  }
+  const agent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  const safari = /^((?!chrome|android).)*safari/i.test(agent);
+  const safariVersion = safari ? Number(agent.match(/Version\/(\d+)/)?.[1] ?? -1) : -1;
+  const firefoxVersion = Number(agent.match(/Firefox\/(\d+)\./)?.[1] ?? -1);
+  return !(safari && safariVersion < 17) && !(firefoxVersion !== -1 && firefoxVersion < 98);
+}
+
+/** An ImageBitmap's pixels are its own, outside the GPU's copy: freed with the texture. */
+function closeBitmapOnDispose(event: { target: THREE.Texture }): void {
+  const image: unknown = event.target.image;
+  if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
+    image.close();
+  }
+}
+
+/**
+ * A picture file as a texture: the texture at once, its pixels when they arrive -- as
+ * `TextureLoader.load` does, and with the same pixels on the GPU.
+ *
+ * Where the browser can (bitmapsUsable), the file is decoded off the main thread into an
+ * ImageBitmap. TextureLoader's image element is decoded on the main thread instead, the
+ * first time it is uploaded, inside the frame that draws it: a 2k map was a stall of tens
+ * of milliseconds the moment a planet grew large enough to want its surface. The bitmap is
+ * made as WebGL would have unpacked the image -- flipped vertically, alpha not
+ * premultiplied, no colour-space conversion (three asks for none for an sRGB or a data
+ * texture alike) -- so the texture says flipY false, the flip being done already.
+ *
+ * Loads go through three's default loading manager either way, which RenderOnDemand
+ * listens to for the frame that shows them. The bitmap is closed when the texture is
+ * disposed: every caller disposes a texture only once nothing draws it any more.
+ */
+export function loadPictureTexture(
+  url: string,
+  onLoad?: (texture: THREE.Texture) => void,
+  onError?: (error: unknown) => void,
+): THREE.Texture {
+  if (!bitmapsUsable()) {
+    return new THREE.TextureLoader().load(url, onLoad, undefined, onError);
+  }
+  const texture = new THREE.Texture();
+  texture.flipY = false;
+  texture.addEventListener('dispose', closeBitmapOnDispose);
+  new THREE.ImageBitmapLoader()
+    .setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+    .load(
+      url,
+      (bitmap) => {
+        texture.image = bitmap;
+        texture.needsUpdate = true;
+        onLoad?.(texture);
+      },
+      undefined,
+      onError,
+    );
+  return texture;
+}
+
+/** loadPictureTexture as a promise of the texture once its pixels are in. */
+export function loadPictureTextureAsync(url: string): Promise<THREE.Texture> {
+  return new Promise((resolve, reject) => {
+    loadPictureTexture(url, resolve, reject);
+  });
+}
+
+/**
  * A body's map, shared with every other caller that asked for the same file. Each call
  * must be matched by one `releaseBodyTexture` once the map is no longer on screen.
  */
@@ -89,7 +163,7 @@ export function loadBodyTexture(
   }
 
   const pending = new Promise<THREE.Texture>((resolve, reject) => {
-    new THREE.TextureLoader().load(
+    loadPictureTexture(
       url,
       (texture) => {
         // The maps are authored in sRGB; loading them as linear washes every
@@ -102,7 +176,6 @@ export function loadBodyTexture(
         texture.wrapT = THREE.ClampToEdgeWrapping;
         resolve(texture);
       },
-      undefined,
       (error: unknown) => {
         // A failed load must not be cached, or one bad network moment would leave
         // that body flat-coloured for the rest of the session.

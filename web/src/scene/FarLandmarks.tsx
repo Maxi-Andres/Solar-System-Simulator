@@ -1,5 +1,4 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -11,6 +10,8 @@ import type { SimClock } from '../core/time.ts';
 import { useViewStore } from '../state/store.ts';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * What a far landmark's mark cannot say (core/farLandmarks.ts): a deep field's beam, from the

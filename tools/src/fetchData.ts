@@ -89,7 +89,8 @@ import {
   type Outcome,
   type ProductFailure,
 } from './fallback.ts';
-import { callHorizons } from './horizons/client.ts';
+import { callHorizons, horizonsLimiter } from './horizons/client.ts';
+import { horizonsCacheStats, pruneHorizonsCache } from './horizons/responseCache.ts';
 import { fetchCoverage, horizonsProbe, lastWithData } from './horizons/coverage.ts';
 import {
   cutAtBrokenJumps,
@@ -453,8 +454,8 @@ export async function fetchAdaptiveBody(
 async function fetchBody(body: BodyDefinition, epoch: Date): Promise<BodyResult> {
   const { start, stop } = windowFor(body.vectorWindow, epoch);
 
-  // Both calls for one body run together; the concurrency cap above limits how many
-  // bodies are in flight, so JPL sees a handful of requests at a time.
+  // Both calls for one body run together; the pool below limits how many bodies are in
+  // flight, and the limiter every call shares (HORIZONS_MAX_CONCURRENT) what JPL sees.
   const [vectors, elementsResponse] = await Promise.all([
     fetchVectors(body, start, stop),
     body.drawOrbit
@@ -815,6 +816,51 @@ async function main(): Promise<void> {
     throw fatalError(fallbacks.fatal, fallbackDirectory);
   }
 
+  // The small moons from here on, beside the small bodies and the craft: they need nothing
+  // of the others. They used to wait for the craft, and the two phases took turns with an
+  // idle slot between a body's requests -- while one was being refined or thinned -- for most
+  // of an hour each. Now both keep work queued, and Horizons sees what the shared limiter lets
+  // through (HORIZONS_MAX_CONCURRENT in config.ts), never more. Nothing they produce depends
+  // on the order the requests are answered in; only the log interleaves.
+  //
+  // One that Horizons keeps failing on, after every retry, is left out with a line in the
+  // log rather than failing the run: four hundred moons are four hundred chances of a
+  // bad minute at JPL, and losing the planets' data to one of them would be the worse
+  // trade. The major bodies and the craft still fail it. So this never rejects: a failure
+  // of the phases below cannot leave it unhandled.
+  //
+  // A moon prints nothing when it succeeds, and the phase takes 30 to 60 minutes, so a
+  // line every SMALL_MOON_PROGRESS_EVERY moons says the run is alive. Counted as they
+  // finish, which with two in flight is near enough the order they were asked in.
+  const smallMoonBodies = CATALOG.filter(isSmallMoon);
+  let smallMoonsDone = 0;
+  let smallMoonsLeftOut = 0;
+  const smallMoonsRead = mapWithConcurrency(
+    smallMoonBodies,
+    MAX_CONCURRENT_REQUESTS,
+    async (body) => {
+      let result: BodyResult | null;
+      try {
+        result = await fetchAdaptiveBody(body, epoch);
+      } catch (error) {
+        console.log(`[fetch-data] ${body.name}: failed (${String(error).slice(0, 160)}); left out`);
+        result = null;
+      }
+      smallMoonsDone += 1;
+      smallMoonsLeftOut += result === null ? 1 : 0;
+      if (
+        smallMoonsDone % SMALL_MOON_PROGRESS_EVERY === 0 ||
+        smallMoonsDone === smallMoonBodies.length
+      ) {
+        console.log(
+          `[fetch-data] small moons ${smallMoonsDone}/${smallMoonBodies.length} ` +
+            `(${smallMoonsLeftOut} left out)`,
+        );
+      }
+      return result;
+    },
+  );
+
   // The named small bodies next, before the craft: several craft fly to them, and a
   // craft is held to a kilometre only near a body it is measured against. The famous
   // comets with them (famousComets.ts), sampled the same way.
@@ -846,45 +892,7 @@ async function main(): Promise<void> {
         return null;
       }),
   );
-  // The small moons last: they need nothing of the others, and the requests are spread
-  // out rather than doubled up against Horizons.
-  //
-  // One that Horizons keeps failing on, after every retry, is left out with a line in the
-  // log rather than failing the run: four hundred moons are four hundred chances of a
-  // bad minute at JPL, and losing the planets' data to one of them would be the worse
-  // trade. The major bodies and the craft still fail it.
-  //
-  // A moon prints nothing when it succeeds, and the phase takes 30 to 60 minutes, so a
-  // line every SMALL_MOON_PROGRESS_EVERY moons says the run is alive. Counted as they
-  // finish, which with two in flight is near enough the order they were asked in.
-  const smallMoonBodies = CATALOG.filter(isSmallMoon);
-  let smallMoonsDone = 0;
-  let smallMoonsLeftOut = 0;
-  const smallMoons = await mapWithConcurrency(
-    smallMoonBodies,
-    MAX_CONCURRENT_REQUESTS,
-    async (body) => {
-      let result: BodyResult | null;
-      try {
-        result = await fetchAdaptiveBody(body, epoch);
-      } catch (error) {
-        console.log(`[fetch-data] ${body.name}: failed (${String(error).slice(0, 160)}); left out`);
-        result = null;
-      }
-      smallMoonsDone += 1;
-      smallMoonsLeftOut += result === null ? 1 : 0;
-      if (
-        smallMoonsDone % SMALL_MOON_PROGRESS_EVERY === 0 ||
-        smallMoonsDone === smallMoonBodies.length
-      ) {
-        console.log(
-          `[fetch-data] small moons ${smallMoonsDone}/${smallMoonBodies.length} ` +
-            `(${smallMoonsLeftOut} left out)`,
-        );
-      }
-      return result;
-    },
-  );
+  const smallMoons = await smallMoonsRead;
   const results = [
     ...natural,
     ...sunward,
@@ -1123,6 +1131,17 @@ async function main(): Promise<void> {
         `${fallbacks.restore.map(({ product }) => product.name).join(', ')} (see STALE above).`,
     );
   }
+  // The Horizons answers this run did not use are dropped, so the deploy saves one run's
+  // working set (responseCache.ts). Only here, at the end of a run that got this far.
+  const cache = horizonsCacheStats();
+  const pruned = await pruneHorizonsCache();
+  console.log(
+    `[fetch-data] Horizons: ${cache.hits} answers kept from earlier runs, ${cache.stored} asked and kept, ` +
+      `${cache.live} asked live; at most ${horizonsLimiter().peak} requests in flight at once` +
+      (pruned === null
+        ? ' (HORIZONS_CACHE=off)'
+        : `; ${pruned.files} kept (${(pruned.bytes / 1024 / 1024).toFixed(1)} MB), ${pruned.removed} dropped`),
+  );
   console.log('[fetch-data] Ephemerides courtesy of NASA/JPL-Caltech.');
   console.log(
     '[fetch-data] Star data from ESA Hipparcos and Tycho-2 and ESA/Gaia/DPAC (Gaia DR3, GCNS); ' +

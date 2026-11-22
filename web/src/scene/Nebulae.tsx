@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -19,6 +19,8 @@ import {
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { hasRemnantNoise, provideRemnantNoise } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The nebulae (core/nebulae.ts): each one's glowing gas, a volume the camera can fly round and

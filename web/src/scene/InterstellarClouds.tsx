@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -13,6 +13,8 @@ import { PARSEC_KM } from '../core/stars3d.ts';
 import type { FeatureProps } from './GalaxyFeatures.tsx';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Interstellar Clouds layer (core/interstellarClouds.ts). Each cloud a ring of its measured

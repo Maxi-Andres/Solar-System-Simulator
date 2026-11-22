@@ -1,10 +1,14 @@
 import {
   HORIZONS_API_URL,
+  HORIZONS_MAX_CONCURRENT,
+  HORIZONS_MIN_SPACING_MS,
   MAX_RETRIES,
   REQUEST_TIMEOUT_MS,
   RETRY_BASE_DELAY_MS,
   RETRY_MAX_DELAY_MS,
 } from '../config.ts';
+import { createLimiter, type Limiter, limitFromEnv } from '../limiter.ts';
+import { throughHorizonsCache } from './responseCache.ts';
 
 /**
  * Shape of a successful Horizons API response. `result` is the same plain-text
@@ -133,12 +137,37 @@ async function callOnce(params: Readonly<Record<string, string>>): Promise<Horiz
   };
 }
 
+let limiter: Limiter | null = null;
+
 /**
- * Calls the Horizons API with retries and exponential backoff.
+ * The one limiter every Horizons request of this process goes through: see
+ * HORIZONS_MAX_CONCURRENT. HORIZONS_MAX_CONCURRENT and HORIZONS_MIN_SPACING_MS in the
+ * environment override config.ts's, read once, at the first request.
+ */
+export function horizonsLimiter(): Limiter {
+  limiter ??= createLimiter({
+    maxConcurrent: limitFromEnv('HORIZONS_MAX_CONCURRENT', HORIZONS_MAX_CONCURRENT, 1),
+    minSpacingMs: limitFromEnv('HORIZONS_MIN_SPACING_MS', HORIZONS_MIN_SPACING_MS, 0),
+  });
+  return limiter;
+}
+
+/**
+ * Calls the Horizons API with retries and exponential backoff -- or answers from the
+ * answers kept between runs, for a query about the far enough past (responseCache.ts says
+ * exactly which). Each attempt waits for a slot of the shared limiter, and holds it only
+ * while it is out: the wait between attempts holds none.
  *
  * `label` only appears in error messages, to say which body failed.
  */
-export async function callHorizons(
+export function callHorizons(
+  params: Readonly<Record<string, string>>,
+  label: string,
+): Promise<HorizonsResponse> {
+  return throughHorizonsCache(params, () => callWithRetries(params, label));
+}
+
+async function callWithRetries(
   params: Readonly<Record<string, string>>,
   label: string,
 ): Promise<HorizonsResponse> {
@@ -148,7 +177,7 @@ export async function callHorizons(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     attempts = attempt;
     try {
-      return await callOnce(params);
+      return await horizonsLimiter().run(() => callOnce(params));
     } catch (error) {
       lastError = error;
       if (!(error instanceof RetryableError) || attempt === MAX_RETRIES) {

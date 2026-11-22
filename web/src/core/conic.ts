@@ -10,8 +10,10 @@ import { SECONDS_PER_DAY } from './time.ts';
  * thousands of years. Those near e = 1 are where the three textbook equations each go
  * wrong -- Kepler's needs a semi-major axis that runs to infinity, Barker's holds only
  * at e exactly 1, the hyperbolic one cancels catastrophically -- and float32 on a GPU
- * would make each worse. There are only four thousand comets, so they are worked out
- * here instead, in float64, a few microseconds each.
+ * would make each worse. This is the float64 answer: a comet made a body of its own is
+ * placed by it (cometBodies.ts), and the comet dots' shader, which solves the same
+ * universal equation in float32 arranged to keep its error to float32's (see
+ * scene/cometShader.ts), is tested against it.
  *
  * **One equation for every conic: universal variables.** In the universal anomaly
  * chi, Kepler's equation from perihelion is

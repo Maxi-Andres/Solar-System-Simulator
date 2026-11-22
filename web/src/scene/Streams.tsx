@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -9,6 +9,8 @@ import type { FeatureProps } from './GalaxyFeatures.tsx';
 import { drawIntoGlow, GLOW_FLOOR, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The halo's stellar streams (core/streams.ts): each a faint trail of light along its measured

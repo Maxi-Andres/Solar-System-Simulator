@@ -9,11 +9,10 @@ import { renderDemand } from './renderDemand.ts';
  * The comets: SBDB's four thousand, each on its own conic about the Sun.
  *
  * Read from `belt/comets.json` and the records beside it (step B2c), named in belt.json
- * and fetched only when the Comets layer is on. Unlike the belt, they are placed on the
- * CPU, in float64, by universal variables (see conic.ts): a third of them are on
- * parabolas or hyperbolas, many more on ellipses with e = 0.999, and four thousand is
- * few enough that doing it properly costs 1.6 ms a frame and nothing per frame while the
- * clock is paused.
+ * and fetched only when the Comets layer is on. A third of them are on parabolas or
+ * hyperbolas and many more on ellipses with e = 0.999, so they are placed by universal
+ * variables (see conic.ts) rather than Kepler's equation: on the GPU, as the belt is, by
+ * scene/cometShader.ts, held by its test to cometPosition here in float64.
  */
 
 /**
@@ -189,6 +188,7 @@ const perifocal: PerifocalState = { x: 0, y: 0, vx: 0, vy: 0 };
 /**
  * Comet `k`'s heliocentric position `jd` (TDB) into `out` at `out[k*3]`, km, ecliptic
  * of J2000; returns its distance from the Sun in AU. `mu` is the Sun's GM, km^3/s^2.
+ * The float64 reference the dots' shader is held to (scene/cometShader.test.ts).
  *
  * tp is days after the reference instant in float32: its step is six minutes for a
  * perihelion within 180 years of it, an hour and a half at the oldest. A comet's place is

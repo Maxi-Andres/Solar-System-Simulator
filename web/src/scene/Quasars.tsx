@@ -1,6 +1,5 @@
 import { QUASAR_ABS_V, QUASAR_FLAGS, QUASAR_POSITION_UNIT_PC } from '@sss/tools/quasars';
 import type { BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -26,6 +25,8 @@ import { FAINT_GALAXY_FLOOR, MIN_SIGMA_PX, WHITE_MU } from './LocalGroup.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM, PARSEC_KM } from './scale.ts';
 import { CELL_PX, CROWDING_SAMPLE, crowdingGrid, measureCrowding, type CrowdingGrid } from './screenCrowding.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The quasars (core/quasars.ts) and the Planck SZ clusters, two layers.

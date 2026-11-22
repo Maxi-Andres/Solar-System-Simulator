@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -25,6 +25,8 @@ import { useViewStore } from '../state/store.ts';
 import { longitudeDirection, poleDirection } from './orientation.ts';
 import { hideLabel, makeLabel, placeShellLabel, revolutionGeometry, rimMaterial, smoothRamp, sphereGeometry } from './regionSurface.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * Earth's surroundings as the standard models draw them (core/magnetosphere.ts): the Magnetosphere

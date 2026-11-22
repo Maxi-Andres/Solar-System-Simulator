@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, type RefObject } from 'react';
 import * as THREE from 'three';
 
@@ -9,6 +9,8 @@ import type { SimClock } from '../core/time.ts';
 import { RING_MAX_OPACITY, ringVisibility } from './distanceRings.ts';
 import { AU_KM, KM_PER_UNIT, kmToUnits } from './scale.ts';
 import { projectToScreen } from './screenProjection.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Solar System laid over Sgr A* (D5), for scale: circles the size of Mercury's and

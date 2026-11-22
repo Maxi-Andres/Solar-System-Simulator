@@ -1,5 +1,4 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
@@ -34,6 +33,8 @@ import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * A galaxy drawn from its sky map (core/skyMap.ts): the Small Magellanic Cloud, a cloud deeper

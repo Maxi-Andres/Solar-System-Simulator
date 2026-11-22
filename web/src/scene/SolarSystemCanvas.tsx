@@ -17,7 +17,7 @@ import { planetFramingKm } from '../core/exoplanets.ts';
 import { exoPlanetOf } from '../core/planetarySystems.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
-import type { LightingMode } from '../state/store.ts';
+import { useViewStore, type LightingMode } from '../state/store.ts';
 import { useEffect, useMemo, type RefObject } from 'react';
 
 import { renderDemand } from '../core/renderDemand.ts';
@@ -26,35 +26,18 @@ import { AsteroidBelt } from './AsteroidBelt.tsx';
 import { BlackHoleLens } from './BlackHoleLens.tsx';
 import { CameraRig } from './CameraRig.tsx';
 import { CometField } from './Comets.tsx';
-import { Constellations } from './Constellations.tsx';
 import { DistanceRings } from './DistanceRings.tsx';
 import { ExoplanetHosts } from './ExoplanetHosts.tsx';
-import { Pulsars } from './Pulsars.tsx';
 import { GlowComposite } from './GlowComposite.tsx';
-import { GlobularClusters } from './GlobularClusters.tsx';
 import { SolarSystemWatch } from './SolarSystemWatch.tsx';
-import { SupernovaRemnants } from './SupernovaRemnants.tsx';
-import { GalaxyFeatures, type GalaxyFeatureLayers } from './GalaxyFeatures.tsx';
+import type { GalaxyFeatureLayers } from './GalaxyFeatures.tsx';
 import { LocalGroup } from './LocalGroup.tsx';
-import { Laniakea } from './Laniakea.tsx';
-import { CosmicWeb } from './CosmicWeb.tsx';
-import { Quasars } from './Quasars.tsx';
-import { FarLandmarks } from './FarLandmarks.tsx';
 import { DwarfStars } from './DwarfStars.tsx';
-import { SkyVolume } from './SkyVolume.tsx';
-import { HorizonScale } from './HorizonScale.tsx';
-import { Heliosphere } from './Heliosphere.tsx';
-import { Magnetosphere } from './Magnetosphere.tsx';
-import { Aurora } from './Aurora.tsx';
-import { MeteorShowers } from './MeteorShowers.tsx';
-import { CosmicMicrowaveBackground } from './CosmicMicrowaveBackground.tsx';
 import { MilkyWay } from './MilkyWay.tsx';
 import { NuclearCluster } from './NuclearCluster.tsx';
-import { AlphaCentauriOrbits } from './AlphaCentauriOrbits.tsx';
-import { SiriusOrbits } from './SiriusOrbits.tsx';
-import { StellarFlybys } from './StellarFlybys.tsx';
 import { SatelliteSwarm } from './SatelliteSwarm.tsx';
 import { LabelProjector } from './LabelProjector.tsx';
+import { LazyLayer, lazyLayer, useOnceOn } from './lazyLayer.tsx';
 import { RenderOnDemand } from './RenderOnDemand.tsx';
 import { ScaleBarProbe } from './ScaleBarProbe.tsx';
 import { ShaderWarmup } from './ShaderWarmup.tsx';
@@ -65,6 +48,36 @@ import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
 import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
 import { SolarSystem } from './SolarSystem.tsx';
 import { Starfield } from './Starfield.tsx';
+
+/**
+ * The layers drawn far from the Sun, or off until switched on, each in a chunk of its own
+ * (lazyLayer.tsx): out of the main chunk, so not parsed before the first frame. Those on
+ * from the start are fetched now, beside the startup data, and are usually in before the
+ * canvas first renders; the rest when first switched on.
+ */
+const Laniakea = lazyLayer(() => import('./Laniakea.tsx').then((m) => m.Laniakea), true);
+const CosmicWeb = lazyLayer(() => import('./CosmicWeb.tsx').then((m) => m.CosmicWeb), true);
+const Quasars = lazyLayer(() => import('./Quasars.tsx').then((m) => m.Quasars), true);
+const FarLandmarks = lazyLayer(() => import('./FarLandmarks.tsx').then((m) => m.FarLandmarks), true);
+const SkyVolume = lazyLayer(() => import('./SkyVolume.tsx').then((m) => m.SkyVolume), true);
+const GlobularClusters = lazyLayer(() => import('./GlobularClusters.tsx').then((m) => m.GlobularClusters), true);
+const GalaxyFeatures = lazyLayer(() => import('./GalaxyFeatures.tsx').then((m) => m.GalaxyFeatures), true);
+const SupernovaRemnants = lazyLayer(() => import('./SupernovaRemnants.tsx').then((m) => m.SupernovaRemnants), true);
+const HorizonScale = lazyLayer(() => import('./HorizonScale.tsx').then((m) => m.HorizonScale), true);
+const CosmicMicrowaveBackground = lazyLayer(
+  () => import('./CosmicMicrowaveBackground.tsx').then((m) => m.CosmicMicrowaveBackground),
+  true,
+);
+const AlphaCentauriOrbits = lazyLayer(() => import('./AlphaCentauriOrbits.tsx').then((m) => m.AlphaCentauriOrbits), true);
+const SiriusOrbits = lazyLayer(() => import('./SiriusOrbits.tsx').then((m) => m.SiriusOrbits), true);
+const StellarFlybys = lazyLayer(() => import('./StellarFlybys.tsx').then((m) => m.StellarFlybys), true);
+// Off at first: fetched the first time each is switched on.
+const Pulsars = lazyLayer(() => import('./Pulsars.tsx').then((m) => m.Pulsars));
+const Constellations = lazyLayer(() => import('./Constellations.tsx').then((m) => m.Constellations));
+const Heliosphere = lazyLayer(() => import('./Heliosphere.tsx').then((m) => m.Heliosphere));
+const Magnetosphere = lazyLayer(() => import('./Magnetosphere.tsx').then((m) => m.Magnetosphere));
+const Aurora = lazyLayer(() => import('./Aurora.tsx').then((m) => m.Aurora));
+const MeteorShowers = lazyLayer(() => import('./MeteorShowers.tsx').then((m) => m.MeteorShowers));
 
 /**
  * The WebGL canvas and camera rig.
@@ -255,6 +268,14 @@ export function SolarSystemCanvas({
   // The same way, this frame's rebased positions: worked out once, by the scene, and
   // read by the labels instead of being worked out again. See SharedFrame.
   const sharedFrame = useMemo<SharedFrame>(() => ({ snapshot: null }), []);
+  // The layers off at first, mounted once first switched on and kept after (lazyLayer.tsx):
+  // each hides itself while off, as before.
+  const pulsarsMounted = useOnceOn(showPulsars);
+  const constellationsMounted = useOnceOn(useViewStore((state) => state.layers.constellations));
+  const heliosphereMounted = useOnceOn(useViewStore((state) => state.layers.heliosphere));
+  const magnetosphereMounted = useOnceOn(useViewStore((state) => state.layers.magnetosphere));
+  const auroraMounted = useOnceOn(useViewStore((state) => state.layers.aurora));
+  const meteorShowersMounted = useOnceOn(useViewStore((state) => state.layers.meteorShowers));
   // The sphere the camera never leaves, about the Sun, whatever it is focused on: inside the
   // CMB's, as everyone is (scale.ts MAX_VIEW_DISTANCE_KM, CameraRig's bound).
   const cameraBound = useMemo(
@@ -393,22 +414,28 @@ export function SolarSystemCanvas({
         visible={showExoplanetHosts && showIcons}
         onPick={onPickHost}
       />
-      <Pulsars
-        source={pulsars}
-        store={store}
-        clock={clock}
-        focus={focus}
-        // Markers and nothing else, as the hosts' rings.
-        visible={showPulsars && showIcons}
-        onPick={onPickPulsar}
-      />
-      <SupernovaRemnants
-        store={store}
-        clock={clock}
-        focus={focus}
-        visible={showSupernovaRemnants}
-        showRings={showIcons}
-      />
+      <LazyLayer>
+        {pulsarsMounted && (
+          <Pulsars
+            source={pulsars}
+            store={store}
+            clock={clock}
+            focus={focus}
+            // Markers and nothing else, as the hosts' rings.
+            visible={showPulsars && showIcons}
+            onPick={onPickPulsar}
+          />
+        )}
+      </LazyLayer>
+      <LazyLayer>
+        <SupernovaRemnants
+          store={store}
+          clock={clock}
+          focus={focus}
+          visible={showSupernovaRemnants}
+          showRings={showIcons}
+        />
+      </LazyLayer>
       <LocalGroup
         source={localGroup}
         store={store}
@@ -420,48 +447,72 @@ export function SolarSystemCanvas({
         volume={localVolume}
         onPickVolume={onPickVolumeGalaxy}
       />
-      <Laniakea
-        source={laniakea}
-        names={laniakeaNames}
-        store={store}
-        clock={clock}
-        focus={focus}
-        visible={showLaniakea}
-        showMarks={showIcons}
-        showBasins={showBasins}
-        basinChips={basinChips}
-        showFlows={showFlowLines}
-        onPick={onPickLaniakeaGalaxy}
-      />
-      <CosmicWeb source={cosmicWeb} store={store} clock={clock} focus={focus} showGalaxies={showSdssGalaxies} showFilaments={showFilaments} />
+      <LazyLayer>
+        <Laniakea
+          source={laniakea}
+          names={laniakeaNames}
+          store={store}
+          clock={clock}
+          focus={focus}
+          visible={showLaniakea}
+          showMarks={showIcons}
+          showBasins={showBasins}
+          basinChips={basinChips}
+          showFlows={showFlowLines}
+          onPick={onPickLaniakeaGalaxy}
+        />
+      </LazyLayer>
+      <LazyLayer>
+        <CosmicWeb source={cosmicWeb} store={store} clock={clock} focus={focus} showGalaxies={showSdssGalaxies} showFilaments={showFilaments} />
+      </LazyLayer>
       {/* Its layers read from the store, its data its own (core/quasars.ts): nothing above needs them. */}
-      <Quasars store={store} clock={clock} focus={focus} />
-      <FarLandmarks store={store} clock={clock} focus={focus} />
+      <LazyLayer>
+        <Quasars store={store} clock={clock} focus={focus} />
+      </LazyLayer>
+      <LazyLayer>
+        <FarLandmarks store={store} clock={clock} focus={focus} />
+      </LazyLayer>
       <DwarfStars source={localGroup} catalog={stars} store={store} clock={clock} focus={focus} visible={showLocalGroup} />
-      <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />
-      <GlobularClusters
-        source={globularClusters}
-        catalog={stars}
-        store={store}
-        clock={clock}
-        focus={focus}
-        visible={showGlobularClusters}
-        showMarks={showIcons}
-        onPick={onPickCluster}
-      />
-      <GalaxyFeatures store={store} clock={clock} focus={focus} layers={galaxyFeatures} />
-      <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
-      <Heliosphere store={store} clock={clock} focus={focus} />
-      <Magnetosphere store={store} clock={clock} focus={focus} />
-      <Aurora store={store} clock={clock} focus={focus} />
-      <MeteorShowers store={store} clock={clock} focus={focus} />
+      <LazyLayer>
+        <SkyVolume galaxyKey="smc" store={store} clock={clock} focus={focus} visible={showLocalGroup} />
+      </LazyLayer>
+      <LazyLayer>
+        <GlobularClusters
+          source={globularClusters}
+          catalog={stars}
+          store={store}
+          clock={clock}
+          focus={focus}
+          visible={showGlobularClusters}
+          showMarks={showIcons}
+          onPick={onPickCluster}
+        />
+      </LazyLayer>
+      <LazyLayer>
+        <GalaxyFeatures store={store} clock={clock} focus={focus} layers={galaxyFeatures} />
+      </LazyLayer>
+      <LazyLayer>
+        <HorizonScale store={store} clock={clock} focus={focus} labels={horizonScaleLabels} />
+      </LazyLayer>
+      <LazyLayer>{heliosphereMounted && <Heliosphere store={store} clock={clock} focus={focus} />}</LazyLayer>
+      <LazyLayer>{magnetosphereMounted && <Magnetosphere store={store} clock={clock} focus={focus} />}</LazyLayer>
+      <LazyLayer>{auroraMounted && <Aurora store={store} clock={clock} focus={focus} />}</LazyLayer>
+      <LazyLayer>{meteorShowersMounted && <MeteorShowers store={store} clock={clock} focus={focus} />}</LazyLayer>
       {/* Its names posted before LabelProjector's declutter, which runs after it. */}
-      <Constellations store={store} clock={clock} focus={focus} />
+      <LazyLayer>{constellationsMounted && <Constellations store={store} clock={clock} focus={focus} />}</LazyLayer>
       <SolarSystemWatch store={store} clock={clock} focus={focus} />
-      <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
-      <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
-      <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
-      <StellarFlybys store={store} clock={clock} focus={focus} />
+      <LazyLayer>
+        <CosmicMicrowaveBackground store={store} clock={clock} focus={focus} visible={showObservableUniverse} label={cmbLabel} />
+      </LazyLayer>
+      <LazyLayer>
+        <AlphaCentauriOrbits store={store} clock={clock} focus={focus} stars3d={stars3d} visible={showOrbits} />
+      </LazyLayer>
+      <LazyLayer>
+        <SiriusOrbits store={store} clock={clock} focus={focus} visible={showOrbits} />
+      </LazyLayer>
+      <LazyLayer>
+        <StellarFlybys store={store} clock={clock} focus={focus} />
+      </LazyLayer>
       <LabelProjector
         store={store}
         clock={clock}

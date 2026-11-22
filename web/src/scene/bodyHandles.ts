@@ -1,11 +1,12 @@
 /**
  * Which bodies need a sphere of their own, and what to free once a body is gone.
  *
- * Every body in the catalog gets a handle in SolarSystem.tsx: a group with a mesh and a
- * marker. Hundreds of them are never drawn as spheres -- a nebula, a galaxy, a landing
- * site, a star with no measured radius, a craft -- and a 64-segment sphere and a lit
- * material each was ~90 KB of geometry and a material apiece for nothing. Those share one
- * placeholder geometry and material instead; their marker is their own, as it is drawn.
+ * Every body in the catalog gets a handle in SolarSystem.tsx: a group with a mesh, and a
+ * marker drawn with every other in one batch (markerInstances.ts). Hundreds of them are
+ * never drawn as spheres -- a nebula, a galaxy, a landing site, a star with no measured
+ * radius, a craft -- and a 64-segment sphere and a lit material each was ~90 KB of geometry
+ * and a material apiece for nothing. Those share one placeholder geometry and material
+ * instead.
  *
  * And bodies come and go: a searched asteroid, a comet, a satellite or a catalogue star
  * past its turn in the LRU (beltBodies.ts, cometBodies.ts, satelliteBodies.ts,

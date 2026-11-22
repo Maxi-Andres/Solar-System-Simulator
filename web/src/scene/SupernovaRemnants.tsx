@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -24,6 +24,8 @@ import {
 } from './remnantMap.ts';
 import { hasRemnantNoise, provideRemnantNoise, remnantMaterial, VOLUME_RADIUS } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * Each supernova remnant (core/supernovaRemnants.ts): its glowing gas, a volume the camera

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 import { gltfLoader } from './craftModels.ts';
 import { kmToUnits } from './scale.ts';
+import { loadPictureTextureAsync } from './textureCache.ts';
 
 /**
  * The real shapes of the small bodies spacecraft have visited: step B1b.
@@ -68,7 +69,7 @@ export interface LoadedShape {
  * fetched here rather than shared through the texture cache, and freed with the shape.
  */
 function loadShapeMap(file: string, anisotropy: number): Promise<THREE.Texture> {
-  return new THREE.TextureLoader().loadAsync(shapeUrl(file)).then((texture) => {
+  return loadPictureTextureAsync(shapeUrl(file)).then((texture) => {
     // A picture, authored in sRGB, as the body maps are.
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = anisotropy;

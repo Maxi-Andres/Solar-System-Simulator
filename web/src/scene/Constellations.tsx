@@ -1,5 +1,5 @@
 import type { BodyId, ConstellationCatalog } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -19,6 +19,8 @@ import { KM_PER_UNIT } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
 import { yearsSinceEpoch } from './starGeometry.ts';
 import { SPHERE_RADIUS } from './starRendering.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Constellations layer (core/constellations.ts): the IAU's 88 as the Sun sees them -- their

@@ -1,5 +1,5 @@
 import type { BodyId, CmbMapInfo } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
 
@@ -12,6 +12,9 @@ import { cmbLut, cmbVisibility, LAST_SCATTERING_RADIUS_KM, LUT_SIZE, LUT_STEP, t
 import { GALACTIC_BASIS } from './galactic.ts';
 import { GLOW_DISPLAY_GLSL } from './glowBuffer.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
+import { loadPictureTexture } from './textureCache.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The last-scattering sphere (G4): Planck's map of the CMB on a sphere of the CMB's comoving
@@ -184,7 +187,7 @@ export function CosmicMicrowaveBackground({
     void fetch(`${base}cmb.json`)
       .then((response) => response.json() as Promise<CmbMapInfo>)
       .then((loaded) => {
-        new THREE.TextureLoader().load(`${base}${loaded.file}`, (texture) => {
+        loadPictureTexture(`${base}${loaded.file}`, (texture) => {
           texture.wrapS = THREE.RepeatWrapping;
           texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -198,7 +201,7 @@ export function CosmicMicrowaveBackground({
           material.uniforms['uMap']!.value = texture;
           end();
           renderDemand.request();
-        }, undefined, (error: unknown) => {
+        }, (error: unknown) => {
           end();
           console.error('Could not load the CMB map', error);
         });

@@ -1,5 +1,4 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -18,6 +17,8 @@ import type { SimClock } from '../core/time.ts';
 import { distance, subtract, type Vec3 } from '../core/vec3.ts';
 import { useViewStore } from '../state/store.ts';
 import { AU_KM, kmToUnits } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The meteor showers' streams where Earth meets them (core/meteorShowers.ts): the Meteor Showers

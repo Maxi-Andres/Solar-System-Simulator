@@ -27,7 +27,8 @@ import {
   type EarthExtrasUniforms,
 } from './earthExtras.ts';
 import { bodiesToResolve, isShown, isSmallMoon } from './floatingOrigin.ts';
-import { markerTexture } from './markerTexture.ts';
+import { markerTexture, type MarkerShape } from './markerTexture.ts';
+import { MarkerInstances } from './markerInstances.ts';
 import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
 import { OrbitLine } from './orbitGeometry.ts';
 import { ringGeometry } from './ringGeometry.ts';
@@ -245,7 +246,12 @@ interface BodyHandles {
   readonly definition: BodyDefinition;
   readonly group: THREE.Group;
   readonly mesh: THREE.Mesh;
-  readonly marker: THREE.Sprite;
+  /**
+   * The marker's colour, in the working space, and its shape. Drawn with every other body's
+   * in one batch (markerInstances.ts), not as an object of its own.
+   */
+  readonly markerColor: THREE.Color;
+  readonly markerShape: MarkerShape;
   /** Null for a body with no orbit drawn -- and for a small moon while it is not focused. */
   orbit: OrbitLine | null;
   /**
@@ -520,7 +526,8 @@ function disposeHandle(handle: BodyHandles, lateOrbits: THREE.Group): void {
     handle.surfaceGround.dispose();
     handle.surfaceGround = null;
   }
-  // The sphere, its own material, the marker's sprite material, any ring, glare, cloud deck.
+  // The sphere, its own material, any ring, glare, cloud deck. Its marker is only numbers
+  // written into the batch each frame, and a body no longer in the store is not written.
   disposeOwnResources(handle.group, SHARED_RESOURCES);
 }
 
@@ -646,25 +653,8 @@ export function SolarSystem({
       }
       group.add(mesh);
 
-      const marker = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: markerTexture(
-            definition.kind === 'spacecraft' || definition.kind === 'satellite' ? 'diamond' : 'circle',
-          ),
-          color: definition.color,
-          transparent: true,
-          depthTest: false,
-          depthWrite: false,
-          // Scaled per unit of depth, not in world units (see the frame's marker size below).
-          sizeAttenuation: false,
-        }),
-      );
-      // Markers draw over everything: a planet behind the Sun still needs a label.
-      marker.renderOrder = 10;
-      // The sprite is scaled to a fixed pixel size, which at Pluto's distance
-      // means tens of thousands of scene units; leave culling to the mesh.
-      marker.frustumCulled = false;
-      group.add(marker);
+      const markerShape: MarkerShape =
+        definition.kind === 'spacecraft' || definition.kind === 'satellite' ? 'diamond' : 'circle';
 
       // Shadowed by its planet and moons: a body of the Sun's lit by it and drawn as a
       // sphere. The patch goes on last, after whatever else the material carries.
@@ -893,7 +883,8 @@ export function SolarSystem({
         definition,
         group,
         mesh,
-        marker,
+        markerColor: new THREE.Color(definition.color),
+        markerShape,
         orbit,
         orbitParent,
         orbitMu,
@@ -971,6 +962,9 @@ export function SolarSystem({
   );
   // The markers shown last frame, which keep their places. See markerDeclutter.ts.
   const heldMarkers = useMemo(() => new Set<BodyId>(), []);
+  // Every body's marker, in one draw. See markerInstances.ts.
+  const markerBatch = useMemo(() => new MarkerInstances(markerTexture('circle'), markerTexture('diamond')), []);
+  useEffect(() => () => markerBatch.dispose(), [markerBatch]);
 
   useFrame(() => {
     const root = rootRef.current;
@@ -1010,7 +1004,7 @@ export function SolarSystem({
     // Milliseconds spent building craft trails this frame, and whether any was put off.
     let trailWorkMs = 0;
     let trailsPutOff = false;
-    const markers = new Map<BodyId, THREE.Sprite>();
+    markerBatch.begin();
 
     for (const handle of handles) {
       const rebased = snapshot.bodies.get(handle.definition.id);
@@ -1294,28 +1288,33 @@ export function SolarSystem({
         }
       }
 
-      handle.marker.visible = showIcons && ringOpacity > 0.005;
-      if (handle.marker.visible) {
-        (handle.marker.material as THREE.SpriteMaterial).opacity = ringOpacity;
-        // Constant on-screen size, whatever the distance. Given per unit of the marker's depth
-        // in front of the camera, as an unattenuated sprite takes it -- the same size on the
-        // screen as a world size would be: a world size overflowed float32 from 300 billion ly
-        // out, where three's sprite shader squares it (length(modelMatrix[0].xyz)), and the
-        // record-holders' rings were not drawn (G4).
+      // A marker behind the camera is not drawn, as a sprite there was clipped: only one in
+      // front is staged, and contends for its place on the screen.
+      if (showIcons && ringOpacity > 0.005 && projectToScreen(handle.group.position, camera, scratchScreen)) {
+        // Constant on-screen size, whatever the distance: the world size of MARKER_PIXELS at
+        // the body's distance, at its depth in the camera's frame -- what an unattenuated
+        // sprite drew, its scale a size per unit of depth. Handed to the shader as it is, never
+        // squared: a world size overflowed float32 from 300 billion ly out when three's sprite
+        // shader took length(modelMatrix[0].xyz), and the record-holders' rings were not drawn
+        // (G4). The clamp is the sprite's, for a marker all but level with the camera.
         const worldSize = pixelsToWorldSize(MARKER_PIXELS, distanceUnits, size.height, fov);
         scratchMarkerView.copy(handle.group.position).applyMatrix4(camera.matrixWorldInverse);
-        handle.marker.scale.setScalar(worldSize / Math.max(-scratchMarkerView.z, distanceUnits * 1e-6));
-
-        if (projectToScreen(handle.group.position, camera, scratchScreen)) {
-          markerCandidates.push({
-            id: handle.definition.id,
-            x: (scratchScreen.x * 0.5 + 0.5) * size.width,
-            y: (-scratchScreen.y * 0.5 + 0.5) * size.height,
-            depth: distanceUnits,
-            rank: labelRank(handle.definition.kind, handle.definition.parent),
-          });
-          markers.set(handle.definition.id, handle.marker);
-        }
+        const depth = -scratchMarkerView.z;
+        markerBatch.stage(
+          handle.definition.id,
+          scratchMarkerView,
+          (worldSize / Math.max(depth, distanceUnits * 1e-6)) * depth,
+          handle.markerColor,
+          ringOpacity,
+          handle.markerShape,
+        );
+        markerCandidates.push({
+          id: handle.definition.id,
+          x: (scratchScreen.x * 0.5 + 0.5) * size.width,
+          y: (-scratchScreen.y * 0.5 + 0.5) * size.height,
+          depth: distanceUnits,
+          rank: labelRank(handle.definition.kind, handle.definition.parent),
+        });
       }
 
       if (handle.glare !== null) {
@@ -1828,20 +1827,17 @@ export function SolarSystem({
     const hidden = declutterMarkers(markerCandidates, focus, MARKER_PIXELS, heldMarkers);
     hiddenMarkers.clear();
     heldMarkers.clear();
-    for (const [id, marker] of markers) {
-      if (hidden.has(id)) {
-        marker.visible = false;
-        hiddenMarkers.add(id);
-      } else {
-        heldMarkers.add(id);
+    for (const { id } of markerCandidates) {
+      (hidden.has(id) ? hiddenMarkers : heldMarkers).add(id);
+    }
+    markerBatch.commit(
+      (id) =>
+        !hidden.has(id) &&
         // A named structure's ring only with its name: one whose name lost its spot to
         // another's would be a ring that says nothing (labelBoard.ts labelsShown). It comes
         // back with its name, nearer or once the others move off.
-        if (labelsShown.active && id !== focus && !labelsShown.ids.has(id) && store.body(id).kind === 'structure') {
-          marker.visible = false;
-        }
-      }
-    }
+        !(labelsShown.active && id !== focus && !labelsShown.ids.has(id) && store.body(id).kind === 'structure'),
+    );
 
     // The Sun is the only light source, which is what puts a real terminator on
     // every planet: the day/night line you see is geometry, not a shader trick.
@@ -1886,6 +1882,7 @@ export function SolarSystem({
           <primitive key={`${handle.definition.id}-orbit`} object={handle.orbit!.line} />
         ))}
       <primitive object={lateOrbits} />
+      <primitive object={markerBatch.mesh} />
       {handles
         .filter((handle) => handle.trajectoryGroup !== null)
         .map((handle) => (

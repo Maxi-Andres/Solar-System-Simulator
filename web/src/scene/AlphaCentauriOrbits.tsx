@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -17,6 +17,8 @@ import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The orbits of the Alpha Centauri system (D3a): A and B about their barycentre, and

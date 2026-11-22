@@ -1,5 +1,5 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -18,6 +18,8 @@ import { useViewStore } from '../state/store.ts';
 import { longitudeDirection, poleDirection } from './orientation.ts';
 import { smoothRamp } from './regionSurface.ts';
 import { KM_PER_UNIT, kmToUnits } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The auroral ovals (core/aurora.ts): NOAA's OVATION Prime forecast drawn as the green glow of

@@ -1,5 +1,5 @@
 import type { BodyId, StarCatalog } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -42,6 +42,8 @@ import { setMarkerPointer } from './markerPointer.ts';
 import { foldMembers } from './markFolding.ts';
 import { MARK_HOSTS, milkyWayMembers, pixelsPerRadian, updateMarkHosts } from './markHosts.ts';
 import { mapStrength } from './Starfield.tsx';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The globular clusters (core/globularClusters.ts): every one marked -- a ring with a dot in

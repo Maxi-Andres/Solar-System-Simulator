@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -9,6 +9,8 @@ import { GALACTIC_BASIS } from './galactic.ts';
 import { drawIntoGlow, GLOW_OUTPUT_GLSL, releaseFromGlow } from './glowBuffer.ts';
 import { KM_PER_UNIT } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Fermi and eROSITA bubbles (core/galacticBubbles.ts): each lobe a faint shell, brightest at

@@ -1,5 +1,5 @@
 import { LANIAKEA_FLAGS, type BodyId, type LaniakeaLandmark } from '@sss/tools/types';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -71,6 +71,8 @@ import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
 import { SUPERGALACTIC_POLE } from './supergalactic.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * Laniakea and what lies about it (G3, core/laniakea.ts): 86,899 galaxies out to 700 Mpc, the

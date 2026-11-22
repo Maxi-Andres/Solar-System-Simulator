@@ -222,6 +222,39 @@ export const TIME_DECIMALS = 8; // days, i.e. ~1 ms
 export const MAX_CONCURRENT_REQUESTS = 2;
 
 /**
+ * What JPL sees, whatever the phases above do: at most this many requests to Horizons in
+ * flight at once from the whole process (horizons/client.ts, through limiter.ts). The pools
+ * above count bodies, and a body can have two requests out at once -- a planet's vectors and
+ * its elements, a craft's two coverage probes -- so "two at a time" used to peak at four, and
+ * two phases could not overlap without doubling it. Three, held to, is below that peak, and
+ * lets the small moons run beside the craft with the service busy but never more so.
+ *
+ * JPL publishes no limit for the API; its one pacing advice, for its e-mail interface, is to
+ * leave a second or two between requests. No spacing is imposed by default -- each request
+ * takes a second or more, and three at once already stay under that -- but the deploy can
+ * set one (HORIZONS_MIN_SPACING_MS), and the cap (HORIZONS_MAX_CONCURRENT), without a commit
+ * to tools/.
+ */
+export const HORIZONS_MAX_CONCURRENT = 3;
+export const HORIZONS_MIN_SPACING_MS = 0;
+
+/**
+ * The Horizons answers kept between runs (horizons/responseCache.ts, which states the whole
+ * policy). An answer is kept only when the query's latest instant is this many days in the
+ * past -- the recent weeks of a mission still flying are re-delivered as navigation turns
+ * predictions into reconstructions -- and used only within its body's refresh period, so the
+ * release is never more than that period behind what JPL publishes about the past.
+ */
+export const HORIZONS_CACHE_MIN_AGE_DAYS = 90;
+export const HORIZONS_CACHE_REFRESH_DAYS = 28;
+/**
+ * The most the deploy saves of them, gzipped. A safety net for the repository's 10 GB of
+ * Actions cache, which the last full run's data and the catalogues' downloads share: past it,
+ * the answers fetched longest ago are dropped first and simply asked again next run.
+ */
+export const HORIZONS_CACHE_MAX_MB = 1000;
+
+/**
  * Retry budget.
  *
  * Four attempts spread over seven seconds was not enough: CI failed with Horizons

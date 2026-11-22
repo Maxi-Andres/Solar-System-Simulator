@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
@@ -19,6 +19,8 @@ import type { FeatureProps } from './GalaxyFeatures.tsx';
 import { GALACTIC_BASIS } from './galactic.ts';
 import { KM_PER_UNIT, PARSEC_KM } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The Local Interstellar Medium layer (core/localInterstellar.ts): the Local Bubble's shell, the

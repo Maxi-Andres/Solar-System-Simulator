@@ -1,5 +1,4 @@
 import type { BodyId } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
@@ -10,6 +9,8 @@ import type { SimClock } from '../core/time.ts';
 import { useViewStore } from '../state/store.ts';
 import { lineFrom } from './AlphaCentauriOrbits.tsx';
 import { KM_PER_UNIT } from './scale.ts';
+// Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
+import { useFrame } from './lazyLayer.tsx';
 
 /**
  * The two stellar flybys' paths (core/stellarFlybys.ts): each a straight line about the

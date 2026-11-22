@@ -28,7 +28,10 @@ import { githubWarning } from './annotate.ts';
  * bad answer is never served twice. Files are written whole or not at all (a temporary file
  * renamed into place), so a run killed mid-write leaves no half an answer behind.
  *
- * Nothing that changes with the date is kept this way: Horizons, SBDB, CelesTrak.
+ * Nothing that changes with the date is kept this way: Horizons, SBDB, CelesTrak. Horizons'
+ * answers about the far past are kept by horizons/responseCache.ts, with a policy of their
+ * own -- by how far in the past a query reaches, and only for a few weeks -- built on the
+ * `keep` and `readKept` below.
  */
 
 export type CachePolicy = 'static' | 'living';

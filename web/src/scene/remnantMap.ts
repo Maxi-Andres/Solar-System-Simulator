@@ -19,6 +19,7 @@ import {
 } from '../core/supernovaRemnants.ts';
 import type { Vec3 } from '../core/vec3.ts';
 import { PARSEC_KM } from './scale.ts';
+import { loadPictureTexture } from './textureCache.ts';
 import {
   NOISE_SIZE,
   remnantLook,
@@ -480,7 +481,7 @@ export type RemnantWorkerAnswer =
   | { readonly kind: 'depth'; readonly key: string; readonly depth: Uint16Array };
 
 function loadTexture(file: string, onLoad: () => void): THREE.Texture {
-  const texture = new THREE.TextureLoader().load(remnantUrl(file), onLoad);
+  const texture = loadPictureTexture(remnantUrl(file), onLoad);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
