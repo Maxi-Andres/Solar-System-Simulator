@@ -10,6 +10,7 @@ import { useViewStore } from '../state/store.ts';
 import { useClosing } from './Presence.tsx';
 import { fictionEntryOfBody, fictionOfReading } from '../core/fiction.ts';
 import { FictionAboutView } from './FictionAboutView.tsx';
+import { PhotoLarge, Photos } from './descriptionPhotos.tsx';
 
 /**
  * A body's description (descriptions/): a page over the scene, as the About is, read from the
@@ -17,8 +18,6 @@ import { FictionAboutView } from './FictionAboutView.tsx';
  * would see; then how it is drawn here, what is measured, what is a model's estimate, what is
  * missing and why, and what it corrects -- every claim numbered to its source at the foot.
  */
-
-const photoUrl = (path: string): string => `${import.meta.env.BASE_URL}${path}`;
 
 // The About's greys (about/prose.tsx), here by value: importing them would bring the About's
 // references into this page's chunk.
@@ -29,12 +28,6 @@ const RULE = '#2a2a2a';
 const ACCENT = '#9fc3e0';
 
 const COLOUR_ORDER: Record<DescriptionPhoto['colour'], number> = { true: 0, tinted: 1, false: 2 };
-
-const COLOUR_NOTE: Record<DescriptionPhoto['colour'], string> = {
-  true: 'True colour',
-  tinted: 'Tinted',
-  false: 'False colour',
-};
 
 /**
  * The page read from a panel: a fictional thing's "about" (FictionAboutView, its own module and
@@ -267,69 +260,6 @@ function Sources({ description }: { description: Description }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-function Photos({ photos, onOpen }: { photos: readonly DescriptionPhoto[]; onOpen: (index: number) => void }) {
-  if (photos.length === 0) return null;
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(10.5rem, 1fr))', gap: '0.8rem', margin: '1.6rem 0 0.4rem' }}>
-      {photos.map((photo, index) => (
-        <figure key={photo.file} style={{ margin: 0 }}>
-          <button
-            type="button"
-            onClick={() => onOpen(index)}
-            title="Open larger"
-            style={{ display: 'block', width: '100%', padding: 0, border: `1px solid ${RULE}`, borderRadius: '0.3rem', background: '#000', cursor: 'zoom-in', overflow: 'hidden' }}
-          >
-            <img
-              src={photoUrl(photo.file)}
-              alt={photo.title}
-              width={photo.width}
-              height={photo.height}
-              loading="lazy"
-              style={{ display: 'block', width: '100%', height: '7.5rem', objectFit: 'cover' }}
-            />
-          </button>
-          <figcaption style={{ marginTop: '0.35rem', fontSize: '0.7rem', lineHeight: 1.45, color: TEXT }}>
-            <span style={{ color: photo.colour === 'true' ? '#8fc79a' : '#c9a86a' }}>{COLOUR_NOTE[photo.colour]}</span>
-            {' · '}
-            {photo.title}
-          </figcaption>
-        </figure>
-      ))}
-    </div>
-  );
-}
-
-function PhotoLarge({ photo, onClose, onMove }: { photo: DescriptionPhoto; onClose: () => void; onMove: (by: number) => void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'ArrowLeft') onMove(-1);
-      if (event.key === 'ArrowRight') onMove(1);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onMove]);
-  return (
-    <div
-      role="dialog"
-      aria-label={photo.title}
-      onClick={onClose}
-      style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', boxSizing: 'border-box', cursor: 'zoom-out' }}
-    >
-      <img
-        src={photoUrl(photo.largeFile)}
-        alt={photo.title}
-        style={{ maxWidth: '100%', maxHeight: 'calc(100% - 7rem)', objectFit: 'contain' }}
-      />
-      <div style={{ maxWidth: '46rem', marginTop: '0.9rem', color: TEXT, fontSize: '0.8rem', lineHeight: 1.55, textAlign: 'center' }}>
-        <div style={{ color: BRIGHT, marginBottom: '0.25rem' }}>{photo.title}</div>
-        <span style={{ color: photo.colour === 'true' ? '#8fc79a' : '#c9a86a' }}>{COLOUR_NOTE[photo.colour]}</span>
-        {' · '}
-        {photo.caption} <span style={{ color: MUTED }}>{photo.credit}, {photo.date}.</span>
-      </div>
-    </div>
   );
 }
 

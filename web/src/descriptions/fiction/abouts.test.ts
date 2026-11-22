@@ -1,3 +1,6 @@
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { FICTION_ENTRIES, fictionBodyId } from '../../core/fiction.ts';
@@ -35,6 +38,32 @@ describe('fiction’s abouts', () => {
         for (const quote of paragraph.match(/“[^”]*”/g) ?? []) {
           expect(quote.split(/\s+/).length, `${key}: ${quote}`).toBeLessThan(15);
         }
+      }
+    }
+  });
+
+  it('show only renders from this app, or real photographs with their credit and a free licence', () => {
+    const publicDir = join(import.meta.dirname, '../../../public');
+    for (const key of Object.keys(FICTION_ABOUTS) as (keyof typeof FICTION_ABOUTS)[]) {
+      expect(FICTION_ABOUTS[key].photos.length, key).toBeGreaterThan(0);
+      for (const photo of FICTION_ABOUTS[key].photos) {
+        for (const file of [photo.file, photo.largeFile]) {
+          expect(existsSync(join(publicDir, file)), file).toBe(true);
+          // A thumbnail and its larger copy, both small enough for a page of text.
+          expect(statSync(join(publicDir, file)).size, file).toBeLessThan(400_000);
+        }
+        if (photo.origin === 'render') {
+          // The app's own, of what it draws, and said to be.
+          expect(photo.file, key).toMatch(/^photos\/fiction\//);
+          expect(photo.caption, key).toMatch(/A render from this app/);
+          expect(photo.credit, key).toBe('Rendered in this app');
+          continue;
+        }
+        // Anything else is real -- a real place, or the creator -- credited and freely licensed.
+        expect(photo.credit.length, photo.file).toBeGreaterThan(2);
+        expect(photo.licence, photo.file).toMatch(/^(CC BY(-SA)? \d\.\d|CC0|Public domain|NASA media, not copyrighted)/);
+        expect(photo.sourceUrl, photo.file).toMatch(/^https:\/\//);
+        if (photo.origin === 'creator') expect(photo.caption, photo.file).toMatch(/real photograph/i);
       }
     }
   });

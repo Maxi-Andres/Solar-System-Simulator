@@ -1,4 +1,80 @@
+import { ALPHA_CENTAURI_A, HUBBLE_PAIR, SOUTHERN_CROSS } from '../alphaCentauri.ts';
+import { SOLAR_SYSTEM } from '../solarSystem.ts';
+import type { Description, DescriptionPhoto } from '../types.ts';
+import { VENUS } from '../venus.ts';
 import type { FictionAboutKey } from './ids.ts';
+
+/**
+ * A picture on a fictional thing's about, and what it is: a render of it from this app -- the
+ * only pictures of a fictional thing shown, never a film still, a poster, a cover or concept art,
+ * none of which this site may use -- a real photograph of the real place it is put, from a real
+ * description, or a freely licensed photograph of its creator. FictionAboutView says which on
+ * each; abouts.test.ts checks every one that is not a render carries its credit and licence.
+ */
+export interface FictionPhoto extends DescriptionPhoto {
+  readonly origin: 'render' | 'real' | 'creator';
+}
+
+/** A real description's photograph, by the end of its file name; shown with its own credit. */
+function realPhoto(from: Description | DescriptionPhoto, fileEnd?: string): FictionPhoto {
+  const photo = 'file' in from ? from : from.photos.find((candidate) => candidate.file.endsWith(fileEnd ?? ''));
+  if (photo === undefined) throw new Error(`No photograph ${fileEnd} to reuse`);
+  return { ...photo, origin: 'real' };
+}
+
+/** The day the renders were taken, the app's clock set to the moment each shows. */
+const RENDERED = '2026-11-22';
+
+/**
+ * A render from this app (web/public/photos/fiction/, 1600 by 1000 pixels and a 640 thumbnail),
+ * taken headless with every panel, name, mark and orbit line hidden.
+ */
+function render(name: string, title: string, caption: string): FictionPhoto {
+  return {
+    file: `photos/fiction/${name}.webp`,
+    largeFile: `photos/fiction/${name}-large.webp`,
+    width: 640,
+    height: 400,
+    title,
+    caption: `${caption} A render from this app, not a picture of anything real.`,
+    colour: 'true',
+    credit: 'Rendered in this app',
+    licence: 'This app’s own',
+    date: RENDERED,
+    sourceUrl: '',
+    origin: 'render',
+  };
+}
+
+const JAMES_CAMERON: FictionPhoto = {
+  file: 'photos/fiction/james-cameron-2016.webp',
+  largeFile: 'photos/fiction/james-cameron-2016-large.webp',
+  width: 640,
+  height: 870,
+  title: 'James Cameron, who wrote and directed Avatar',
+  caption: 'At San Diego Comic-Con, July 2016. A real photograph of the film’s creator.',
+  colour: 'true',
+  credit: 'Gage Skidmore',
+  licence: 'CC BY-SA 3.0',
+  date: '2016-07-23',
+  sourceUrl: 'https://commons.wikimedia.org/wiki/File:James_Cameron_by_Gage_Skidmore.jpg',
+  origin: 'creator',
+};
+
+const ANDY_WEIR: FictionPhoto = {
+  file: 'photos/fiction/andy-weir-2015.webp',
+  largeFile: 'photos/fiction/andy-weir-2015-large.webp',
+  width: 640,
+  height: 480,
+  title: 'Andy Weir, who wrote Project Hail Mary',
+  caption: 'At NASA’s Johnson Space Center during its Mars Week, April 2015. A real photograph of the novel’s author.',
+  colour: 'true',
+  credit: 'NASA/James Blair and Lauren Harnett',
+  licence: 'Public domain',
+  date: '2015-04',
+  sourceUrl: 'https://commons.wikimedia.org/wiki/File:Andy_Weir_at_NASA_JSC.png',
+  origin: 'creator',
+};
 
 /**
  * Each fictional thing's "about" (Phase F): a few short paragraphs, read from its panel as a real
@@ -10,6 +86,8 @@ import type { FictionAboutKey } from './ids.ts';
 export interface FictionAbout {
   /** For the page's head: what it is ("Moon", "Gas giant"). */
   readonly kind: string;
+  /** Renders first, then the real places, then the creator. */
+  readonly photos: readonly FictionPhoto[];
   readonly story: readonly string[];
   readonly canon: readonly string[];
   readonly invented: readonly string[];
@@ -18,6 +96,16 @@ export interface FictionAbout {
 
 const PANDORA: FictionAbout = {
   kind: 'Moon',
+  photos: [
+    render(
+      'pandora-polyphemus',
+      'Pandora, with Polyphemus beyond',
+      'Pandora as drawn here: this app’s own procedural surface and haze, lit by α Centauri A, with Polyphemus 270,000 km behind it and two of its sister moons as specks.',
+    ),
+    realPhoto(SOUTHERN_CROSS),
+    realPhoto(HUBBLE_PAIR),
+    JAMES_CAMERON,
+  ],
   story: [
     'Pandora is the world of James Cameron’s Avatar (2009): a habitable moon of the gas giant Polyphemus, covered in rainforest, home to the Na’vi, and mined by a human company for a mineral it calls unobtanium. Its air cannot be breathed by humans, who go about it in grown Na’vi bodies they drive from afar — the avatars of the title.',
   ],
@@ -38,6 +126,16 @@ const PANDORA: FictionAbout = {
 
 const POLYPHEMUS: FictionAbout = {
   kind: 'Gas giant',
+  photos: [
+    render(
+      'pandora-polyphemus',
+      'Polyphemus, with Pandora before it',
+      'Polyphemus as drawn here, at left: this app’s own procedural bands and storm, lit by α Centauri A, with Pandora in front of it.',
+    ),
+    realPhoto(ALPHA_CENTAURI_A, 'webb-miri-s1.webp'),
+    realPhoto(HUBBLE_PAIR),
+    JAMES_CAMERON,
+  ],
   story: [
     'Polyphemus is the giant Pandora goes round in Avatar: banded in blue and cyan, it fills a large part of Pandora’s sky, with other moons seen against it. The Na’vi call it Naranawm, “great eye” (Pandorapedia).',
   ],
@@ -56,6 +154,18 @@ const POLYPHEMUS: FictionAbout = {
 
 const POLYPHEMUS_FAMILY: FictionAbout = {
   kind: 'Moons and Trojans',
+  photos: [
+    render(
+      'polyphemus-vi',
+      'Polyphemus VI, before its planet',
+      'Polyphemus VI, one of the moons this app numbers and sizes itself, its icy surface our own procedural drawing; Polyphemus at the left and Pandora at the right, both much farther off.',
+    ),
+    render(
+      'dante',
+      'Dante, close',
+      'Dante, the innermost moon, named only in Avatar: The Game; its size, its craters and its colour are this app’s inventions, drawn procedurally.',
+    ),
+  ],
   story: [
     'In Avatar, Pandora is one of several moons of Polyphemus, and others hang in its daytime sky.',
   ],
@@ -74,6 +184,14 @@ const POLYPHEMUS_FAMILY: FictionAbout = {
 
 const ADRIAN: FictionAbout = {
   kind: 'Planet · drawn over τ Ceti e',
+  photos: [
+    render(
+      'adrian-crescent',
+      'Adrian’s crescent',
+      'τ Ceti e as Adrian, from its night side: the haze is this app’s own drawing of the novel’s thick, CO₂-rich air, lit by τ Ceti, on the sphere the app draws for the real candidate. The faint red line at the top is the Petrova line.',
+    ),
+    ANDY_WEIR,
+  ],
   story: [
     'In Andy Weir’s Project Hail Mary (2021), a microbe called Astrophage is dimming the Sun. τ Ceti, 11.9 light years away, is infected too but is not dimming, and the Hail Mary is sent to find out why. Adrian is the planet there that τ Ceti’s own line of Astrophage runs to.',
   ],
@@ -92,6 +210,19 @@ const ADRIAN: FictionAbout = {
 
 const HAIL_MARY: FictionAbout = {
   kind: 'Starship',
+  photos: [
+    render(
+      'hail-mary-cruise',
+      'The Hail Mary under way',
+      'The ship as drawn here in cruise, accelerating toward τ Ceti, at the novel’s 40 m — from a fan-made model of the film’s ship, as the text below says.',
+    ),
+    render(
+      'hail-mary-centrifuge',
+      'Centrifuge mode over Adrian',
+      'The crew section turned and let out on its cables, the two halves spinning for one g, over Adrian’s haze in June 2039.',
+    ),
+    ANDY_WEIR,
+  ],
   story: [
     'The Hail Mary is the ship of Project Hail Mary: a last-ditch mission from Earth to τ Ceti, to learn why that star, alone among the Sun’s infected neighbours, is not dimming. It is driven by Astrophage itself, the microbe that stores starlight as mass and gives it back as infrared light.',
   ],
@@ -108,6 +239,16 @@ const HAIL_MARY: FictionAbout = {
 
 const PETROVA: FictionAbout = {
   kind: 'Line of Astrophage',
+  photos: [
+    render(
+      'petrova-sun-venus',
+      'The Petrova line, Sun to Venus',
+      'The line as drawn here, from the Sun to Venus, seen from 3.4 AU above the plane of the planets; Venus itself is too small to see at this distance.',
+    ),
+    realPhoto(VENUS, 'transit-2012.webp'),
+    realPhoto(SOLAR_SYSTEM, 'zodiacal-light-2021.webp'),
+    ANDY_WEIR,
+  ],
   story: [
     'In Project Hail Mary, astronomers first notice the Sun’s trouble as a faint line of infrared light running from the Sun to Venus — the Petrova line, named for the astronomer who saw it. It is Astrophage, a microbe living at the Sun’s surface, on its way to Venus to breed and back, glowing as it goes. A second Petrova line, from τ Ceti to Adrian, shows that star infected too.',
   ],
