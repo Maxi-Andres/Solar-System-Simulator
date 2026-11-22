@@ -9,8 +9,16 @@ import { projectToScreen } from './screenProjection.ts';
  * italic (App.tsx GALAXY_LABEL_STYLE): they name parts of a map, not places to go.
  *
  * The component owns the elements: made here, in a layer of their own over the canvas, and
- * each frame placed and posted to the labels' one declutter pass (labelBoard.ts), which hides
- * those that lose. Mount the component before LabelProjector, whose frame runs after it.
+ * each frame placed and posted to the labels' one declutter pass (labelBoard.ts), which shows
+ * those that win and hides those that lose. Mount the component before LabelProjector, whose
+ * frame runs after it.
+ *
+ * **Written only when it changes.** Each name's place and opacity are kept as last written,
+ * and written again only when they differ; a name is not shown here but by the declutter pass,
+ * so one that keeps losing its spot is not shown and hidden again every frame; and which names
+ * may be showing is kept here too, so hiding a layer's names that are all hidden already asks
+ * nothing of the page. Each of those was a trip through the style system, every frame, for
+ * every name of the layer: from half a millisecond a frame among the stellar streams' names.
  */
 
 const STYLE: Partial<CSSStyleDeclaration> = {
@@ -27,11 +35,24 @@ const STYLE: Partial<CSSStyleDeclaration> = {
   textShadow: '0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,1)',
 };
 
-const scratch = { x: 0, y: 0 };
+/** A name's place and opacity as last written into its element; NaN for never. */
+interface Written {
+  x: number;
+  y: number;
+  opacity: number;
+}
 
 export class SceneLabels {
   private readonly layer: HTMLDivElement | null;
   private readonly elements: HTMLSpanElement[];
+  private readonly written: Written[];
+  /**
+   * Whether each name may be showing: 1 from its posting -- the declutter pass shows it if it
+   * wins -- until it is hidden here. Only LabelProjector shows a posted name, so a 0 is known
+   * hidden and needs no look at its element.
+   */
+  private readonly mayShow: Uint8Array;
+  private projected: THREE.Vector3 | null = null;
 
   /**
    * `canvas` is the renderer's (useThree().gl.domElement): the names go in a layer beside it.
@@ -48,6 +69,8 @@ export class SceneLabels {
     if (host === null || typeof document === 'undefined') {
       this.layer = null;
       this.elements = [];
+      this.written = [];
+      this.mayShow = new Uint8Array(0);
       return;
     }
     const layer = document.createElement('div');
@@ -60,6 +83,8 @@ export class SceneLabels {
       layer.appendChild(element);
       return element;
     });
+    this.written = names.map(() => ({ x: NaN, y: NaN, opacity: NaN }));
+    this.mayShow = new Uint8Array(names.length);
     host.appendChild(layer);
     this.layer = layer;
   }
@@ -70,7 +95,9 @@ export class SceneLabels {
 
   hide(index: number): void {
     const element = this.elements[index];
-    if (element !== undefined && element.style.display !== 'none') {
+    if (element === undefined || this.mayShow[index] === 0) return;
+    this.mayShow[index] = 0;
+    if (element.style.display !== 'none') {
       element.style.display = 'none';
     }
   }
@@ -81,8 +108,9 @@ export class SceneLabels {
 
   /**
    * Puts name `index` centred on `point` (scene units, camera-relative as the scene is) at
-   * `opacity`, and posts it to the declutter pass; hidden where the point is off screen or
-   * behind the camera, or the opacity is nothing. `importance` orders names within the rank.
+   * `opacity`, and posts it to the declutter pass, which shows it if it wins; hidden where the
+   * point is off screen or behind the camera, or the opacity is nothing. `importance` orders
+   * names within the rank.
    */
   place(
     index: number,
@@ -98,22 +126,37 @@ export class SceneLabels {
       this.hide(index);
       return false;
     }
-    const projected = point.clone();
+    const projected = this.projected === null ? (this.projected = point.clone()) : this.projected;
     if (!projectToScreen(point, camera, projected) || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1) {
       this.hide(index);
       return false;
     }
-    scratch.x = (projected.x * 0.5 + 0.5) * size.width;
-    scratch.y = (-projected.y * 0.5 + 0.5) * size.height;
-    if (element.style.display !== 'block') element.style.display = 'block';
-    element.style.transform = `translate(${scratch.x}px, ${scratch.y}px) translate(-50%, -50%)`;
-    element.style.opacity = String(Math.min(1, opacity));
-    const box = boxOf(element);
+    const x = (projected.x * 0.5 + 0.5) * size.width;
+    const y = (-projected.y * 0.5 + 0.5) * size.height;
+    const written = this.written[index]!;
+    if (written.x !== x || written.y !== y) {
+      element.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+      written.x = x;
+      written.y = y;
+    }
+    const shownOpacity = Math.min(1, opacity);
+    if (written.opacity !== shownOpacity) {
+      element.style.opacity = String(shownOpacity);
+      written.opacity = shownOpacity;
+    }
+    let box = boxOf(element);
+    if (box.width === 0 && element.style.display === 'none') {
+      // Never measured: a hidden element has no box. Shown to be measured, once per text --
+      // where it is, at its opacity -- and left to the declutter pass like any other.
+      element.style.display = 'block';
+      box = boxOf(element);
+    }
+    this.mayShow[index] = 1;
     labelBoard.posted.push({
       key: `${this.key}-${index}`,
       element,
-      x: scratch.x,
-      y: scratch.y,
+      x,
+      y,
       offset: -box.width / 2,
       dy: 0,
       width: box.width,

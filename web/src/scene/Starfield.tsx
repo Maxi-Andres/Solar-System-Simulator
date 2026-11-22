@@ -1,5 +1,5 @@
 import type { BodyId, StarCatalog } from '@sss/tools/types';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -48,6 +48,8 @@ import { matchOrbitingStar, orbitingStarState, type OrbitingStar } from '../core
 import { isCatalogueStar, parseStarBodyId, starBodyId } from '../core/starBodies.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { lensState, lensUniforms } from './lens.ts';
+import { ViewChange } from './orbitGeometry.ts';
+import { compiledFor, compileFor } from './shaderPrecompile.ts';
 
 /**
  * A star Starfield draws apart from its tier, with a fade of its own: Alpha Centauri's
@@ -281,6 +283,34 @@ function sunGeometry(): THREE.BufferGeometry {
 }
 
 const scratchCamera = new THREE.Vector3();
+const scratchSize = new THREE.Vector2();
+const scratchClear = new THREE.Color();
+
+/**
+ * The 3D stars while the view moves: drawn into a buffer of their own with no multisampling,
+ * then laid over the frame in one pass.
+ *
+ * The canvas is multisampled four times, and each of the tiers' additive dots blends into all
+ * four samples: from ~1,000 ly, where all 357,000 are on screen at 2.7 px, they were 31 ms of a
+ * 35 ms frame on an integrated GPU (5 ms without the samples, in a bench). A still view is drawn
+ * as it always was, on the canvas; only while the camera moves -- every frame of a drag, where
+ * the picture changes anyway -- are the dots drawn once per pixel instead of per sample, and
+ * added onto the frame: the same light, summed in the same 8 bits, less the samples' edge.
+ * Bodies in front still hide them: the pass is tested against the frame's depth at the far
+ * plane, where the stars are (STAR3D_VERTEX_SHADER).
+ */
+const TIER_PASS_VERTEX = /* glsl */ `
+void main() {
+  // The far plane, as the stars' own depth is: every body in front hides it.
+  gl_Position = vec4(position.xy, 1.0, 1.0);
+}
+`;
+const TIER_PASS_FRAGMENT = /* glsl */ `
+uniform sampler2D uTiers;
+void main() {
+  gl_FragColor = texelFetch(uTiers, ivec2(gl_FragCoord.xy), 0);
+}
+`;
 const EMPTY_VIEW = { state: 'absent', info: null, tiers: [] as readonly LoadedStarTier[] } as const;
 const noSubscribe = (): (() => void) => () => {};
 
@@ -292,6 +322,45 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
   const skyTwinRef = useRef<THREE.Points>(null);
   const sunTwinRef = useRef<THREE.Points>(null);
   const requested = useRef(false);
+  const threeGl = useThree((state) => state.gl);
+  const threeCamera = useThree((state) => state.camera);
+  const threeScene = useThree((state) => state.scene);
+  // The moving view's pass for the tiers: see TIER_PASS_VERTEX.
+  const tierPass = useMemo(() => {
+    const target = new THREE.WebGLRenderTarget(1, 1, {
+      depthBuffer: false,
+      stencilBuffer: false,
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      generateMipmaps: false,
+    });
+    const material = new THREE.ShaderMaterial({
+      uniforms: { uTiers: { value: target.texture } },
+      vertexShader: TIER_PASS_VERTEX,
+      fragmentShader: TIER_PASS_FRAGMENT,
+      // Added onto the frame, as each dot was: what the buffer summed, onto what is there.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      depthWrite: false,
+      transparent: true,
+      toneMapped: false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    quad.frustumCulled = false;
+    quad.renderOrder = -1;
+    quad.visible = false;
+    return { target, material, quad, view: new ViewChange() };
+  }, []);
+  useEffect(
+    () => () => {
+      tierPass.target.dispose();
+      tierPass.material.dispose();
+      tierPass.quad.geometry.dispose();
+    },
+    [tierPass],
+  );
 
   const view = useSyncExternalStore(
     stars3d?.subscribe ?? noSubscribe,
@@ -463,6 +532,9 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
       points.frustumCulled = false;
       points.renderOrder = -1;
       tierPoints.set(tier.index, points);
+      // Its program for the moving view's buffer too (no lights, a render target): made beside
+      // the page, and that pass not taken until it is (see the frame loop).
+      void compileFor(threeGl, threeCamera, threeScene, [points], 'glow');
       tierReaches.set(tier.index, tierReach(tier.records, points.geometry.getAttribute('starColor').array as Float32Array));
       group.add(points);
       const twin = new THREE.Points(points.geometry, tierMaterialTwin);
@@ -484,7 +556,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
     if (changed) {
       sky.placed.needsUpdate = true;
     }
-  }, [view, tierPoints, tierTwins, tierReaches, pairPoints, hiddenByTier, discStars, tierMaterial, tierMaterialTwin, tierUniforms, sky]);
+  }, [view, tierPoints, tierTwins, tierReaches, pairPoints, hiddenByTier, discStars, tierMaterial, tierMaterialTwin, tierUniforms, sky, threeGl, threeCamera, threeScene]);
 
   // Everything made here goes with the component.
   useEffect(
@@ -650,6 +722,36 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         !tiersUnseen(reach, cameraPc.length(), motion, catalog.magnitudeLimit, dotPeak);
     }
 
+    // While the view moves, the tiers into their own buffer and onto the frame in one pass
+    // (TIER_PASS_VERTEX); still, on the canvas as always. Not with a lens on (its far-side
+    // images), nor before the tiers' program for the buffer is made.
+    let drawn = false;
+    for (const points of tierPoints.values()) drawn ||= points.visible;
+    const moving = tierPass.view.moving(camera, focus, size.height, performance.now());
+    const passed = group.visible && drawn && moving && !lensOn && compiledFor(tierMaterial, 'glow');
+    tierPass.quad.visible = passed;
+    if (passed) {
+      const target = tierPass.target;
+      gl.getDrawingBufferSize(scratchSize);
+      if (target.width !== scratchSize.x || target.height !== scratchSize.y) {
+        target.setSize(scratchSize.x, scratchSize.y);
+      }
+      const previous = gl.getRenderTarget();
+      const autoClear = gl.autoClear;
+      gl.getClearColor(scratchClear);
+      const clearAlpha = gl.getClearAlpha();
+      gl.setRenderTarget(target);
+      gl.setClearColor(0x000000, 0);
+      gl.clear(true, false, false);
+      gl.autoClear = false;
+      gl.render(group, camera);
+      gl.autoClear = autoClear;
+      gl.setRenderTarget(previous);
+      gl.setClearColor(scratchClear, clearAlpha);
+      // Drawn: not again on the canvas this frame.
+      group.visible = false;
+    }
+
     // The Sun's point, as its sphere goes: see the header.
     const sunPixelRadius = angularRadiusPixels(
       store.body('sun').radiusEquatorialKm,
@@ -681,6 +783,7 @@ export function Starfield({ catalog, clock, store, focus, stars3d, showMap, sunS
         visible={false}
       />
       <group ref={tiersRef} />
+      <primitive object={tierPass.quad} />
       <points
         ref={sunRef}
         geometry={sunPoint}

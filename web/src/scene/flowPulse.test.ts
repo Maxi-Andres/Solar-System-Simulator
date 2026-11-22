@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { LIVE_STEP_PX } from '../core/renderDemand.ts';
-import { flowPulseWaitMs, pulsePcPerSecond, type FlowPulseBound } from './flowPulse.ts';
+import * as THREE from 'three';
+
+import { FLOW_REACH_PX, flowPulseWaitMs, pulsePcPerSecond, sphereInView, type FlowPulseBound } from './flowPulse.ts';
 
 /** Laniakea.tsx's: Gyr for a parsec at 1 km/s, and the brightening's Gyr of flow a second. */
 const GYR_PER_PC_AT_KMS = 3.0857e13 / 3.15576e16;
@@ -49,5 +51,57 @@ describe('the flow lines’ brightening', () => {
     const far = flowPulseWaitMs(bound, 3e10, 0, 0, PX_PER_RADIAN);
     expect(far).toBeGreaterThan(near);
     expect(flowPulseWaitMs(bound, 1e9, 0, 0, PX_PER_RADIAN)).toBe(0);
+  });
+});
+
+describe('whether the flow lines are in view', () => {
+  const W = 1920;
+  const H = 1080;
+  const camera = new THREE.PerspectiveCamera(50, W / H, 1e-3, 1e30);
+  const e = camera.projectionMatrix.elements;
+  // Projected as the GPU would: the device pixel a view-space point lands on, or null behind.
+  const pixel = (x: number, y: number, z: number): [number, number] | null => {
+    const v = new THREE.Vector4(x, y, z, 1).applyMatrix4(camera.projectionMatrix);
+    return v.w > 0 ? [((v.x / v.w + 1) / 2) * W, ((v.y / v.w + 1) / 2) * H] : null;
+  };
+
+  it('is false only when every point of the sphere is off the screen by more than the reach', () => {
+    let seed = 7;
+    const random = (): number => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    let culled = 0;
+    for (let trial = 0; trial < 4000; trial += 1) {
+      const r = 10 ** (random() * 4);
+      const x = (random() - 0.5) * 2e4;
+      const y = (random() - 0.5) * 2e4;
+      const z = (random() - 0.5) * 2e4;
+      if (sphereInView(x, y, z, r, e, W, H, FLOW_REACH_PX)) continue;
+      culled += 1;
+      // Points over its surface and inside: none may land within the reach of the screen.
+      for (let k = 0; k < 200; k += 1) {
+        const u = random() * 2 - 1;
+        const phi = random() * 2 * Math.PI;
+        const s = Math.sqrt(1 - u * u) * r * Math.cbrt(random());
+        const p = pixel(x + s * Math.cos(phi), y + s * Math.sin(phi), z + u * r);
+        if (p === null) continue;
+        expect(p[0] < -FLOW_REACH_PX || p[0] > W + FLOW_REACH_PX || p[1] < -FLOW_REACH_PX || p[1] > H + FLOW_REACH_PX).toBe(true);
+      }
+    }
+    // And it does cull: a good share of spheres scattered about the camera are out of view.
+    expect(culled).toBeGreaterThan(1000);
+  }, 60_000);
+
+  it('keeps a sphere in front, one about the camera, and one just past the edge within the reach', () => {
+    expect(sphereInView(0, 0, -100, 1, e, W, H, FLOW_REACH_PX)).toBe(true);
+    expect(sphereInView(0, 0, 0, 1, e, W, H, FLOW_REACH_PX)).toBe(true);
+    expect(sphereInView(0, 0, 100, 1, e, W, H, FLOW_REACH_PX)).toBe(false);
+    // A point 2 pixels right of the screen's edge, as a tiny sphere: within the reach.
+    const z = -1000;
+    const xEdge = (-z / e[0]!) * (1 + (2 * 2) / W);
+    expect(sphereInView(xEdge, 0, z, 1e-9, e, W, H, FLOW_REACH_PX)).toBe(true);
+    const xFar = (-z / e[0]!) * (1 + (2 * 6) / W);
+    expect(sphereInView(xFar, 0, z, 1e-9, e, W, H, FLOW_REACH_PX)).toBe(false);
   });
 });

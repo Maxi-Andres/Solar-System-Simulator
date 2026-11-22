@@ -136,8 +136,17 @@ export function AdaptiveResolution() {
     // them -- renders again. Everything that draws by the ratio asks the renderer each frame.
     let full = gl.getPixelRatio();
     let reduced = Number.NaN;
+    // A ratio decided after one frame's render, put in force before the next one's. Setting it
+    // resizes the drawing buffer, which clears it: set after the render, the frame the browser
+    // then shows is that cleared buffer -- the screen black for a frame, now and then, while
+    // zooming. Before the render, the same frame draws into the new buffer.
+    let pending = Number.NaN;
 
     const stopBefore = addEffect(() => {
+      if (!Number.isNaN(pending)) {
+        gl.setPixelRatio(pending);
+        pending = Number.NaN;
+      }
       started = performance.now();
     });
     const stopAfter = addAfterEffect((timestamp) => {
@@ -158,14 +167,19 @@ export function AdaptiveResolution() {
       if (step === 'cut') {
         reduced = Math.max(MIN_PIXEL_RATIO, full * RATIO_WHILE_MOVING);
         if (reduced < full) {
-          gl.setPixelRatio(reduced);
+          pending = reduced;
+          renderDemand.request();
         } else {
           governor.reset();
         }
       } else if (step === 'restore') {
-        gl.setPixelRatio(full);
+        pending = full;
         reduced = Number.NaN;
         // The still view at full resolution, and its labels settled on it.
+        renderDemand.request();
+      } else if (governor.cut) {
+        // While cut, the frames that count the camera still come at once: out where the live
+        // clock asks one a second, the restore would otherwise wait seconds at the low ratio.
         renderDemand.request();
       }
     });

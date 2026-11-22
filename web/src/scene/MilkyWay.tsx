@@ -27,6 +27,7 @@ import { sameView, underFloor, warpBetween, WARP_PX, type GlowView } from './mil
 import { projectToScreen } from './screenProjection.ts';
 import { GLOW_DISPLAY_GLSL, GLOW_FLOOR, milkyWayGlow } from './glowBuffer.ts';
 import { ViewMotion } from './viewMotion.ts';
+import { compileFor } from './shaderPrecompile.ts';
 import { srgbToLinear } from './starRendering.ts';
 import { splitHigh, splitLow } from './stars3dShader.ts';
 
@@ -587,6 +588,7 @@ export interface MilkyWayProps {
 
 export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps) {
   const { camera, size, gl } = useThree();
+  const scene = useThree((state) => state.scene);
   const points = useRef<THREE.Points | null>(null);
   const dustPoints = useRef<THREE.Points | null>(null);
   const sampleAsked = useRef(false);
@@ -692,6 +694,8 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
     () => () => {
       worker.current?.terminate();
       sampleLoading.current?.();
+      // Its sample, if still compiling, is let go when the compile is done (below).
+      sampleLoading.current = null;
       points.current?.geometry.dispose();
       dustPoints.current?.geometry.dispose();
       material.dispose();
@@ -788,29 +792,42 @@ export function MilkyWay({ store, clock, focus, visible, labels }: MilkyWayProps
       worker.current = made;
       sampleLoading.current = beginLoading('the Milky Way', !sampleWanted);
       made.onmessage = (event: MessageEvent<{ light: MilkyWaySample; radii: Float32Array; dust: Float32Array }>) => {
+        made.terminate();
+        worker.current = null;
         const built = buildGeometry(event.data.light, event.data.radii);
-        bounds.current = built.bounds;
-        // Whatever was drawn before was drawn without it.
-        kept.current = null;
         const builtDust = buildDustGeometry(event.data.dust);
-        clouds.current = { light: built.cloud, dust: builtDust };
         const cloud = new THREE.Points(built.cloud.geometry, material);
         cloud.frustumCulled = false;
         // In each slab, after its dust: see the header.
         cloud.renderOrder = 1;
-        group.add(cloud);
-        points.current = cloud;
         // Before its slab's light, after every slab behind.
         const dust = new THREE.Points(builtDust.geometry, dustMaterial);
         dust.frustumCulled = false;
         dust.renderOrder = 0;
-        group.add(dust);
-        dustPoints.current = dust;
-        made.terminate();
-        worker.current = null;
-        sampleLoading.current?.();
-        skyCapture.revision += 1;
-        renderDemand.request();
+        // Drawn once their programs are made, and the quad's that carries a kept drawing over:
+        // all three are drawn into buffers of their own with no lights, as the glow's are
+        // (shaderPrecompile.ts 'glow'). Made on their first draw they held the frame the galaxy
+        // came into view in, and the first drag after.
+        const show = (): void => {
+          if (sampleLoading.current === null) {
+            // Taken away meanwhile.
+            cloud.geometry.dispose();
+            dust.geometry.dispose();
+            return;
+          }
+          bounds.current = built.bounds;
+          // Whatever was drawn before was drawn without it.
+          kept.current = null;
+          clouds.current = { light: built.cloud, dust: builtDust };
+          group.add(cloud, dust);
+          points.current = cloud;
+          dustPoints.current = dust;
+          sampleLoading.current();
+          sampleLoading.current = null;
+          skyCapture.revision += 1;
+          renderDemand.request();
+        };
+        void compileFor(gl, camera, scene, [cloud, dust, carry.quad], 'glow').then(show, show);
       };
       made.postMessage({ count: GALAXY_POINTS, dust: DUST_POINTS });
     }

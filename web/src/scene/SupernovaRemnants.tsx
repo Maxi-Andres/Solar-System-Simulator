@@ -24,6 +24,7 @@ import {
 } from './remnantMap.ts';
 import { hasRemnantNoise, provideRemnantNoise, remnantMaterial, VOLUME_RADIUS } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+import { compileFor } from './shaderPrecompile.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -106,9 +107,6 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
       noiseAsked: false,
       asked: new Set<string>(),
       depths: new Map<string, Uint16Array>(),
-      // What the shaders are compiled against before the gas is drawn: a render target, as the
-      // glow buffer is -- which of the two is all three's program for them depends on.
-      compileTarget: new THREE.WebGLRenderTarget(1, 1),
     }),
     [],
   );
@@ -124,17 +122,9 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
       group.add(mesh);
       renderDemand.request();
     };
-    const previous = gl.getRenderTarget();
-    let compiled: Promise<unknown>;
-    try {
-      gl.setRenderTarget(made.compileTarget);
-      compiled = gl.compileAsync(mesh, camera, scene);
-    } catch {
-      compiled = Promise.resolve();
-    } finally {
-      gl.setRenderTarget(previous);
-    }
-    compiled.then(add, add);
+    // For the pass that draws it, the glow's (shaderPrecompile.ts): compiled for the canvas it
+    // was another program, and the glow pass compiled its own again before drawing it.
+    void compileFor(gl, camera, scene, [mesh], 'glow').then(add, add);
   };
   const ask = (request: RemnantWorkerRequest): void => {
     if (made.worker === null) {
@@ -205,7 +195,6 @@ export function SupernovaRemnants({ store, clock, focus, visible, showRings }: S
       made.loading?.();
       made.noiseAsked = false;
       made.asked.clear();
-      made.compileTarget.dispose();
       for (const entry of drawn.entries) {
         group.remove(entry.ring);
         (entry.ring.material as THREE.Material).dispose();

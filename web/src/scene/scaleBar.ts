@@ -71,25 +71,43 @@ function approximate(value: number): string {
   return Number(value.toPrecision(3)).toLocaleString('en-US', { maximumFractionDigits: 8 });
 }
 
+/**
+ * The last reading, and the words of the last length: asked every frame, and the same while the
+ * camera orbits at one distance. Formatting the label and the tooltip's four numbers was a third
+ * of a millisecond a frame from the Milky Way out, to write what the bar already said; now the
+ * words are made only when the length itself changes -- a zoom past a 1, 2 or 5 -- and a frame
+ * at the same scale returns the reading it returned before.
+ */
+let lastReading: { kmPerPx: number; maxWidthPx: number; reading: ScaleBarReading } | null = null;
+let lastWords: { value: number; unit: ScaleUnit; label: string; detail: string } | null = null;
+
 /** The bar for a picture where one CSS pixel at the focus's distance is `kmPerPx`. */
 export function scaleBarReading(kmPerPx: number, maxWidthPx = SCALE_BAR_MAX_PX): ScaleBarReading {
+  if (lastReading !== null && lastReading.kmPerPx === kmPerPx && lastReading.maxWidthPx === maxWidthPx) {
+    return lastReading.reading;
+  }
   const maxKm = kmPerPx * maxWidthPx;
   const chosen = UNITS.find((entry) => maxKm >= entry.fromKm) ?? UNITS[UNITS.length - 1]!;
   const value = niceFloor(maxKm / chosen.km);
   const lengthKm = value * chosen.km;
-  const detail = [
-    `${approximate(lengthKm)} km`,
-    `${approximate(lengthKm / AU_KM)} AU`,
-    `${approximate(lengthKm / LIGHT_YEAR_KM)} ly`,
-    `${approximate(lengthKm / PARSEC_KM)} pc`,
-  ].join(' = ');
-  return {
+  if (lastWords === null || lastWords.value !== value || lastWords.unit !== chosen.unit) {
+    const detail = [
+      `${approximate(lengthKm)} km`,
+      `${approximate(lengthKm / AU_KM)} AU`,
+      `${approximate(lengthKm / LIGHT_YEAR_KM)} ly`,
+      `${approximate(lengthKm / PARSEC_KM)} pc`,
+    ].join(' = ');
+    lastWords = { value, unit: chosen.unit, label: formatLength(value, chosen.unit), detail };
+  }
+  const reading: ScaleBarReading = {
     lengthKm,
     widthPx: lengthKm / kmPerPx,
     unit: chosen.unit,
-    label: formatLength(value, chosen.unit),
-    detail,
+    label: lastWords.label,
+    detail: lastWords.detail,
   };
+  lastReading = { kmPerPx, maxWidthPx, reading };
+  return reading;
 }
 
 /**

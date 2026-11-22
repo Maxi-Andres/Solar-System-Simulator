@@ -221,6 +221,11 @@ export function chipCounts(satellites: Satellites): number[] {
   return counts;
 }
 
+/** Resolves in a later task: what follows runs after the browser has had its turn. */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** Reads satellites.json, its named list and its records; null when the data has none. */
 export async function loadSatellites(fetchers: BeltFetchers, basePath = '/'): Promise<Satellites | null> {
   const dir = `${basePath}data/satellites/`;
@@ -242,7 +247,14 @@ export async function loadSatellites(fetchers: BeltFetchers, basePath = '/'): Pr
     throw new Error(`satellites.json names ${info.bulk.file} of ${info.bulk.bytes} bytes, which is not there.`);
   }
   const records = decodeSatelliteRecords(buffer);
+  // Each pass over the twenty thousand records a task of its own, and the app's taking it in
+  // another: all in the one the last file arrived in, with the swarm built and the app drawn
+  // again, they were a single task of 125 to 134 ms (production, 2026-11-22).
+  await nextTask();
   checkSatelliteRecords(records);
+  await nextTask();
+  const chips = recordChips(records, info);
+  await nextTask();
   const list = named as NamedSatellite[];
   const fallback = sgp4 as SgpSatellite[];
   return {
@@ -250,7 +262,7 @@ export async function loadSatellites(fetchers: BeltFetchers, basePath = '/'): Pr
     named: list,
     sgp4: fallback,
     records,
-    chips: recordChips(records, info),
+    chips,
     namedChips: Uint8Array.from(list, (satellite) => chipOfFlags(satellite.flags, info.groups, TYPE_SHIFT)),
     sgp4Chips: Uint8Array.from(fallback, (satellite) => chipOfFlags(satellite.flags, info.groups, TYPE_SHIFT)),
   };

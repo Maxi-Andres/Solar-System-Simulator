@@ -38,13 +38,14 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { starColor } from './blackbody.ts';
 import { FLOOR_THIN_GLSL, floorKept, halfCountRadiusPc } from './crowding.ts';
 import { nearestMarker, PICK_RADIUS_PX } from './ExoplanetHosts.tsx';
-import { flowPulseWaitMs, pulsePcPerSecond, type FlowPulseBound } from './flowPulse.ts';
+import { FLOW_REACH_PX, flowPulseWaitMs, pulsePcPerSecond, sphereInView, type FlowPulseBound } from './flowPulse.ts';
 import { galacticDirection } from './galactic.ts';
 import { DISC_VOLUME_FRAGMENT, DISC_VOLUME_VERTEX, SERSIC_VOLUME_FRAGMENT, SERSIC_VOLUME_VERTEX, sersicAtlas } from './galaxyColumns.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
 import { homeNames } from './homeName.ts';
 import { basinPartsAhead, basinPartsGeometry, type BasinParts, type BasinRequest } from './laniakeaBasins.ts';
+import { BasinFillPass } from './laniakeaFillPass.ts';
 import {
   boxMatrix,
   CLICK_SLOP_PX,
@@ -70,8 +71,10 @@ import { GALACTIC_CENTRE_SCENE_PC, laniakeaFolds, MARK_HOSTS, pixelsPerRadian as
 import { setMarkerPointer } from './markerPointer.ts';
 import { galaxyVisibility } from './MilkyWay.tsx';
 import { KM_PER_UNIT, LIGHT_YEAR_KM } from './scale.ts';
+import { compileFor } from './shaderPrecompile.ts';
 import { UNITS_PER_PC } from './stars3dShader.ts';
 import { SUPERGALACTIC_POLE } from './supergalactic.ts';
+import { ViewMotion } from './viewMotion.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -124,7 +127,9 @@ import { useFrame } from './lazyLayer.tsx';
  * of the camera. And the groups' reconstruction's answer, where the Milky Way's flow ends at
  * Shapley and Laniakea is a part of Shapley's basin (Valade et al. 2024 find the data slightly
  * prefer it): a chip of its own, off at first. Neither is drawn as the truth; the About and the
- * panels say both. Each basin is named and marked at its attractor by its structure body.
+ * panels say both. Each basin is named and marked at its attractor by its structure body. The
+ * fills are drawn at half the resolution while the camera moves, in full the moment it stops
+ * (laniakeaFillPass.ts).
  *
  * ## Where the galaxies flow
  *
@@ -882,6 +887,27 @@ const noRaycast = (): void => {};
 const scratchMatrix = new THREE.Matrix4();
 const scratchSize = new THREE.Vector2();
 
+/** Whether any flow line can be on the screen from `cameraPc` (flowPulse.ts sphereInView); with no bound, taken as yes. */
+function flowsInView(bound: FlowPulseBound | null, cameraPc: THREE.Vector3, camera: THREE.Camera, renderer: THREE.WebGLRenderer): boolean {
+  if (bound === null) return true;
+  // The sphere about the camera, in pc, turned into the camera's view: the planes are through the eye.
+  const x = bound.centreX - cameraPc.x;
+  const y = bound.centreY - cameraPc.y;
+  const z = bound.centreZ - cameraPc.z;
+  const m = camera.matrixWorldInverse.elements;
+  const size = renderer.getDrawingBufferSize(scratchSize);
+  return sphereInView(
+    m[0]! * x + m[4]! * y + m[8]! * z,
+    m[1]! * x + m[5]! * y + m[9]! * z,
+    m[2]! * x + m[6]! * y + m[10]! * z,
+    bound.radiusPc,
+    camera.projectionMatrix.elements,
+    size.x,
+    size.y,
+    FLOW_REACH_PX,
+  );
+}
+
 /** A galaxy drawn as a volume: what its instance needs, worked out once. */
 interface VolumeFixed {
   readonly kind: 'plummer' | 'disc' | 'sersic';
@@ -929,7 +955,7 @@ function volumeFixed(galaxy: LocalGroupGalaxy, layerOf: (n: number) => number): 
 }
 
 export function Laniakea({ source, names, store, clock, focus, visible, showMarks, showBasins, basinChips, showFlows, onPick }: LaniakeaProps) {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
   const catalogue = useSyncExternalStore(source.subscribe, () => source.value);
   const nameIndex = useSyncExternalStore(names.subscribe, () => names.value);
   const version = useStoreVersion(store);
@@ -1170,6 +1196,11 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   }, [marks, store, version]);
 
   // ---- The outlines and fills: Laniakea's basin, Shapley's; the voids; the walls.
+  // The fills drawn at a quarter of the pixels while the camera moves (laniakeaFillPass.ts).
+  const fillPass = useMemo(() => new BasinFillPass(), []);
+  useEffect(() => () => fillPass.dispose(), [fillPass]);
+  const motion = useMemo(() => new ViewMotion(), []);
+  const shownFills = useMemo<THREE.Mesh[]>(() => [], []);
   const outlineMaterial = (color: string, rim: number, face: number, nearPc: number) =>
     new THREE.ShaderMaterial({
       uniforms: {
@@ -1208,8 +1239,25 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         (request === null ? Promise.resolve(null) : basinPartsAhead(request)).then((parts) => {
           if (basinsAsked.current.token !== asked.token) return;
           const made = parts === null ? null : basinObjectsFor(basins, parts, outline.color, outlineMaterial);
-          setBasinObjects((before) => ({ ...before, [outline.key]: made }));
-          renderDemand.request();
+          // Shown once its shaders are compiled beside the page (shaderPrecompile.ts), not on
+          // its first draw, which held the page 60 to 80 ms: the outline and the fill for the
+          // canvas, and the fill for the buffer it is drawn into while the camera moves
+          // (laniakeaFillPass.ts) -- with no lights, as the glow's pass compiles.
+          const compiled =
+            made === null
+              ? Promise.resolve()
+              : Promise.all([
+                  compileFor(gl, camera, scene, [made.outline, made.fill, fillPass.quad], 'canvas'),
+                  compileFor(gl, camera, scene, [made.fill], 'glow'),
+                ]);
+          return compiled.then(() => {
+            if (basinsAsked.current.token !== asked.token) {
+              disposeBasin(made);
+              return;
+            }
+            setBasinObjects((before) => ({ ...before, [outline.key]: made }));
+            renderDemand.request();
+          });
         }),
       );
     }
@@ -1382,7 +1430,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   }, []);
 
   useEffect(() => {
-    const objects: THREE.Object3D[] = [volumes.disc.mesh, volumes.sersic.mesh, volumes.plummer.mesh, here];
+    const objects: THREE.Object3D[] = [volumes.disc.mesh, volumes.sersic.mesh, volumes.plummer.mesh, here, fillPass.quad];
     if (points !== null) objects.push(points.object);
     if (marks !== null) objects.push(marks.object);
     if (structures !== null) objects.push(...structures.voids, ...structures.walls);
@@ -1395,7 +1443,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     return () => {
       group.remove(...objects);
     };
-  }, [group, volumes, points, marks, structures, basinObjects, flows, here]);
+  }, [group, volumes, points, marks, structures, basinObjects, flows, here, fillPass]);
 
   // Disposed with what made them.
   useEffect(() => () => {
@@ -1460,7 +1508,12 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
   // Scratch for the frame: the volumes drawn this frame.
   const resolved = useMemo(() => ({ k: [] as number[], px: [] as number[] }), []);
 
-  useFrame(({ camera: frameCamera, gl: renderer }) => {
+  useFrame(({ camera: frameCamera, gl: renderer, size }) => {
+    // Asked every frame, shown or not, so that it knows the camera has been still however long
+    // before the fills appear: a first ask counts as a move, and frames a second apart at rest
+    // would draw them coarse for six seconds.
+    frameCamera.updateMatrixWorld();
+    const moving = motion.moved(frameCamera);
     const sun = store.sunFromFocus(focus, clock.tdbJulianDay);
     if (sun === null) {
       group.visible = false;
@@ -1614,6 +1667,14 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       }
     };
     for (const outline of outlines) basin(basinObjects[outline.key], showBasins && basinChipShown(basinChips, outline.chip), outline);
+    // While the camera moves, the fills shown drawn apart at a quarter of the pixels; still, on
+    // the canvas as they always were (laniakeaFillPass.ts).
+    shownFills.length = 0;
+    for (const outline of outlines) {
+      const fill = basinObjects[outline.key]?.fill;
+      if (fill?.visible === true) shownFills.push(fill);
+    }
+    fillPass.setFills(moving ? shownFills : []);
     for (const mesh of structures?.voids ?? []) {
       const landmark = mesh.userData['landmark'] as LaniakeaLandmark;
       // From inside, its shell is all about the camera: fainter.
@@ -1649,7 +1710,10 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     if (flows !== null) {
       const opacity = showFlows ? structureFade : 0;
       setUniforms(flows, opacity);
-      if (opacity > 0) {
+      // Its brightening asks for frames only while some line is in view (flowPulse.ts
+      // sphereInView): turned away from them, nothing it changes is drawn. Not faded or slowed
+      // where they are seen -- from 13 Gpc they are still a patch 70 pixels across.
+      if (opacity > 0 && flowsInView(flowBound, cameraPc, frameCamera, renderer)) {
         const uniforms = (flows.material as THREE.ShaderMaterial).uniforms;
         uniforms['uClockGyr']!.value = ((performance.now() / 1000) * FLOW_GYR_PER_SECOND) % (FLOW_PULSE_GYR * 1000);
         renderer.getDrawingBufferSize(uniforms['uViewportPx']!.value as THREE.Vector2);
@@ -1677,9 +1741,11 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
     }
 
     // "You are here", once home is a speck (homeName.ts): with the marks.
+    // The canvas's size as the scene keeps it, not the element's clientHeight and clientWidth:
+    // read after other layers had written their labels' styles this frame, they laid the page
+    // out again to answer (LocalGroup.tsx).
     {
-      const element = renderer.domElement;
-      const home = homeNames(cameraPc.length() * PARSEC_KM, element.clientHeight, fov);
+      const home = homeNames(cameraPc.length() * PARSEC_KM, size.height, fov);
       const uniforms = (here.material as THREE.ShaderMaterial).uniforms;
       here.visible = home.here === true && showMarks;
       (uniforms['uCameraPc']!.value as THREE.Vector3).copy(cameraPc);
@@ -1694,8 +1760,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       markUniforms['uPixelRatio']!.value = renderer.getPixelRatio();
       markUniforms['uFade']!.value = markFade;
       if (markFade > 0) {
-        const element = renderer.domElement;
-        const cssPerRadian = viewPixelsPerRadian(element.clientHeight, fov);
+        const cssPerRadian = viewPixelsPerRadian(size.height, fov);
         updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], cssPerRadian, focus);
         const focusIndex = focus.startsWith('galaxy-lk-') ? Number(focus.slice('galaxy-lk-'.length)) : -1;
         // Each mark's strength: the focus whole; a group's brightest its host's; a member its
@@ -1703,7 +1768,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
         // those that can be other than 0, the rest 0 (laniakeaMarks.ts).
         const state = (marks.state ??= new MarkState(laniakeaMarkIndex(catalogue.records, 12, marks.folds, marks.reachPc)));
         state.strengths(MARK_HOSTS, catalogue.records, 12, marks.reachPc, [cameraPc.x, cameraPc.y, cameraPc.z], cssPerRadian, focusIndex, marks.value);
-        declutterMarks(marks.set, frameCamera, cameraPc, element.clientWidth, element.clientHeight, state.candidates(marks.bodies));
+        declutterMarks(marks.set, frameCamera, cameraPc, size.width, size.height, state.candidates(marks.bodies));
         state.settle(marks.set.shown.array as Float32Array, marks.set.kept);
       }
     }

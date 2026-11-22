@@ -4,9 +4,10 @@
  * The Milky Way's model names its centre and its arms itself (MilkyWay.tsx), in elements of
  * its own, and nothing compared them with the bodies' names: "Milky Way" was written over
  * "Large Magellanic Cloud". Now it places them as before and posts each here, with the box its
- * text takes; LabelProjector, whose frame runs after it, declutters them with the bodies' and
- * hides those that lose. Taken each frame, so a frame in which the model posted nothing leaves
- * nothing behind.
+ * text takes; LabelProjector, whose frame runs after it, declutters them with the bodies',
+ * shows those that win -- a poster may leave a name hidden for it to show (sceneLabels.ts) --
+ * and hides those that lose. Taken each frame, so a frame in which the model posted nothing
+ * leaves nothing behind.
  */
 
 export interface BoardLabel {

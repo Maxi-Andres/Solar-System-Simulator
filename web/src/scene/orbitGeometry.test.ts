@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import * as THREE from 'three';
 
+import { KM_PER_UNIT } from './scale.ts';
+
 import {
   ORBIT_CLOSE_IN_HALVINGS,
   ORBIT_SAGITTA_RADII,
@@ -18,6 +20,8 @@ import {
   orbitLinePointsKm,
   ORBIT_UNSEEN_PX,
   orbitUnseenKm,
+  ViewChange,
+  VIEW_REST_MS,
   refinementAnomaly,
 } from './orbitGeometry.ts';
 
@@ -225,6 +229,27 @@ describe('float32 anchoring', () => {
   });
 });
 
+describe('an orbit line made before it is drawn', () => {
+  it('works its points out when first wanted, the very points it would have made at once', () => {
+    const line = new OrbitLine(PLUTO, PLUTO_RADIUS_KM, '#ffffff');
+    const positions = () => line.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    // Nothing made yet: a hidden line costs nothing.
+    expect(positions().count).toBe(0);
+    const anchor = { x: 1.5e6, y: -2e5, z: 3e3 };
+    line.update(anchor, 1);
+    const points = orbitLinePointsKm(PLUTO, PLUTO_RADIUS_KM);
+    const expected = new Float32Array(points.length);
+    for (let i = 0; i < points.length; i += 3) {
+      expected[i] = (points[i]! + anchor.x) / KM_PER_UNIT;
+      expected[i + 1] = (points[i + 1]! + anchor.y) / KM_PER_UNIT;
+      expected[i + 2] = (points[i + 2]! + anchor.z) / KM_PER_UNIT;
+    }
+    expect(Array.from(positions().array)).toEqual(Array.from(expected));
+    expect(line.segments).toBe(points.length / 3);
+    line.dispose();
+  });
+});
+
 describe('the refinement at a body no uniform line can hold', () => {
   const GM_SUN = 1.32712440041e11;
   const a = 1.3794e8;
@@ -418,6 +443,61 @@ describe('how near an orbit line comes, and what may move unseen there', () => {
     line.update(sun, 1, 0);
     expect(version()).toBeGreaterThan(built);
     line.dispose();
+  });
+
+  it('with the camera moving at real time, rebuilds only when both rules would', () => {
+    const version = (line: OrbitLine): number =>
+      (line.line.geometry.getAttribute('position') as THREE.BufferAttribute).version;
+    const sun = { x: 0, y: 0, z: 0 };
+    // A shift the still rule rebuilds for, but too small to see from afar.
+    const shifted = { ...PLUTO, semiMajorAxisKm: PLUTO.semiMajorAxisKm + 100 * PLUTO_RADIUS_KM };
+    const moving = new OrbitLine(PLUTO, PLUTO_RADIUS_KM, '#ffffff');
+    moving.update(sun, 1);
+    const built = version(moving);
+    const unseen = orbitUnseenKm(moving.nearestKm(0, 0, 5e10), ppr);
+    moving.setElements(shifted, unseen, true);
+    moving.update(sun, 1);
+    expect(version(moving)).toBe(built);
+    // Come to rest: the still rule again, and the very line a still view always drew.
+    moving.setElements(shifted);
+    moving.update(sun, 1);
+    expect(version(moving)).toBeGreaterThan(built);
+    const still = new OrbitLine(PLUTO, PLUTO_RADIUS_KM, '#ffffff');
+    still.setElements(shifted);
+    still.update(sun, 1);
+    const positions = (line: OrbitLine) => (line.line.geometry.getAttribute('position') as THREE.BufferAttribute).array;
+    expect(positions(moving)).toEqual(positions(still));
+    // A shift the still rule keeps is kept while moving too, even from nearby.
+    const tiny = { ...shifted, semiMajorAxisKm: shifted.semiMajorAxisKm + 0.1 * PLUTO_RADIUS_KM };
+    const rebuilt = version(moving);
+    moving.setElements(tiny, 0, true);
+    moving.update(sun, 1);
+    expect(version(moving)).toBe(rebuilt);
+    moving.dispose();
+    still.dispose();
+  });
+});
+
+describe('ViewChange', () => {
+  it('is moving while the camera, its lens, the focus or the canvas changed a moment ago', () => {
+    const camera = new THREE.PerspectiveCamera(27, 16 / 9, 1, 1e9);
+    camera.position.set(0, 0, 100);
+    camera.updateMatrixWorld();
+    const view = new ViewChange();
+    expect(view.moving(camera, 'earth', 1080, 0)).toBe(true);
+    // Still, but only just: a drag's pointer events leave frames between them.
+    expect(view.moving(camera, 'earth', 1080, VIEW_REST_MS / 2)).toBe(true);
+    expect(view.moving(camera, 'earth', 1080, VIEW_REST_MS)).toBe(false);
+    camera.position.x = 1;
+    camera.updateMatrixWorld();
+    expect(view.moving(camera, 'earth', 1080, 1000)).toBe(true);
+    expect(view.moving(camera, 'earth', 1080, 1000 + VIEW_REST_MS)).toBe(false);
+    camera.fov = 30;
+    camera.updateProjectionMatrix();
+    expect(view.moving(camera, 'earth', 1080, 2000)).toBe(true);
+    expect(view.moving(camera, 'mars', 1080, 3000)).toBe(true);
+    expect(view.moving(camera, 'mars', 900, 4000)).toBe(true);
+    expect(view.moving(camera, 'mars', 900, 5000)).toBe(false);
   });
 });
 

@@ -83,24 +83,51 @@ export type Rgb = readonly [number, number, number];
  * numbers the functions above give, so every integral below sums exactly what it did, without
  * seven exponentials a sample -- the sky's few thousand colours were a quarter of a second of
  * the first frame. Made on first use.
+ *
+ * With them, the parts of Planck's law that do not depend on the temperature, at each
+ * wavelength: its numerator over metres^5, and metres times Boltzmann's constant -- each
+ * computed by the very operations planckSpectralRadiance does, in its order, so a sample is
+ * the same number to the bit with one exponential and no power left (`planckAt`).
  */
-let observerTable: { x: Float64Array; y: Float64Array; z: Float64Array } | null = null;
-function observer(): { x: Float64Array; y: Float64Array; z: Float64Array } {
+interface ObserverTable {
+  readonly x: Float64Array;
+  readonly y: Float64Array;
+  readonly z: Float64Array;
+  /** (2 h c^2) / metres^5. */
+  readonly scale: Float64Array;
+  /** metres * k. */
+  readonly metresK: Float64Array;
+}
+let observerTable: ObserverTable | null = null;
+function observer(): ObserverTable {
   if (observerTable === null) {
     const count = Math.floor((WAVELENGTH_MAX_NM - WAVELENGTH_MIN_NM) / WAVELENGTH_STEP_NM) + 1;
     const x = new Float64Array(count);
     const y = new Float64Array(count);
     const z = new Float64Array(count);
+    const scale = new Float64Array(count);
+    const metresK = new Float64Array(count);
     let i = 0;
     for (let wavelength = WAVELENGTH_MIN_NM; wavelength <= WAVELENGTH_MAX_NM; wavelength += WAVELENGTH_STEP_NM) {
       x[i] = cieX(wavelength);
       y[i] = cieY(wavelength);
       z[i] = cieZ(wavelength);
+      const metres = wavelength * 1e-9;
+      scale[i] = (2 * PLANCK_H * SPEED_OF_LIGHT * SPEED_OF_LIGHT) / metres ** 5;
+      metresK[i] = metres * BOLTZMANN_K;
       i += 1;
     }
-    observerTable = { x, y, z };
+    observerTable = { x, y, z, scale, metresK };
   }
   return observerTable;
+}
+
+/**
+ * planckSpectralRadiance at sample `i` of the table: `(2hc^2 / m^5) / expm1(hc / (m k T))`,
+ * which is how that function groups it -- left to right -- so the same number.
+ */
+function planckAt(table: ObserverTable, i: number, kelvin: number): number {
+  return table.scale[i]! / Math.expm1((PLANCK_H * SPEED_OF_LIGHT) / (table.metresK[i]! * kelvin));
 }
 
 /**
@@ -123,17 +150,12 @@ export function blackbodyLinearSrgb(kelvin: number): Rgb {
   let z = 0;
 
   const curves = observer();
-  let i = 0;
-  for (
-    let wavelength = WAVELENGTH_MIN_NM;
-    wavelength <= WAVELENGTH_MAX_NM;
-    wavelength += WAVELENGTH_STEP_NM
-  ) {
-    const radiance = planckSpectralRadiance(wavelength, kelvin);
+  const count = curves.x.length;
+  for (let i = 0; i < count; i += 1) {
+    const radiance = planckAt(curves, i, kelvin);
     x += radiance * curves.x[i]!;
     y += radiance * curves.y[i]!;
     z += radiance * curves.z[i]!;
-    i += 1;
   }
 
   // Y = 1, which makes the result a colour at unit luminance rather than a spectrum.
@@ -238,6 +260,58 @@ function colorAtStep(step: number): Rgb {
     colorTable[step] = color;
   }
   return color;
+}
+
+/**
+ * The steps of the colour table that these colour indices need, as starColor would make them:
+ * three channels a step, NaN for a step not needed. What the star catalogue's worker sends back
+ * with the catalogue (starCatalog.worker.ts), so the sky's few thousand integrals -- 69 ms of
+ * the task before the first frame, measured in production -- are made off the main thread, by
+ * the same function, to the same numbers. Steps made already are copied as they are.
+ */
+export function starColorSteps(colorIndices: ArrayLike<number>): Float64Array {
+  const steps = new Float64Array((COLOR_STEPS + 1) * 3).fill(Number.NaN);
+  const put = (step: number): void => {
+    if (steps[step * 3] !== steps[step * 3]) {
+      const [r, g, b] = colorAtStep(step);
+      steps[step * 3] = r;
+      steps[step * 3 + 1] = g;
+      steps[step * 3 + 2] = b;
+    }
+  };
+  for (let k = 0; k < colorIndices.length; k += 1) {
+    const { nearest, below } = stepsOf(colorIndices[k]!);
+    if (nearest !== null) {
+      put(nearest);
+    } else {
+      put(below);
+      put(below + 1);
+    }
+  }
+  return steps;
+}
+
+/** Takes the steps starColorSteps made elsewhere into this thread's table, where it has none. */
+export function provideStarColorSteps(steps: Float64Array): void {
+  for (let step = 0; step <= COLOR_STEPS; step += 1) {
+    const r = steps[step * 3]!;
+    if (r === r && colorTable[step] === undefined) {
+      colorTable[step] = [r, steps[step * 3 + 1]!, steps[step * 3 + 2]!];
+    }
+  }
+}
+
+/** The step a colour index is on, or the two it lies between, and how far along: starColor's rule. */
+function stepsOf(colorIndex: number): { readonly nearest: number | null; readonly below: number; readonly t: number } {
+  // Past the clamp every colour index is the same colour (colorIndexToTemperature).
+  const clamped = Math.min(MAX_COLOR_INDEX, Math.max(MIN_COLOR_INDEX, colorIndex));
+  const position = (clamped - MIN_COLOR_INDEX) / COLOR_INDEX_STEP;
+  const nearest = Math.round(position);
+  if (Math.abs(position - nearest) < ON_STEP) {
+    return { nearest, below: nearest, t: 0 };
+  }
+  const below = Math.min(Math.floor(position), COLOR_STEPS - 1);
+  return { nearest: null, below, t: position - below };
 }
 
 export function starColor(colorIndex: number): Rgb {

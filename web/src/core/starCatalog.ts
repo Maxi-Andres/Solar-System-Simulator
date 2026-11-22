@@ -1,5 +1,6 @@
 import type { StarCatalog } from '@sss/tools/types';
 
+import { provideStarColorSteps } from '../scene/blackbody.ts';
 import type { Fetcher } from './ephemerisStore.ts';
 
 /**
@@ -14,6 +15,12 @@ import type { Fetcher } from './ephemerisStore.ts';
  * 46,000 stars are 1.5 MB of JSON, 45 ms of JSON.parse on 2026-11-21 that the first frame
  * waited behind. The worker hands the columns back as Float64Arrays, transferred rather
  * than copied -- plain arrays cost as much to copy across as to parse.
+ *
+ * And with them the stars' colours: the steps of blackbody.ts's table their colour indices
+ * need, each an integral of Planck's law through the CIE observer, made there by the same
+ * function and taken into this thread's table (provideStarColorSteps) -- 69 ms of the task
+ * before the first frame, measured in production on 2026-11-22, that the sky's mount spent
+ * making them.
  */
 
 /** Every column the renderer reads, and they must all be the same length. */
@@ -82,8 +89,13 @@ export function columnBuffers(catalog: StarCatalog): ArrayBuffer[] {
   return COLUMNS.map((column) => (catalog[column] as Float64Array).buffer as ArrayBuffer);
 }
 
-/** What the worker sends back: the catalogue, or why it could not. */
-export type StarCatalogReply = { readonly catalog: StarCatalog } | { readonly error: string };
+/**
+ * What the worker sends back: the catalogue and its stars' colour steps (blackbody.ts
+ * starColorSteps), or why it could not.
+ */
+export type StarCatalogReply =
+  | { readonly catalog: StarCatalog; readonly colorSteps: Float64Array }
+  | { readonly error: string };
 
 /** The catalogue fetched and parsed by starCatalog.worker.ts; rejects with its reason. */
 function loadInWorker(url: string): Promise<StarCatalog> {
@@ -92,6 +104,7 @@ function loadInWorker(url: string): Promise<StarCatalog> {
     worker.onmessage = (event: MessageEvent<StarCatalogReply>) => {
       worker.terminate();
       if ('catalog' in event.data) {
+        provideStarColorSteps(event.data.colorSteps);
         resolve(event.data.catalog);
       } else {
         reject(new Error(event.data.error));

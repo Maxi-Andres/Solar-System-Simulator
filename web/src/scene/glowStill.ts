@@ -33,10 +33,24 @@ interface Fingerprint {
   refs: unknown[];
   /** False when something in it could change without the snapshot seeing it. */
   complete: boolean;
+  /**
+   * The per-instance values compared by value (addInstances): each attribute's array and how
+   * many of its values are drawn, in the order met. The values themselves are not copied into
+   * `numbers` -- tens of thousands of them a frame among the galaxies' instances, each boxed into
+   * a list and rounded to compare, were most of this file's two milliseconds a frame at the
+   * Solar Neighbourhood's view -- but compared in place, bit for bit, against `copies`.
+   */
+  arrays: InstanceValues[];
+  counts: number[];
+  /** The values of `arrays` as they were drawn, when this is the snapshot the buffers hold. */
+  copies: InstanceValues[];
 }
 
+/** An attribute's typed array, any kind but a float64 one (three has none per instance). */
+type InstanceValues = Float32Array | Uint32Array | Int32Array | Uint16Array | Int16Array | Uint8Array | Int8Array;
+
 function fingerprint(): Fingerprint {
-  return { numbers: [], refs: [], complete: true };
+  return { numbers: [], refs: [], complete: true, arrays: [], counts: [], copies: [] };
 }
 
 export class GlowStill {
@@ -59,6 +73,8 @@ export class GlowStill {
     const now = this.#now;
     now.numbers.length = 0;
     now.refs.length = 0;
+    now.arrays.length = 0;
+    now.counts.length = 0;
     now.complete = true;
     const n = now.numbers;
     n.push(width, height, apart ? 1 : 0, glows.length, volumes.length);
@@ -73,6 +89,7 @@ export class GlowStill {
     const same = last !== null && now.complete && last.complete && equal(last, now);
     if (!same) {
       // Kept as what the buffers now hold; the spare is reused for the next frame's snapshot.
+      copyInstances(now, last);
       this.#now = last ?? fingerprint();
       this.#last = now;
     }
@@ -85,16 +102,64 @@ export class GlowStill {
   }
 }
 
-function equal(a: Fingerprint, b: Fingerprint): boolean {
-  if (a.numbers.length !== b.numbers.length || a.refs.length !== b.refs.length) return false;
-  for (let i = 0; i < a.numbers.length; i += 1) {
+/** `last` (with its copies) against `now` (live): `now`'s arrays are read as they are this frame. */
+function equal(last: Fingerprint, now: Fingerprint): boolean {
+  if (last.numbers.length !== now.numbers.length || last.refs.length !== now.refs.length) return false;
+  for (let i = 0; i < last.numbers.length; i += 1) {
     // As the GPU is given them, single precision; and by Object.is, NaN is NaN and 0 is not -0.
-    if (!Object.is(Math.fround(a.numbers[i]!), Math.fround(b.numbers[i]!))) return false;
+    if (!Object.is(Math.fround(last.numbers[i]!), Math.fround(now.numbers[i]!))) return false;
   }
-  for (let i = 0; i < a.refs.length; i += 1) {
-    if (a.refs[i] !== b.refs[i]) return false;
+  for (let i = 0; i < last.refs.length; i += 1) {
+    if (last.refs[i] !== now.refs[i]) return false;
+  }
+  // The same attributes and counts are in the numbers and refs; their values, bit for bit.
+  for (let k = 0; k < now.arrays.length; k += 1) {
+    if (!sameBits(last.copies[k]!, now.arrays[k]!, now.counts[k]!)) return false;
   }
   return true;
+}
+
+/** The integer view of a float array, by array: its bits, compared exactly and fast. */
+const bitViews = new WeakMap<InstanceValues, InstanceValues>();
+
+function bitsOf(values: InstanceValues): InstanceValues {
+  if (!(values instanceof Float32Array)) return values;
+  let view = bitViews.get(values);
+  if (view === undefined) {
+    view = new Uint32Array(values.buffer, values.byteOffset, values.length);
+    bitViews.set(values, view);
+  }
+  return view;
+}
+
+/**
+ * Whether the first `count` values of `live` are, bit for bit, `copy`: a float the GPU is given
+ * is its bits, so this is the single-precision comparison of the rest, NaN and -0 included.
+ */
+function sameBits(copy: InstanceValues, live: InstanceValues, count: number): boolean {
+  if (copy.length < count) return false;
+  const bits = bitsOf(live);
+  for (let i = 0; i < count; i += 1) {
+    if (copy[i] !== bits[i]) return false;
+  }
+  return true;
+}
+
+/** Copies `now`'s compared instance values, as drawn, into its copies, reusing `spare`'s buffers. */
+function copyInstances(now: Fingerprint, spare: Fingerprint | null): void {
+  const pool = spare?.copies ?? [];
+  now.copies.length = 0;
+  for (let k = 0; k < now.arrays.length; k += 1) {
+    const bits = bitsOf(now.arrays[k]!);
+    const count = now.counts[k]!;
+    let copy = pool[k];
+    if (copy === undefined || copy.constructor !== bits.constructor || copy.length < count) {
+      copy = new (bits.constructor as new (length: number) => InstanceValues)(count);
+    }
+    copy.set(bits.subarray(0, count));
+    now.copies.push(copy);
+  }
+  if (spare !== null) spare.copies = [];
 }
 
 function pushArray(out: number[], values: ArrayLike<number>): void {
@@ -136,10 +201,17 @@ function addInstances(fp: Fingerprint, attribute: THREE.BufferAttribute, count: 
     fp.numbers.push(attribute.version);
     return;
   }
-  const values = attribute.array;
+  const values = attribute.array as unknown as InstanceValues;
   const n = Math.min(values.length, count * size);
   fp.numbers.push(n);
-  for (let i = 0; i < n; i += 1) fp.numbers.push(values[i]!);
+  if (n === 0) return;
+  if (values instanceof Float64Array) {
+    // Not a kind three draws per instance; if one ever is, it is drawn every frame.
+    fp.complete = false;
+    return;
+  }
+  fp.arrays.push(values);
+  fp.counts.push(n);
 }
 
 /** Past this many instances an instanced mesh is compared by its attributes' versions. */

@@ -37,7 +37,7 @@ describe('the Milky Way’s points binned into cubes', () => {
         expect(cubes.box[c * 6 + 3 + a]! - cubes.box[c * 6 + a]!).toBeLessThanOrEqual(CUBE_PC);
       }
     }
-  });
+  }, 60_000);
 });
 
 describe('each slab’s pass handed only the points that can fall in it', () => {

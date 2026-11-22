@@ -375,62 +375,130 @@ function register(id: BodyId, known: SatelliteFacts, chip: number, catalogueName
   });
 }
 
+/** A named satellite made ready to add: its store entry, and what search and the panels read. */
+interface NamedReady {
+  readonly entry: Entry;
+  readonly facts: SatelliteFacts;
+  readonly chip: number;
+  readonly catalogueName: string;
+}
+
+/** Named satellite `index` made ready to add, or null where it is in already or cannot be placed. */
+function namedReady(store: EphemerisStore, satellites: Satellites, index: number): NamedReady | null {
+  const satellite = satellites.named[index]!;
+  const id = namedSatelliteBodyId(satellite.id);
+  if (store.isPropagatedBody(id)) {
+    return null;
+  }
+  const satrec = satrecOf(satellite.omm, satellite.name);
+  if (satrec === null) {
+    return null;
+  }
+  // Data from before the shapes has none, and such a satellite stays a marker.
+  const look: SatelliteLook | null =
+    satellite.shape === undefined || satellite.spanM === undefined
+      ? null
+      : {
+          spanM: satellite.spanM,
+          shape: satellite.shape,
+          operator: satellite.operator,
+          launchDate: satellite.launchDate,
+        };
+  const entry = entryFor(
+    store,
+    id,
+    satellite.name,
+    satrec.jdsatepoch,
+    (jd) => sgp4State(satrec, jd),
+    { aboutParent: true, coverage: sgp4Window(satrec.jdsatepoch), exact: true },
+    look,
+  );
+  if (entry === null) {
+    return null;
+  }
+  return {
+    entry,
+    facts: {
+      name: satellite.name,
+      tier: 'named',
+      model: 'sgp4',
+      noradId: satellite.noradId,
+      cosparId: satellite.cosparId,
+      operator: satellite.operator,
+      launchDate: satellite.launchDate,
+      note: satellite.note,
+      flags: satellite.flags,
+      epochJdUtc: satrec.jdsatepoch,
+      satrec,
+      bulk: null,
+    },
+    chip: satellites.namedChips[index] ?? OTHER_CHIP,
+    catalogueName: satellite.omm.OBJECT_NAME,
+  };
+}
+
+/** Adds the satellites made ready, in one go: one rebuild of the store, one notice. */
+function addReady(store: EphemerisStore, ready: readonly NamedReady[]): void {
+  const entries: Entry[] = [];
+  for (const { entry, facts: known, chip, catalogueName } of ready) {
+    // Made ready a moment ago: one put in since by another way is left as it is.
+    if (store.isPropagatedBody(entry.body.id)) {
+      continue;
+    }
+    register(entry.body.id, known, chip, catalogueName);
+    entries.push(entry);
+  }
+  store.addPropagatedBodies(entries);
+}
+
 /** Adds every named satellite to `store`, once: those SGP4 can read and place. */
 export function addNamedSatellites(store: EphemerisStore, satellites: Satellites): void {
-  const entries: Entry[] = [];
-  satellites.named.forEach((satellite, index) => {
-    const id = namedSatelliteBodyId(satellite.id);
-    if (store.isPropagatedBody(id)) {
-      return;
+  const ready: NamedReady[] = [];
+  for (let index = 0; index < satellites.named.length; index += 1) {
+    const made = namedReady(store, satellites, index);
+    if (made !== null) {
+      ready.push(made);
     }
-    const satrec = satrecOf(satellite.omm, satellite.name);
-    if (satrec === null) {
-      return;
+  }
+  addReady(store, ready);
+}
+
+/** Milliseconds of satellites made ready at a time, when the page is idle. */
+export const NAMED_SLICE_MS = 6;
+
+/**
+ * addNamedSatellites a few at a time, while the page is idle, then all of them added at
+ * once: the same bodies, the same entries. Each is an SGP4 record read and initialised and
+ * its state at its epoch -- half a millisecond -- and the 52 together were 31 ms of the task
+ * the satellites' data arrived in, with the swarm built and the app drawn again in it too,
+ * 125 to 134 ms in all (production, 2026-11-22). Added together at the end, so the scene
+ * takes in one change, not one a slice. Returns a function that stops it, adding nothing.
+ */
+export function addNamedSatellitesWhenIdle(
+  store: EphemerisStore,
+  satellites: Satellites,
+  later: (work: () => void) => () => void,
+): () => void {
+  const ready: NamedReady[] = [];
+  let index = 0;
+  let cancel: () => void = () => {};
+  const slice = (): void => {
+    const until = performance.now() + NAMED_SLICE_MS;
+    while (index < satellites.named.length && performance.now() < until) {
+      const made = namedReady(store, satellites, index);
+      if (made !== null) {
+        ready.push(made);
+      }
+      index += 1;
     }
-    // Data from before the shapes has none, and such a satellite stays a marker.
-    const look: SatelliteLook | null =
-      satellite.shape === undefined || satellite.spanM === undefined
-        ? null
-        : {
-            spanM: satellite.spanM,
-            shape: satellite.shape,
-            operator: satellite.operator,
-            launchDate: satellite.launchDate,
-          };
-    const entry = entryFor(
-      store,
-      id,
-      satellite.name,
-      satrec.jdsatepoch,
-      (jd) => sgp4State(satrec, jd),
-      { aboutParent: true, coverage: sgp4Window(satrec.jdsatepoch), exact: true },
-      look,
-    );
-    if (entry === null) {
-      return;
+    if (index < satellites.named.length) {
+      cancel = later(slice);
+    } else {
+      addReady(store, ready);
     }
-    register(
-      id,
-      {
-        name: satellite.name,
-        tier: 'named',
-        model: 'sgp4',
-        noradId: satellite.noradId,
-        cosparId: satellite.cosparId,
-        operator: satellite.operator,
-        launchDate: satellite.launchDate,
-        note: satellite.note,
-        flags: satellite.flags,
-        epochJdUtc: satrec.jdsatepoch,
-        satrec,
-        bulk: null,
-      },
-      satellites.namedChips[index] ?? OTHER_CHIP,
-      satellite.omm.OBJECT_NAME,
-    );
-    entries.push(entry);
-  });
-  store.addPropagatedBodies(entries);
+  };
+  cancel = later(slice);
+  return () => cancel();
 }
 
 /** The satellite bodies added from search and still in the store: two at most. */

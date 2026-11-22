@@ -17,6 +17,7 @@ import {
   tablePath,
   tessellatePath,
   TRAIL_OPACITY,
+  trailCompileProbe,
   trailFade,
   TrajectoryLine,
 } from './trajectoryLine.ts';
@@ -328,6 +329,24 @@ describe('TrajectoryLine', () => {
     // Same instant, same focus, but the stand-in was used: drawn again.
     line.update(START + 50.5, ORIGIN, sampler(path));
     expect(positions.version).toBeGreaterThan(version);
+  });
+
+  it('is compiled ahead by a probe drawn as it is drawn', () => {
+    const line = new TrajectoryLine(circlePath(10, 100), '#ffffff');
+    const probe = trailCompileProbe();
+    // The same shaders and settings, on geometries with the same attributes -- a geometry
+    // without a position would be another program.
+    parts(line).forEach((part, k) => {
+      const probed = probe.objects[k] as THREE.Line;
+      expect(probed.type).toBe(part.type);
+      const a = part.material as THREE.ShaderMaterial;
+      const b = probed.material as THREE.ShaderMaterial;
+      expect(b.vertexShader).toBe(a.vertexShader);
+      expect(b.fragmentShader).toBe(a.fragmentShader);
+      expect([b.transparent, b.depthWrite, b.toneMapped, b.blending]).toEqual([a.transparent, a.depthWrite, a.toneMapped, a.blending]);
+      expect(Object.keys(probed.geometry.attributes).sort()).toEqual(Object.keys(part.geometry.attributes).sort());
+    });
+    probe.dispose();
   });
 });
 

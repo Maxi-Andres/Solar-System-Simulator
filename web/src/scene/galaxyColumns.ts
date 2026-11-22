@@ -261,6 +261,9 @@ export function sersicTable(n: number, width = SERSIC_TABLE_M, height = SERSIC_T
   return table;
 }
 
+/** The tables a worker is making now, by index: what it resolves when done. */
+const tablesComing = new Map<number, Promise<void>>();
+
 /** What sersicTables.worker.ts is asked: the tables of these indices, at the default size. */
 export interface SersicWorkerRequest {
   readonly indices: readonly number[];
@@ -288,9 +291,13 @@ export function provideSersicTable(table: SersicTable): void {
  * and sersicAtlas makes them in the frame as before.
  */
 export function sersicTablesAhead(indices: readonly number[]): Promise<void> {
-  const missing = [...new Set(indices)].filter((n) => !hasSersicTable(n));
-  if (missing.length === 0) return Promise.resolve();
-  return new Promise((resolve) => {
+  const wanted = [...new Set(indices)].filter((n) => !hasSersicTable(n));
+  // An index a worker is making already is waited for, not made twice: the Local Group's and
+  // Laniakea's both ask for the de Vaucouleurs table as the scene mounts.
+  const missing = wanted.filter((n) => !tablesComing.has(n));
+  const coming = wanted.filter((n) => tablesComing.has(n)).map((n) => tablesComing.get(n)!);
+  if (missing.length === 0) return Promise.all(coming).then(() => undefined);
+  const made = new Promise<void>((resolve) => {
     let worker: Worker;
     try {
       worker = new Worker(new URL('./sersicTables.worker.ts', import.meta.url), { type: 'module' });
@@ -315,6 +322,11 @@ export function sersicTablesAhead(indices: readonly number[]): Promise<void> {
     const request: SersicWorkerRequest = { indices: missing };
     worker.postMessage(request);
   });
+  for (const n of missing) tablesComing.set(n, made);
+  void made.then(() => {
+    for (const n of missing) if (tablesComing.get(n) === made) tablesComing.delete(n);
+  });
+  return Promise.all([made, ...coming]).then(() => undefined);
 }
 
 /**
@@ -350,23 +362,45 @@ export function sersicAtlas(indices: readonly number[]): {
   readonly layerOf: (n: number) => number;
 } {
   const ns = [...new Set(indices)].sort((a, b) => a - b);
-  const layers = ns.map((n) => sersicTable(n));
   const width = SERSIC_TABLE_M;
   const height = SERSIC_TABLE_S;
-  const data = new Uint16Array(width * height * Math.max(1, layers.length));
-  layers.forEach((table, l) => {
-    for (let k = 0; k < width * height; k += 1) {
-      data[l * width * height + k] = THREE.DataUtils.toHalfFloat(table.lnColumn[k]!);
+  const count = Math.max(1, ns.length);
+  // The texels made when three first uploads the texture -- the first frame something is drawn
+  // with it -- and not when it is made: a layer mounted with the scene and not seen from the
+  // Solar System (Laniakea's) made the de Vaucouleurs table in the task before the first frame,
+  // 42 ms, for a texture nothing drew. The tables are asked of a worker meanwhile
+  // (sersicTablesAhead), so by the time it is drawn they are most likely made; any that are not
+  // are made then, as before. The same numbers either way.
+  let data: Uint16Array | null = null;
+  const fill = (): Uint16Array => {
+    if (data === null) {
+      const made = new Uint16Array(width * height * count);
+      ns.forEach((n, l) => {
+        const table = sersicTable(n);
+        for (let k = 0; k < width * height; k += 1) {
+          made[l * width * height + k] = THREE.DataUtils.toHalfFloat(table.lnColumn[k]!);
+        }
+      });
+      data = made;
     }
-  });
-  const texture = new THREE.DataTexture(data, width, height * Math.max(1, layers.length), THREE.RedFormat, THREE.HalfFloatType);
+    return data;
+  };
+  if (typeof Worker !== 'undefined') void sersicTablesAhead(ns);
+  const texture = new THREE.DataTexture(null, width, height * count, THREE.RedFormat, THREE.HalfFloatType);
+  texture.image = {
+    width,
+    height: height * count,
+    get data() {
+      return fill();
+    },
+  };
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.generateMipmaps = false;
   texture.needsUpdate = true;
-  return { texture, layers: Math.max(1, layers.length), layerOf: (n) => Math.max(0, ns.indexOf(n)) };
+  return { texture, layers: count, layerOf: (n) => Math.max(0, ns.indexOf(n)) };
 }
 
 export const SERSIC_COLUMN_GLSL = /* glsl */ `

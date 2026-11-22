@@ -8,6 +8,7 @@ import { rebaseVisibleFrame } from '../scene/satellites.ts';
 import {
   addBulkSatelliteBody,
   addNamedSatellites,
+  addNamedSatellitesWhenIdle,
   bulkSatelliteBodyId,
   bulkStateTeme,
   geodeticHeightKm,
@@ -56,6 +57,49 @@ describe('chips', () => {
   it('puts a GOES under Weather, not GEO', () => {
     const goes = (1 << SATELLITE_GROUPS.indexOf('weather')) | (1 << SATELLITE_GROUPS.indexOf('geo'));
     expect(chipOfFlags(goes, SATELLITE_GROUPS, TYPE_SHIFT)).toBe(2);
+  });
+});
+
+describe('the named satellites added when the page is idle', () => {
+  it('adds the very bodies addNamedSatellites does, all at once at the end', () => {
+    const { satellites } = satelliteFixture();
+    const now = makeStore();
+    addNamedSatellites(now, satellites);
+    const later = makeStore();
+    const queued: (() => void)[] = [];
+    let versions = 0;
+    later.subscribe(() => {
+      versions += 1;
+    });
+    addNamedSatellitesWhenIdle(later, satellites, (work) => {
+      queued.push(work);
+      return () => {};
+    });
+    // Nothing until the page is idle.
+    const id = namedSatelliteBodyId('iss');
+    expect(later.isPropagatedBody(id)).toBe(false);
+    while (queued.length > 0) queued.shift()!();
+    expect(later.bodies.map((body) => body.id)).toEqual(now.bodies.map((body) => body.id));
+    expect(later.body(id)).toEqual(now.body(id));
+    expect(later.elementsFor(id)).toEqual(now.elementsFor(id));
+    expect(satelliteFacts(id)?.name).toBe('International Space Station');
+    // One change for the scene to take in, not one a slice.
+    expect(versions).toBe(1);
+  });
+
+  it('adds nothing once stopped', () => {
+    const { satellites } = satelliteFixture();
+    const store = makeStore();
+    let pending: (() => void) | null = null;
+    const stop = addNamedSatellitesWhenIdle(store, satellites, (work) => {
+      pending = work;
+      return () => {
+        pending = null;
+      };
+    });
+    stop();
+    expect(pending).toBeNull();
+    expect(store.isPropagatedBody(namedSatelliteBodyId('iss'))).toBe(false);
   });
 });
 

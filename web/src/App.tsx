@@ -2,7 +2,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
 import type { DistanceMode, EphemerisStore } from './core/ephemerisStore.ts';
-import { addNamedSatellites } from './core/satelliteBodies.ts';
+import { addNamedSatellitesWhenIdle } from './core/satelliteBodies.ts';
 import { chipShown, SATELLITE_CHIPS, satelliteChipLayer } from './core/satelliteGroups.ts';
 import type { Signal } from './core/signal.ts';
 import { useSignal } from './core/useSignal.ts';
@@ -146,6 +146,12 @@ setFocusFraming((id) => {
  * is wrapped in `OnReadout`, which re-renders just that on the readout beat. See signal.ts
  * for what it cost when all of this re-rendered ten times a second.
  */
+
+/**
+ * The longest the named satellites wait for an idle moment, each slice of them, ms: they are
+ * on screen within a few frames even while something keeps the page busy.
+ */
+const NAMED_SATELLITES_WAIT_MS = 250;
 
 /** Which catalog `kind` values each layer switch controls. */
 const LAYER_KINDS: Record<string, readonly string[]> = {
@@ -684,7 +690,9 @@ export function App() {
   }, [store, comets, visibleKinds]);
 
   // And the satellites, once, the first time their layer is on -- or search asks. The named
-  // ones become bodies the moment they arrive (see satelliteBodies.ts).
+  // ones become bodies as soon as the page is idle after they arrive, a few at a time and
+  // added together (see satelliteBodies.ts addNamedSatellitesWhenIdle): not in the task the
+  // data came in, which builds the swarm and draws the app again already.
   useEffect(() => {
     if (store !== null && visibleKinds.has('satellite')) {
       void satellites.request();
@@ -692,9 +700,10 @@ export function App() {
   }, [store, satellites, visibleKinds]);
   const satelliteData = useSyncExternalStore(satellites.subscribe, () => satellites.value);
   useEffect(() => {
-    if (store !== null && satelliteData !== null) {
-      addNamedSatellites(store, satelliteData);
+    if (store === null || satelliteData === null) {
+      return undefined;
     }
+    return addNamedSatellitesWhenIdle(store, satelliteData, (work) => whenIdle(work, NAMED_SATELLITES_WAIT_MS));
   }, [store, satelliteData]);
 
   // Switching a layer off while standing on one of its bodies would leave the camera

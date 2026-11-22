@@ -241,7 +241,7 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     };
   }, [points]);
 
-  useFrame(({ camera: frameCamera, gl: renderer }) => {
+  useFrame(({ camera: frameCamera, gl: renderer, size }) => {
     const group = groupRef.current;
     if (group === null) {
       return;
@@ -281,7 +281,9 @@ export function ExoplanetHosts({ source, store, clock, focus, visible, onPick }:
     uniforms['uFade']!.value = fade;
     if (points !== null && folds !== null) {
       const fov = (frameCamera as THREE.PerspectiveCamera).fov;
-      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      // The canvas's size as the scene keeps it, not its clientHeight: read after other layers had
+      // written their labels' styles this frame, that laid the page out again (LocalGroup.tsx).
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(size.height, fov), focus);
       if (foldMembers(MARK_HOSTS, folds.host, folds.separationPc, folds.value, -1)) {
         points.geometry.getAttribute('aFold').needsUpdate = true;
       }

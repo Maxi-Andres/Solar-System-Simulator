@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 
 import { prugnielSimien, SERSIC_REACH, sersicLightWithin, sersicUnitColumn } from '../core/localGroup.ts';
 import { discColumn, hasSersicTable, provideSersicTable, sersicAtlas, sersicTable, sersicTableColumn } from './galaxyColumns.ts';
@@ -175,6 +176,22 @@ describe('the Prugniel-Simien table', () => {
     expect(atlas.layers).toBe(3);
     expect([atlas.layerOf(4), atlas.layerOf(5.99), atlas.layerOf(11.84)]).toEqual([0, 1, 2]);
     expect(atlas.texture.image.height).toBe(3 * atlas.texture.image.width);
+  });
+
+  it('makes its texels when they are first read, the very ones made at once', () => {
+    const n = 7.31;
+    const atlas = sersicAtlas([4, n]);
+    // Nothing made yet: a layer not drawn costs nothing.
+    expect(hasSersicTable(n)).toBe(false);
+    const data = atlas.texture.image.data as Uint16Array;
+    expect(hasSersicTable(n)).toBe(true);
+    const size = atlas.texture.image.width * atlas.texture.image.width;
+    const table = sersicTable(n);
+    for (const k of [0, 1, 777, size - 1]) {
+      expect(data[size + k]).toBe(THREE.DataUtils.toHalfFloat(table.lnColumn[k]!));
+    }
+    // And the same array every time it is read.
+    expect(atlas.texture.image.data).toBe(data);
   });
 
   it('holds a steep profile’s light too, as far as it reaches', () => {

@@ -107,6 +107,47 @@ export function orbitUnseenKm(nearestKm: number, pixelsPerRadian: number): numbe
   return (Math.max(nearestKm, 0) * ORBIT_UNSEEN_PX) / pixelsPerRadian;
 }
 
+/**
+ * How long the view must have been still, ms, before it counts as at rest: half the frames a
+ * request buys at 60 Hz (renderDemand.ts SETTLE_FRAMES), so the frames that follow a drag
+ * still draw the view at rest. A drag's pointer events do not come every frame -- a slow hand
+ * holds the camera still for a frame or a few between two -- and a rule that changed at each
+ * of those would rebuild on them.
+ */
+export const VIEW_REST_MS = 250;
+
+/**
+ * Whether the view is moving: changed -- the camera's place and turn about the focus, its
+ * lens, the focus, the canvas's height -- within VIEW_REST_MS of `nowMs`. The orbit lines'
+ * rule for a moving view (OrbitLine.setElements's `orStill`) is taken only while it is.
+ */
+export class ViewChange {
+  readonly #last = new Float64Array(32);
+  #focus: string | null = null;
+  #height = -1;
+  #changedMs = -Infinity;
+
+  moving(camera: THREE.Camera, focus: string, height: number, nowMs: number): boolean {
+    const last = this.#last;
+    const world = camera.matrixWorld.elements;
+    const lens = camera.projectionMatrix.elements;
+    let changed = focus !== this.#focus || height !== this.#height;
+    for (let i = 0; i < 16; i += 1) {
+      if (last[i] !== world[i] || last[16 + i] !== lens[i]) {
+        changed = true;
+      }
+      last[i] = world[i]!;
+      last[16 + i] = lens[i]!;
+    }
+    this.#focus = focus;
+    this.#height = height;
+    if (changed) {
+      this.#changedMs = nowMs;
+    }
+    return nowMs - this.#changedMs < VIEW_REST_MS;
+  }
+}
+
 /** An ellipse as a curve: its centre, semi-axes, periapsis direction and pole, km. */
 interface EllipseShape {
   readonly cx: number;
@@ -203,10 +244,19 @@ const FLOAT32_DRIFT_ERROR = 2 * 2 ** -24;
 export class OrbitLine {
   readonly line: THREE.LineLoop;
   /** Authoritative points, heliocentric, km, float64. */
-  #pointsKm: Float64Array;
-  #positions: Float32Array;
+  #pointsKm: Float64Array = new Float64Array(0);
+  #positions: Float32Array = new Float32Array(0);
   /** The elements the current geometry was built from. */
   #builtFrom: OsculatingElements | null = null;
+  /**
+   * Whether #pointsKm is still to be made from #builtFrom: a line is made with its elements
+   * and its points worked out the first time they are wanted (#ensurePoints). The scene makes
+   * every body's line as it mounts, an asteroid's or a far moon's whose layer is off or whose
+   * system is not open among them -- sixteen thousand points each for the asteroids, 37 ms of
+   * the task before the first frame -- and most are not drawn for a long while, if ever. The
+   * points, when made, are the very ones the constructor made.
+   */
+  #pending = true;
   /** Sun position relative to focus, in km, at the last rebuild. */
   #anchorKm: Vec3 = { x: 0, y: 0, z: 0 };
   #anchored = false;
@@ -238,15 +288,28 @@ export class OrbitLine {
    * uniform grids are held to, ΔE = sqrt(8·s·r·(1 - e²) / a): 4.9e-5 rad for Apophis,
    * a hundred seconds of its motion -- so at real time the line is rebuilt every hundred
    * seconds, and under warp every frame: 16,425 points, a fraction of a millisecond.
+   *
+   * With `unseenKm` (setElements's), the sagitta allowed is that when it is more: what
+   * cannot be seen from where the camera is now. Worked out when asked, from the elements
+   * the line was built from, so the still rule is the same whatever the line was last
+   * rebuilt under.
    */
-  #recentreE = Infinity;
+  #recentreE(unseenKm: number): number {
+    const built = this.#builtFrom;
+    if (this.#builtE === null || built === null) {
+      return Infinity;
+    }
+    return Math.sqrt(
+      (8 * Math.max(ORBIT_SAGITTA_RADII * this.#bodyRadiusKm, unseenKm) * (1 - built.eccentricity ** 2)) /
+        built.semiMajorAxisKm,
+    );
+  }
 
   readonly #bodyRadiusKm: number;
 
   constructor(elements: OsculatingElements, bodyRadiusKm: number, color: string) {
     this.#bodyRadiusKm = bodyRadiusKm;
-    this.#pointsKm = this.#pointsFor(elements, 0);
-    this.#positions = new Float32Array(this.#pointsKm.length);
+    this.#shapeFor(elements);
     this.#builtFrom = elements;
 
     const geometry = new THREE.BufferGeometry();
@@ -268,28 +331,39 @@ export class OrbitLine {
   }
 
   get segments(): number {
+    this.#ensurePoints();
     return this.#pointsKm.length / 3;
   }
 
-  /** The authoritative points for these elements, refined at the body where it needs it. */
-  #pointsFor(elements: OsculatingElements, unseenKm: number): Float64Array {
+  /** What the line's checks read of its elements: where it is refined, its longest chord. */
+  #shapeFor(elements: OsculatingElements): void {
     const r = this.#bodyRadiusKm;
     this.#builtE = refinementAnomaly(elements, r);
-    // The sagitta allowed at the body: a quarter of its radius, or what cannot be seen from
-    // where the camera is, whichever is more.
-    this.#recentreE =
-      this.#builtE === null
-        ? Infinity
-        : Math.sqrt(
-            (8 * Math.max(ORBIT_SAGITTA_RADII * r, unseenKm) * (1 - elements.eccentricity ** 2)) /
-              elements.semiMajorAxisKm,
-          );
     this.#chordKm =
       (elements.semiMajorAxisKm * 2 * Math.PI) / orbitSegmentsFor(elements.apoapsisKm, r);
     this.#nearestKm = Number.NaN;
+  }
+
+  /** The authoritative points for these elements, refined at the body where it needs it. */
+  #pointsFor(elements: OsculatingElements): void {
+    this.#shapeFor(elements);
     // The old points' buffer refilled, when the count is unchanged -- it always is for a
     // given body, but for a refined line crossing between the grid's two rules.
-    return orbitLinePointsKm(elements, r, this.#pointsKm);
+    this.#pointsKm = orbitLinePointsKm(elements, this.#bodyRadiusKm, this.#pointsKm);
+    this.#pending = false;
+    if (this.#positions.length !== this.#pointsKm.length) {
+      this.#positions = new Float32Array(this.#pointsKm.length);
+      this.line.geometry.setAttribute('position', new THREE.BufferAttribute(this.#positions, 3));
+    }
+    // Force the next update() to refill the buffer with the new shape.
+    this.#anchored = false;
+  }
+
+  /** The points of the elements the line holds, made now if they have not been yet. */
+  #ensurePoints(): void {
+    if (this.#pending && this.#builtFrom !== null) {
+      this.#pointsFor(this.#builtFrom);
+    }
   }
 
   /**
@@ -314,6 +388,7 @@ export class OrbitLine {
         return this.#nearestKm - moved;
       }
     }
+    this.#ensurePoints();
     const points = this.#pointsKm;
     let nearest = Infinity;
     for (let i = 0; i < points.length; i += 3) {
@@ -365,33 +440,35 @@ export class OrbitLine {
    * **Under warp, `unseenKm`**: what a quarter of a pixel spans where the line comes nearest
    * the camera (orbitUnseenKm), when that is more -- and the shift measured as the curve
    * really moves (ellipseShiftKm). There the guess rebuilt every planet every frame from
-   * afar, for nothing on screen. Not with the clock at real time or paused: there the line is
-   * rebuilt as it always was, so a still view is the very picture it was. Leaving warp, the
-   * next frame holds the line to that again, measured from what it was last built from.
+   * afar, for nothing on screen. Not with the clock at real time or paused and the camera
+   * still: there the line is rebuilt as it always was, so a still view is the very picture it
+   * was. Leaving warp, the next frame holds the line to that again, measured from what it was
+   * last built from.
+   *
+   * **At real time with the camera moving, `unseenKm` and `orStill`**: left as it is when
+   * either rule would leave it. The guess alone rebuilt the far asteroids' lines every frame
+   * of a drag -- Leleakuhonua's, a thousand AU across and held to 0.4 km, its heliocentric
+   * ellipse swinging with the Sun's own pull toward Jupiter by kilometres a frame, sixteen
+   * thousand points each, three or four of them a frame -- to move them a millionth of a
+   * pixel. Nothing is still while the camera moves, and the frame it comes to rest holds every
+   * line to the still rule again, so the view it rests on is the one it always was.
    */
-  setElements(elements: OsculatingElements, unseenKm: number | null = null): void {
-    if (
-      this.#builtFrom !== null &&
-      (unseenKm === null
-        ? this.#legacyShiftKm(elements) < this.#bodyRadiusKm * 0.4
-        : ellipseShiftKm(this.#builtFrom, elements) < Math.max(this.#bodyRadiusKm * 0.4, unseenKm)) &&
-      this.#movedE(elements) < this.#recentreE
-    ) {
-      return;
+  setElements(elements: OsculatingElements, unseenKm: number | null = null, orStill = false): void {
+    const built = this.#builtFrom;
+    if (built !== null) {
+      const still = () =>
+        this.#legacyShiftKm(elements) < this.#bodyRadiusKm * 0.4 &&
+        this.#movedE(elements) < this.#recentreE(0);
+      const unseen = (km: number) =>
+        ellipseShiftKm(built, elements) < Math.max(this.#bodyRadiusKm * 0.4, km) &&
+        this.#movedE(elements) < this.#recentreE(km);
+      if (unseenKm === null ? still() : unseen(unseenKm) || (orStill && still())) {
+        return;
+      }
     }
 
-    this.#pointsKm = this.#pointsFor(elements, unseenKm ?? 0);
     this.#builtFrom = elements;
-
-    if (this.#positions.length !== this.#pointsKm.length) {
-      this.#positions = new Float32Array(this.#pointsKm.length);
-      this.line.geometry.setAttribute(
-        'position',
-        new THREE.BufferAttribute(this.#positions, 3),
-      );
-    }
-    // Force the next update() to refill the buffer with the new shape.
-    this.#anchored = false;
+    this.#pointsFor(elements);
   }
 
   /**
@@ -445,6 +522,7 @@ export class OrbitLine {
    * motion had the buffer refilled every frame under warp.
    */
   update(sunRelativeToFocusKm: Vec3, toleranceKm: number, unseenKm: number | null = null): void {
+    this.#ensurePoints();
     this.#toleranceKm = Math.max(toleranceKm, 1, (unseenKm ?? 0) / FLOAT32_DRIFT_ERROR);
 
     const drift = this.#anchored

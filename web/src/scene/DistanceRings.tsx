@@ -50,6 +50,9 @@ const RULERS_FULL_LY = 0.1;
 /** Gap between the ring and its name, pixels. */
 const LABEL_GAP_PX = 6;
 
+/** Each name's place and opacity as last written into it. */
+const writtenLabels = new WeakMap<HTMLElement, { x: number; y: number; opacity: number }>();
+
 const scratchSun = new THREE.Vector3();
 const scratchSide = new THREE.Vector3();
 const scratchPoint = new THREE.Vector3();
@@ -266,10 +269,24 @@ export function DistanceRings({
       }
       const x = (scratchPoint.x * 0.5 + 0.5) * size.width;
       const y = (-scratchPoint.y * 0.5 + 0.5) * size.height;
-      element.style.transform = ring.census
-        ? `translate(${x}px, ${y - LABEL_GAP_PX}px) translate(-50%, -100%)`
-        : `translate(${x + LABEL_GAP_PX}px, ${y}px) translateY(-50%)`;
-      element.style.opacity = String(visibility);
+      // Written only when it changes: a style write is a trip through the style system even
+      // with the same value, and the census edge's name holds still while the camera orbits.
+      let written = writtenLabels.get(element);
+      if (written === undefined) {
+        written = { x: Number.NaN, y: Number.NaN, opacity: Number.NaN };
+        writtenLabels.set(element, written);
+      }
+      if (written.x !== x || written.y !== y) {
+        element.style.transform = ring.census
+          ? `translate(${x}px, ${y - LABEL_GAP_PX}px) translate(-50%, -100%)`
+          : `translate(${x + LABEL_GAP_PX}px, ${y}px) translateY(-50%)`;
+        written.x = x;
+        written.y = y;
+      }
+      if (written.opacity !== visibility) {
+        element.style.opacity = String(visibility);
+        written.opacity = visibility;
+      }
     });
   });
 

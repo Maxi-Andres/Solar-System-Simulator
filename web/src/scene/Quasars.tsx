@@ -288,6 +288,11 @@ export interface QuasarsProps {
 
 const noRaycast = (): void => {};
 const scratchSize = new THREE.Vector2();
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
 const scratchMatrix = new THREE.Matrix3();
 
 export function Quasars({ store, clock, focus, source: given }: QuasarsProps) {
@@ -365,16 +370,19 @@ export function Quasars({ store, clock, focus, source: given }: QuasarsProps) {
     },
     [quasars],
   );
-  const crowding = useRef<{ sample: Float32Array; grid: CrowdingGrid | null; texture: THREE.DataTexture | null }>({
+  // `uploaded`: what the texture last took, to give it only a grid that differs (see the frame).
+  const crowding = useRef<{ sample: Float32Array; grid: CrowdingGrid | null; texture: THREE.DataTexture | null; uploaded: Uint8Array | null }>({
     sample: new Float32Array(0),
     grid: null,
     texture: null,
+    uploaded: null,
   });
   useEffect(
     () => () => {
       crowding.current.texture?.dispose();
       crowding.current.texture = null;
       crowding.current.grid = null;
+      crowding.current.uploaded = null;
     },
     [],
   );
@@ -537,6 +545,7 @@ export function Quasars({ store, clock, focus, source: given }: QuasarsProps) {
         c.texture.minFilter = THREE.LinearFilter;
         c.texture.magFilter = THREE.LinearFilter;
         c.texture.unpackAlignment = 1;
+        c.uploaded = null;
         uniforms['uCrowding']!.value = c.texture;
       }
       if (kept > 0 && quasarFade > 0 && c.sample.length > 0) {
@@ -547,7 +556,13 @@ export function Quasars({ store, clock, focus, source: given }: QuasarsProps) {
         measureCrowding(c.grid, c.sample, c.sample.length / 3, perSample, cameraPc, scratchMatrix.elements, e[0]!, e[5]!, size.x, size.y);
         // The counts kept, the shares made again with the quasars' brighter patch.
         holdQuasarPatch(c.grid, perSample, size.x, size.y);
-        c.texture.needsUpdate = true;
+        // Uploaded only when it differs from what the texture holds: a new version every frame
+        // tells the glow pass (glowStill.ts) the quasars changed, and it draws them all again --
+        // from far out most of the GPU's frame, the same picture as before (CosmicWeb.tsx, same rule).
+        if (c.uploaded === null || !sameBytes(c.uploaded, c.grid.kept)) {
+          c.uploaded = c.grid.kept.slice();
+          c.texture.needsUpdate = true;
+        }
       }
     }
 

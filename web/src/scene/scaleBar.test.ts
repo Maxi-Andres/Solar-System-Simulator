@@ -69,6 +69,20 @@ describe('the scale bar', () => {
     expect(scaleBarReading(10 * LIGHT_YEAR_KM / 100, 100).detail).toContain('3.07 pc');
   });
 
+  it('answers a frame at the same scale with the reading it gave, the words made once per length', () => {
+    const kmPerPx = kmPerPixelAt(1e16, FOV_DEG, HEIGHT);
+    const first = scaleBarReading(kmPerPx);
+    expect(scaleBarReading(kmPerPx)).toBe(first);
+    // A zoom that keeps the length: a new width, the same words.
+    const nearer = scaleBarReading(kmPerPx * 0.999);
+    expect(nearer.widthPx).toBeGreaterThan(first.widthPx);
+    expect([nearer.label, nearer.detail, nearer.lengthKm]).toEqual([first.label, first.detail, first.lengthKm]);
+    // Away and back: the same answer as at first.
+    const far = scaleBarReading(kmPerPx * 1000);
+    expect(far.label).not.toBe(first.label);
+    expect(scaleBarReading(kmPerPx)).toEqual(first);
+  });
+
   it('is the frame height over its pixels at the focus', () => {
     // The frame is 2 tan(13.5 deg) = 0.48 of the distance tall.
     expect(kmPerPixelAt(HEIGHT, FOV_DEG, HEIGHT)).toBeCloseTo(2 * Math.tan((13.5 * Math.PI) / 180), 12);

@@ -17,6 +17,7 @@ import type { SimClock } from '../core/time.ts';
 import { useViewStore } from '../state/store.ts';
 import { KM_PER_UNIT } from './scale.ts';
 import { SceneLabels } from './sceneLabels.ts';
+import { compileFor } from './shaderPrecompile.ts';
 import { yearsSinceEpoch } from './starGeometry.ts';
 import { SPHERE_RADIUS } from './starRendering.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
@@ -81,7 +82,11 @@ function lineMaterial(colour: THREE.Color): THREE.ShaderMaterial {
 }
 
 function segments(material: THREE.ShaderMaterial): THREE.LineSegments {
-  const lines = new THREE.LineSegments(new THREE.BufferGeometry(), material);
+  // An empty `position` until the catalogue's: three compiles another program for a geometry
+  // with no position at all, and the one compiled ahead (below) would not be the one drawn.
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+  const lines = new THREE.LineSegments(geometry, material);
   lines.frustumCulled = false;
   return lines;
 }
@@ -90,6 +95,7 @@ export function Constellations({ store, clock, focus }: { store: EphemerisStore;
   const visible = useViewStore((state) => state.layers.constellations);
   const showLabels = useViewStore((state) => state.layers.labels);
   const { camera, size, gl } = useThree();
+  const scene = useThree((three) => three.scene);
 
   const state = useMemo(() => {
     const figureMaterial = lineMaterial(FIGURE_COLOUR);
@@ -143,7 +149,11 @@ export function Constellations({ store, clock, focus }: { store: EphemerisStore;
 
     if (fade > 0 && !state.asked) {
       state.asked = true;
-      void loadConstellations().then((catalog) => {
+      // The lines' program made while the figures come, and the figures shown once both are
+      // here: made on their first draw, it held that frame (shaderPrecompile.ts). One program
+      // for both, the same shader.
+      const compiled = compileFor(gl, camera, scene, [state.figures, state.boundaries], 'canvas');
+      void Promise.all([loadConstellations(), compiled]).then(([catalog]) => {
         if (catalog === null) return;
         state.catalog = catalog;
         state.boundaries.geometry.setAttribute('position', new THREE.BufferAttribute(boundarySegments(catalog), 3));
@@ -164,8 +174,8 @@ export function Constellations({ store, clock, focus }: { store: EphemerisStore;
     state.group.position.copy(camera.position);
     const years = yearsSinceEpoch(jd);
     if (!(Math.abs(years - state.years) < RECOMPUTE_YEARS)) {
-      const attribute = state.figures.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-      if (attribute === undefined) {
+      const attribute = state.figures.geometry.getAttribute('position') as THREE.BufferAttribute;
+      if (attribute.count === 0) {
         state.figures.geometry.setAttribute('position', new THREE.BufferAttribute(figureSegments(catalog, years), 3));
       } else {
         figureSegments(catalog, years, attribute.array as Float32Array);

@@ -19,6 +19,7 @@ import {
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { hasRemnantNoise, provideRemnantNoise } from './remnantVolume.ts';
 import { angularRadiusPixels, KM_PER_UNIT } from './scale.ts';
+import { compileFor } from './shaderPrecompile.ts';
 // Run in the frame where the layer is mounted, though its chunk arrives later: see lazyLayer.tsx.
 import { useFrame } from './lazyLayer.tsx';
 
@@ -111,7 +112,6 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
       loading: null as (() => void) | null,
       // With no worker: the idle warm-up here instead, its cancel.
       cancelIdle: null as (() => void) | null,
-      compileTarget: new THREE.WebGLRenderTarget(1, 1),
       frustum: new THREE.Frustum(),
       viewProjection: new THREE.Matrix4(),
       centre: new THREE.Vector3(),
@@ -243,17 +243,9 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
       group.add(mesh);
       renderDemand.request();
     };
-    const previous = gl.getRenderTarget();
-    let compiled: Promise<unknown>;
-    try {
-      gl.setRenderTarget(made.compileTarget);
-      compiled = gl.compileAsync(mesh, camera, scene);
-    } catch {
-      compiled = Promise.resolve();
-    } finally {
-      gl.setRenderTarget(previous);
-    }
-    compiled.then(add, add);
+    // For the pass that draws it, the glow's (shaderPrecompile.ts): compiled for the canvas it
+    // was another program, and the glow pass compiled its own again before drawing it.
+    void compileFor(gl, camera, scene, [mesh], 'glow').then(add, add);
   };
 
   // Each nebula's brightness scale -- a few hundred thousand samples of its parts -- worked out
@@ -281,7 +273,6 @@ export function Nebulae({ store, clock, focus, visible, showIcons }: FeatureProp
       made.cancelIdle = null;
       made.loading?.();
       made.loading = null;
-      made.compileTarget.dispose();
       for (const entry of drawn.entries) {
         group.remove(entry.ring);
         (entry.ring.material as THREE.Material).dispose();

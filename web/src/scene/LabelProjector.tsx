@@ -698,18 +698,21 @@ export function LabelProjector({
     }
 
     // Written into the labels, and their widths taken for the declutter: estimated the
-    // frame the text changes, measured from the next.
-    for (const [id, element] of map) {
-      const text = alt.get(id) ?? null;
-      if ((altShown.get(id) ?? null) === text) {
-        continue;
-      }
-      setAltText(element, text);
-      widths.delete(id);
-      if (text === null) {
-        altShown.delete(id);
-      } else {
+    // frame the text changes, measured from the next. Only a label with another text this
+    // frame or the last can change, a handful: not a walk of all thousand.
+    for (const [id, text] of alt) {
+      if (altShown.get(id) !== text && map.has(id)) {
+        setAltText(map.get(id) ?? null, text);
+        widths.delete(id);
         altShown.set(id, text);
+      }
+    }
+    for (const id of altShown.keys()) {
+      if (!alt.has(id)) {
+        // Deleting the entry being visited is safe in a Map's iteration.
+        setAltText(map.get(id) ?? null, null);
+        widths.delete(id);
+        altShown.delete(id);
       }
     }
     for (let i = 0; i < projected.length; i += 1) {
@@ -729,7 +732,7 @@ export function LabelProjector({
     // The focused body outranks them all. See `declutterLabels`.
     shown.clear();
 
-    // With the names the Milky Way's model placed, which it shows unless they lose here.
+    // With the names others placed (labelBoard.ts): shown if they win here, hidden if they lose.
     const boardElements = new Map<string, HTMLElement>();
     for (const label of posted) {
       const id = `${BOARD_PREFIX}${label.key}`;
@@ -739,7 +742,13 @@ export function LabelProjector({
 
     for (const candidate of declutterLabels(projected, focus, held)) {
       shown.add(candidate.id);
-      if (boardElements.has(candidate.id)) {
+      const board = boardElements.get(candidate.id);
+      if (board !== undefined) {
+        // Shown here if its poster left it hidden (sceneLabels.ts does, so a name that keeps
+        // losing is not shown and hidden again every frame).
+        if (board.style.display !== 'block') {
+          board.style.display = 'block';
+        }
         continue;
       }
 

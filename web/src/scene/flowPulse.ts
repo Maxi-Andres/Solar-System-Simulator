@@ -46,3 +46,43 @@ export function flowPulseWaitMs(bound: FlowPulseBound, cameraX: number, cameraY:
   const ms = (LIVE_STEP_PX / pixelsPerSecond) * 1000;
   return ms < VSYNC_MS ? 0 : ms;
 }
+
+/** How far past its line a ribbon may reach on the screen, device pixels: the widest's half and a pixel more. */
+export const FLOW_REACH_PX = 4;
+
+/**
+ * Whether a sphere, its centre (`x`, `y`, `z`) in the camera's view space (any unit, the
+ * camera at the origin looking down -z) and its radius in that unit, can put any pixel on the
+ * screen, `reachPx` device pixels past its edge allowed: the projection's terms `e` (column
+ * major), the drawing buffer `widthPx` by `heightPx`. False only when the whole sphere is behind
+ * the camera or beyond one side of the frustum widened by that reach -- a plane through the
+ * eye, so the test holds for any part of the sphere at any distance. The lines' brightening
+ * asks for no frame while none of them is in view: nothing it would change is drawn.
+ */
+export function sphereInView(
+  x: number,
+  y: number,
+  z: number,
+  radius: number,
+  e: ArrayLike<number>,
+  widthPx: number,
+  heightPx: number,
+  reachPx: number,
+): boolean {
+  if (z - radius >= 0) return false;
+  // Right of the screen: x_clip > (1 + m) w, x_clip = e0 x + e8 z, w = -z.
+  const mx = 1 + (2 * reachPx) / widthPx;
+  const my = 1 + (2 * reachPx) / heightPx;
+  const e0 = e[0]!;
+  const e5 = e[5]!;
+  const e8 = e[8]!;
+  const e9 = e[9]!;
+  // Wholly on the outer side of the plane (nx, 0 or nx, nyz) . p = 0 through the eye.
+  const beyond = (nx: number, nyz: number, along: number): boolean => nx * along + nyz * z > radius * Math.hypot(nx, nyz);
+  return !(
+    beyond(e0, e8 + mx, x) ||
+    beyond(-e0, -e8 + mx, x) ||
+    beyond(e5, e9 + my, y) ||
+    beyond(-e5, -e9 + my, y)
+  );
+}

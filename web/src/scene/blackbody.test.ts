@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   blackbodyChromaticity,
   blackbodyLinearSrgb,
+  cieX,
+  cieY,
+  cieZ,
   colorIndexToTemperature,
   MAX_COLOR_INDEX,
   MIN_COLOR_INDEX,
   planckSpectralRadiance,
+  provideStarColorSteps,
   starColor,
+  starColorSteps,
   temperatureToColorIndex,
 } from './blackbody.ts';
 
@@ -162,5 +167,45 @@ describe('temperatureToColorIndex', () => {
     }
     // TRAPPIST-1, 2,566 K (Agol et al. 2021): a red dwarf's colour index.
     expect(temperatureToColorIndex(2566)).toBeGreaterThan(1.8);
+  });
+});
+
+describe('the colour integral, made faster', () => {
+  it('sums exactly the samples planckSpectralRadiance gives', () => {
+    // The integral as it was: planckSpectralRadiance at each wavelength, through the curves.
+    const reference = (kelvin: number): readonly [number, number, number] => {
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (let wavelength = 360; wavelength <= 830; wavelength += 1) {
+        const radiance = planckSpectralRadiance(wavelength, kelvin);
+        x += radiance * cieX(wavelength);
+        y += radiance * cieY(wavelength);
+        z += radiance * cieZ(wavelength);
+      }
+      const bigX = x / y;
+      const bigZ = z / y;
+      return [
+        Math.max(0, 3.2406 * bigX - 1.5372 - 0.4986 * bigZ),
+        Math.max(0, -0.9689 * bigX + 1.8758 + 0.0415 * bigZ),
+        Math.max(0, 0.0557 * bigX - 0.204 + 1.057 * bigZ),
+      ];
+    };
+    for (const kelvin of [1800, 2300.5, 3600, 5772, 9940, 25000, 40000, 1e6]) {
+      expect(blackbodyLinearSrgb(kelvin)).toEqual(reference(kelvin));
+    }
+  });
+
+  it('hands over the steps a catalogue needs, the very colours starColor makes', () => {
+    const indices = [0.65, -0.4, 3.85, 1.2345, 0.0001, 4.5, 1.2345];
+    const steps = starColorSteps(indices);
+    let made = 0;
+    for (let k = 0; k < steps.length; k += 3) if (steps[k] === steps[k]) made += 1;
+    // 0.65, -0.4, 3.85 and the clamp each on a step; 1.2345 and 0.0001 between two.
+    expect(made).toBe(8);
+    // Taken in where the table has them already: nothing changes.
+    provideStarColorSteps(steps);
+    const step = Math.round((0.65 + 0.4) / 0.001);
+    expect([steps[step * 3], steps[step * 3 + 1], steps[step * 3 + 2]]).toEqual([...starColor(0.65)]);
   });
 });

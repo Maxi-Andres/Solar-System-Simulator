@@ -196,7 +196,7 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     };
   }, [compiled]);
 
-  useFrame(({ camera: frameCamera, gl: renderer }) => {
+  useFrame(({ camera: frameCamera, gl: renderer, size }) => {
     const group = groupRef.current;
     if (group === null) {
       return;
@@ -234,7 +234,9 @@ export function Pulsars({ source, store, clock, focus, visible, onPick }: Pulsar
     // Folded into the Milky Way's mark, the one gone to never (markFolding.ts).
     if (points !== null) {
       const fov = (frameCamera as THREE.PerspectiveCamera).fov;
-      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(renderer.domElement.clientHeight, fov), focus);
+      // The canvas's size as the scene keeps it, not its clientHeight: read after other layers had
+      // written their labels' styles this frame, that laid the page out again (LocalGroup.tsx).
+      updateMarkHosts([cameraPc.x, cameraPc.y, cameraPc.z], pixelsPerRadian(size.height, fov), focus);
       if (foldMembers(MARK_HOSTS, points.folds.host, points.folds.separationPc, points.folds.value, pulsarIndexOf(focus) ?? -1)) {
         points.fold.needsUpdate = true;
       }

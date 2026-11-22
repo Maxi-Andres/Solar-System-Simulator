@@ -368,6 +368,41 @@ function unbounded(geometry: THREE.BufferGeometry): void {
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
 }
 
+/**
+ * A trail's two lines with nothing in them, its two materials and the attributes it draws
+ * with: for compiling their programs before the first trail is drawn (SolarSystem.tsx). The
+ * craft's trails come in after the first frame, as their paths do, and the first drawn made
+ * both programs there and then. Kept, not drawn, so the programs stay in three's cache.
+ */
+export function trailCompileProbe(): { readonly objects: readonly THREE.Object3D[]; dispose(): void } {
+  const uniforms = fadeUniforms(TRAIL_COLOR);
+  const material = trailMaterial(TRAIL_VERTEX_SHADER, {
+    ...uniforms,
+    uOriginHigh: { value: new THREE.Vector3() },
+    uOriginLow: { value: new THREE.Vector3() },
+    uUnitsPerKm: { value: 1 / KM_PER_UNIT },
+  });
+  const nearMaterial = trailMaterial(NEAR_VERTEX_SHADER, uniforms);
+  const empty = (perVertex: number) => new THREE.BufferAttribute(new Float32Array(0), perVertex);
+  const chords = new THREE.BufferGeometry();
+  chords.setAttribute('position', empty(3));
+  chords.setAttribute('positionLow', empty(3));
+  chords.setAttribute('aDays', empty(1));
+  const near = new THREE.BufferGeometry();
+  near.setAttribute('position', empty(3));
+  near.setAttribute('aDays', empty(1));
+  const objects = [new THREE.LineSegments(chords, material), new THREE.Line(near, nearMaterial)];
+  return {
+    objects,
+    dispose: () => {
+      chords.dispose();
+      near.dispose();
+      material.dispose();
+      nearMaterial.dispose();
+    },
+  };
+}
+
 /** Room for the stretch at the craft, in vertices. */
 const CLOSE_IN_CAPACITY = MAX_CHORDS_PER_INTERVAL + CLOSE_IN_STEPS + 2;
 

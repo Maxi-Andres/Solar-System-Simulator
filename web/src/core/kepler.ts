@@ -280,15 +280,35 @@ export function orbitAnomalies(segments: number, around: number | null = null): 
     }
     return uniform;
   }
-  const centre = ((around % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const j = Math.min(segments - 1, Math.floor(centre / step));
-  const before = centre - j * step;
-  const after = (j + 1) * step - centre;
-  const anomalies = new Float64Array(segments + 2 * ORBIT_CLOSE_IN_HALVINGS + 1);
+  const { j, anomalies: closeIn } = refinedAnomalies(segments, around);
+  const anomalies = new Float64Array(segments + closeIn.length);
   let k = 0;
   for (let i = 0; i <= j; i += 1) {
     anomalies[k++] = i * step;
   }
+  anomalies.set(closeIn, k);
+  k += closeIn.length;
+  for (let i = j + 1; i < segments; i += 1) {
+    anomalies[k++] = i * step;
+  }
+  return anomalies;
+}
+
+/**
+ * The anomalies a refined polyline adds, in order, and the grid index `j` they follow: the
+ * segment the body is in, halved toward it from each side, and the body's own anomaly.
+ */
+function refinedAnomalies(
+  segments: number,
+  around: number,
+): { readonly j: number; readonly anomalies: Float64Array } {
+  const step = (2 * Math.PI) / segments;
+  const centre = ((around % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const j = Math.min(segments - 1, Math.floor(centre / step));
+  const before = centre - j * step;
+  const after = (j + 1) * step - centre;
+  const anomalies = new Float64Array(2 * ORBIT_CLOSE_IN_HALVINGS + 1);
+  let k = 0;
   for (let h = 1; h <= ORBIT_CLOSE_IN_HALVINGS; h += 1) {
     anomalies[k++] = centre - before * 2 ** -h;
   }
@@ -296,10 +316,7 @@ export function orbitAnomalies(segments: number, around: number | null = null): 
   for (let h = ORBIT_CLOSE_IN_HALVINGS; h >= 1; h -= 1) {
     anomalies[k++] = centre + after * 2 ** -h;
   }
-  for (let i = j + 1; i < segments; i += 1) {
-    anomalies[k++] = i * step;
-  }
-  return anomalies;
+  return { j, anomalies };
 }
 
 /** Eccentric anomaly from true anomaly, both radians, for an ellipse of eccentricity e. */
@@ -325,7 +342,9 @@ export function eccentricFromTrueAnomaly(trueAnomalyRad: number, e: number): num
  * orbit line rebuilt under warp reuses its buffer rather than leaving a few hundred kB a
  * frame to the garbage collector. The rotation into the reference frame is worked out once,
  * not once a point -- six cosines and sines fewer per vertex -- and with the very operations
- * perifocalToReference does, so the points are the same to the bit.
+ * perifocalToReference does, so the points are the same to the bit. So are the uniform grid's
+ * cosines and sines, kept per segment count (uniformGrid): a line of sixteen thousand points
+ * rebuilt was two thirds those two calls.
  */
 export function orbitPointsKm(
   elements: OsculatingElements,
@@ -333,10 +352,12 @@ export function orbitPointsKm(
   around: number | null = null,
   out?: Float64Array,
 ): Float64Array {
-  // The uniform grid is i * step, as orbitAnomalies has it, without the array.
-  const anomalies = around === null ? null : orbitAnomalies(segments, around);
-  const count = anomalies === null ? segments : anomalies.length;
-  const step = (2 * Math.PI) / segments;
+  // The uniform grid is i * step, as orbitAnomalies has it, without the array: its cosines
+  // and sines from the table, and in a refined line the anomalies closing in on the body
+  // after grid index `j` (see orbitAnomalies).
+  const grid = uniformGrid(segments);
+  const refined = around === null ? null : refinedAnomalies(segments, around);
+  const count = refined === null ? segments : segments + refined.anomalies.length;
   const points = out !== undefined && out.length === count * 3 ? out : new Float64Array(count * 3);
   const e = elements.eccentricity;
   const a = elements.semiMajorAxisKm;
@@ -358,16 +379,70 @@ export function orbitPointsKm(
   const zx = sinOmega * sinI;
   const zy = cosOmega * sinI;
 
-  for (let i = 0; i < count; i += 1) {
-    const E = anomalies === null ? i * step : anomalies[i]!;
-    const xPerifocal = a * (Math.cos(E) - e);
-    const yPerifocal = a * sqrtOneMinusESquared * Math.sin(E);
+  const put = (i: number, cosE: number, sinE: number): void => {
+    const xPerifocal = a * (cosE - e);
+    const yPerifocal = a * sqrtOneMinusESquared * sinE;
     points[i * 3] = xx * xPerifocal + xy * yPerifocal;
     points[i * 3 + 1] = yx * xPerifocal + yy * yPerifocal;
     points[i * 3 + 2] = zx * xPerifocal + zy * yPerifocal;
+  };
+  const { cos, sin } = grid;
+  if (refined === null) {
+    for (let i = 0; i < segments; i += 1) {
+      put(i, cos[i]!, sin[i]!);
+    }
+    return points;
   }
-
+  const { j, anomalies } = refined;
+  const extra = anomalies.length;
+  for (let i = 0; i <= j; i += 1) {
+    put(i, cos[i]!, sin[i]!);
+  }
+  for (let k = 0; k < extra; k += 1) {
+    const E = anomalies[k]!;
+    put(j + 1 + k, Math.cos(E), Math.sin(E));
+  }
+  for (let i = j + 1; i < segments; i += 1) {
+    put(i + extra, cos[i]!, sin[i]!);
+  }
   return points;
+}
+
+/** A uniform grid's cosines and sines: cos(i * step), sin(i * step), step = 2 pi / segments. */
+interface UniformGrid {
+  readonly cos: Float64Array;
+  readonly sin: Float64Array;
+}
+
+/**
+ * How many uniform grids are kept, most recently used first. Each is 16 bytes a segment --
+ * 256 kB at the 16,384 cap -- and the lines rebuilt often share a few counts: every body at
+ * the cap, and Pluto's.
+ */
+const GRIDS_KEPT = 8;
+const grids = new Map<number, UniformGrid>();
+
+/** The cosines and sines of a uniform grid of `segments`, computed once and kept. */
+function uniformGrid(segments: number): UniformGrid {
+  const kept = grids.get(segments);
+  if (kept !== undefined) {
+    grids.delete(segments);
+    grids.set(segments, kept);
+    return kept;
+  }
+  const step = (2 * Math.PI) / segments;
+  const cos = new Float64Array(segments);
+  const sin = new Float64Array(segments);
+  for (let i = 0; i < segments; i += 1) {
+    cos[i] = Math.cos(i * step);
+    sin[i] = Math.sin(i * step);
+  }
+  const grid = { cos, sin };
+  grids.set(segments, grid);
+  if (grids.size > GRIDS_KEPT) {
+    grids.delete(grids.keys().next().value!);
+  }
+  return grid;
 }
 
 /**

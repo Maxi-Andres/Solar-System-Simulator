@@ -162,6 +162,58 @@ describe('instanced glows', () => {
     expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
   });
 
+  it('compares an instanced geometry’s attributes bit for bit, once and again after each change', () => {
+    const c = camera(10);
+    const geometry = new THREE.InstancedBufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+    const centres = new THREE.InstancedBufferAttribute(new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9]), 3);
+    const sizes = new THREE.InstancedBufferAttribute(new Uint16Array([10, 20, 30]), 1);
+    geometry.setAttribute('aCentre', centres);
+    geometry.setAttribute('aSize', sizes);
+    geometry.instanceCount = 2;
+    const mesh = new THREE.Mesh(geometry, glow().material);
+    mesh.updateMatrixWorld();
+    const still = new GlowStill();
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    centres.array[4] = 5.000001;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    // -0 is not 0 to the bit; set back, it is a change again, and then kept.
+    centres.array[0] = -0;
+    centres.array[0] = 1;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    centres.array[1] = -0;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    centres.array[1] = 2;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    sizes.array[1] = 21;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    // Past the instances drawn, nothing drawn changes.
+    sizes.array[2] = 31;
+    centres.array[8] = 0;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    // More drawn: a change, and then the new ones are compared too.
+    geometry.instanceCount = 3;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(true);
+    centres.array[8] = 9;
+    expect(still.same(c, 100, 50, false, [mesh], [])).toBe(false);
+  });
+
+  it('a camera that moves every frame draws every frame, and the first still one keeps', () => {
+    const mesh = instanced();
+    const still = new GlowStill();
+    for (let k = 0; k < 6; k += 1) {
+      expect(still.same(camera(10 + k), 100, 50, false, [mesh], [])).toBe(false);
+    }
+    expect(still.same(camera(15), 100, 50, false, [mesh], [])).toBe(true);
+    mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, 1, 0));
+    expect(still.same(camera(15), 100, 50, false, [mesh], [])).toBe(false);
+    expect(still.same(camera(15), 100, 50, false, [mesh], [])).toBe(true);
+  });
+
   it('with none drawn, nothing else of it matters', () => {
     const c = camera(10);
     const mesh = instanced();

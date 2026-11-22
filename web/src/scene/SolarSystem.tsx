@@ -31,7 +31,9 @@ import { bodiesToResolve, isShown, isSmallMoon } from './floatingOrigin.ts';
 import { markerTexture, type MarkerShape } from './markerTexture.ts';
 import { MarkerInstances } from './markerInstances.ts';
 import { bodyFixedOrientation, bodyOrientation } from './orientation.ts';
-import { OrbitLine, orbitUnseenKm } from './orbitGeometry.ts';
+import { OrbitLine, orbitUnseenKm, ViewChange } from './orbitGeometry.ts';
+import { sphereGeometry } from './sphereGeometry.ts';
+import { compileWithMap } from './mapCompile.ts';
 import { ringGeometry } from './ringGeometry.ts';
 import { cloudTopDriftDeg, cloudTopDriftRateDegPerDay, cloudTopMapOffset } from './cloudRotation.ts';
 import { degPerDayToRadPerSec, pixelsPerRadian, solarSystemRate, surfaceRate, transverseRate } from './screenMotion.ts';
@@ -92,8 +94,10 @@ import {
   TableTrail,
   tablePath,
   TRAIL_COLOR,
+  trailCompileProbe,
   TrajectoryLine,
 } from './trajectoryLine.ts';
+import { compileFor } from './shaderPrecompile.ts';
 import { ORBIT_OPACITY } from './orbitGeometry.ts';
 import { renderDemand } from '../core/renderDemand.ts';
 import { useStoreVersion } from '../core/useStoreVersion.ts';
@@ -648,7 +652,7 @@ export function SolarSystem({
         definition.radiusEstimated === true || (definition.kind === 'planet' && definition.parent !== null);
       const geometry = sharedSphere || neverSphere
         ? SMALL_MOON_SPHERE
-        : new THREE.SphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
+        : sphereGeometry(radiusUnits, SPHERE_SEGMENTS, SPHERE_SEGMENTS / 2);
 
       // The Sun emits rather than receives, so it gets an unlit material -- and one
       // driven far past full scale, because a light source is not a lit surface. See
@@ -761,7 +765,7 @@ export function SolarSystem({
           // the sphere, the deck floats 5 km above it, and the drift rotation stops
           // the two grids lining up -- so the clouds sank into the planet in vertical
           // stripes, one per facet. See CLOUD_SEGMENTS.
-          new THREE.SphereGeometry(kmToUnits(deckRadiusKm), CLOUD_SEGMENTS, CLOUD_SEGMENTS / 2),
+          sphereGeometry(kmToUnits(deckRadiusKm), CLOUD_SEGMENTS, CLOUD_SEGMENTS / 2),
           cloudMaterial,
         );
         cloud.scale.set(
@@ -781,7 +785,7 @@ export function SolarSystem({
         const atmosphere = new THREE.Mesh(
           // Coarser than the cloud deck, which needed its resolution to stay outside
           // the planet. This shell stands 100 km off the ground; see ATMOSPHERE_SEGMENTS.
-          new THREE.SphereGeometry(
+          sphereGeometry(
             atmosphereRadiusRatio(definition.radiusEquatorialKm),
             ATMOSPHERE_SEGMENTS,
             ATMOSPHERE_SEGMENTS / 2,
@@ -1015,6 +1019,7 @@ export function SolarSystem({
   );
 
   const { size, camera, gl } = useThree();
+  const scene = useThree((state) => state.scene);
 
   // Hidden layers are not resolved at all, which for the moons means not fetched.
   const wanted = useMemo(
@@ -1031,6 +1036,24 @@ export function SolarSystem({
     return batch;
   }, []);
   useEffect(() => () => markerBatch.dispose(), [markerBatch]);
+  const lastView = useMemo(() => new ViewChange(), []);
+  // The craft's trails are made once their two programs are (trajectoryLine.ts
+  // trailCompileProbe): the first trail drawn made them in that frame.
+  const trailsCompiled = useRef(false);
+  useEffect(() => {
+    const probe = trailCompileProbe();
+    let live = true;
+    const done = (): void => {
+      if (!live) return;
+      trailsCompiled.current = true;
+      renderDemand.request();
+    };
+    void compileFor(gl, camera, scene, probe.objects, 'canvas').then(done, done);
+    return () => {
+      live = false;
+      probe.dispose();
+    };
+  }, [gl, camera, scene]);
 
   useFrame(() => {
     const root = rootRef.current;
@@ -1078,6 +1101,10 @@ export function SolarSystem({
     const cameraKmX = camera.position.x * KM_PER_UNIT;
     const cameraKmY = camera.position.y * KM_PER_UNIT;
     const cameraKmZ = camera.position.z * KM_PER_UNIT;
+    // Whether the view is moving: the camera about the focus, its lens, the focus itself or
+    // the canvas changed a moment ago. Only then are orbit lines held to what shows rather than
+    // to the still rule (OrbitLine.setElements) -- the first frame at rest goes back to it.
+    const cameraMoved = lastView.moving(camera, focus, size.height, nowMs);
 
     for (const handle of handles) {
       const rebased = snapshot.bodies.get(handle.definition.id);
@@ -1771,10 +1798,16 @@ export function SolarSystem({
         void loadBodyTexture(wanted.file, {
           anisotropy: gl.capabilities.getMaxAnisotropy(),
         })
-          .then((texture) => {
+          .then(async (texture) => {
             // The set may have been switched again while this was in flight; a stale
             // response must not overwrite a newer choice.
             if (handle.requestedFile !== wanted.file) {
+              return;
+            }
+            // Put on once its program is made, beside the page (mapCompile.ts): the Sun's,
+            // made on its first draw, held the frame its map arrived in for half a second.
+            await compileWithMap(gl, camera, scene, handle.mesh, texture);
+            if (handle.requestedFile !== wanted.file || handle.disposed) {
               return;
             }
             meshMaterial.map = texture;
@@ -1852,7 +1885,8 @@ export function SolarSystem({
           const relative = store.stateRelativeTo(handle.definition.id, handle.orbitParent, jd);
           // Under warp, how far the line may move unseen from where the camera is
           // (orbitUnseenKm): from afar, far more than the body's radius it is otherwise held
-          // to. At real time and paused, null: rebuilt as it always was (OrbitLine.setElements).
+          // to. At real time and paused, null while the camera is still: rebuilt as it always
+          // was (OrbitLine.setElements); while it moves, held to either.
           let unseenKm: number | null = null;
           if (relative !== null) {
             const live = stateToOsculatingElements(
@@ -1864,7 +1898,7 @@ export function SolarSystem({
               handle.definition.id,
               handle.orbitCenter,
             );
-            if (live !== null && clock.mode === 'warp') {
+            if (live !== null && (clock.mode === 'warp' || cameraMoved)) {
               unseenKm = orbitUnseenKm(
                 handle.orbit.nearestKm(
                   cameraKmX - parent.positionKm.x,
@@ -1875,14 +1909,14 @@ export function SolarSystem({
               );
             }
             if (live !== null) {
-              handle.orbit.setElements(live, unseenKm);
+              handle.orbit.setElements(live, unseenKm, clock.mode !== 'warp');
             }
           }
 
           // Rebuild tolerance scales with the focused body's radius: that is the
           // smallest thing on screen worth resolving, so drifting by less than that
           // cannot be seen.
-          handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25, unseenKm);
+          handle.orbit.update(parent.positionKm, focusRadiusKm * 0.25, clock.mode === 'warp' ? unseenKm : null);
         }
       }
 
@@ -1904,7 +1938,7 @@ export function SolarSystem({
 
         // Asked for only once the line is wanted: a layer that is off costs nothing.
         const wantedLine = showTrails && satellite > 0.005 && origin !== undefined;
-        if (wantedLine && handle.trajectory === null) {
+        if (wantedLine && handle.trajectory === null && trailsCompiled.current) {
           const info = store.pathInfo(id);
           if (info !== null && info.count === null) {
             // A close orbiter: its trail from its own table, one turn at a time.

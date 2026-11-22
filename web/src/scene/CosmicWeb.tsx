@@ -1,4 +1,5 @@
 import { COSMIC_WEB_FILAMENT_CATALOGUES, COSMIC_WEB_POSITION_UNIT_PC, type BodyId } from '@sss/tools/types';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 
@@ -19,6 +20,7 @@ import { renderDemand } from '../core/renderDemand.ts';
 import { PARSEC_KM } from '../core/stars3d.ts';
 import type { SimClock } from '../core/time.ts';
 import { starColor } from './blackbody.ts';
+import { classifyCells, GalaxyCells, HANDED, listServes, writeList, type CellView, type SpriteLaw } from './cosmicWebCells.ts';
 import { FLOOR_THIN_GLSL, floorShown, lineKept } from './crowding.ts';
 import { SPRITE_FRAGMENT_GLSL, SPRITE_VERTEX_GLSL, spriteGeometry } from './gaussianSprite.ts';
 import { drawIntoGlow, releaseFromGlow } from './glowBuffer.ts';
@@ -48,6 +50,14 @@ import { useFrame } from './lazyLayer.tsx';
  * B-V, flags and dot as four bytes, read as normalised (formats every GPU reads natively, so
  * nothing is converted on upload) -- 22 MB for all of them. A galaxy's light and colour are
  * looked up in a 256 x 2 table by its bytes.
+ *
+ * Its place and bytes are a texel each of two textures, GALAXY_TEXTURE_WIDTH galaxies a row,
+ * and each instance of the draw reads the galaxy a list names (aIndex): the list holds only the
+ * galaxies that can put a pixel on the screen, in their order, each by its own index
+ * (cosmicWebCells.ts) -- from inside the web most of them are behind the camera or beside the
+ * screen. Normalised as the attributes were, by the texture unit: the same conversion, to the
+ * bit (16-bit normalised textures, EXT_texture_norm16; where a GPU lacks them, the same floats
+ * worked out here, which match it to the bit too, at twice the memory).
  *
  * Streamed: the chunks come most luminous first (core/cosmicWeb.ts CosmicWebGalaxies); a chunk
  * is drawn once its galaxies' dots are weighed, in a worker, and every dot is weighed again then.
@@ -107,6 +117,10 @@ export const FILAMENT_DEPTH_FROM_PC = 30e6;
 const FILAMENT_DISCARD = 0.002;
 
 const UNIT = 32767 * COSMIC_WEB_POSITION_UNIT_PC;
+/** Galaxies a row of the place and bytes textures. */
+export const GALAXY_TEXTURE_WIDTH = 2048;
+/** The shader's numbers that bound how far a sprite reaches (cosmicWebCells.ts). */
+const SPRITE_LAW: SpriteLaw = { sigmaPx: MIN_SIGMA_PX, faintFloor: FAINT_GALAXY_FLOOR, depthLeast: FILAMENT_DEPTH_LEAST };
 /** The whole sky, square degrees. */
 const SKY_DEG2 = (4 * 180 * 180) / Math.PI;
 
@@ -123,14 +137,22 @@ uniform float uDepthPc;
 uniform sampler2D uTable;
 // Each dot's share kept where it lies on the screen (screenCrowding.ts).
 uniform sampler2D uCrowding;
-attribute vec4 aPlace;
-attribute vec4 aBytes;
+// Each galaxy's place and bytes, a texel each, and which galaxy this instance is: the list's,
+// or the instance's own while the draw takes every galaxy (see the header).
+uniform sampler2D uPlace;
+uniform sampler2D uBytes;
+uniform float uAll;
+attribute float aIndex;
 varying vec3 vPeak;
 varying float vSigmaPx;
 ${SPRITE_VERTEX_GLSL}
 ${FLOOR_THIN_GLSL}
 
 void main() {
+  int id = uAll > 0.5 ? gl_InstanceID : int(aIndex);
+  ivec2 texel = ivec2(id % ${GALAXY_TEXTURE_WIDTH}, id / ${GALAXY_TEXTURE_WIDTH});
+  vec4 aPlace = texelFetch(uPlace, texel, 0);
+  vec4 aBytes = texelFetch(uBytes, texel, 0);
   vec3 rel = aPlace.xyz * ${UNIT.toExponential(6)} - uCameraPc;
   float distancePc = length(rel);
   ivec4 b = ivec4(floor(aBytes * 255.0 + 0.5));
@@ -145,7 +167,7 @@ void main() {
   // Its faint dot dimmer the farther it is than what the camera looks at, as the filaments are.
   float depth = clamp(uDepthPc / distancePc, ${FILAMENT_DEPTH_LEAST.toFixed(2)}, 1.0);
   // Fewer dots, not fainter, once each is under FLOOR_THIN of itself (crowding.ts).
-  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aBytes.w * floorThinned(uFloorKept * local * depth, gl_InstanceID) * uFade);
+  vPeak = max(vPeak, hue * ${FAINT_GALAXY_FLOOR.toPrecision(6)} * aBytes.w * floorThinned(uFloorKept * local * depth, id) * uFade);
   vSigmaPx = sigmaPx;
   gl_Position = spriteCorner(centre, spriteRadiusPx(vPeak, sigmaPx));
   #include <logdepthbuf_vertex>
@@ -280,6 +302,26 @@ void main() {
 
 /** A galaxy's light and colour by its bytes: row 0 its colour (blackbody of its B-V, unknown as 0.8, Laniakea's), row 1 its light in white columns (unknown: none). */
 export function galaxyTable(): THREE.DataTexture {
+  const texture = new THREE.DataTexture(galaxyTableData(), 256, 2, THREE.RGBAFormat, THREE.FloatType);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Each code's light (the table's row 1) and its colour's brightest channel (row 0), for the cull's bounds (cosmicWebCells.ts). */
+export function galaxyCodeBounds(): { lightOf: Float32Array; hueOf: Float32Array } {
+  const data = galaxyTableData();
+  const lightOf = new Float32Array(256);
+  const hueOf = new Float32Array(256);
+  for (let code = 0; code < 256; code += 1) {
+    lightOf[code] = data[(256 + code) * 4]!;
+    hueOf[code] = Math.max(data[code * 4]!, data[code * 4 + 1]!, data[code * 4 + 2]!);
+  }
+  return { lightOf, hueOf };
+}
+
+function galaxyTableData(): Float32Array {
   const data = new Float32Array(256 * 2 * 4);
   const white = columnAt(WHITE_MU);
   for (let code = 0; code < 256; code += 1) {
@@ -291,11 +333,7 @@ export function galaxyTable(): THREE.DataTexture {
     const absV = absVOf(code);
     data[(256 + code) * 4] = Number.isNaN(absV) ? 0 : 10 ** (-0.4 * (absV - SUN_ABSOLUTE_V)) / white;
   }
-  const texture = new THREE.DataTexture(data, 256, 2, THREE.RGBAFormat, THREE.FloatType);
-  texture.minFilter = THREE.NearestFilter;
-  texture.magFilter = THREE.NearestFilter;
-  texture.needsUpdate = true;
-  return texture;
+  return data;
 }
 
 /** The Sun's absolute V, as Laniakea's (core/laniakea.ts). */
@@ -314,7 +352,134 @@ export interface CosmicWebProps {
 
 const noRaycast = (): void => {};
 const scratchSize = new THREE.Vector2();
+
+/** Whether two byte arrays hold the same bytes. */
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
 const scratchMatrix = new THREE.Matrix3();
+
+/**
+ * The list the galaxies' draw reads (cosmicWebCells.ts): the cubes it was written for and how
+ * many galaxies it holds -- what the GPU's copy holds -- and one written since, uploaded with
+ * the next frame's draw (three uploads an attribute before the frame's onBeforeRender, so one
+ * written in it waits for the next).
+ */
+interface Cull {
+  handed: Uint8Array;
+  count: number;
+  /** The cubes' version and the galaxies drawn it was written for: another, and it holds too few. */
+  version: number;
+  drawn: number;
+  pending: { handed: Uint8Array; count: number; version: number; drawn: number } | null;
+  verdicts: Uint8Array;
+  /** What the verdicts were worked out for. */
+  key: number[];
+  view: { -readonly [K in keyof CellView]: CellView[K] };
+  modelView: THREE.Matrix4;
+}
+
+function newCull(): Cull {
+  return {
+    handed: new Uint8Array(0),
+    count: 0,
+    version: -1,
+    drawn: -1,
+    pending: null,
+    verdicts: new Uint8Array(0),
+    key: [],
+    view: {
+      cameraX: 0,
+      cameraY: 0,
+      cameraZ: 0,
+      modelView: [],
+      unitsPerPc: UNITS_PER_PC,
+      projection: [],
+      widthPx: 1,
+      heightPx: 1,
+      pixelsPerRadian: 1,
+      fade: 0,
+      floorKept: 0,
+      depthPc: 0,
+    },
+    modelView: new THREE.Matrix4(),
+  };
+}
+
+/**
+ * Before the galaxies are drawn into the glow: the list if it holds every galaxy that can draw a
+ * pixel through `camera` with this frame's uniforms, every galaxy otherwise; and a new list
+ * written for the next frame when this one does not hold them, has fallen too far behind the
+ * view to hold them much longer, or holds far more than it needs.
+ */
+function cullGalaxies(
+  galaxies: { cells: GalaxyCells; indexAttribute: THREE.InstancedBufferAttribute; geometry: THREE.InstancedBufferGeometry; cull: Cull },
+  count: number,
+  uniforms: Record<string, THREE.IUniform>,
+  camera: THREE.Camera,
+  object: THREE.Object3D,
+): void {
+  const { cells, cull, geometry, indexAttribute } = galaxies;
+  if (count === 0) {
+    geometry.instanceCount = 0;
+    return;
+  }
+  // A list written last time is the GPU's now.
+  if (cull.pending !== null) {
+    cull.handed = cull.pending.handed;
+    cull.count = cull.pending.count;
+    cull.version = cull.pending.version;
+    cull.drawn = cull.pending.drawn;
+    cull.pending = null;
+  }
+  if (cull.verdicts.length < cells.count) cull.verdicts = new Uint8Array(Math.max(256, cells.count * 2));
+  const view = cull.view;
+  const cameraPc = uniforms['uCameraPc']!.value as THREE.Vector3;
+  const viewport = uniforms['uViewportPx']!.value as THREE.Vector2;
+  view.cameraX = cameraPc.x;
+  view.cameraY = cameraPc.y;
+  view.cameraZ = cameraPc.z;
+  view.modelView = cull.modelView.multiplyMatrices(camera.matrixWorldInverse, object.matrixWorld).elements;
+  view.projection = camera.projectionMatrix.elements;
+  view.widthPx = viewport.x;
+  view.heightPx = viewport.y;
+  view.pixelsPerRadian = uniforms['uPixelsPerRadian']!.value as number;
+  view.fade = uniforms['uFade']!.value as number;
+  view.floorKept = uniforms['uFloorKept']!.value as number;
+  view.depthPc = uniforms['uDepthPc']!.value as number;
+  // The same inputs as the last time -- a still camera, the glow drawn again for something
+  // else -- the same verdicts: not worked out again.
+  const key = cull.key;
+  let same = key.length > 0 && key[0] === cells.version && key[1] === cells.count;
+  const now = [cells.version, cells.count, view.cameraX, view.cameraY, view.cameraZ, view.widthPx, view.heightPx, view.pixelsPerRadian, view.fade, view.floorKept, view.depthPc];
+  for (let i = 0; same && i < now.length; i += 1) same = key[i] === now[i];
+  for (let i = 0; same && i < 16; i += 1) same = key[now.length + i] === view.modelView[i] && key[now.length + 16 + i] === view.projection[i];
+  if (!same) {
+    classifyCells(cells, view, SPRITE_LAW, cull.verdicts);
+    key.length = 0;
+    key.push(...now, ...Array.from(view.modelView), ...Array.from(view.projection));
+  }
+  const current = cull.version === cells.version && cull.drawn === count;
+  const serves = current ? listServes(cull.handed, cull.verdicts, cells.count) : { covers: false, ahead: false, fits: false };
+  if (serves.covers) {
+    uniforms['uAll']!.value = 0;
+    geometry.instanceCount = cull.count;
+  } else {
+    uniforms['uAll']!.value = 1;
+    geometry.instanceCount = count;
+  }
+  if (!(serves.covers && serves.ahead && serves.fits)) {
+    const handed = new Uint8Array(cells.count);
+    for (let c = 0; c < cells.count; c += 1) handed[c] = (cull.verdicts[c]! & HANDED) !== 0 ? 1 : 0;
+    const written = writeList(cells.cellOf, count, handed, indexAttribute.array as Float32Array);
+    indexAttribute.clearUpdateRanges();
+    indexAttribute.addUpdateRange(0, Math.max(1, written));
+    indexAttribute.needsUpdate = true;
+    cull.pending = { handed, count: written, version: cells.version, drawn: count };
+  }
+}
 
 export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilaments }: CosmicWebProps) {
   const info = useSyncExternalStore(source.info.subscribe, () => source.info.value);
@@ -347,22 +512,47 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
     }),
     [],
   );
+  const gl = useThree((state) => state.gl);
+  // How many galaxies are drawn: those whose dots are weighed (below).
+  const drawn = useRef(0);
   const galaxies = useMemo(() => {
     if (info === null || budget === 0) return null;
     const capacity = info.galaxies.chunks.slice(0, budget).reduce((sum, chunk) => sum + chunk.count, 0);
-    const place = new Int16Array(capacity * 4);
-    const bytes = new Uint8Array(capacity * 4);
+    const rows = Math.max(1, Math.ceil(capacity / GALAXY_TEXTURE_WIDTH));
+    const texels = rows * GALAXY_TEXTURE_WIDTH;
+    const place = new Int16Array(texels * 4);
+    const bytes = new Uint8Array(texels * 4);
+    // The places normalised by the texture unit where it can (see the header); else as floats.
+    const placeFloat = gl.extensions.has('EXT_texture_norm16') ? null : new Float32Array(texels * 4);
+    const placeTexture =
+      placeFloat === null
+        ? new THREE.DataTexture(place, GALAXY_TEXTURE_WIDTH, rows, THREE.RGBAFormat, THREE.ShortType)
+        : new THREE.DataTexture(placeFloat, GALAXY_TEXTURE_WIDTH, rows, THREE.RGBAFormat, THREE.FloatType);
+    placeTexture.normalized = placeFloat === null;
+    const bytesTexture = new THREE.DataTexture(bytes, GALAXY_TEXTURE_WIDTH, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+    for (const texture of [placeTexture, bytesTexture]) {
+      texture.minFilter = THREE.NearestFilter;
+      texture.magFilter = THREE.NearestFilter;
+    }
     const geometry = spriteGeometry(0);
-    const placeAttribute = new THREE.InstancedBufferAttribute(place, 4, true);
-    const bytesAttribute = new THREE.InstancedBufferAttribute(bytes, 4, true);
-    geometry.setAttribute('aPlace', placeAttribute);
-    geometry.setAttribute('aBytes', bytesAttribute);
+    const indexAttribute = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    indexAttribute.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aIndex', indexAttribute);
     const table = galaxyTable();
-    galaxyUniforms['uTable']!.value = table;
+    // The frame's uniforms shared, set each frame below; this draw's own textures and list
+    // switch its own -- not written into the shared ones, which a second run of this memo (React
+    // runs it twice in development) would point at textures nothing fills.
+    const uniforms: Record<string, THREE.IUniform> = {
+      ...galaxyUniforms,
+      uTable: { value: table },
+      uPlace: { value: placeTexture },
+      uBytes: { value: bytesTexture },
+      uAll: { value: 1 },
+    };
     const object = new THREE.Mesh(
       geometry,
       new THREE.ShaderMaterial({
-        uniforms: galaxyUniforms,
+        uniforms,
         vertexShader: GALAXY_VERTEX,
         fragmentShader: GALAXY_FRAGMENT,
         transparent: true,
@@ -375,8 +565,28 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
     object.raycast = noRaycast;
     object.visible = false;
     drawIntoGlow(object);
-    return { object, geometry, place, bytes, placeAttribute, bytesAttribute, table, capacity, copied: 0, chunksCopied: 0 };
-  }, [info, budget, galaxyUniforms]);
+    const made = {
+      object,
+      geometry,
+      place,
+      placeFloat,
+      bytes,
+      placeTexture,
+      bytesTexture,
+      indexAttribute,
+      table,
+      capacity,
+      copied: 0,
+      chunksCopied: 0,
+      cells: new GalaxyCells(capacity),
+      codes: galaxyCodeBounds(),
+      cull: newCull(),
+    };
+    // Handed only the galaxies that can draw a pixel, decided as it is drawn, through the
+    // camera that draws it (cosmicWebCells.ts).
+    object.onBeforeRender = (_renderer, _scene, camera) => cullGalaxies(made, drawn.current, uniforms, camera, object);
+    return made;
+  }, [info, budget, galaxyUniforms, gl]);
   useEffect(
     () => () => {
       if (galaxies === null) return;
@@ -384,23 +594,27 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
       galaxies.geometry.dispose();
       (galaxies.object.material as THREE.Material).dispose();
       galaxies.table.dispose();
+      galaxies.placeTexture.dispose();
+      galaxies.bytesTexture.dispose();
     },
     [galaxies],
   );
   // The dots: weighed in a worker for every galaxy copied, again as each chunk lands; drawn to there.
   const [halfCountPc, setHalfCountPc] = useState(0);
-  const drawn = useRef(0);
   const weighRef = useRef<() => void>(() => {});
-  const crowding = useRef<{ sample: Float32Array; grid: CrowdingGrid | null; texture: THREE.DataTexture | null }>({
+  // `uploaded`: what the texture last took, to give it only a grid that differs (see the frame).
+  const crowding = useRef<{ sample: Float32Array; grid: CrowdingGrid | null; texture: THREE.DataTexture | null; uploaded: Uint8Array | null }>({
     sample: new Float32Array(0),
     grid: null,
     texture: null,
+    uploaded: null,
   });
   useEffect(
     () => () => {
       crowding.current.texture?.dispose();
       crowding.current.texture = null;
       crowding.current.grid = null;
+      crowding.current.uploaded = null;
     },
     [],
   );
@@ -437,8 +651,7 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
     worker.onmessage = (event: MessageEvent<FloorAnswer>) => {
       const { weights, halfCountPc: half } = event.data;
       for (let g = 0; g < weights.length; g += 1) galaxies.bytes[g * 4 + 3] = weights[g]!;
-      galaxies.bytesAttribute.clearUpdateRanges();
-      galaxies.bytesAttribute.needsUpdate = true;
+      galaxies.bytesTexture.needsUpdate = true;
       galaxies.geometry.instanceCount = weights.length;
       drawn.current = weights.length;
       // The crowding's sample: every so many of the galaxies drawn, the same each frame.
@@ -482,8 +695,14 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
         galaxies.bytes[at + 1] = chunk.bv[g]!;
         galaxies.bytes[at + 2] = chunk.flags[g]!;
       }
-      galaxies.placeAttribute.addUpdateRange(from * 4, chunk.count * 4);
-      galaxies.placeAttribute.needsUpdate = true;
+      const float = galaxies.placeFloat;
+      if (float !== null) {
+        // As the texture unit would normalise them: the nearest float to c / 32767 (see the header).
+        for (let j = from * 4; j < (from + chunk.count) * 4; j += 1) float[j] = Math.max(-1, galaxies.place[j]! / 32767);
+      }
+      galaxies.cells.add(galaxies.place, galaxies.bytes, from, from + chunk.count, galaxies.codes.lightOf, galaxies.codes.hueOf);
+      galaxies.placeTexture.needsUpdate = true;
+      galaxies.bytesTexture.needsUpdate = true;
       galaxies.copied += chunk.count;
       galaxies.chunksCopied += 1;
       added = true;
@@ -626,6 +845,7 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
         c.texture.minFilter = THREE.LinearFilter;
         c.texture.magFilter = THREE.LinearFilter;
         c.texture.unpackAlignment = 1;
+        c.uploaded = null;
         galaxyUniforms['uCrowding']!.value = c.texture;
       }
       if (kept > 0 && galaxyFade > 0 && c.sample.length > 0) {
@@ -633,7 +853,14 @@ export function CosmicWeb({ source, store, clock, focus, showGalaxies, showFilam
         scratchMatrix.setFromMatrix4(camera.matrixWorldInverse);
         const e = camera.projectionMatrix.elements;
         measureCrowding(c.grid, c.sample, c.sample.length / 3, drawn.current / (c.sample.length / 3), cameraPc, scratchMatrix.elements, e[0]!, e[5]!, size.x, size.y);
-        c.texture.needsUpdate = true;
+        // Uploaded only when it differs from what the texture holds: a new version every frame
+        // told the glow pass (glowStill.ts) that the galaxies had changed, and every frame the
+        // live clock or anything else asked for drew 1.8 million sprites into the glow again,
+        // the same as before -- from outside the web 25 ms of the GPU a frame.
+        if (c.uploaded === null || !sameBytes(c.uploaded, c.grid.kept)) {
+          c.uploaded = c.grid.kept.slice();
+          c.texture.needsUpdate = true;
+        }
       }
     }
 
