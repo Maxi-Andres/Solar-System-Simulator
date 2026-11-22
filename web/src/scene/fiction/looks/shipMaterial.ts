@@ -156,6 +156,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uShadowTexel;
   uniform vec2 uShadowRange;
   uniform vec3 uGalaxyPole;
+  uniform float uAmbient;
   uniform vec3 uFillDirection;
   uniform vec3 uFillColor;
   uniform float uFillIrradiance;
@@ -382,6 +383,10 @@ const FRAGMENT_SHADER = /* glsl */ `
       radiance += fill * uFillColor * uFillIrradiance * uIrradiance * nlFill * mix(0.4, 1.0, occlusion);
     }
 
+    // The lighting mode's ambient (shading.ts LIGHTING): none under Natural; under Flood and
+    // Shadow the same even light the Solar System's bodies get, so the ship is seen from any side.
+    radiance += (diffuse + metal * f0 / PI) * uAmbient * occlusion;
+
     // The silhouette: grazing angles reflect the sky's faint band at nearly full Fresnel, so an
     // edge on the dark side still separates from black space.
     radiance += pow(1.0 - nv, 5.0) * sky(r, 1.0) * uIrradiance * 2.0 * occlusion;
@@ -416,6 +421,7 @@ export function shipMaterial(): THREE.ShaderMaterial {
       uShadowProjection: { value: new THREE.Matrix4() },
       // A galaxy across the sky, tilted: in view space, set with the light.
       uGalaxyPole: { value: new THREE.Vector3(0, 1, 0) },
+      uAmbient: { value: LIGHTING.natural.ambient },
       uFillDirection: { value: new THREE.Vector3(0, -1, 0) },
       uFillColor: { value: new THREE.Color(1, 1, 1) },
       uFillIrradiance: { value: 0 },
@@ -453,8 +459,16 @@ export function planetshineStrength(albedo: number, litFraction: number, angular
   return albedo * Math.min(Math.max(litFraction, 0), 1) * sine * sine;
 }
 
-export function setShipLight(material: THREE.ShaderMaterial, toLight: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void {
+export function setShipLight(
+  material: THREE.ShaderMaterial,
+  toLight: THREE.Vector3,
+  camera: THREE.Camera,
+  planetshine?: Planetshine,
+  lighting: { readonly sun: number; readonly ambient: number } = LIGHTING.natural,
+): void {
   (material.uniforms['uLight']!.value as THREE.Vector3).copy(toLight).transformDirection(camera.matrixWorldInverse);
+  material.uniforms['uIrradiance']!.value = lighting.sun;
+  material.uniforms['uAmbient']!.value = lighting.ambient;
   if (planetshine === undefined || planetshine.strength <= 0) {
     material.uniforms['uFillIrradiance']!.value = 0;
   } else {

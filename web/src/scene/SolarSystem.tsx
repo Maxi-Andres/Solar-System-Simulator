@@ -1481,7 +1481,7 @@ export function SolarSystem({
               world === undefined || bound === undefined
                 ? undefined
                 : planetshine(store.body(bound), world.positionKm, light.positionKm, rebased.positionKm, fictionOn);
-            model.update(scratchLight, camera, shine);
+            model.update(scratchLight, camera, shine, LIGHTING[lighting]);
           }
         }
       }

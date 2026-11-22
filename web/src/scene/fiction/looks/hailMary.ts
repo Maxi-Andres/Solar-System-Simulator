@@ -825,7 +825,7 @@ export interface HailMary {
    * Each frame it is drawn: the direction to the star (world space), the camera, and the light
    * of a nearby world on the ship's dark side if there is one (see Planetshine).
    */
-  update(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void;
+  update(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine, lighting?: { readonly sun: number; readonly ambient: number }): void;
   /**
    * Cruise, or centrifuge mode at a spin angle (radians, about the hinge axis, local y). In
    * centrifuge mode the crew section is turned round and 80 m out on its cables, the whole
@@ -1064,8 +1064,8 @@ export function createHailMary(): HailMary {
   return {
     object,
     triangles,
-    update(lightDirection, camera, planetshine) {
-      setShipLight(material, lightDirection, camera, planetshine);
+    update(lightDirection, camera, planetshine, lighting) {
+      setShipLight(material, lightDirection, camera, planetshine, lighting);
       // Detail from how much of the view the ship spans: its length over its distance against
       // the view's half-height.
       object.getWorldPosition(objectPosition);

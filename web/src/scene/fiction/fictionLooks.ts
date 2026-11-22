@@ -80,7 +80,13 @@ export interface FictionObject {
    * to the world and `planetshineStrength(albedo, litFraction, angularRadius)`, a share of the
    * star's irradiance. Omit it, or pass strength 0, far from any world.
    */
-  update?(lightDirection: THREE.Vector3, camera: THREE.Camera, planetshine?: Planetshine): void;
+  update?(
+    lightDirection: THREE.Vector3,
+    camera: THREE.Camera,
+    planetshine?: Planetshine,
+    /** The lighting mode's star and ambient irradiance (shading.ts LIGHTING); Natural if absent. */
+    lighting?: { readonly sun: number; readonly ambient: number },
+  ): void;
   /**
    * A ship's flight mode, for the ships that have more than one (looks/hailMary.ts): `cruise`,
    * or `centrifuge`, split and spinning for gravity, at `spinPhase` radians about local y. The
