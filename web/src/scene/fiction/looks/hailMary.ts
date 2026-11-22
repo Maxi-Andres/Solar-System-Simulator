@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 
 import { gltfLoader, modelUrl } from '../../craftModels.ts';
-import { type Planetshine, type ShipFinish, setShipFinishes, setShipLight, shipMaterial, MARKING } from './shipMaterial.ts';
+import { type Planetshine, type ShipFinish, MARKING } from './shipMaterial.ts';
+import { type RigLight, createShipRig, packedShipGeometry } from './shipRig.ts';
 
 export { planetshineStrength, type Planetshine } from './shipMaterial.ts';
+export { LOW_DETAIL_BELOW, SHADOW_MAP_SIZE, SHADOWS_ABOVE } from './shipRig.ts';
 
 /**
  * The Hail Mary (Andy Weir, *Project Hail Mary*, 2021), drawn from a fan-made model of the ship
@@ -266,23 +268,7 @@ export function shipGeometry(root: THREE.Object3D | undefined, section: number):
     }
     vertexBase += position.count;
   }
-  return finishGeometry(positions, normals, detail, indices);
-}
-
-function finishGeometry(
-  positions: Float32Array,
-  normals: Int16Array,
-  detail: Uint8Array,
-  indices: Uint16Array | Uint32Array,
-): THREE.BufferGeometry {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  // Four components, the fourth unused: a format the GPU reads as it is.
-  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 4, true));
-  geometry.setAttribute('detail', new THREE.BufferAttribute(detail, 4, true));
-  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  geometry.computeBoundingSphere();
-  return geometry;
+  return packedShipGeometry(positions, normals, detail, indices);
 }
 
 /** The five Zylon cables of centrifuge mode, from the drum's front to the turned column's aft end. */
@@ -326,39 +312,8 @@ function cableGeometry(): THREE.BufferGeometry {
     for (let c = 0; c < 3; c += 1) packedNormals[i * 4 + c] = Math.round(normals[i * 3 + c]! * 32767);
     detail.set([255, zylon, SECTION.cables, 0], i * 4);
   }
-  return finishGeometry(new Float32Array(positions), packedNormals, detail, new Uint16Array(indices));
+  return packedShipGeometry(new Float32Array(positions), packedNormals, detail, new Uint16Array(indices));
 }
-
-// --- The star's shadow ------------------------------------------------------------------------
-
-/** Shadow map size: 1,024 over the hull's 44 m bounding sphere, a texel every 4 cm in cruise. */
-export const SHADOW_MAP_SIZE = 1024;
-
-/** Above this share of the view's half-height -- about 200 pixels -- the star casts shadows. */
-export const SHADOWS_ABOVE = 0.37;
-
-/**
- * The shadow map holds depth from the star packed into eight-bit RGBA (three's packing chunk):
- * thirty-two bits across the ship's depth. Stored as a half float it had a step of 6 cm at
- * 50 m, as coarse as the bias, and the hull shadowed itself in patches.
- */
-const DEPTH_VERTEX = /* glsl */ `
-  varying float vDepth;
-  void main() {
-    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-    vDepth = -viewPosition.z;
-    gl_Position = projectionMatrix * viewPosition;
-  }
-`;
-
-const DEPTH_FRAGMENT = /* glsl */ `
-  #include <packing>
-  uniform vec2 uRange;
-  varying float vDepth;
-  void main() {
-    gl_FragColor = packDepthToRGBA(clamp((vDepth - uRange.x) / (uRange.y - uRange.x), 0.0, 0.9999));
-  }
-`;
 
 // --- The object -------------------------------------------------------------------------------
 
@@ -367,53 +322,19 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** How the ship is flown: drives at the stern, or split and spinning for gravity. */
 export type ShipMode = 'cruise' | 'centrifuge';
 
-/** Below this share of the view's half-height -- about 50 pixels on a 1080-line screen -- the silhouette model is drawn. */
-export const LOW_DETAIL_BELOW = 0.1;
-
 /** The ship's widest extent against its length, for how much of the view it fills: the radiators. */
 const CRUISE_SPAN = RADIATOR_SPAN_M / HAIL_MARY_LENGTH_M;
 const CENTRIFUGE_SPAN = (CENTRIFUGE.hingeZ + 1) / HAIL_MARY_LENGTH_M;
-
-const GLOW_VERTEX = /* glsl */ `
-  #include <common>
-  #include <logdepthbuf_pars_vertex>
-  attribute vec3 color;
-  uniform float uPixelsPerUnit;
-  varying vec3 vColor;
-  void main() {
-    vColor = color;
-    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-    // A glow half a metre across, never less than three pixels: a light at a distance is a point.
-    float radius = length((modelViewMatrix * vec4(0.5, 0.0, 0.0, 0.0)).xyz);
-    gl_PointSize = clamp(2.0 * radius * uPixelsPerUnit / max(-viewPosition.z, 1e-6), 3.0, 48.0);
-    gl_Position = projectionMatrix * viewPosition;
-    #include <logdepthbuf_vertex>
-  }
-`;
-
-const GLOW_FRAGMENT = /* glsl */ `
-  #include <common>
-  #include <logdepthbuf_pars_fragment>
-  varying vec3 vColor;
-  void main() {
-    #include <logdepthbuf_fragment>
-    float d = length(gl_PointCoord - 0.5) * 2.0;
-    float glow = exp(-d * d * 7.0) * 1.2 + exp(-d * d * 60.0) * 3.0;
-    gl_FragColor = vec4(vColor * glow, 1.0);
-    #include <tonemapping_fragment>
-    #include <colorspace_fragment>
-  }
-`;
 
 /**
  * The running lights: red and green at the radiator tips, port and starboard, white strobes at
  * the bow tip and the stern -- places the model leaves bare, so ours do not sit on its detail.
  */
-const LIGHTS: readonly { position: THREE.Vector3; color: readonly [number, number, number]; crew: boolean }[] = [
-  { position: new THREE.Vector3(0, -(RADIATOR_SPAN_M / 2 + 0.3), 4.5), color: [1.0, 0.06, 0.03], crew: false },
-  { position: new THREE.Vector3(0, RADIATOR_SPAN_M / 2 + 0.3, 4.5), color: [0.05, 1.0, 0.15], crew: false },
-  { position: new THREE.Vector3(0, 0, Z_NOSE + 0.25), color: [1.0, 0.97, 0.9], crew: true },
-  { position: new THREE.Vector3(0, 2.6, 0.2), color: [1.0, 0.97, 0.9], crew: false },
+const LIGHTS: readonly RigLight[] = [
+  { position: new THREE.Vector3(0, -(RADIATOR_SPAN_M / 2 + 0.3), 4.5), color: [1.0, 0.06, 0.03], section: SECTION.rear },
+  { position: new THREE.Vector3(0, RADIATOR_SPAN_M / 2 + 0.3, 4.5), color: [0.05, 1.0, 0.15], section: SECTION.rear },
+  { position: new THREE.Vector3(0, 0, Z_NOSE + 0.25), color: [1.0, 0.97, 0.9], section: SECTION.crew },
+  { position: new THREE.Vector3(0, 2.6, 0.2), color: [1.0, 0.97, 0.9], section: SECTION.rear },
 ];
 
 export interface HailMary {
@@ -450,9 +371,16 @@ export type LoadModel = () => Promise<THREE.Object3D>;
 const loadFromFile: LoadModel = () => gltfLoader().then((loader) => loader.loadAsync(modelUrl(HAIL_MARY_MODEL)).then((gltf) => gltf.scene));
 
 export function createHailMary(load: LoadModel = loadFromFile): HailMary {
-  const material = shipMaterial();
-  setShipFinishes(material, FINISH_TABLE);
-  const empty = new THREE.BufferGeometry();
+  const rig = createShipRig({
+    name: 'hail-mary',
+    sectionNames: ['hail-mary-fuel-and-drives', 'hail-mary-crew', 'hail-mary-cables'],
+    lightsName: 'hail-mary-lights',
+    lights: LIGHTS,
+    lengthM: HAIL_MARY_LENGTH_M,
+    finishes: FINISH_TABLE,
+  });
+  const [rear, crew, cables] = rig.sections as [THREE.Mesh, THREE.Mesh, THREE.Mesh];
+  const empty = rear.geometry;
   const geometries: Record<string, THREE.BufferGeometry> = {
     crewFull: empty,
     rearFull: empty,
@@ -463,164 +391,17 @@ export function createHailMary(load: LoadModel = loadFromFile): HailMary {
     centrifugeCables: cableGeometry(),
   };
   const triangles = { full: 0, low: 0 };
-
-  const crew = new THREE.Mesh(empty, material);
-  const rear = new THREE.Mesh(empty, material);
-  const cables = new THREE.Mesh(empty, material);
-  crew.name = 'hail-mary-crew';
-  rear.name = 'hail-mary-fuel-and-drives';
-  cables.name = 'hail-mary-cables';
-  for (const mesh of [crew, rear, cables]) mesh.frustumCulled = false;
-
-  // The running lights' glow: one draw of sprites, placed with the sections.
-  const glowGeometry = new THREE.BufferGeometry();
-  glowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(LIGHTS.length * 3), 3));
-  glowGeometry.setAttribute('color', new THREE.Float32BufferAttribute(LIGHTS.flatMap((light) => light.color.map((c) => c * 0.6)), 3));
-  const glowMaterial = new THREE.ShaderMaterial({
-    vertexShader: GLOW_VERTEX,
-    fragmentShader: GLOW_FRAGMENT,
-    uniforms: { uPixelsPerUnit: { value: 500 } },
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const glows = new THREE.Points(glowGeometry, glowMaterial);
-  glows.name = 'hail-mary-lights';
-  glows.frustumCulled = false;
-  const drawingSize = new THREE.Vector2();
-  glows.onBeforeRender = (renderer, _scene, camera) => {
-    renderer.getDrawingBufferSize(drawingSize);
-    glowMaterial.uniforms['uPixelsPerUnit']!.value = (drawingSize.y / 2) * camera.projectionMatrix.elements[5]!;
-  };
-
-  // Metres, z from the stern -> length one, centre of mass at the origin.
-  const spin = new THREE.Group();
-  spin.add(rear, crew, cables, glows);
-  const model = new THREE.Group();
-  model.scale.setScalar(1 / HAIL_MARY_LENGTH_M);
-  model.add(spin);
-  const object = new THREE.Group();
-  object.name = 'hail-mary';
-  object.add(model);
-
-  // The star's shadow: the three sections again, sharing their geometry, drawn for depth from
-  // the star into a small map, in the model's own frame (metres, centre of mass at the origin).
-  const shadowTarget = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
-    minFilter: THREE.NearestFilter,
-    magFilter: THREE.NearestFilter,
-    generateMipmaps: false,
-    depthBuffer: true,
-  });
-  const depthMaterial = new THREE.ShaderMaterial({
-    vertexShader: DEPTH_VERTEX,
-    fragmentShader: DEPTH_FRAGMENT,
-    uniforms: { uRange: { value: new THREE.Vector2(0, 1) } },
-    side: THREE.DoubleSide,
-  });
-  const shadowScene = new THREE.Scene();
-  const proxies = [rear, crew, cables].map((mesh) => {
-    const proxy = new THREE.Mesh(mesh.geometry, depthMaterial);
-    proxy.matrixAutoUpdate = false;
-    proxy.frustumCulled = false;
-    shadowScene.add(proxy);
-    return proxy;
-  });
-  const shadowCamera = new THREE.OrthographicCamera();
-  const lightInModel = new THREE.Vector3(1, 0, 0);
-  const lastLight = new THREE.Vector3();
-  let shadowWanted = false;
-  let shadowDirty = true;
-  let shadowFrame = -1;
-  const sectionMatrix = [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Matrix4()];
-  const scratchQuaternion = new THREE.Quaternion();
-  const scratchPosition = new THREE.Vector3();
-  const scratchScale = new THREE.Vector3();
-  const centre = new THREE.Vector3();
-  const farEnd = new THREE.Vector3();
-  const clear = new THREE.Color();
-  const previousClear = new THREE.Color();
-
   let mode: ShipMode = 'cruise';
-  let low = false;
-  let ready = false;
 
-  const drawShadow = (renderer: THREE.WebGLRenderer): void => {
-    if (!shadowWanted || !ready) return;
-    // Once a frame at most, and only when something moved.
-    if (!shadowDirty || renderer.info.render.frame === shadowFrame) return;
-    spin.updateMatrix();
-    const meshes = [rear, crew, cables];
-    for (let s = 0; s < 3; s += 1) {
-      meshes[s]!.updateMatrix();
-      sectionMatrix[s]!.multiplyMatrices(spin.matrix, meshes[s]!.matrix);
-      proxies[s]!.geometry = meshes[s]!.geometry;
-      proxies[s]!.visible = meshes[s]!.visible;
-      proxies[s]!.matrix.copy(sectionMatrix[s]!);
-    }
-    // The bounds: from the stern to the crew section's far end, wherever the mode puts it.
-    centre.set(0, 0, 0).applyMatrix4(sectionMatrix[0]!);
-    farEnd.set(0, 0, mode === 'cruise' ? Z_NOSE : CREW_AFT_Z_M).applyMatrix4(sectionMatrix[1]!);
-    const radius = centre.distanceTo(farEnd) / 2 + 8;
-    centre.add(farEnd).multiplyScalar(0.5);
-    shadowCamera.left = -radius;
-    shadowCamera.right = radius;
-    shadowCamera.top = radius;
-    shadowCamera.bottom = -radius;
-    shadowCamera.near = 0.1;
-    shadowCamera.far = 2 * radius + 10;
-    shadowCamera.position.copy(centre).addScaledVector(lightInModel, radius + 5);
-    shadowCamera.up.set(Math.abs(lightInModel.y) < 0.9 ? 0 : 1, Math.abs(lightInModel.y) < 0.9 ? 1 : 0, 0);
-    shadowCamera.lookAt(centre);
-    shadowCamera.updateMatrixWorld();
-    shadowCamera.updateProjectionMatrix();
-
-    const previousTarget = renderer.getRenderTarget();
-    const autoClear = renderer.autoClear;
-    renderer.getClearColor(previousClear);
-    const previousAlpha = renderer.getClearAlpha();
-    renderer.autoClear = false;
-    renderer.setRenderTarget(shadowTarget);
-    // Empty texels are as far as the map holds: lit.
-    (depthMaterial.uniforms['uRange']!.value as THREE.Vector2).set(shadowCamera.near, shadowCamera.far);
-    (material.uniforms['uShadowRange']!.value as THREE.Vector2).set(shadowCamera.near, shadowCamera.far);
-    renderer.setClearColor(clear.setRGB(1, 1, 1, THREE.LinearSRGBColorSpace), 1);
-    renderer.clear(true, true, false);
-    renderer.render(shadowScene, shadowCamera);
-    renderer.setRenderTarget(previousTarget);
-    renderer.setClearColor(previousClear, previousAlpha);
-    renderer.autoClear = autoClear;
-
-    const views = material.uniforms['uShadowView']!.value as THREE.Matrix4[];
-    for (let s = 0; s < 3; s += 1) views[s]!.multiplyMatrices(shadowCamera.matrixWorldInverse, sectionMatrix[s]!);
-    (material.uniforms['uShadowProjection']!.value as THREE.Matrix4).copy(shadowCamera.projectionMatrix);
-    material.uniforms['uShadowMap']!.value = shadowTarget.texture;
-    material.uniforms['uShadowTexel']!.value = 1 / SHADOW_MAP_SIZE;
-    material.uniforms['uShadowOn']!.value = 1;
-    material.uniformsNeedUpdate = true;
-    shadowDirty = false;
-    shadowFrame = renderer.info.render.frame;
-  };
-  // Whichever section is drawn first draws the shadow, before any of them reads it.
-  for (const mesh of [rear, crew, cables]) {
-    mesh.onBeforeRender = (renderer) => drawShadow(renderer);
-  }
-
-  const glowPositions = glowGeometry.getAttribute('position') as THREE.BufferAttribute;
-  const placeGlows = (): void => {
-    crew.updateMatrix();
-    LIGHTS.forEach((light, i) => {
-      scratchPosition.copy(light.position);
-      if (light.crew) scratchPosition.applyMatrix4(crew.matrix);
-      glowPositions.setXYZ(i, scratchPosition.x, scratchPosition.y, scratchPosition.z);
-    });
-    glowPositions.needsUpdate = true;
-  };
   const showDetail = (): void => {
+    const low = rig.low;
     crew.geometry = low ? geometries['crewLow']! : geometries['crewFull']!;
     rear.geometry = low ? geometries['rearLow']! : geometries['rearFull']!;
     cables.geometry = mode === 'centrifuge' ? geometries['centrifugeCables']! : low ? geometries['linesLow']! : geometries['linesFull']!;
   };
+  rig.onDetail = showDetail;
   const place = (phase: number): void => {
+    const spin = rig.spin;
     if (mode === 'cruise') {
       crew.position.set(0, 0, 0);
       crew.rotation.set(0, 0, 0);
@@ -635,8 +416,7 @@ export function createHailMary(load: LoadModel = loadFromFile): HailMary {
       spin.position.set(0, 0, -CENTRIFUGE.centreZ).applyAxisAngle(Y_AXIS, phase);
     }
     showDetail();
-    placeGlows();
-    shadowDirty = true;
+    rig.moved();
   };
   place(0);
 
@@ -662,9 +442,8 @@ export function createHailMary(load: LoadModel = loadFromFile): HailMary {
         const count = (g: THREE.BufferGeometry): number => (g.index?.count ?? 0) / 3;
         triangles.full = count(geometries['rearFull']!) + count(geometries['crewFull']!) + count(geometries['linesFull']!);
         triangles.low = count(geometries['rearLow']!) + count(geometries['crewLow']!) + count(geometries['linesLow']!);
-        ready = true;
         showDetail();
-        shadowDirty = true;
+        rig.setReady();
       })
       .catch(() => {
         // Left at its lights; the layer's marker stands in.
@@ -672,42 +451,13 @@ export function createHailMary(load: LoadModel = loadFromFile): HailMary {
       .finally(() => resolveLoaded());
   };
 
-  const objectPosition = new THREE.Vector3();
-  const cameraPosition = new THREE.Vector3();
   return {
-    object,
+    object: rig.object,
     triangles,
     loaded,
     update(lightDirection, camera, planetshine, lighting) {
       if (!requested) fetchModel();
-      setShipLight(material, lightDirection, camera, planetshine, lighting);
-      // Detail from how much of the view the ship spans: its widest extent over its distance
-      // against the view's half-height.
-      object.getWorldPosition(objectPosition);
-      camera.getWorldPosition(cameraPosition);
-      const length = object.matrixWorld.getMaxScaleOnAxis() * (mode === 'cruise' ? CRUISE_SPAN : CENTRIFUGE_SPAN);
-      const distance = Math.max(objectPosition.distanceTo(cameraPosition), 1e-9);
-      const halfView = camera instanceof THREE.PerspectiveCamera ? Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) : 1;
-      const share = length / distance / halfView;
-      const nowLow = share < LOW_DETAIL_BELOW;
-      if (nowLow !== low) {
-        low = nowLow;
-        // The glows stay: at a few pixels the running lights are what is seen of the ship.
-        showDetail();
-      }
-      // The shadow: wanted only while large; redrawn when the star moves against the ship.
-      shadowWanted = share > SHADOWS_ABOVE;
-      if (!shadowWanted) {
-        material.uniforms['uShadowOn']!.value = 0;
-        return;
-      }
-      model.updateWorldMatrix(true, false);
-      model.matrixWorld.decompose(scratchPosition, scratchQuaternion, scratchScale);
-      lightInModel.copy(lightDirection).applyQuaternion(scratchQuaternion.invert()).normalize();
-      if (lightInModel.distanceToSquared(lastLight) > 1e-8) {
-        lastLight.copy(lightInModel);
-        shadowDirty = true;
-      }
+      rig.update(lightDirection, camera, planetshine, lighting, mode === 'cruise' ? CRUISE_SPAN : CENTRIFUGE_SPAN);
     },
     setMode(next, spinPhase = 0) {
       mode = next;
@@ -716,12 +466,7 @@ export function createHailMary(load: LoadModel = loadFromFile): HailMary {
     dispose() {
       disposed = true;
       for (const geometry of Object.values(geometries)) geometry.dispose();
-      empty.dispose();
-      material.dispose();
-      glowGeometry.dispose();
-      glowMaterial.dispose();
-      depthMaterial.dispose();
-      shadowTarget.dispose();
+      rig.dispose();
     },
   };
 }

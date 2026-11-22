@@ -247,6 +247,11 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   if (planetarySystemOf(body.id) !== null) {
     return 'planetary-system';
   }
+  // A fictional world about a star of no system -- Erid and Vulcan about 40 Eridani A -- is in the
+  // neighbourhood with its star, listed by the star's crumb before it.
+  if (fiction !== null && realAnchorOf(fiction)?.kind === 'star') {
+    return 'none';
+  }
   // Any other star than the Sun is in the neighbourhood, and listed there.
   return isCatalogueStar(body) ? 'none' : 'solar-system';
 }

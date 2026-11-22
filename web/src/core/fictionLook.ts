@@ -30,7 +30,9 @@ export type WorldPalette =
   /** Airless rock, cratered, grey to ochre: a small moon (Polyphemus' other moons). */
   | 'barren'
   /** Airless ice, bright, cracked: an icy moon (Polyphemus' other moons). */
-  | 'icy';
+  | 'icy'
+  /** Under a crushing, hot ammonia atmosphere, the ground dim beneath it (Erid). */
+  | 'ammonia-haze';
 
 export type FictionLook =
   | {
@@ -55,4 +57,4 @@ export type FictionLook =
    * A ship, our own design from what its canon describes. Length 1 along local +z (+z the bow,
    * the direction it accelerates), centred on its centre of mass.
    */
-  | { readonly kind: 'ship'; readonly design: 'hail-mary' };
+  | { readonly kind: 'ship'; readonly design: 'hail-mary' | 'blip-a' };

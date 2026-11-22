@@ -54,7 +54,7 @@ describe('fiction’s abouts', () => {
   it('show only the works’ own images: in film/, credited to a studio, sourced, small', () => {
     const publicDir = join(import.meta.dirname, '../../../public');
     for (const key of Object.keys(FICTION_ABOUTS) as (keyof typeof FICTION_ABOUTS)[]) {
-      // An about may have none: the Petrova line's.
+      // An about may have none: the Petrova line's, Erid's, the Blip-A's.
       for (const photo of FICTION_ABOUTS[key].photos) {
         expect(photo.origin, photo.file).toBe('film');
         for (const file of [photo.file, photo.largeFile]) {
@@ -71,6 +71,10 @@ describe('fiction’s abouts', () => {
     }
     expect(FICTION_ABOUTS['polyphemus-family'].photos.length).toBeGreaterThan(0);
     expect(FICTION_ABOUTS.petrova.photos).toEqual([]);
+    // Star Trek's from its official site; none yet for Erid or the Blip-A.
+    expect(FICTION_ABOUTS.vulcan.photos.map((photo) => photo.credit)).toEqual(['© CBS Studios', '© CBS Studios']);
+    expect(FICTION_ABOUTS.erid.photos).toEqual([]);
+    expect(FICTION_ABOUTS['blip-a'].photos).toEqual([]);
   });
 
   it('are kept apart from the real descriptions', () => {

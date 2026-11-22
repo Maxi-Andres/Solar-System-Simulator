@@ -17,9 +17,10 @@ export interface FictionPhoto extends DescriptionPhoto {
   readonly filmNote?: 'Image from the film' | 'Image from the franchise';
 }
 
-/** Avatar's studio, and Project Hail Mary's, as their images are credited. */
+/** Avatar's studio, Project Hail Mary's and Star Trek's, as their images are credited. */
 const AVATAR_STUDIO = '© 20th Century Studios';
 const HAIL_MARY_STUDIO = '© Amazon MGM Studios';
+const STAR_TREK_STUDIO = '© CBS Studios';
 
 /**
  * The source of a film image the project's author supplied himself (Maxi, 2026-11-22), which has
@@ -56,25 +57,42 @@ function suppliedStill(
 }
 
 /**
- * An image from the film's official site (web/public/photos/fiction/film/): a 640-pixel thumbnail
+ * An image from a work's official site (web/public/photos/fiction/film/): a 640-pixel thumbnail
  * and a large copy 800 pixels wide at most, no larger -- shown small, for illustration.
  */
-function filmStill(name: string, title: string, caption: string, sourceUrl: string): FictionPhoto {
+function officialStill(
+  name: string,
+  site: { readonly studio: string; readonly name: string; readonly width?: number; readonly height?: number },
+  title: string,
+  caption: string,
+  sourceUrl: string,
+): FictionPhoto {
   return {
     file: `photos/fiction/film/${name}.webp`,
     largeFile: `photos/fiction/film/${name}-large.webp`,
-    width: 640,
-    height: 360,
+    width: site.width ?? 640,
+    height: site.height ?? 360,
     title,
-    caption: `${caption} An image from the film’s own official site, shown small for illustration; it belongs to the studio.`,
+    caption: `${caption} An image from the work’s own official site, shown small for illustration; it belongs to the studio.`,
     colour: 'true',
-    credit: AVATAR_STUDIO,
+    credit: site.studio,
     licence: 'All rights reserved; shown small for illustration in a non-commercial project',
-    date: 'avatar.com, Pandorapedia',
+    date: site.name,
     sourceUrl,
     origin: 'film',
   };
 }
+
+/** Avatar's official site, its encyclopedia. */
+const PANDORAPEDIA = { studio: AVATAR_STUDIO, name: 'avatar.com, Pandorapedia' } as const;
+
+/** An image from Pandorapedia, 640 by 360. */
+function filmStill(name: string, title: string, caption: string, sourceUrl: string): FictionPhoto {
+  return officialStill(name, PANDORAPEDIA, title, caption, sourceUrl);
+}
+
+/** Star Trek's official site, startrek.com. */
+const STARTREK_COM = { studio: STAR_TREK_STUDIO, name: 'startrek.com' } as const;
 
 const AVATAR_POLYPHEMUS_STILL = filmStill(
   'polyphemus-and-moons',
@@ -273,6 +291,80 @@ const PETROVA: FictionAbout = {
   ],
 };
 
+const ERID: FictionAbout = {
+  kind: 'Planet',
+  photos: [],
+  story: [
+    'Erid is the home world of Rocky, the alien engineer the Hail Mary’s pilot meets at τ Ceti in Andy Weir’s Project Hail Mary (2021). Its star, 40 Eridani A, is infected with Astrophage and dimming too, and Rocky’s ship, the Blip-A, was sent to τ Ceti for the same reason as the Hail Mary. Eridians live in a hot, crushing air of ammonia and know the world by sound.',
+  ],
+  canon: [
+    'The novel gives a few numbers: Erid’s gravity, which Rocky gives as 20.48 m/s², a little over twice Earth’s; its air, ammonia; and his ship kept at 29 atmospheres and 210 °C, as at home. It puts 40 Eridani ten light years from τ Ceti.',
+    'The rest is from Weir’s own Eridian Species Information Document, which he shared with readers. Erid is “the first planet orbiting Eridani A”, 0.224 AU out on an orbit of eccentricity 0.04, its year 42.245 days; 8.47 Earth masses and 12,835 km in radius, 2.09 g at the ground; 28 atmospheres of ammonia over a surface at 210 °C, where water stays liquid under the pressure and the oceans are at 202 °C; a day of 5.1104 hours, and a magnetic field about 25 times Earth’s. In a 2026 interview Weir put its year at 46 days; the document’s figure is used.',
+  ],
+  invented: [
+    'The plane of its orbit, which neither source gives: tilted 60° to the sky, and shared with Vulcan’s, so the two orbits are seen open from Earth rather than edge on.',
+    'The distance it is drawn at. The document’s 0.224 AU and 42.245 days together imply a star of 0.84 Suns, where 40 Eridani A is measured at 0.78 (Ma et al. 2018). The period, the number Weir took from the real candidate, is kept, and the orbit drawn at the 0.219 AU it gives about the real mass; the panel shows both. Its look, this app’s own procedural drawing, is derived from the physics in Weir’s document: a deep, hot ammonia haze over a dark ground, its limb wide because hot, light ammonia gives the air a scale height of some 9.5 km. The film does not show Erid from space.',
+  ],
+  reality: [
+    '40 Eridani A is real: an orange dwarf a little smaller than the Sun, 16.3 light years away. A white dwarf and a red dwarf, 40 Eridani B and C, go round each other every 230 years, together some 400 AU from it; the app draws both where the star catalogue places them, and from Erid they would be the brightest stars in the sky.',
+    'In 2018 a planet of at least 8.47 Earth masses was reported round A, 0.22 AU out with a period of 42.4 days (Ma et al. 2018): the candidate Weir built Erid on, which the press called Vulcan. In 2024 Burrows et al., in a paper titled “The Death of Vulcan”, showed with the NEID spectrograph that the signal is the star’s own activity — its spots coming round as it turns — and not a planet. The app does not draw it. At 0.22 AU, A gives some nine times the light Earth gets: an Earth-like world there would be far too hot, which is why Weir gave Erid its thick, hot air.',
+  ],
+};
+
+const VULCAN: FictionAbout = {
+  kind: 'Planet',
+  photos: [
+    officialStill(
+      'vulcan-from-orbit',
+      { ...STARTREK_COM, height: 269 },
+      'Vulcan from orbit, as Star Trek shows it',
+      'The Enterprise over Vulcan’s red-orange deserts and white cloud.',
+      'https://www.startrek.com/news/vulcan-like-planet-found-for-real',
+    ),
+    officialStill(
+      'vulcan-surface',
+      { ...STARTREK_COM, width: 550, height: 300 },
+      'Vulcan’s surface, as Star Trek shows it',
+      'Red desert hills under a hazy sky, a ring of stone pillars on a height and a city beyond.',
+      'https://www.startrek.com/news/vulcan-like-planet-found-for-real',
+    ),
+  ],
+  story: [
+    'Vulcan is the home world of Spock’s people in Star Trek, from the first series (1966) on: a hot, dry desert planet of thin air, whose people live by logic. In the later series, reunited with their Romulan cousins, they call it Ni’Var.',
+  ],
+  canon: [
+    'Its star is 40 Eridani A. Star Trek: Picard names it on screen (“Maps and Legends”, 2020), Discovery shows it on a map (2017), and Enterprise puts Vulcan a little over 16 light years from Earth (“Home”, 2004). The choice goes back to a letter Gene Roddenberry signed with three astronomers in Sky & Telescope in July 1991, “Vulcan’s Sun”: 40 Eridani A is about four billion years old, time enough for life to rise, and its two companions would shine brilliantly in Vulcan’s sky.',
+    'An older placement, in the Star Trek Spaceflight Chronology (1979), puts Vulcan at ε Eridani instead, a star of about a billion years; Roddenberry preferred 40 Eridani for its age.',
+    'Of the world itself the canon gives little. Vulcan has no moon (Spock, “The Man Trap”, 1966); it is hot, its air thin (“Amok Time”, 1967); from orbit it is red-orange and tan desert. Its size, mass, day and orbit are given nowhere. That its gravity is stronger than Earth’s is an old assumption of the franchise, never given a figure on screen; the 1.4 g often quoted is fan lore, and is not used.',
+  ],
+  invented: [
+    'Its orbit and its size. Vulcan is drawn 0.62 AU from 40 Eridani A, in the star’s habitable zone — A gives 0.46 of the Sun’s light, so Earth’s share falls at 0.68 AU — at 1.2 times the light Earth gets, warm enough for the desert the series shows. That is 0.4 AU outside Erid, far enough that both orbits stay stable; its year, by Kepler’s law, is about 202 days. The orbit is nearly circular and lies in Erid’s plane.',
+    'Its radius is Earth’s, 6,371 km, and its mass 1.2 Earths, so that its gravity is 1.2 g: higher than Earth’s, as the franchise holds, without the fans’ figure. No moon is drawn, as Spock says; the large body seen in its sky in Star Trek: The Motion Picture (1979), which licensed books later called T’Khut, is not canon and not drawn. Its look, a red-orange desert under hazy air, is this app’s own procedural drawing after the series.',
+  ],
+  reality: [
+    '40 Eridani is real, 16.3 light years away: A, an orange dwarf a little smaller than the Sun; B, a white dwarf, the first ever recognised, in 1910; and C, a red dwarf. B and C go round each other every 230 years, together some 400 AU from A, and from a world round A they would shine as a brilliant pair, as the 1991 letter said. The app draws all three where the star catalogue places them.',
+    'In 2018 the press greeted a candidate planet round A as “Vulcan”: 0.22 AU out, far too close and too hot for the series’ world. In 2024 Burrows et al., in “The Death of Vulcan”, showed the signal was the star’s activity and not a planet. No planet is known round A today, and its habitable zone, near 0.6 to 0.7 AU, is as far as anyone can yet tell empty.',
+  ],
+};
+
+const BLIP_A: FictionAbout = {
+  kind: 'Starship',
+  photos: [],
+  story: [
+    'The Blip-A is Rocky’s ship in Project Hail Mary: sent from Erid to τ Ceti, as the Hail Mary was from Earth, to learn why that star is not dimming. When the Hail Mary arrives only Rocky is left aboard.',
+  ],
+  canon: [
+    'The novel: it has been at τ Ceti for 46 years when the Hail Mary arrives, in orbit close by — “maybe a few hundred meters away”, the pilot first judges. Through his telescope it is “roughly triangle-shaped”, with “gable-like protrusions along its hull”, every face flat, a mottled grey and tan; at its centre is a diamond-shaped part about the size of the Hail Mary. It is built of xenonite, a material Eridians can make in any shape, and inside it keeps Erid’s air: ammonia at 29 atmospheres and 210 °C. Later the two ships are joined by a xenonite tunnel.',
+  ],
+  invented: [
+    'Where it is: on the Hail Mary’s own orbit round Adrian, 300 m ahead of where the Hail Mary will be, from 46 years before the Hail Mary’s arrival — 1993, as the app dates that arrival — on. The novel has it round τ Ceti when the Hail Mary comes, the two moving to Adrian later; as the Hail Mary’s arrival is made one, so is its stay. Its trip from Erid, which the canon does not describe, is not drawn.',
+    'Its model is after the novel, its proportions this app’s own: the diamond 40 m tip to tip, three rods to a wide triangular base, a stalk with four flat panels and a pyramid nose — 127 m in all. The 2026 film’s design is not described in any source found. It carries no lights — Eridians have no eyes — so from afar it is a plain dot.',
+  ],
+  reality: [
+    'No such ship exists, nor any material like xenonite. τ Ceti is real, 11.9 light years from the Sun, and 40 Eridani 16.3; the two are about 10 light years apart, as the novel says. τ Ceti e, which Adrian is drawn over, is a candidate planet that studies since 2024 find more likely the star’s own activity.',
+  ],
+};
+
 /** Each page by its key (ids.ts). */
 export const FICTION_ABOUTS: Readonly<Record<FictionAboutKey, FictionAbout>> = {
   pandora: PANDORA,
@@ -281,4 +373,7 @@ export const FICTION_ABOUTS: Readonly<Record<FictionAboutKey, FictionAbout>> = {
   adrian: ADRIAN,
   'hail-mary': HAIL_MARY,
   petrova: PETROVA,
+  erid: ERID,
+  'blip-a': BLIP_A,
+  vulcan: VULCAN,
 };

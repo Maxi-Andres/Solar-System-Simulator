@@ -47,6 +47,7 @@ import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
 import { julianDayToDate, tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
 import { FICTION_COLOR, FICTION_LAYER, fictionEntryOfBody, fictionTag, overlayOf } from './core/fiction.ts';
+import { ensureFictionStars } from './core/fictionBodies.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
 import { ensureSirius } from './core/siriusBodies.ts';
 import { clusterFramingKm, ensureClusterBody } from './core/globularClusters.ts';
@@ -596,6 +597,35 @@ export function App() {
       cancelled = true;
     };
   }, [store, stars3d, starNames]);
+
+  // With the Fiction layer on, the stars fiction is anchored to by catalogue are bodies too --
+  // 40 Eridani A and its two companions, for Erid and Vulcan -- so the layer can place its worlds
+  // about them (core/fictionBodies.ts ensureFictionStars). Off, nothing is asked for.
+  const fictionOn = layers.fiction;
+  useEffect(() => {
+    if (!fictionOn || store === null || stars3d === null || starNames === null) {
+      return;
+    }
+    let cancelled = false;
+    // Their light is drawn by the 3D stars: asked for now, as search does.
+    void stars3d.request();
+    starNames
+      .request()
+      .then(async () => {
+        const index = starNames.value;
+        if (cancelled || index === null) {
+          return;
+        }
+        await ensureFictionStars(store, stars3d, index, useViewStore.getState().focus);
+        renderDemand.request();
+      })
+      .catch((error: unknown) => {
+        console.error('Could not place the stars of fiction', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fictionOn, store, stars3d, starNames]);
 
   // A star group gone to -- the Hyades, the Ursa Major moving group -- has its named members
   // made star bodies: marked and named on screen (stellarGroups.ts).

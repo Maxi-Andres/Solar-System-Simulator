@@ -163,9 +163,12 @@ export class Voyage {
     };
   }
 
-  /** Its offset and velocity about the destination at `jd`, after arrival. */
-  orbitOffset(jd: number): StateVector {
-    const angle = ((jd - this.arrivalJd) * DAY_S * this.orbitSpeedKmS) / this.orbitRadiusKm;
+  /**
+   * Its offset and velocity about the destination at `jd`, after arrival -- or, `aheadRad` further
+   * round, a ship parked on the same orbit's (ParkedShip), at any time.
+   */
+  orbitOffset(jd: number, aheadRad = 0): StateVector {
+    const angle = ((jd - this.arrivalJd) * DAY_S * this.orbitSpeedKmS) / this.orbitRadiusKm + aheadRad;
     const c = Math.cos(angle);
     const s = Math.sin(angle);
     return {
@@ -217,11 +220,54 @@ export class Voyage {
 const IN_ORBIT = { centrifuge: true } as const;
 const UNDER_THRUST = { centrifuge: false } as const;
 
-/** The voyages placed, by the ship's body id. */
+/**
+ * A ship parked on a voyaging one's orbit (fiction.ts FictionParking): the Blip-A, a few hundred
+ * metres ahead of where the Hail Mary will be, on the same circle about Adrian -- from 46 years
+ * before the Hail Mary arrives, on. The canon has it about τ Ceti when the Hail Mary comes, and
+ * both go to Adrian later; as the Hail Mary's arrival is made one, so is its stay: about Adrian
+ * throughout. Its trip from Erid is not drawn: the canon does not give it.
+ */
+export class ParkedShip {
+  /** When it is first there, TDB Julian day. */
+  readonly fromJd: number;
+  readonly #aheadRad: number;
+
+  constructor(
+    readonly record: FictionShipRecord,
+    readonly companion: Voyage,
+    aheadKm: number,
+    yearsBefore: number,
+  ) {
+    this.#aheadRad = aheadKm / companion.orbitRadiusKm;
+    this.fromJd = companion.arrivalJd - yearsBefore * YEAR_DAYS;
+  }
+
+  /** Its offset and velocity about the world, at `jd`. */
+  offset(jd: number): StateVector {
+    return this.companion.orbitOffset(jd, this.#aheadRad);
+  }
+
+  /** Its bow along its motion round the world, into `out`; it does not spin. */
+  pose(jd: number, out: { x: number; y: number; z: number }): { readonly centrifuge: boolean } {
+    const v = this.offset(jd).velocity;
+    const n = Math.hypot(v.x, v.y, v.z);
+    out.x = v.x / n;
+    out.y = v.y / n;
+    out.z = v.z / n;
+    return UNDER_THRUST;
+  }
+}
+
+/** The voyages placed, by the ship's body id; and the ships parked beside them. */
 const voyages = new Map<BodyId, Voyage>();
+const parkedShips = new Map<BodyId, ParkedShip>();
 
 export function voyageOf(id: BodyId): Voyage | null {
   return voyages.get(id) ?? null;
+}
+
+export function parkedOf(id: BodyId): ParkedShip | null {
+  return parkedShips.get(id) ?? null;
 }
 
 /**
@@ -296,6 +342,7 @@ export function placeShips(store: EphemerisStore, ships: readonly FictionShipRec
     const id = fictionBodyId(record.id);
     if (store.isPropagatedBody(id)) continue;
     const { voyage } = record;
+    if (voyage === undefined) continue;
     if (!store.isPropagatedBody(voyage.to) && !store.bodies.some((body) => body.id === voyage.to)) continue;
     const launchJd = valueOf(voyage.launchJd);
     const accelG = valueOf(voyage.accelerationG);
@@ -336,6 +383,34 @@ export function placeShips(store: EphemerisStore, ships: readonly FictionShipRec
       },
       // Not before it leaves: a craft has no place before its launch.
       { exact: true, coverage: { startJd: launchJd, stopJd: Number.POSITIVE_INFINITY } },
+    );
+    added.push(id);
+  }
+  // Then the ships parked beside them, once their companion's orbit is known.
+  for (const record of ships) {
+    const id = fictionBodyId(record.id);
+    if (record.parked === undefined || store.isPropagatedBody(id)) continue;
+    const companion = voyages.get(fictionBodyId(record.parked.beside));
+    const aheadKm = valueOf(record.parked.aheadKm);
+    const years = valueOf(record.parked.yearsBefore);
+    if (companion === undefined || aheadKm === null || years === null) continue;
+    const parked = new ParkedShip(record, companion, aheadKm, years);
+    parkedShips.set(id, parked);
+    const world = companion.record.voyage?.to;
+    if (world === undefined) continue;
+    store.addPropagatedBody(
+      shipBodyDefinition(record),
+      null,
+      (jd) => {
+        const at = heliocentric(store, world, jd);
+        const offset = parked.offset(jd);
+        // Where the world cannot be said, at its arrival's place: as the companion's fallback.
+        return at === null
+          ? companion.lineState(companion.arrivalJd)
+          : { position: add(at.position, offset.position), velocity: add(at.velocity, offset.velocity) };
+      },
+      // Not before it came: its trip there is not drawn.
+      { exact: true, coverage: { startJd: parked.fromJd, stopJd: Number.POSITIVE_INFINITY } },
     );
     added.push(id);
   }

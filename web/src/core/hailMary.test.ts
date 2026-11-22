@@ -12,7 +12,8 @@ import {
   valueOf,
   valuesOfEntry,
 } from './fiction.ts';
-import { C_KM_S, G0_KM_S2, lorentzFactor, ThrustTrip, Voyage } from './hailMary.ts';
+import { C_KM_S, G0_KM_S2, lorentzFactor, ParkedShip, ThrustTrip, Voyage } from './hailMary.ts';
+import { BLIP_A_LENGTH_M } from '../scene/fiction/looks/blipA.ts';
 import { PLANETARY_SYSTEMS } from './planetarySystems.ts';
 import { length, subtract } from './vec3.ts';
 
@@ -132,19 +133,19 @@ describe('Adrian and the Hail Mary', () => {
   it('put the ship’s 12.6 km/s orbit above the sphere drawn for τ Ceti e, by Adrian’s invented mass', () => {
     const real = PLANETARY_SYSTEMS.flatMap((system) => system.planets).find((planet) => planet.id === TAU_CETI_E_ID)!;
     const drawnKm = drawnRadiusEarth(real) * 6371;
-    const ship = FICTION_SHIPS[0]!;
-    const mass = valueOf(ship.voyage.destinationMassEarth)!;
-    const v = valueOf(ship.voyage.orbitSpeedKmS)!;
+    const voyage = FICTION_SHIPS[0]!.voyage!;
+    const mass = valueOf(voyage.destinationMassEarth)!;
+    const v = valueOf(voyage.orbitSpeedKmS)!;
     const radius = (mass * GM_EARTH) / (v * v);
     expect(radius).toBeGreaterThan(drawnKm + 500);
     expect(radius).toBeLessThan(drawnKm + 3_000);
-    expect(valueNote(ship.voyage.destinationMassEarth).kind).toBe('invented');
+    expect(valueNote(voyage.destinationMassEarth).kind).toBe('invented');
     // At the real minimum mass it would be below the ground.
     expect((real.massEarth * GM_EARTH) / (v * v)).toBeLessThan(drawnKm);
   });
 
   it('mark the quoted 1.5 g and ship time unverified, the thirteen years canon, the launch invented', () => {
-    const { voyage } = FICTION_SHIPS[0]!;
+    const voyage = FICTION_SHIPS[0]!.voyage!;
     expect(valueNote(voyage.accelerationG).kind).toBe('unverified');
     expect(valueNote(voyage.shipYears).kind).toBe('unverified');
     expect(valueNote(voyage.earthYears).kind).toBe('canon');
@@ -155,5 +156,43 @@ describe('Adrian and the Hail Mary', () => {
   it('run the Petrova lines from the Sun to Venus and from τ Ceti to Adrian', () => {
     const lines = FICTION_ENTRIES.filter((entry) => entry.kind === 'line');
     expect(lines.map((line) => (line.kind === 'line' ? line.planet : '')).sort()).toEqual([TAU_CETI_E_ID, 'venus'].sort());
+  });
+});
+
+describe('the Blip-A', () => {
+  const hailMary = FICTION_SHIPS.find((ship) => ship.id === 'hail-mary')!;
+  const blipA = FICTION_SHIPS.find((ship) => ship.id === 'blip-a')!;
+  const voyage = new Voyage(hailMary, 2_461_041.5, { x: 1.5e8, y: 0, z: 0 }, { x: 1.5e8, y: -6e13, z: 9e13 }, 1.5 * G0_KM_S2, {
+    radiusKm: 12_553,
+    speedKmS: 12.6,
+    pole: { x: 0, y: 0, z: 1 },
+  });
+  const parked = new ParkedShip(blipA, voyage, valueOf(blipA.parked!.aheadKm)!, valueOf(blipA.parked!.yearsBefore)!);
+
+  it('waits on the Hail Mary’s orbit, a few hundred metres ahead, from 46 years before it arrives', () => {
+    expect(blipA.parked!.beside).toBe('hail-mary');
+    expect(valueNote(blipA.parked!.yearsBefore).kind).toBe('canon');
+    expect(valueNote(blipA.parked!.aheadKm).kind).toBe('invented');
+    expect((voyage.arrivalJd - parked.fromJd) / 365.25).toBeCloseTo(46, 9);
+    for (const days of [-1_000, 0, 3.5]) {
+      const jd = voyage.arrivalJd + days;
+      const own = parked.offset(jd).position;
+      expect(length(own)).toBeCloseTo(12_553, 6);
+      // 300 m ahead of the Hail Mary, along the same circle.
+      expect(length(subtract(own, voyage.orbitOffset(jd).position))).toBeCloseTo(0.3, 6);
+    }
+  });
+
+  it('points along its motion and does not spin', () => {
+    const bow = { x: 0, y: 0, z: 0 };
+    const jd = voyage.arrivalJd + 2;
+    expect(parked.pose(jd, bow).centrifuge).toBe(false);
+    const v = parked.offset(jd).velocity;
+    expect((bow.x * v.x + bow.y * v.y + bow.z * v.z) / length(v)).toBeCloseTo(1, 9);
+  });
+
+  it('is as long as its model, and only its diamond’s 40 m is canon', () => {
+    expect(valueOf(blipA.lengthM)).toBeCloseTo(BLIP_A_LENGTH_M, 6);
+    expect(valueNote(blipA.lengthM).kind).toBe('invented');
   });
 });

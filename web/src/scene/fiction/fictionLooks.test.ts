@@ -24,6 +24,10 @@ import {
   createHailMary,
 } from './looks/hailMary.ts';
 import { SHIP_SHADERS } from './looks/shipMaterial.ts';
+import { AMMONIA_HAZE, AMMONIA_HAZE_AIR } from './looks/ammoniaHaze.ts';
+import { ARID, ARID_AIR } from './looks/arid.ts';
+import { BLIP_A_CENTRE_OF_MASS_Z_M, BLIP_A_LENGTH_M, DIAMOND_SPAN_M, createBlipA } from './looks/blipA.ts';
+import { DENSE_HAZE_AIR } from './looks/denseHaze.ts';
 import { STORM_COUNT, stormPlacements } from './looks/bandedGiant.ts';
 import { JUNGLE_MOON } from './looks/jungleMoon.ts';
 import { seedFraction, seedHash } from './looks/noise.ts';
@@ -523,6 +527,99 @@ describe('the Hail Mary', () => {
     crew.geometry.addEventListener('dispose', freed);
     ship.dispose();
     expect(freed).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ammonia-haze (Erid) and arid (Vulcan)', () => {
+  const ERID: World = { kind: 'world', palette: 'ammonia-haze', seed: 4 };
+  const VULCAN: World = { kind: 'world', palette: 'arid', seed: 5 };
+
+  it("draws Erid as a haze deck, its haze yellowed by blue absorbed, its limb wider than Adrian's", () => {
+    const material = shader(fictionWorldMaterial(ERID));
+    expect(material.fragmentShader).toContain('layer0');
+    const absorption = AMMONIA_HAZE_AIR.absorption!;
+    expect(absorption[2]).toBeGreaterThan(absorption[1]);
+    expect(absorption[1]).toBeGreaterThan(absorption[0]);
+    expect(AMMONIA_HAZE_AIR.mie).toBeGreaterThan(DENSE_HAZE_AIR.mie);
+    // Ammonia (17 g/mol) at 480 K against carbon dioxide (44) on Adrian: twice the scale height
+    // in proportion, for all of Erid's 2.09 g.
+    expect(AMMONIA_HAZE_AIR.scaleHeight / DENSE_HAZE_AIR.scaleHeight).toBeCloseTo(2, 1);
+    expect(AMMONIA_HAZE.faceSize).toBe(512);
+    material.dispose();
+  });
+
+  it('draws Vulcan with relief in half floats under thin, dusty air', () => {
+    const material = shader(fictionWorldMaterial(VULCAN));
+    expect(material.fragmentShader).toContain('reliefAt');
+    expect(ARID.halfFloat).toBe(true);
+    expect(ARID_AIR.scaleHeight).toBeLessThan(DENSE_HAZE_AIR.scaleHeight / 2);
+    expect(ARID_AIR.absorption![2]).toBeGreaterThan(ARID_AIR.absorption![0]);
+    material.dispose();
+  });
+});
+
+describe('the Blip-A', () => {
+  function camera(distance: number): THREE.PerspectiveCamera {
+    const c = new THREE.PerspectiveCamera(45, 1, 0.001, 1e6);
+    c.position.set(0, distance, 0);
+    c.lookAt(0, 0, 0);
+    c.updateMatrixWorld();
+    return c;
+  }
+
+  it('is length one along +z, the nose forward, its centre of mass at the origin', () => {
+    const ship = createBlipA();
+    ship.object.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(ship.object);
+    expect(box.max.z - box.min.z).toBeCloseTo(1, 1);
+    expect(box.max.z).toBeCloseTo((BLIP_A_LENGTH_M - BLIP_A_CENTRE_OF_MASS_Z_M) / BLIP_A_LENGTH_M, 1);
+    // The diamond is "about the size of my ship": the Hail Mary's 40 m.
+    expect(DIAMOND_SPAN_M).toBe(40);
+    expect(BLIP_A_LENGTH_M).toBeGreaterThan(100);
+    ship.dispose();
+  });
+
+  it('is one draw on the ship program, and carries no running lights', () => {
+    const ship = createBlipA();
+    let meshes = 0;
+    let points = 0;
+    ship.object.traverse((part) => {
+      if ((part as THREE.Mesh).isMesh) meshes += 1;
+      if ((part as THREE.Points).isPoints) points += 1;
+    });
+    expect(meshes).toBe(1);
+    expect(points).toBe(0);
+    ship.dispose();
+  });
+
+  it('is cheap, and draws its silhouette when small on screen', () => {
+    const ship = createBlipA();
+    expect(ship.triangles.full).toBeLessThan(10000);
+    expect(ship.triangles.low).toBeLessThan(ship.triangles.full / 2);
+    const hull = ship.object.getObjectByName('blip-a-hull') as THREE.Mesh;
+    const full = hull.geometry;
+    ship.object.updateMatrixWorld(true);
+    ship.update(new THREE.Vector3(1, 0, 0), camera(500));
+    expect(hull.geometry).not.toBe(full);
+    ship.update(new THREE.Vector3(1, 0, 0), camera(2));
+    expect(hull.geometry).toBe(full);
+    expect((hull.material as THREE.ShaderMaterial).uniforms['uShadowOn']).toBeDefined();
+    ship.dispose();
+  });
+
+  it('takes planetshine and the lighting mode', () => {
+    const ship = createBlipA();
+    const material = (ship.object.getObjectByName('blip-a-hull') as THREE.Mesh).material as THREE.ShaderMaterial;
+    ship.update(new THREE.Vector3(1, 0, 0), camera(2), { direction: new THREE.Vector3(0, -1, 0), strength: 0.3 }, { sun: 0.4, ambient: 1.5 });
+    expect(material.uniforms['uFillIrradiance']!.value).toBe(0.3);
+    expect(material.uniforms['uAmbient']!.value).toBe(1.5);
+    ship.dispose();
+  });
+
+  it('is what createFictionObject builds for its design', () => {
+    const made = createFictionObject({ kind: 'ship', design: 'blip-a' });
+    expect(made.object.name).toBe('blip-a');
+    made.dispose();
   });
 });
 

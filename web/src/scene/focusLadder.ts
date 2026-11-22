@@ -106,6 +106,14 @@ export function focusLadder(store: Pick<EphemerisStore, 'body'>, focus: BodyId):
   if (isCatalogueStar(body)) {
     return ladder(8 * body.radiusEquatorialKm, outerFrom('solar-neighbourhood'));
   }
+  // A world about a star of no system the app draws -- Erid and Vulcan about 40 Eridani A
+  // (core/fiction.ts) -- has its star's ladder: the star framed as a body, then the neighbourhood.
+  if (body.parent !== null) {
+    const star = store.body(body.parent);
+    if (isCatalogueStar(star)) {
+      return ladder(8 * star.radiusEquatorialKm, outerFrom('solar-neighbourhood'));
+    }
+  }
   // A fictional ship goes between the stars (core/hailMary.ts): a body of no system, as a lone star is.
   if (fictionShipOf(focus) !== null) {
     return ladder(ownFramingKm(body), outerFrom('solar-neighbourhood'));

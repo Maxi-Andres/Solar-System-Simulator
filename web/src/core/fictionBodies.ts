@@ -5,6 +5,7 @@ import type { EphemerisStore } from './ephemerisStore.ts';
 import { GM_EARTH, planetStateAboutStar, type ExoPlanet } from './exoplanets.ts';
 import {
   FICTION,
+  FICTION_ANCHOR_STARS,
   FICTION_COLOR,
   fictionBodyId,
   fictionRecord,
@@ -16,6 +17,8 @@ import {
 import { stateToOsculatingElements } from './kepler.ts';
 import { lagrangeState, massRatio } from './lagrange.ts';
 import { towardStar } from './planetarySystems.ts';
+import { addStarBody, starBodyFacts } from './starBodies.ts';
+import type { StarNameIndex, Stars3dSource } from './stars3d.ts';
 import { J2000_JD } from './time.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
 
@@ -44,6 +47,7 @@ export function resolveAnchor(store: EphemerisStore, anchor: FictionAnchor): Bod
   }
   // An overlay is no body of its own: drawn over the real one (SolarSystem.tsx), never placed.
   if (anchor.kind === 'overlay') return null;
+  if (anchor.kind === 'star') return starBodyByDesignation(store, anchor.designation);
   const id = fictionBodyId(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   if (!store.isPropagatedBody(id)) return null;
   return anchor.kind === 'fiction' ? id : store.body(id).parent;
@@ -60,9 +64,16 @@ export function fictionOrbit(record: FictionRecord, gmParentKm3S2: number): ExoP
     record.position === 'invented'
       ? inventedOrbit(record.id, { minKm: 0.3 * AU_KM, maxKm: 3 * AU_KM })
       : null;
-  const a = invented?.semiMajorAxisKm ?? valueOf(record.orbit.semiMajorAxisKm) ?? AU_KM;
   const mu = gmParentKm3S2 + massEarth * GM_EARTH;
   const given = record.orbit.periodDays === undefined ? null : valueOf(record.orbit.periodDays);
+  // Drawn at the period's distance about the parent's mass, where the record asks (FictionOrbit).
+  const a =
+    invented?.semiMajorAxisKm ??
+    (record.orbit.drawnFromPeriod === true && given !== null && gmParentKm3S2 > 0
+      ? Math.cbrt((mu * (given * DAY_S) ** 2) / (4 * Math.PI ** 2))
+      : null) ??
+    valueOf(record.orbit.semiMajorAxisKm) ??
+    AU_KM;
   const periodDays = given ?? (2 * Math.PI * Math.sqrt(a ** 3 / mu)) / DAY_S;
   // Periastron that long before J2000 that the mean anomaly then is the record's.
   const meanAnomalyDeg = record.orbit.meanAnomalyDeg === undefined ? 0 : (valueOf(record.orbit.meanAnomalyDeg) ?? 0);
@@ -118,6 +129,50 @@ export function fictionBodyDefinition(record: FictionRecord, parent: BodyId): Bo
     rings: null,
     mission: null,
   };
+}
+
+/** The star body carrying `designation` (starBodies.ts), or null while there is none. */
+export function starBodyByDesignation(store: EphemerisStore, designation: string): BodyId | null {
+  for (const body of store.bodies) {
+    if (body.kind === 'star' && starBodyFacts(body.id)?.designations.includes(designation) === true) return body.id;
+  }
+  return null;
+}
+
+/**
+ * Makes the stars fiction is anchored to by catalogue bodies, pinned, with their measured mass --
+ * 40 Eridani A, for Erid and Vulcan -- and their companions, so they are named in those worlds'
+ * skies (fiction.ts FICTION_ANCHOR_STARS). Called once the Fiction layer is on (App.tsx); they stay
+ * bodies after, as any star gone to does. A star already a body without its mass -- found by search
+ * before the layer was on -- is made again with it, unless the camera is on it: the worlds' orbits
+ * are drawn with it.
+ */
+export async function ensureFictionStars(
+  store: EphemerisStore,
+  stars3d: Stars3dSource,
+  names: StarNameIndex,
+  keep: BodyId,
+): Promise<void> {
+  const entryOf = (designation: string): number | null => {
+    const { designations } = names.names;
+    for (let k = 0; k < names.names.count; k += 1) {
+      if (designations[k]?.includes(designation) === true) return k;
+    }
+    return null;
+  };
+  for (const star of FICTION_ANCHOR_STARS) {
+    const k = entryOf(star.designation);
+    if (k === null) continue;
+    const existing = starBodyByDesignation(store, star.designation);
+    if (existing !== null && store.body(existing).gmBodyOnlyKm3S2 === 0 && existing !== keep) {
+      store.removePropagatedBody(existing);
+    }
+    await addStarBody(store, stars3d, names, k, keep, true, star.massSun);
+    for (const companion of star.companions) {
+      const c = entryOf(companion);
+      if (c !== null) await addStarBody(store, stars3d, names, c, keep, true);
+    }
+  }
 }
 
 /**

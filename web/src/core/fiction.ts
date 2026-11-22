@@ -122,6 +122,12 @@ export type FictionAnchor =
    */
   | { readonly kind: 'lagrange'; readonly of: string; readonly point: 4 | 5 }
   /**
+   * A catalogue star, by a designation it carries ("HIP 19849"): made a body, pinned, once the
+   * Fiction layer is on (fictionBodies.ts ensureFictionStars) -- 40 Eridani A, which is no body
+   * from the start as Alpha Centauri's stars are. FICTION_ANCHOR_STARS lists each, with its mass.
+   */
+  | { readonly kind: 'star'; readonly designation: string }
+  /**
    * A real body the fiction says is this world -- Adrian is τ Ceti e -- drawn over it rather than
    * beside it (FICTION_OVERLAYS): with the Fiction layer on, the body's label, look and panel add
    * the fiction; off, nothing of the body changes. No body of its own, and the real data untouched.
@@ -142,6 +148,13 @@ export interface FictionOrbit {
   readonly periodDays?: FictionValue;
   /** Where along the orbit at J2000, degrees of mean anomaly; absent, at periastron. */
   readonly meanAnomalyDeg?: FictionValue;
+  /**
+   * Drawn at the distance the period gives about the star's measured mass, not at the record's
+   * own: where the canon gives both and they imply another mass for a real star (Erid's 0.224 AU
+   * and 42.245 days, 0.84 suns against 40 Eridani A's 0.78). The orbit line, redrawn from the
+   * state with the star's mass (SolarSystem.tsx), then runs through the planet. The panel says so.
+   */
+  readonly drawnFromPeriod?: true;
 }
 
 /** A fact the panel lists besides size and orbit: a day's length, a gravity, an air. */
@@ -490,8 +503,8 @@ function trojan(point: 4 | 5, radiusKm: number, tint: readonly [number, number, 
   };
 }
 
-/** The records: each value the canon's with its source, or invented with why. */
-export const FICTION: readonly FictionRecord[] = [
+/** Avatar's worlds about α Centauri A, nearest Polyphemus first. */
+const AVATAR_WORLDS: readonly FictionRecord[] = [
   POLYPHEMUS,
   ...MOONS.slice(0, 4),
   PANDORA,
@@ -587,6 +600,8 @@ export const PALETTE_ALBEDO: Readonly<Record<WorldPalette, number>> = {
   desert: 0.25,
   arid: 0.25,
   'dense-haze': 0.7,
+  // Erid's ammonia haze over a dark ground: bright from above as Venus's cloud is, a little less.
+  'ammonia-haze': 0.6,
   'storm-rock': 0.15,
   scorched: 0.12,
   temperate: 0.3,
@@ -597,6 +612,177 @@ export const PALETTE_ALBEDO: Readonly<Record<WorldPalette, number>> = {
 
 /** A world's albedo where no fiction is drawn over it: a rocky planet with some air, Earth's. */
 export const DEFAULT_ALBEDO = 0.3;
+
+// --- 40 Eridani A: Erid and Vulcan ------------------------------------------------------------
+
+/**
+ * The real stars fictional worlds are anchored to by catalogue (FictionAnchor 'star'), made bodies
+ * once the Fiction layer is on (fictionBodies.ts ensureFictionStars), with their companions so they
+ * are named in those worlds' skies. The mass is the star's measured one, what the worlds' orbits are
+ * drawn with -- a real number, cited, not the fiction's.
+ */
+export interface FictionAnchorStar {
+  readonly designation: string;
+  readonly massSun: number;
+  readonly massReference: string;
+  /** Designations of its companions, made bodies with it. */
+  readonly companions: readonly string[];
+}
+
+/** 40 Eridani A (Keid, HIP 19849), a K0.5 dwarf 5.0 pc away, and its white and red dwarf companions. */
+export const FORTY_ERI_A = 'HIP 19849';
+
+export const FICTION_ANCHOR_STARS: readonly FictionAnchorStar[] = [
+  {
+    designation: FORTY_ERI_A,
+    // 0.78 +- 0.08, from the Torres et al. 2010 relations (Ma et al. 2018, Table 2).
+    massSun: 0.78,
+    massReference: 'Ma et al. 2018, MNRAS 480, 2411',
+    companions: ['40 Eri B', '40 Eri C'],
+  },
+];
+
+const AU = 149_597_870.7;
+
+/**
+ * Erid's sources: the novel's words, and Weir's own Eridian Species Information Document, which he
+ * shared himself -- the author's companion material, preferred to nothing, the novel preferred to it.
+ */
+const ERIDIAN_DOCUMENT: CanonSource = {
+  short: 'Weir’s Eridian document',
+  full:
+    'Andy Weir, Project Hail Mary: Official Eridian Species Information Document (the author’s own companion ' +
+    'material, shared by him; Internet Archive item eridianlore)',
+};
+
+/**
+ * The plane of 40 Eridani A's fictional worlds, the same for both, as a system's planets nearly
+ * share one. Neither canon gives it, nor is the star's own spin axis measured to borrow.
+ */
+const FORTY_ERI_PLANE = {
+  inclinationDeg: invented(60, 'Canon silent: chosen so the orbits are seen open from Earth, not edge on; Erid and Vulcan in one plane.'),
+  nodeDeg: invented(90, 'Canon silent: with the inclination, one plane for both worlds.'),
+} as const;
+
+/**
+ * Erid, Rocky's world: the candidate planet 40 Eridani A b as it was claimed in 2018 -- Weir took
+ * its mass, period and distance -- made a world by his document. A body of its own, not an overlay:
+ * the app does not draw the candidate (the Exoplanet Archive does not list it; Burrows et al. 2024
+ * found it the star's activity).
+ */
+const ERID: FictionRecord = {
+  id: 'erid',
+  name: 'Erid',
+  aliases: [],
+  work: HAIL_MARY_NOVEL,
+  kind: 'planet',
+  anchor: { kind: 'star', designation: FORTY_ERI_A },
+  anchorLine: 'Orbits the real 40 Eridani A',
+  position: 'canon',
+  look: { kind: 'world', palette: 'ammonia-haze', seed: 400 },
+  radiusKm: { value: 12_835, source: ERIDIAN_DOCUMENT },
+  massEarth: { value: 8.47, source: ERIDIAN_DOCUMENT },
+  orbit: {
+    semiMajorAxisKm: { value: 0.224 * AU, source: ERIDIAN_DOCUMENT },
+    eccentricity: { value: 0.04, source: ERIDIAN_DOCUMENT },
+    ...FORTY_ERI_PLANE,
+    periodDays: { value: 42.245, source: ERIDIAN_DOCUMENT },
+    drawnFromPeriod: true,
+  },
+  facts: [
+    { label: 'Is', value: { value: 'the first planet of 40 Eridani A', source: ERIDIAN_DOCUMENT } },
+    {
+      label: 'Surface gravity',
+      value: { value: 2.09, source: ERIDIAN_DOCUMENT },
+      unit: 'g',
+      note: 'the novel: 20.48 m/s², the same',
+    },
+    {
+      label: 'Air',
+      value: { value: 'ammonia, 28 atm', source: ERIDIAN_DOCUMENT },
+      note: 'the novel: 29 atm of ammonia in Rocky’s ship',
+    },
+    { label: 'Surface', value: { value: 210, source: ERIDIAN_DOCUMENT }, unit: '°C', note: 'the novel: 210 °C in Rocky’s ship' },
+    { label: 'Oceans', value: { value: 'liquid water, 202 °C', source: ERIDIAN_DOCUMENT } },
+    { label: 'Day', value: { value: 5.1104, source: ERIDIAN_DOCUMENT }, unit: 'h' },
+    { label: 'Magnetic field', value: { value: 'about 25 × Earth’s', source: ERIDIAN_DOCUMENT } },
+    { label: 'From τ Ceti', value: { value: 10, source: PHM_NOVEL }, unit: 'ly' },
+  ],
+  realityCheck:
+    '40 Eridani A is real, 16.3 ly away; the candidate planet Weir took Erid’s numbers from was the star’s own activity (Burrows et al. 2024).',
+};
+
+const STAR_TREK: FictionWork = { title: 'Star Trek', creator: 'Gene Roddenberry', year: 1966, medium: 'series' };
+
+/** Vulcan's sources: the episodes and the one letter that put it at 40 Eridani A. */
+const VULCAN_STAR: CanonSource = {
+  short: 'Picard, 2020; Sky & Telescope, 1991',
+  full:
+    'Star Trek: Picard, “Maps and Legends” (2020), on screen; Gene Roddenberry, Sallie Baliunas, Robert Donahue & ' +
+    'George Nassiopoulos, “Vulcan’s Sun”, Sky & Telescope 82(1), July 1991',
+};
+const MAN_TRAP: CanonSource = {
+  short: 'Star Trek, 1966',
+  full: 'Star Trek, “The Man Trap” (1966): Spock tells Uhura that Vulcan has no moon',
+};
+const AMOK_TIME: CanonSource = {
+  short: 'Star Trek, 1967',
+  full: 'Star Trek, “Amok Time” (1967): a hot desert world of thin air',
+};
+const ENTERPRISE_HOME: CanonSource = {
+  short: 'Enterprise, 2004',
+  full: 'Star Trek: Enterprise, “Home” (2004): “a little over” 16 light years from Earth',
+};
+const FRANCHISE_GRAVITY: CanonSource = {
+  short: 'the franchise, no figure',
+  full:
+    'A long-standing assumption of the franchise, with no figure found on screen. The 1.4 g often quoted ' +
+    '(Wikipedia, uncited) is fanon and is not used.',
+  unverified: true,
+};
+
+/**
+ * Vulcan: at 40 Eridani A by the 1991 letter and on screen since 2020; nothing else of its size or
+ * orbit is canon, so both are invented here, each with why.
+ */
+const VULCAN: FictionRecord = {
+  id: 'vulcan',
+  name: 'Vulcan',
+  aliases: ['Ni’Var'],
+  work: STAR_TREK,
+  kind: 'planet',
+  anchor: { kind: 'star', designation: FORTY_ERI_A },
+  anchorLine: 'Orbits the real 40 Eridani A',
+  position: 'canon',
+  look: { kind: 'world', palette: 'arid', seed: 500 },
+  radiusKm: invented(6_371, 'Canon silent: about Earth’s, as its people and its landscapes suggest.'),
+  massEarth: invented(
+    1.2,
+    'Canon silent: the franchise holds its gravity higher than Earth’s with no figure; 1.2 Earths at Earth’s size gives 1.2 g. The 1.4 g often quoted is fanon, not used.',
+  ),
+  orbit: {
+    // 40 Eri A gives 0.46 Suns' light (Teff 5,072 K, R 0.87 Rsun): Earth's falls at 0.68 AU.
+    semiMajorAxisKm: invented(
+      0.62 * AU,
+      'Canon silent: in 40 Eridani A’s habitable zone, at 1.2 times the light Earth gets — a hot desert, as the series shows — and 0.4 AU outside Erid, which leaves both orbits stable.',
+    ),
+    eccentricity: invented(0.02, 'Canon silent: near circular, as a temperate world’s would be.'),
+    ...FORTY_ERI_PLANE,
+  },
+  facts: [
+    { label: 'Star', value: { value: '40 Eridani A', source: VULCAN_STAR } },
+    { label: 'Moons', value: { value: 'none', source: MAN_TRAP } },
+    { label: 'Gravity', value: { value: 'higher than Earth’s', source: FRANCHISE_GRAVITY }, note: '1.4 g is fanon: not used' },
+    { label: 'Climate', value: { value: 'hot, arid, thin air', source: AMOK_TIME } },
+    { label: 'From Earth', value: { value: 'a little over 16', source: ENTERPRISE_HOME }, unit: 'ly' },
+    { label: 'Day', value: { silent: true } },
+  ],
+  realityCheck:
+    '40 Eridani A is real, a K dwarf 16.3 ly away, a white dwarf and a red dwarf about it; the planet billed as “Vulcan” in 2018 was the star’s own activity (Burrows et al. 2024).',
+};
+
+/** The records: each value the canon's with its source, or invented with why. */
+export const FICTION: readonly FictionRecord[] = [...AVATAR_WORLDS, ERID, VULCAN];
 
 /** The worlds drawn over real bodies (FictionAnchor 'overlay'). */
 export const FICTION_OVERLAYS: readonly FictionRecord[] = [ADRIAN];
@@ -620,12 +806,38 @@ export interface FictionVoyage {
   readonly destinationMassEarth: FictionValue;
 }
 
-/** A fictional ship: a body of its own, drawn as its model (FictionLook 'ship'). */
-export interface FictionShipRecord extends FictionBase {
+/**
+ * A ship that waits beside another's orbit (hailMary.ts ParkedShip): in the same circle about the
+ * same world, a little ahead -- from a span of years before the other arrives, for good.
+ */
+export interface FictionParking {
+  /** The ship whose orbit it shares, by id: a voyaging one. */
+  readonly beside: string;
+  /** How far ahead along that orbit, km. */
+  readonly aheadKm: FictionValue;
+  /** How long it has been there when the other arrives, years. */
+  readonly yearsBefore: FictionValue;
+}
+
+interface FictionShipBase extends FictionBase {
   readonly kind: 'ship';
   readonly look: Extract<FictionLook, { kind: 'ship' }>;
   readonly lengthM: FictionValue;
-  readonly voyage: FictionVoyage;
+}
+
+/**
+ * A fictional ship: a body of its own, drawn as its model (FictionLook 'ship') -- on a voyage
+ * (the Hail Mary), or parked beside one's orbit (the Blip-A).
+ */
+export type FictionShipRecord =
+  | (FictionShipBase & { readonly voyage: FictionVoyage; readonly parked?: undefined })
+  | (FictionShipBase & { readonly parked: FictionParking; readonly voyage?: undefined });
+
+/** The world a ship goes round in the end: its voyage's destination, or the one its companion's voyage ends at. */
+export function shipWorld(ship: FictionShipRecord): BodyId | null {
+  if (ship.voyage !== undefined) return ship.voyage.to;
+  const beside = FICTION_SHIPS.find((other) => other.id === ship.parked.beside);
+  return beside?.voyage?.to ?? null;
 }
 
 /** 1 January 2026, 0 h TDB. */
@@ -663,8 +875,40 @@ const HAIL_MARY: FictionShipRecord = {
   realityCheck: 'The relativity is real: at 1.5 g, 11.9 ly take 13.1 years on Earth and 3.9 aboard. No such drive exists.',
 };
 
-/** The ships. */
-export const FICTION_SHIPS: readonly FictionShipRecord[] = [HAIL_MARY];
+/**
+ * The Blip-A, Rocky's ship. The novel: it has been at τ Ceti 46 years when the Hail Mary arrives,
+ * in orbit "maybe a few hundred meters away"; both later go to Adrian. Its trip from Erid is canon
+ * silent and not drawn: it is there from 46 years before the Hail Mary's arrival, and not before.
+ */
+const BLIP_A: FictionShipRecord = {
+  id: 'blip-a',
+  name: 'Blip-A',
+  aliases: ['Rocky’s ship'],
+  work: HAIL_MARY_NOVEL,
+  kind: 'ship',
+  anchorLine: 'Beside the Hail Mary’s orbit, about the real τ Ceti e',
+  position: 'canon',
+  look: { kind: 'ship', design: 'blip-a' },
+  // The model's stern to nose (scene/fiction/looks/blipA.ts BLIP_A_LENGTH_M; hailMary.test.ts).
+  lengthM: invented(
+    127,
+    'Canon gives only its diamond-shaped centre, “about the size of my ship”: 40 m. The rest of the model, and so its length, is invented.',
+  ),
+  parked: {
+    beside: 'hail-mary',
+    aheadKm: invented(0.3, 'The novel: “maybe a few hundred meters away” when the Hail Mary arrives.'),
+    yearsBefore: { value: 46, source: PHM_NOVEL },
+  },
+  facts: [
+    { label: 'Crew', value: { value: 'Rocky, the last of its crew', source: PHM_NOVEL } },
+    { label: 'Hull', value: { value: 'xenonite', source: PHM_NOVEL } },
+    { label: 'From', value: { value: 'Erid, 40 Eridani A', source: PHM_NOVEL } },
+  ],
+  realityCheck: 'No such ship exists; τ Ceti is real, 11.9 ly away, and τ Ceti e only a candidate planet.',
+};
+
+/** The ships, voyaging ones first: a parked one is placed by its companion's orbit. */
+export const FICTION_SHIPS: readonly FictionShipRecord[] = [HAIL_MARY, BLIP_A];
 
 /**
  * A line of something fictional from a star to one of its planets: the Petrova lines, Astrophage
@@ -728,6 +972,7 @@ export function valuesOfEntry(entry: FictionEntry): FictionValue<unknown>[] {
   if (entry.kind === 'line') return facts;
   if (entry.kind === 'ship') {
     const { voyage } = entry;
+    if (voyage === undefined) return [entry.lengthM, entry.parked.aheadKm, entry.parked.yearsBefore, ...facts];
     return [
       entry.lengthM,
       voyage.launchJd,
@@ -825,11 +1070,11 @@ export function fictionWorldLook(id: BodyId): Extract<FictionLook, { kind: 'worl
  * is Polyphemus's, Alpha Centauri A. Null for a chain of fictional anchors that never reaches a
  * real one, which fiction.test.ts rules out.
  */
-export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { kind: 'alphaCen' | 'overlay' }> | null {
+export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { kind: 'alphaCen' | 'overlay' | 'star' }> | null {
   let current: FictionRecord | null = record;
   for (let steps = 0; current !== null && steps <= FICTION.length; steps += 1) {
     const anchor: FictionAnchor = current.anchor;
-    if (anchor.kind === 'alphaCen' || anchor.kind === 'overlay') return anchor;
+    if (anchor.kind === 'alphaCen' || anchor.kind === 'overlay' || anchor.kind === 'star') return anchor;
     current = fictionRecord(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   }
   return null;

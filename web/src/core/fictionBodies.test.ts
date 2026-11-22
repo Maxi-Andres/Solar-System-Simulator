@@ -5,7 +5,7 @@ import type { BodyDefinition } from '@sss/tools/types';
 
 import { ALPHA_CEN_A_PLANETS } from './alphaCenAPlanets.ts';
 import { EphemerisStore } from './ephemerisStore.ts';
-import { FICTION, FICTION_COLOR, fictionBodyId, fictionRecord, type FictionRecord } from './fiction.ts';
+import { FICTION, FICTION_COLOR, FORTY_ERI_A, fictionBodyId, fictionRecord, realAnchorOf, type FictionRecord } from './fiction.ts';
 import { fictionOrbit, placeFiction, resolveAnchor, whenPlaced } from './fictionBodies.ts';
 import { allPlanetarySystems, exoPlanetOf, planetarySystemOf } from './planetarySystems.ts';
 import { J2000_JD } from './time.ts';
@@ -15,6 +15,9 @@ import { length, type Vec3 } from './vec3.ts';
 const STAR_A = 'star-test-a';
 /** Where the stand-in star is: Alpha Centauri's direction is not what is tested. */
 const TOWARD_A: Vec3 = { x: -0.48, y: -0.6, z: -0.64 };
+/** A stand-in for 40 Eridani A, a catalogue star carrying its Hipparcos number. */
+const STAR_40 = 'star-test-40';
+const TOWARD_40: Vec3 = { x: 0.6, y: 0.64, z: -0.48 };
 const GM_SUN = 1.3271244e11;
 
 vi.mock('./alphaCenBodies.ts', async (original) => ({
@@ -23,8 +26,25 @@ vi.mock('./alphaCenBodies.ts', async (original) => ({
 }));
 vi.mock('./planetarySystems.ts', async (original) => ({
   ...(await original<typeof import('./planetarySystems.ts')>()),
-  towardStar: (id: string) => (id === STAR_A ? TOWARD_A : null),
+  towardStar: (id: string) => (id === STAR_A ? TOWARD_A : id === STAR_40 ? TOWARD_40 : null),
 }));
+vi.mock('./starBodies.ts', async (original) => ({
+  ...(await original<typeof import('./starBodies.ts')>()),
+  starBodyFacts: (id: string) => (id === STAR_40 ? { designations: ['HD 26965', FORTY_ERI_A] } : null),
+}));
+
+/** The worlds about Alpha Centauri A, which the stand-in A places; Erid and Vulcan wait for 40 Eri A. */
+const AT_ALPHA_CEN = FICTION.filter((record) => realAnchorOf(record)?.kind === 'alphaCen');
+const AT_40_ERI = FICTION.filter((record) => realAnchorOf(record)?.kind === 'star');
+
+function add40EriA(s: EphemerisStore): void {
+  const star: BodyDefinition = { ...getBody('sun'), id: STAR_40, name: '40 Eri A (Keid)', gmKm3S2: 0.78 * GM_SUN, gmBodyOnlyKm3S2: 0.78 * GM_SUN };
+  const at = 16.3 * LIGHT_YEAR_KM;
+  s.addPropagatedBody(star, null, () => ({
+    position: { x: TOWARD_40.x * at, y: TOWARD_40.y * at, z: TOWARD_40.z * at },
+    velocity: { x: 0, y: 0, z: 0 },
+  }), { exact: true });
+}
 
 const AU_KM = 149_597_870.7;
 const LIGHT_YEAR_KM = 9.4607304725808e12;
@@ -54,7 +74,7 @@ describe('placing fiction', () => {
   it('makes Polyphemus a planet of Alpha Centauri A and Pandora its moon, in fiction’s colour', () => {
     const s = store(true);
     const added = placeFiction(s);
-    expect(added).toHaveLength(FICTION.length);
+    expect(added).toHaveLength(AT_ALPHA_CEN.length);
     expect(added.slice(0, 2)).toEqual([fictionBodyId('polyphemus'), fictionBodyId('polyphemus-1')]);
     const polyphemus = s.body(fictionBodyId('polyphemus'));
     const pandora = s.body(fictionBodyId('pandora'));
@@ -70,7 +90,7 @@ describe('placing fiction', () => {
     const s = store(true);
     const reversed = [...FICTION].reverse();
     const added = placeFiction(s, reversed);
-    expect(added).toHaveLength(FICTION.length);
+    expect(added).toHaveLength(AT_ALPHA_CEN.length);
     // Polyphemus first: everything else hangs from it.
     expect(added[0]).toBe(fictionBodyId('polyphemus'));
   });
@@ -81,9 +101,30 @@ describe('placing fiction', () => {
     expect(resolveAnchor(s, { kind: 'alphaCen', member: 'A' })).toBeNull();
     const placed = whenPlaced(s, fictionBodyId('pandora'));
     addStar(s);
-    expect(placeFiction(s)).toHaveLength(FICTION.length);
+    expect(placeFiction(s)).toHaveLength(AT_ALPHA_CEN.length);
     await expect(placed).resolves.toBe(fictionBodyId('pandora'));
     expect(placeFiction(s)).toEqual([]);
+  });
+
+  it('puts Erid and Vulcan about 40 Eridani A once that star is a body, Erid at its period’s distance', () => {
+    const s = store(true);
+    placeFiction(s);
+    expect(resolveAnchor(s, { kind: 'star', designation: FORTY_ERI_A })).toBeNull();
+    add40EriA(s);
+    expect(resolveAnchor(s, { kind: 'star', designation: FORTY_ERI_A })).toBe(STAR_40);
+    expect(placeFiction(s).sort()).toEqual(AT_40_ERI.map((record) => fictionBodyId(record.id)).sort());
+    const erid = s.body(fictionBodyId('erid'));
+    expect(erid.parent).toBe(STAR_40);
+    expect(erid.radiusEquatorialKm).toBe(12_835);
+    // The canon's 42.245 days about the measured 0.78 Suns: 0.219 AU, not the document's 0.224.
+    const orbit = fictionOrbit(fictionRecord('erid')!, 0.78 * GM_SUN);
+    expect(orbit.periodDays).toBe(42.245);
+    expect(orbit.semiMajorAxisAu).toBeCloseTo(0.2186, 3);
+    const state = s.localState(fictionBodyId('erid'), J2000_JD)!;
+    // At periastron: a (1 - e).
+    expect(length(state.position) / AU_KM).toBeCloseTo(orbit.semiMajorAxisAu * 0.96, 4);
+    // Vulcan from Kepler's law about the same mass: about 202 days at 0.62 AU.
+    expect(fictionOrbit(fictionRecord('vulcan')!, 0.78 * GM_SUN).periodDays).toBeCloseTo(202, 0);
   });
 
   it('keeps each world at its orbit’s distance from its parent, a state about it the frame tree carries', () => {

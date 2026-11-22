@@ -85,7 +85,7 @@ import {
   type FictionWorldParts,
 } from './fiction/fictionHooks.ts';
 import type { FictionObject } from './fiction/fictionLooks.ts';
-import { DEFAULT_ALBEDO, FICTION_LAYER, fictionShipOf, isFictionBody, overlayOf, PALETTE_ALBEDO } from '../core/fiction.ts';
+import { DEFAULT_ALBEDO, FICTION_LAYER, fictionShipOf, isFictionBody, overlayOf, PALETTE_ALBEDO, shipWorld } from '../core/fiction.ts';
 import { starDiscColor, starDiscMaterial } from './starDisc.ts';
 import { lensState } from './lens.ts';
 import {
@@ -1466,7 +1466,8 @@ export function SolarSystem({
           model.object.quaternion.setFromUnitVectors(SHIP_AXIS, scratchBow.normalize());
           model.setMode?.(pose.centrifuge ? 'centrifuge' : 'cruise', pose.spinPhase);
           // Lit by the nearer of the Sun and the star it is bound for.
-          const bound = fictionShipOf(handle.definition.id)?.voyage.to;
+          const ship = fictionShipOf(handle.definition.id);
+          const bound = ship === null ? undefined : (shipWorld(ship) ?? undefined);
           const there = bound === undefined || !store.isPropagatedBody(bound) ? undefined : snapshot.bodies.get(lightingStar(store, store.body(bound)));
           const light = there !== undefined && (sun === undefined || lengthSq(there.positionKm, rebased.positionKm) < lengthSq(sun.positionKm, rebased.positionKm)) ? there : sun;
           if (light !== undefined && model.update !== undefined) {

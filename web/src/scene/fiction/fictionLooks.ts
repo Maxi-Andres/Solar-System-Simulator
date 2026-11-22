@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import type { FictionLook, WorldPalette } from '../../core/fictionLook.ts';
 import { exoplanetMaterial } from '../exoplanetSurface.ts';
 import { BARREN, ICY, NO_HAZE } from './looks/airless.ts';
+import { AMMONIA_HAZE, AMMONIA_HAZE_AIR } from './looks/ammoniaHaze.ts';
+import { ARID, ARID_AIR } from './looks/arid.ts';
+import { createBlipA } from './looks/blipA.ts';
 import { DENSE_HAZE, DENSE_HAZE_AIR } from './looks/denseHaze.ts';
 import { createHailMary, type Planetshine, type ShipMode } from './looks/hailMary.ts';
 import { atmosphereHalo } from './looks/atmosphereShell.ts';
@@ -38,6 +41,8 @@ const PALETTE_LOOKS: Partial<Record<WorldPalette, PaletteLook>> = {
   barren: { surface: BARREN, haze: NO_HAZE, tintWeight: 0.6 },
   icy: { surface: ICY, haze: NO_HAZE, tintWeight: 0.4 },
   'dense-haze': { surface: DENSE_HAZE, haze: DENSE_HAZE_AIR, tintWeight: 0.6 },
+  'ammonia-haze': { surface: AMMONIA_HAZE, haze: AMMONIA_HAZE_AIR, tintWeight: 0.5 },
+  arid: { surface: ARID, haze: ARID_AIR, tintWeight: 0.5 },
 };
 
 /** A stand-in colour for the palettes without a look yet. */
@@ -53,6 +58,7 @@ const STUB_COLOUR: Record<WorldPalette, string> = {
   crystal: '#b8d8e8',
   barren: '#7a756c',
   icy: '#d0d8e0',
+  'ammonia-haze': '#c8b48c',
 };
 
 /**
@@ -142,7 +148,7 @@ export function createFictionWorldExtras(look: WorldLook, material: THREE.Materi
 /** A fictional object that is not a world: a monolith, Rama, a wormhole's mouth. */
 export function createFictionObject(look: Exclude<FictionLook, { kind: 'world' }>): FictionObject {
   if (look.kind === 'ship') {
-    return createHailMary();
+    return look.design === 'blip-a' ? createBlipA() : createHailMary();
   }
   const geometry =
     look.kind === 'monolith'

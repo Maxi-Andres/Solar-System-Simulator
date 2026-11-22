@@ -9,9 +9,22 @@ import { fictionEntry } from '../../core/fiction.ts';
 
 /**
  * The pages there are: one for each of Avatar's two worlds, one shared by the rest of Polyphemus'
- * family; Adrian's, the Hail Mary's, and one for both Petrova lines.
+ * family; Adrian's, the Hail Mary's, and one for both Petrova lines; Erid's, the Blip-A's and
+ * Vulcan's.
  */
-export type FictionAboutKey = 'pandora' | 'polyphemus' | 'polyphemus-family' | 'adrian' | 'hail-mary' | 'petrova';
+export type FictionAboutKey =
+  | 'pandora'
+  | 'polyphemus'
+  | 'polyphemus-family'
+  | 'adrian'
+  | 'hail-mary'
+  | 'petrova'
+  | 'erid'
+  | 'blip-a'
+  | 'vulcan';
+
+/** The records with a page of their own, by the same name. */
+const OWN_PAGES: ReadonlySet<string> = new Set(['pandora', 'polyphemus', 'adrian', 'hail-mary', 'erid', 'blip-a', 'vulcan']);
 
 /** What each page is called on the way into it ("Read about …"). */
 export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
@@ -21,6 +34,9 @@ export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
   adrian: 'Adrian',
   'hail-mary': 'Hail Mary',
   petrova: 'Petrova line',
+  erid: 'Erid',
+  'blip-a': 'Blip-A',
+  vulcan: 'Vulcan',
 };
 
 /**
@@ -28,7 +44,7 @@ export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
  * Trojans, the one they share; null for a record with none yet.
  */
 export function fictionAboutKey(recordId: string): FictionAboutKey | null {
-  if (recordId === 'pandora' || recordId === 'polyphemus' || recordId === 'adrian' || recordId === 'hail-mary') return recordId;
+  if (OWN_PAGES.has(recordId)) return recordId as FictionAboutKey;
   const entry = fictionEntry(recordId);
   if (entry === null || entry.kind === 'ship') return null;
   if (entry.kind === 'line') return 'petrova';

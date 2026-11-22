@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   FICTION,
+  FICTION_ANCHOR_STARS,
   FICTION_COLOR,
+  FORTY_ERI_A,
   fictionBodyId,
   fictionOf,
   fictionRecord,
@@ -255,6 +257,54 @@ describe('Polyphemus’ moons and Trojans', () => {
   });
 });
 
+describe('Erid and Vulcan', () => {
+  const erid = fictionRecord('erid')!;
+  const vulcan = fictionRecord('vulcan')!;
+
+  it('go round the real 40 Eridani A, a catalogue star made a body with its measured mass', () => {
+    for (const record of [erid, vulcan]) {
+      expect(record.anchor).toEqual({ kind: 'star', designation: FORTY_ERI_A });
+      expect(realAnchorOf(record)).toEqual({ kind: 'star', designation: FORTY_ERI_A });
+    }
+    const star = FICTION_ANCHOR_STARS.find((candidate) => candidate.designation === FORTY_ERI_A)!;
+    expect(star.massSun).toBe(0.78);
+    expect(star.massReference).toMatch(/Ma et al. 2018/);
+    expect(star.companions).toEqual(['40 Eri B', '40 Eri C']);
+  });
+
+  it('give Erid Weir’s numbers, from his document, and only its plane invented', () => {
+    expect(valueOf(erid.radiusKm)).toBe(12_835);
+    expect(valueOf(erid.massEarth)).toBe(8.47);
+    expect(valueOf(erid.orbit.semiMajorAxisKm)! / 149_597_870.7).toBeCloseTo(0.224, 9);
+    expect(valueOf(erid.orbit.eccentricity)).toBe(0.04);
+    expect(valueOf(erid.orbit.periodDays!)).toBe(42.245);
+    for (const value of [erid.radiusKm, erid.massEarth, erid.orbit.semiMajorAxisKm, erid.orbit.periodDays!]) {
+      expect(valueNote(value).text).toBe('Weir’s Eridian document');
+    }
+    expect(valueNote(erid.orbit.inclinationDeg).kind).toBe('invented');
+    // Its own radius and mass give its 2.09 g.
+    expect(8.47 / (12_835 / 6_371) ** 2).toBeCloseTo(2.09, 2);
+    // And its distance and period a star of 0.84 Suns, not 40 Eri A's 0.78: drawn from the period.
+    expect(0.224 ** 3 / (42.245 / 365.25) ** 2).toBeCloseTo(0.84, 2);
+    expect(erid.orbit.drawnFromPeriod).toBe(true);
+  });
+
+  it('give Vulcan its star and no moon from the canon, its size and orbit invented, no fanon 1.4 g', () => {
+    expect(valueNote(vulcan.facts.find((fact) => fact.label === 'Star')!.value).kind).toBe('canon');
+    expect(valueOf(vulcan.facts.find((fact) => fact.label === 'Moons')!.value)).toBe('none');
+    for (const value of [vulcan.radiusKm, vulcan.massEarth, vulcan.orbit.semiMajorAxisKm, vulcan.orbit.eccentricity]) {
+      expect(valueNote(value).kind).toBe('invented');
+    }
+    const values = valuesOfEntry(vulcan).flatMap((value) => ('value' in value ? [String(value.value)] : []));
+    expect(values.includes('1.4')).toBe(false);
+    // In the habitable zone (L = 0.46 Suns: Earth's light at 0.68 AU), well outside Erid.
+    const aAu = valueOf(vulcan.orbit.semiMajorAxisKm)! / 149_597_870.7;
+    expect(0.46 / aAu ** 2).toBeGreaterThan(1);
+    expect(0.46 / aAu ** 2).toBeLessThan(1.3);
+    expect(aAu - 0.224).toBeGreaterThan(0.3);
+  });
+});
+
 describe('fiction among the bodies', () => {
   it('knows its bodies by id, and no real one', () => {
     expect(isFictionBody(fictionBodyId('pandora'))).toBe(true);
@@ -289,8 +339,9 @@ describe('a value and its note', () => {
 describe('search', () => {
   it('finds a world by its name, its work or its creator, and all of them by "fiction"', () => {
     expect(searchFiction('pand').map((record) => record.id)).toEqual(['pandora']);
-    expect(searchFiction('Avatar').length).toBe(FICTION.length);
-    expect(searchFiction('cameron').length).toBe(FICTION.length);
+    const avatar = FICTION.filter((record) => record.work.title === 'Avatar').length;
+    expect(searchFiction('Avatar').length).toBe(avatar);
+    expect(searchFiction('cameron').length).toBe(avatar);
     expect(searchFiction('fiction').length).toBe(FICTION_ENTRIES.length);
     expect(searchFiction('polyphemus')[0]!.id).toBe('polyphemus');
     // Project Hail Mary's: the world over τ Ceti e, the ship, both Petrova lines.
@@ -298,7 +349,12 @@ describe('search', () => {
     expect(searchFiction('adrian').map((entry) => entry.id)).toEqual(['adrian', 'petrova-tau-ceti']);
     expect(searchFiction('hail mary')[0]!.id).toBe('hail-mary');
     expect(searchFiction('petrova').map((entry) => entry.id).sort()).toEqual(['petrova-sun', 'petrova-tau-ceti']);
-    expect(searchFiction('weir').length).toBe(4);
+    // Adrian, Erid, the two ships and the two lines.
+    expect(searchFiction('weir').length).toBe(6);
+    expect(searchFiction('erid').map((entry) => entry.id)).toEqual(['erid']);
+    expect(searchFiction('vulcan').map((entry) => entry.id)).toEqual(['vulcan']);
+    expect(searchFiction('blip-a').map((entry) => entry.id)).toEqual(['blip-a']);
+    expect(searchFiction('star trek').map((entry) => entry.id)).toEqual(['vulcan']);
     // Pandora by its number among the moons, before Polyphemus VI and the rest.
     expect(searchFiction('Polyphemus V')[0]!.id).toBe('pandora');
     expect(searchFiction('dante').map((record) => record.id)).toEqual(['polyphemus-1']);

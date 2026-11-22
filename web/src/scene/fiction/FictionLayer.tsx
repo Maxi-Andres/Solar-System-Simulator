@@ -17,7 +17,7 @@ import {
   type FictionLineRecord,
 } from '../../core/fiction.ts';
 import { placeFiction } from '../../core/fictionBodies.ts';
-import { placeShips, voyageOf } from '../../core/hailMary.ts';
+import { parkedOf, placeShips, voyageOf } from '../../core/hailMary.ts';
 import { renderDemand } from '../../core/renderDemand.ts';
 import type { SimClock } from '../../core/time.ts';
 import { useViewStore } from '../../state/store.ts';
@@ -38,6 +38,13 @@ setFictionMakers({
   object: createFictionObject,
   planetshineStrength,
   pose: (id, jd, out) => {
+    // A parked ship (the Blip-A) along its motion, not spinning.
+    const parked = parkedOf(id);
+    if (parked !== null) {
+      if (jd < parked.fromJd) return null;
+      parked.pose(jd, out);
+      return CRUISE;
+    }
     const voyage = voyageOf(id);
     const pose = voyage?.pose(jd, out) ?? null;
     if (voyage === null || pose === null) return null;
@@ -101,6 +108,7 @@ export function FictionLayer({
     // Sun's tables is fetched first, which no frame at today's date would ask for.
     let live = true;
     for (const ship of FICTION_SHIPS) {
+      if (ship.voyage === undefined) continue;
       const launch = valueOf(ship.voyage.launchJd);
       if (launch === null) continue;
       store
@@ -146,7 +154,11 @@ export function FictionLayer({
       return { line, positions };
     };
     return {
-      voyages: FICTION_SHIPS.map((ship) => ({ ship, ...make(FICTION_COLOR, ORBIT_OPACITY, false) })),
+      // Only a ship with a voyage has a path; a parked one has none drawn.
+      voyages: FICTION_SHIPS.filter((ship) => ship.voyage !== undefined).map((ship) => ({
+        ship,
+        ...make(FICTION_COLOR, ORBIT_OPACITY, false),
+      })),
       petrova: FICTION_LINES.map((record) => ({
         record,
         ...make(new THREE.Color().setRGB(record.colour[0], record.colour[1], record.colour[2], THREE.LinearSRGBColorSpace), 0.9, true),

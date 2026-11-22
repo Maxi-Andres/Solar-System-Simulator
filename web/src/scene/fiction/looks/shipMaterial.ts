@@ -31,7 +31,7 @@ import { LIGHTING } from '../../shading.ts';
  */
 
 /** Surface patterns drawn in the shader, coded in a finish's fourth component. */
-export const MARKING = { foil: -3, weathered: -5 } as const;
+export const MARKING = { foil: -3, weathered: -5, mottled: -6 } as const;
 
 /** A finish: base colour (linear), metalness, roughness, and the optional rest. */
 export interface ShipFinish {
@@ -195,7 +195,17 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec2 surfaceMetres = vec2(atan(relative.y, relative.x) * radius, vLocal.z);
     vec2 pixelMetres = fwidth(surfaceMetres);
 
-    if (pattern < -4.5) {
+    if (pattern < -5.5) {
+      // Mottled: two tones in broad, soft swirls, like paint stirred and left half mixed -- the
+      // Blip-A's xenonite. Laid out in the hull's own metres on two slanted planes, so flat
+      // panels facing any way all carry it.
+      vec2 a = vLocal.xy * 0.09 + vLocal.z * vec2(0.05, -0.07);
+      vec2 b = vLocal.yz * 0.07 + vLocal.x * vec2(-0.06, 0.04) + 17.0;
+      vec2 swirl = vec2(valueNoise(a * 1.7 + 3.0), valueNoise(b * 1.7 + 9.0)) * 2.4;
+      float mix1 = valueNoise(a + swirl) * 0.6 + valueNoise(b - swirl) * 0.4;
+      float tone = smoothstep(0.38, 0.62, mix1 + 0.12 * (valueNoise(a * 6.0) - 0.5));
+      albedo = mix(albedo, vec3(0.34, 0.27, 0.18), tone);
+    } else if (pattern < -4.5) {
       // Weathered paint: faint grime in broad, soft patches, faded out where a pixel spans them.
       float grime = valueNoise(surfaceMetres * vec2(0.45, 0.3)) * valueNoise(surfaceMetres * vec2(1.9, 1.3) + 5.0);
       float grimeShown = 1.0 - smoothstep(0.2, 0.8, max(pixelMetres.x, pixelMetres.y));

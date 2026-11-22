@@ -14,7 +14,7 @@ import {
   type FictionValue,
 } from '../core/fiction.ts';
 import { fictionOrbit } from '../core/fictionBodies.ts';
-import { C_KM_S, DAYS_PER_YEAR, lorentzFactor, voyageOf } from '../core/hailMary.ts';
+import { C_KM_S, DAYS_PER_YEAR, lorentzFactor, parkedOf, voyageOf } from '../core/hailMary.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from '../descriptions/fiction/ids.ts';
 import { FictionTag } from './FictionTag.tsx';
 import { ReadMore } from './ReadMore.tsx';
@@ -108,7 +108,16 @@ export function FictionPanel({
           </Row>
         ) : (
           <>
-            <ValueRow label="Orbit radius" value={record.orbit.semiMajorAxisKm} format={formatDistance} />
+            <ValueRow
+              label="Orbit radius"
+              value={record.orbit.semiMajorAxisKm}
+              format={formatDistance}
+              extra={
+                record.orbit.drawnFromPeriod === true && orbit !== null
+                  ? `drawn at ${orbit.semiMajorAxisAu.toFixed(3)} AU, its period about the star’s measured mass`
+                  : undefined
+              }
+            />
             <ValueRow label="Eccentricity" value={record.orbit.eccentricity} format={(e) => e.toFixed(3)} />
           </>
         )}
@@ -174,6 +183,8 @@ function ShipPanel({
   const moment = voyage?.moment(jd) ?? null;
   const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
   const about = fictionAboutKey(ship.id);
+  // A parked ship (the Blip-A): where it waits, beside whom, and since when.
+  const parked = ship.parked === undefined ? null : parkedOf(focus);
   return (
     <Panel title={ship.name} onClose={onClose} width="17.5rem">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -186,7 +197,24 @@ function ShipPanel({
       {about !== null && <ReadMore name={FICTION_ABOUT_NAMES[about]} />}
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
-        <Row label="Now">{moment?.phase ?? '--'}</Row>
+        {ship.voyage !== undefined && <Row label="Now">{moment?.phase ?? '--'}</Row>}
+        {ship.parked !== undefined && (
+          <>
+            <Row label="Now">{parked === null ? '--' : jd < parked.fromJd ? 'not there yet' : 'in orbit'}</Row>
+            {parked !== null && (
+              <Row label="There since" note={{ text: 'the Hail Mary’s arrival less 46 years', kind: 'computed' }}>
+                {dateOf(parked.fromJd)}
+              </Row>
+            )}
+            <ValueRow label="Years there" value={ship.parked.yearsBefore} format={(years) => `${years} at the Hail Mary’s arrival`} />
+            <ValueRow label="Ahead of it" value={ship.parked.aheadKm} format={(km) => `${Math.round(km * 1000)} m`} />
+            {parked !== null && (
+              <Row label="Orbit" note={{ text: 'the Hail Mary’s', kind: 'computed' }}>
+                {`${Math.round(parked.companion.orbitRadiusKm).toLocaleString('en-US')} km, ${parked.companion.orbitSpeedKmS} km/s`}
+              </Row>
+            )}
+          </>
+        )}
         {moment !== null && moment.earthDays !== null && moment.shipDays !== null && (
           <>
             <Row label="Since launch, Earth" note={COMPUTED}>{yearsMonths(moment.earthDays)}</Row>
@@ -199,23 +227,27 @@ function ShipPanel({
         )}
         <Row label="From Sun">{fromSun === null ? '--' : formatDistance(fromSun)}</Row>
         <Divider />
-        <ValueRow label="Acceleration" value={ship.voyage.accelerationG} format={(g) => `${g} g`} />
-        {voyage !== null && (
+        {ship.voyage !== undefined && (
           <>
-            <Row label="Trip, Earth" note={COMPUTED}>{`${(voyage.trip.totalS / 86_400 / DAYS_PER_YEAR).toFixed(2)} yr`}</Row>
-            <ValueRow label="Trip, Earth (canon)" value={ship.voyage.earthYears} format={(years) => `${years} yr`} />
-            <Row label="Trip, aboard" note={COMPUTED}>{`${(voyage.trip.properTotalS / 86_400 / DAYS_PER_YEAR).toFixed(2)} yr`}</Row>
-            <ValueRow label="Trip, aboard (quoted)" value={ship.voyage.shipYears} format={(years) => yearsMonths(years * DAYS_PER_YEAR)} />
-            <Row label="Top speed" note={COMPUTED}>{`${voyage.trip.peakBeta.toFixed(4)} c`}</Row>
+            <ValueRow label="Acceleration" value={ship.voyage.accelerationG} format={(g) => `${g} g`} />
+            {voyage !== null && (
+              <>
+                <Row label="Trip, Earth" note={COMPUTED}>{`${(voyage.trip.totalS / 86_400 / DAYS_PER_YEAR).toFixed(2)} yr`}</Row>
+                <ValueRow label="Trip, Earth (canon)" value={ship.voyage.earthYears} format={(years) => `${years} yr`} />
+                <Row label="Trip, aboard" note={COMPUTED}>{`${(voyage.trip.properTotalS / 86_400 / DAYS_PER_YEAR).toFixed(2)} yr`}</Row>
+                <ValueRow label="Trip, aboard (quoted)" value={ship.voyage.shipYears} format={(years) => yearsMonths(years * DAYS_PER_YEAR)} />
+                <Row label="Top speed" note={COMPUTED}>{`${voyage.trip.peakBeta.toFixed(4)} c`}</Row>
+              </>
+            )}
+            <ValueRow label="Launch" value={ship.voyage.launchJd} format={dateOf} />
+            {voyage !== null && <Row label="Arrival" note={COMPUTED}>{dateOf(voyage.arrivalJd)}</Row>}
+            <ValueRow label="Orbit at Adrian" value={ship.voyage.orbitSpeedKmS} format={(v) => `${v} km/s`} />
+            {voyage !== null && (
+              <Row label="Its radius" note={{ text: 'GM / v², Adrian’s mass invented', kind: 'computed' }}>
+                {`${Math.round(voyage.orbitRadiusKm).toLocaleString('en-US')} km`}
+              </Row>
+            )}
           </>
-        )}
-        <ValueRow label="Launch" value={ship.voyage.launchJd} format={dateOf} />
-        {voyage !== null && <Row label="Arrival" note={COMPUTED}>{dateOf(voyage.arrivalJd)}</Row>}
-        <ValueRow label="Orbit at Adrian" value={ship.voyage.orbitSpeedKmS} format={(v) => `${v} km/s`} />
-        {voyage !== null && (
-          <Row label="Its radius" note={{ text: 'GM / v², Adrian’s mass invented', kind: 'computed' }}>
-            {`${Math.round(voyage.orbitRadiusKm).toLocaleString('en-US')} km`}
-          </Row>
         )}
         <ValueRow label="Length" value={ship.lengthM} format={(m) => `${m} m`} />
         {ship.facts.map((fact) => (
