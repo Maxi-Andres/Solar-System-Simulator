@@ -889,14 +889,19 @@ const BLIP_A: FictionShipRecord = {
   anchorLine: 'Beside the Hail Mary’s orbit, about the real τ Ceti e',
   position: 'canon',
   look: { kind: 'ship', design: 'blip-a' },
-  // The model's stern to nose (scene/fiction/looks/blipA.ts BLIP_A_LENGTH_M; hailMary.test.ts).
+  // The model's tip to tip (scene/fiction/looks/blipA.ts BLIP_A_LENGTH_M; hailMary.test.ts).
   lengthM: invented(
-    127,
-    'Canon gives only its diamond-shaped centre, “about the size of my ship”: 40 m. The rest of the model, and so its length, is invented.',
+    400,
+    'Scaled from the 2026 film’s stills against the Hail Mary’s 40 m: about ten Hail Marys. The novel gives no length.',
   ),
   parked: {
+    // Its needles run along the orbit, the 230 m aft fan toward the Hail Mary, whose centrifuge
+    // reaches 75 m from its centre: 400 m centre to centre leaves some 95 m between them.
     beside: 'hail-mary',
-    aheadKm: invented(0.3, 'The novel: “maybe a few hundred meters away” when the Hail Mary arrives.'),
+    aheadKm: invented(
+      0.4,
+      'The novel: “maybe a few hundred meters away” when the Hail Mary arrives; 400 m, centre to centre, keeps the film-sized ship clear of the Hail Mary.',
+    ),
     yearsBefore: { value: 46, source: PHM_NOVEL },
   },
   facts: [

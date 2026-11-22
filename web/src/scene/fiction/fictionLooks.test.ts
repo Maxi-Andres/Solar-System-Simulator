@@ -26,7 +26,7 @@ import {
 import { SHIP_SHADERS } from './looks/shipMaterial.ts';
 import { AMMONIA_HAZE, AMMONIA_HAZE_AIR } from './looks/ammoniaHaze.ts';
 import { ARID, ARID_AIR } from './looks/arid.ts';
-import { BLIP_A_CENTRE_OF_MASS_Z_M, BLIP_A_LENGTH_M, DIAMOND_SPAN_M, createBlipA } from './looks/blipA.ts';
+import { AFT_REACH_M, BLIP_A_CENTRE_OF_MASS_Z_M, BLIP_A_LENGTH_M, FORE_REACH_M, createBlipA } from './looks/blipA.ts';
 import { DENSE_HAZE_AIR } from './looks/denseHaze.ts';
 import { STORM_COUNT, stormPlacements } from './looks/bandedGiant.ts';
 import { JUNGLE_MOON } from './looks/jungleMoon.ts';
@@ -567,49 +567,64 @@ describe('the Blip-A', () => {
     return c;
   }
 
-  it('is length one along +z, the nose forward, its centre of mass at the origin', () => {
+  it("is length one along +z, the needles' axis, its centre of mass at the origin", () => {
     const ship = createBlipA();
     ship.object.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(ship.object);
     expect(box.max.z - box.min.z).toBeCloseTo(1, 1);
-    expect(box.max.z).toBeCloseTo((BLIP_A_LENGTH_M - BLIP_A_CENTRE_OF_MASS_Z_M) / BLIP_A_LENGTH_M, 1);
-    // The diamond is "about the size of my ship": the Hail Mary's 40 m.
-    expect(DIAMOND_SPAN_M).toBe(40);
-    expect(BLIP_A_LENGTH_M).toBeGreaterThan(100);
+    expect(box.max.z).toBeCloseTo((FORE_REACH_M - BLIP_A_CENTRE_OF_MASS_Z_M) / BLIP_A_LENGTH_M, 1);
+    expect(AFT_REACH_M + FORE_REACH_M).toBe(BLIP_A_LENGTH_M);
+    // Ten Hail Marys: the film's stills, against its 40 m.
+    expect(BLIP_A_LENGTH_M).toBe(400);
+    // Thin through, tall across: a flattened fan.
+    expect(box.max.x - box.min.x).toBeLessThan(0.5 * (box.max.y - box.min.y));
     ship.dispose();
   });
 
-  it('is one draw on the ship program, and carries no running lights', () => {
+  it('draws its needles instanced on the ship shader, and carries no running lights', () => {
     const ship = createBlipA();
-    let meshes = 0;
+    let instancedMeshes = 0;
     let points = 0;
+    const programs = new Set<THREE.Material>();
     ship.object.traverse((part) => {
-      if ((part as THREE.Mesh).isMesh) meshes += 1;
+      if ((part as THREE.InstancedMesh).isInstancedMesh) instancedMeshes += 1;
       if ((part as THREE.Points).isPoints) points += 1;
+      if ((part as THREE.Mesh).isMesh) programs.add((part as THREE.Mesh).material as THREE.Material);
     });
-    expect(meshes).toBe(1);
+    expect(instancedMeshes).toBe(4);
     expect(points).toBe(0);
+    // The ship's material, and its variant for the rods, on the very same uniforms.
+    expect(programs.size).toBe(2);
+    const [first, second] = [...programs] as THREE.ShaderMaterial[];
+    expect(first!.uniforms).toBe(second!.uniforms);
+    expect(SHIP_SHADERS.vertex).toContain('USE_INSTANCING');
     ship.dispose();
   });
 
-  it('is cheap, and draws its silhouette when small on screen', () => {
+  it('keeps to its budget, and thins out with distance: every needle near, fewer and thicker further, a few shapes small', () => {
     const ship = createBlipA();
-    expect(ship.triangles.full).toBeLessThan(10000);
-    expect(ship.triangles.low).toBeLessThan(ship.triangles.full / 2);
-    const hull = ship.object.getObjectByName('blip-a-hull') as THREE.Mesh;
-    const full = hull.geometry;
+    // Two triangles a rod: the thin, long triangles are what costs.
+    expect(ship.triangles.full).toBeLessThan(20000);
+    expect(ship.triangles.mid).toBeLessThan(ship.triangles.full);
+    expect(ship.triangles.low).toBeLessThan(100);
+    const needles = ship.object.getObjectByName('blip-a-needles')!;
+    const middle = ship.object.getObjectByName('blip-a-needles-mid')!;
+    const core = ship.object.getObjectByName('blip-a-core') as THREE.Mesh;
+    const coreFull = core.geometry;
     ship.object.updateMatrixWorld(true);
+    ship.update(new THREE.Vector3(1, 0, 0), camera(1));
+    expect(needles.visible).toBe(true);
+    ship.update(new THREE.Vector3(1, 0, 0), camera(6));
+    expect([needles.visible, middle.visible]).toEqual([false, true]);
     ship.update(new THREE.Vector3(1, 0, 0), camera(500));
-    expect(hull.geometry).not.toBe(full);
-    ship.update(new THREE.Vector3(1, 0, 0), camera(2));
-    expect(hull.geometry).toBe(full);
-    expect((hull.material as THREE.ShaderMaterial).uniforms['uShadowOn']).toBeDefined();
+    expect([needles.visible, middle.visible]).toEqual([false, false]);
+    expect(core.geometry).not.toBe(coreFull);
     ship.dispose();
   });
 
   it('takes planetshine and the lighting mode', () => {
     const ship = createBlipA();
-    const material = (ship.object.getObjectByName('blip-a-hull') as THREE.Mesh).material as THREE.ShaderMaterial;
+    const material = (ship.object.getObjectByName('blip-a-core') as THREE.Mesh).material as THREE.ShaderMaterial;
     ship.update(new THREE.Vector3(1, 0, 0), camera(2), { direction: new THREE.Vector3(0, -1, 0), strength: 0.3 }, { sun: 0.4, ambient: 1.5 });
     expect(material.uniforms['uFillIrradiance']!.value).toBe(0.3);
     expect(material.uniforms['uAmbient']!.value).toBe(1.5);

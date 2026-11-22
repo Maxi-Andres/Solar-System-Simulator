@@ -349,16 +349,34 @@ const VULCAN: FictionAbout = {
 
 const BLIP_A: FictionAbout = {
   kind: 'Starship',
-  photos: [],
+  photos: [
+    suppliedStill(
+      'blip-a-and-hail-mary',
+      { width: 640, height: 297 },
+      HAIL_MARY_STUDIO,
+      'Image from the film',
+      'The Blip-A close, the Hail Mary beside it, as Project Hail Mary shows them',
+      'The Blip-A’s dark bronze needles streaming past, its jagged core among them, and the white Hail Mary small beside it.',
+    ),
+    suppliedStill(
+      'hail-mary-docked-at-blip-a',
+      { width: 640, height: 294 },
+      HAIL_MARY_STUDIO,
+      'Image from the film',
+      'The Hail Mary docked against the Blip-A, as Project Hail Mary shows them',
+      'The Hail Mary, a small white craft, against the Blip-A’s core and its wide flat fan of needles.',
+    ),
+  ],
   story: [
     'The Blip-A is Rocky’s ship in Project Hail Mary: sent from Erid to τ Ceti, as the Hail Mary was from Earth, to learn why that star is not dimming. When the Hail Mary arrives only Rocky is left aboard.',
   ],
   canon: [
-    'The novel: it has been at τ Ceti for 46 years when the Hail Mary arrives, in orbit close by — “maybe a few hundred meters away”, the pilot first judges. Through his telescope it is “roughly triangle-shaped”, with “gable-like protrusions along its hull”, every face flat, a mottled grey and tan; at its centre is a diamond-shaped part about the size of the Hail Mary. It is built of xenonite, a material Eridians can make in any shape, and inside it keeps Erid’s air: ammonia at 29 atmospheres and 210 °C. Later the two ships are joined by a xenonite tunnel.',
+    'The novel: it has been at τ Ceti for 46 years when the Hail Mary arrives, in orbit close by — “maybe a few hundred meters away”, the pilot first judges; later it holds station 217 m off. Through his telescope it is “roughly triangle-shaped”, with “gable-like protrusions along its hull”, every face flat, a mottled grey and tan; at its centre is a diamond-shaped part about the size of the Hail Mary. It is built of xenonite, a material Eridians can make in any shape, and inside it keeps Erid’s air: ammonia at 29 atmospheres and 210 °C. Later the two ships are joined by a xenonite tunnel.',
+    'The 2026 film’s ship looks nothing like the novel’s. It is not a hull at all but a vast spindle of needles: a dark, jagged core with a row of sawtooth peaks along its top, and from it thousands of long, thin rods streaming out both ways in a flat fan, dark bronze and gold. Docked beside it, the Hail Mary is a small craft.',
   ],
   invented: [
-    'Where it is: on the Hail Mary’s own orbit round Adrian, 300 m ahead of where the Hail Mary will be, from 46 years before the Hail Mary’s arrival — 1993, as the app dates that arrival — on. The novel has it round τ Ceti when the Hail Mary comes, the two moving to Adrian later; as the Hail Mary’s arrival is made one, so is its stay. Its trip from Erid, which the canon does not describe, is not drawn.',
-    'Its model is after the novel, its proportions this app’s own: the diamond 40 m tip to tip, three rods to a wide triangular base, a stalk with four flat panels and a pyramid nose — 127 m in all. The 2026 film’s design is not described in any source found. It carries no lights — Eridians have no eyes — so from afar it is a plain dot.',
+    'Its model takes the 2026 film’s general configuration, as the Hail Mary’s does, every detail this app’s own: a core of flat-faced blocks with five sawtooth peaks, and some 2,400 needles fanning out from it in one plane, 84 m across and 26 m through, bronze and gold. Its length, which the novel never gives, is 400 m, scaled from the film’s stills against the Hail Mary’s 40 m — about ten Hail Marys. From the novel it keeps its flat faces, its xenonite and its lack of lights: Eridians have no eyes, so from afar it is a plain dot.',
+    'Where it is: on the Hail Mary’s own orbit round Adrian, its needles along its motion, 400 m ahead of where the Hail Mary will be — “a few hundred meters”, as the novel says, and far enough that the film-sized ship and the Hail Mary’s spinning centrifuge stay clear of each other. It is there from 46 years before the Hail Mary’s arrival — 1993, as the app dates that arrival — on. The novel has it round τ Ceti when the Hail Mary comes, the two moving to Adrian later; as the Hail Mary’s arrival is made one, so is its stay. Its trip from Erid, which the canon does not describe, is not drawn.',
   ],
   reality: [
     'No such ship exists, nor any material like xenonite. τ Ceti is real, 11.9 light years from the Sun, and 40 Eridani 16.3; the two are about 10 light years apart, as the novel says. τ Ceti e, which Adrian is drawn over, is a candidate planet that studies since 2024 find more likely the star’s own activity.',

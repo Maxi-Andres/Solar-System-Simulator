@@ -104,7 +104,11 @@ export const LOW_DETAIL_BELOW = 0.1;
 const DEPTH_VERTEX = /* glsl */ `
   varying float vDepth;
   void main() {
-    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    #ifdef USE_INSTANCING
+      vec4 viewPosition = modelViewMatrix * (instanceMatrix * vec4(position, 1.0));
+    #else
+      vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    #endif
     vDepth = -viewPosition.z;
     gl_Position = projectionMatrix * viewPosition;
   }
@@ -181,6 +185,13 @@ export interface ShipRig {
   readonly material: THREE.ShaderMaterial;
   /** Whether the silhouette is drawn now. */
   readonly low: boolean;
+  /** The share of the view's half-height the ship spanned at the last update. */
+  readonly share: number;
+  /**
+   * Adds a part drawn with the ship's material, shadowed and casting as the sections do -- an
+   * instanced one too -- at rest in the spin's frame. Its geometry's section ids must be 0..2.
+   */
+  addPart(mesh: THREE.Mesh, defines?: Record<string, string>): void;
   /** The ship's geometries are in: shadows may be drawn. */
   setReady(): void;
   /** Called when the silhouette is switched in or out: the ship picks its geometries. */
@@ -209,6 +220,21 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     mesh.frustumCulled = false;
     return mesh;
   });
+  /** Variants of the material for parts drawn another way (shader defines), on the very same uniforms. */
+  const variants = new Map<string, THREE.ShaderMaterial>();
+  const variant = (defines: Record<string, string>): THREE.ShaderMaterial => {
+    const key = JSON.stringify(defines);
+    let found = variants.get(key);
+    if (found === undefined) {
+      found = material.clone();
+      found.uniforms = material.uniforms;
+      found.defines = { ...defines };
+      variants.set(key, found);
+    }
+    return found;
+  };
+  /** Everything drawn: the sections, then any parts added. */
+  const meshes: THREE.Mesh[] = [...sections];
 
   // The running lights' glow: one draw of sprites, placed with the sections.
   const glowGeometry = new THREE.BufferGeometry();
@@ -256,17 +282,26 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     side: THREE.DoubleSide,
   });
   const shadowScene = new THREE.Scene();
-  const proxies = sections.map((mesh) => {
-    const proxy = new THREE.Mesh(mesh.geometry, depthMaterial);
+  const proxyOf = (mesh: THREE.Mesh): THREE.Mesh => {
+    let proxy: THREE.Mesh;
+    if ((mesh as THREE.InstancedMesh).isInstancedMesh === true) {
+      const instanced = mesh as THREE.InstancedMesh;
+      const copy = new THREE.InstancedMesh(mesh.geometry, depthMaterial, instanced.count);
+      copy.instanceMatrix = instanced.instanceMatrix;
+      proxy = copy;
+    } else {
+      proxy = new THREE.Mesh(mesh.geometry, depthMaterial);
+    }
     proxy.matrixAutoUpdate = false;
     proxy.frustumCulled = false;
     shadowScene.add(proxy);
     return proxy;
-  });
+  };
+  const proxies = meshes.map(proxyOf);
   const shadowCamera = new THREE.OrthographicCamera();
   const lightInModel = new THREE.Vector3(1, 0, 0);
   const lastLight = new THREE.Vector3();
-  const sectionMatrix = sections.map(() => new THREE.Matrix4());
+  const sectionMatrix: THREE.Matrix4[] = meshes.map(() => new THREE.Matrix4());
   const scratchQuaternion = new THREE.Quaternion();
   const scratchPosition = new THREE.Vector3();
   const scratchScale = new THREE.Vector3();
@@ -285,16 +320,25 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     // Once a frame at most, and only when something moved.
     if (!shadowDirty || renderer.info.render.frame === shadowFrame) return;
     spin.updateMatrix();
-    sections.forEach((mesh, s) => {
+    meshes.forEach((mesh, s) => {
       mesh.updateMatrix();
       sectionMatrix[s]!.multiplyMatrices(spin.matrix, mesh.matrix);
       proxies[s]!.geometry = mesh.geometry;
       proxies[s]!.visible = mesh.visible;
       proxies[s]!.matrix.copy(sectionMatrix[s]!);
     });
-    // The bounds: every section's bounding sphere, wherever the ship has put it.
-    const spheres = sections
-      .map((mesh, s) => ({ sphere: mesh.geometry.boundingSphere, s }))
+    // The bounds: every visible part's bounding sphere, wherever the ship has put it -- an
+    // instanced part's over all its copies.
+    const sphereOf = (mesh: THREE.Mesh): THREE.Sphere | null => {
+      if ((mesh as THREE.InstancedMesh).isInstancedMesh === true) {
+        const instanced = mesh as THREE.InstancedMesh;
+        if (instanced.boundingSphere === null) instanced.computeBoundingSphere();
+        return instanced.boundingSphere;
+      }
+      return mesh.geometry.boundingSphere;
+    };
+    const spheres = meshes
+      .map((mesh, s) => ({ sphere: mesh.visible ? sphereOf(mesh) : null, s }))
       .filter((entry): entry is { sphere: THREE.Sphere; s: number } => entry.sphere !== null && entry.sphere.radius > 0);
     if (spheres.length === 0) return;
     centre.set(0, 0, 0);
@@ -334,17 +378,21 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     renderer.autoClear = autoClear;
 
     const views = material.uniforms['uShadowView']!.value as THREE.Matrix4[];
-    sections.forEach((_, s) => views[s]!.multiplyMatrices(shadowCamera.matrixWorldInverse, sectionMatrix[s]!));
+    // The shader's three section transforms: the sections' own; added parts share section 0's.
+    for (let s = 0; s < Math.min(sections.length, 3); s += 1) views[s]!.multiplyMatrices(shadowCamera.matrixWorldInverse, sectionMatrix[s]!);
     (material.uniforms['uShadowProjection']!.value as THREE.Matrix4).copy(shadowCamera.projectionMatrix);
     material.uniforms['uShadowMap']!.value = shadowTarget.texture;
     material.uniforms['uShadowTexel']!.value = 1 / SHADOW_MAP_SIZE;
+    // Two texels and a half: 8 cm for the Hail Mary's 40 m, a metre for the Blip-A's 400.
+    material.uniforms['uShadowBias']!.value = (2.5 * 2 * radius) / SHADOW_MAP_SIZE;
     material.uniforms['uShadowOn']!.value = 1;
     material.uniformsNeedUpdate = true;
     shadowDirty = false;
     shadowFrame = renderer.info.render.frame;
   };
-  // Whichever section is drawn first draws the shadow, before any of them reads it.
+  // Whichever part is drawn first draws the shadow, before any of them reads it.
   for (const mesh of sections) mesh.onBeforeRender = (renderer) => drawShadow(renderer);
+  let share = 0;
 
   const glowPositions = glowGeometry.getAttribute('position') as THREE.BufferAttribute;
   const placeGlows = (): void => {
@@ -367,6 +415,19 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     get low() {
       return low;
     },
+    get share() {
+      return share;
+    },
+    addPart(mesh, defines) {
+      mesh.material = defines === undefined ? material : variant(defines);
+      mesh.frustumCulled = false;
+      mesh.onBeforeRender = (renderer) => drawShadow(renderer);
+      meshes.push(mesh);
+      sectionMatrix.push(new THREE.Matrix4());
+      proxies.push(proxyOf(mesh));
+      spin.add(mesh);
+      shadowDirty = true;
+    },
     setReady() {
       ready = true;
       shadowDirty = true;
@@ -385,7 +446,7 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
       const extent = object.matrixWorld.getMaxScaleOnAxis() * span;
       const distance = Math.max(objectPosition.distanceTo(cameraPosition), 1e-9);
       const halfView = camera instanceof THREE.PerspectiveCamera ? Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) : 1;
-      const share = extent / distance / halfView;
+      share = extent / distance / halfView;
       const nowLow = share < LOW_DETAIL_BELOW;
       if (nowLow !== low) {
         low = nowLow;
@@ -410,6 +471,7 @@ export function createShipRig(options: ShipRigOptions): ShipRig {
     dispose() {
       empty.dispose();
       material.dispose();
+      for (const found of variants.values()) found.dispose();
       glowGeometry.dispose();
       glowMaterial.dispose();
       depthMaterial.dispose();

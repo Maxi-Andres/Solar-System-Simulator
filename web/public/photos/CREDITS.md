@@ -484,7 +484,7 @@ The Sun's spotless Sun of March 2017 is the glossary's (`public/glossary/CREDITS
 
 ## Fiction's abouts (`fiction/film/`)
 
-Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.ts`), and only the works' own images: from the films and the franchise, few and small (a 640-pixel thumbnail, a large copy no wider than 800), shown for illustration in a non-commercial project, as an encyclopaedia shows a film's stills. They belong to their studios. Those from the works' official sites, avatar.com and startrek.com, are linked below; the others were supplied by the project's author. The Petrova line, Erid and the Blip-A have none.
+Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.ts`), and only the works' own images: from the films and the franchise, few and small (a 640-pixel thumbnail, a large copy no wider than 800), shown for illustration in a non-commercial project, as an encyclopaedia shows a film's stills. They belong to their studios. Those from the works' official sites, avatar.com and startrek.com, are linked below; the others were supplied by the project's author. The Petrova line and Erid have none.
 
 | File | What | Credit | Source |
 |---|---|---|---|
@@ -496,5 +496,7 @@ Shown only on a fictional thing's about page (`src/descriptions/fiction/abouts.t
 | `fiction/film/hail-mary-in-space.webp`, `-large` | The Hail Mary in space (the letterbox's top band cropped) | © Amazon MGM Studios | Supplied by the project's author |
 | `fiction/film/hail-mary-over-the-aurora.webp`, `-large` | The Hail Mary in Earth orbit over an aurora | © Amazon MGM Studios | Supplied by the project's author |
 | `fiction/film/adrian-from-orbit.webp`, `-large` | Adrian from orbit, with a ship | © Amazon MGM Studios | Supplied by the project's author |
+| `fiction/film/blip-a-and-hail-mary.webp`, `-large` | The Blip-A close, the Hail Mary beside it (655 pixels wide, as supplied; one bright row cropped) | © Amazon MGM Studios | Supplied by the project's author |
+| `fiction/film/hail-mary-docked-at-blip-a.webp`, `-large` | The Hail Mary docked against the Blip-A (the letterbox's top band cropped) | © Amazon MGM Studios | Supplied by the project's author |
 | `fiction/film/vulcan-from-orbit.webp`, `-large` | The Enterprise over Vulcan | © CBS Studios | [startrek.com, "Vulcan-like Planet Found... for Real"](https://www.startrek.com/news/vulcan-like-planet-found-for-real) |
 | `fiction/film/vulcan-surface.webp`, `-large` | Vulcan's surface: a ring of stone pillars, a city beyond (550 pixels wide, as published) | © CBS Studios | [startrek.com, "Vulcan-like Planet Found... for Real"](https://www.startrek.com/news/vulcan-like-planet-found-for-real) |

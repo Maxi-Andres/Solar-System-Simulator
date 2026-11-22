@@ -13,7 +13,8 @@ import {
   valuesOfEntry,
 } from './fiction.ts';
 import { C_KM_S, G0_KM_S2, lorentzFactor, ParkedShip, ThrustTrip, Voyage } from './hailMary.ts';
-import { BLIP_A_LENGTH_M } from '../scene/fiction/looks/blipA.ts';
+import { AFT_REACH_M, BLIP_A_LENGTH_M } from '../scene/fiction/looks/blipA.ts';
+import { CENTRIFUGE_CONTROL_ROOM_RADIUS_M } from '../scene/fiction/looks/hailMary.ts';
 import { PLANETARY_SYSTEMS } from './planetarySystems.ts';
 import { length, subtract } from './vec3.ts';
 
@@ -169,6 +170,13 @@ describe('the Blip-A', () => {
   });
   const parked = new ParkedShip(blipA, voyage, valueOf(blipA.parked!.aheadKm)!, valueOf(blipA.parked!.yearsBefore)!);
 
+  it('keeps clear of the Hail Mary: its aft fan short of the centrifuge’s reach, with room to spare', () => {
+    // Needles along the orbit, the aft fan toward the Hail Mary; its centrifuge 75 m from the centre.
+    const gapM = valueOf(blipA.parked!.aheadKm)! * 1000 - AFT_REACH_M - CENTRIFUGE_CONTROL_ROOM_RADIUS_M;
+    expect(gapM).toBeGreaterThan(50);
+    expect(valueOf(blipA.parked!.aheadKm)! * 1000).toBeLessThanOrEqual(500);
+  });
+
   it('waits on the Hail Mary’s orbit, a few hundred metres ahead, from 46 years before it arrives', () => {
     expect(blipA.parked!.beside).toBe('hail-mary');
     expect(valueNote(blipA.parked!.yearsBefore).kind).toBe('canon');
@@ -178,8 +186,8 @@ describe('the Blip-A', () => {
       const jd = voyage.arrivalJd + days;
       const own = parked.offset(jd).position;
       expect(length(own)).toBeCloseTo(12_553, 6);
-      // 300 m ahead of the Hail Mary, along the same circle.
-      expect(length(subtract(own, voyage.orbitOffset(jd).position))).toBeCloseTo(0.3, 6);
+      // 400 m ahead of the Hail Mary, along the same circle.
+      expect(length(subtract(own, voyage.orbitOffset(jd).position))).toBeCloseTo(0.4, 6);
     }
   });
 
@@ -191,7 +199,7 @@ describe('the Blip-A', () => {
     expect((bow.x * v.x + bow.y * v.y + bow.z * v.z) / length(v)).toBeCloseTo(1, 9);
   });
 
-  it('is as long as its model, and only its diamond’s 40 m is canon', () => {
+  it('is as long as its model, 400 m by the film’s stills, invented', () => {
     expect(valueOf(blipA.lengthM)).toBeCloseTo(BLIP_A_LENGTH_M, 6);
     expect(valueNote(blipA.lengthM).kind).toBe('invented');
   });

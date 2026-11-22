@@ -31,7 +31,7 @@ import { LIGHTING } from '../../shading.ts';
  */
 
 /** Surface patterns drawn in the shader, coded in a finish's fourth component. */
-export const MARKING = { foil: -3, weathered: -5, mottled: -6 } as const;
+export const MARKING = { foil: -3, weathered: -5, mottled: -6, needle: -7 } as const;
 
 /** A finish: base colour (linear), metalness, roughness, and the optional rest. */
 export interface ShipFinish {
@@ -56,11 +56,20 @@ const VERTEX_SHADER = /* glsl */ `
   // x: sky visibility; y: finish index / 255; z: section / 255 (eight bits, normalised).
   attribute vec4 detail;
 
+  #ifdef NEEDLE_RIBBON
+    // Across the rod, -0.5 to 0.5, and the two directions its round face is drawn between.
+    varying float vAcross;
+    varying vec3 vSide;
+    varying vec3 vFacing;
+  #endif
+
   uniform vec3 uSurface[${SHIP_FINISH_SLOTS}];
   uniform vec4 uFinish[${SHIP_FINISH_SLOTS}];
   uniform float uAniso[${SHIP_FINISH_SLOTS}];
   uniform mat4 uShadowView[3];
   uniform mat4 uShadowProjection;
+  // The shadow map's bias, metres: a couple of its texels, so it scales with the ship.
+  uniform float uShadowBias;
 
   varying vec3 vLocal;
   varying vec3 vNormal;
@@ -74,21 +83,58 @@ const VERTEX_SHADER = /* glsl */ `
   void main() {
     int finish = int(detail.y * 255.0 + 0.5);
     int section = int(detail.z * 255.0 + 0.5);
-    vLocal = position;
-    vSurface = uSurface[finish];
+    // Instanced parts (the Blip-A's needles): each copy placed by its instance matrix, its
+    // occlusion and tone from its instance colour (r: sky seen, g: brightness).
+    #if defined(USE_INSTANCING) && defined(NEEDLE_RIBBON)
+      // A rod drawn as a ribbon turned about its own axis to face the camera, shaded as the
+      // half of a round rod that faces it: one layer of fragments a rod instead of a box's two
+      // or three, and the highlight a streak down its length. The ribbon: x across (-0.5, 0,
+      // 0.5), z along; the instance matrix sizes it (width in x, length in z) and places it.
+      vec3 centre = (instanceMatrix * vec4(0.0, 0.0, position.z, 1.0)).xyz;
+      vec3 axis = normalize(mat3(instanceMatrix) * vec3(0.0, 0.0, 1.0));
+      float width = length(mat3(instanceMatrix) * vec3(1.0, 0.0, 0.0));
+      mat3 turn = mat3(modelViewMatrix);
+      vec3 cameraLocal = -(transpose(turn) * modelViewMatrix[3].xyz) / dot(turn[0], turn[0]);
+      vec3 side = normalize(cross(axis, cameraLocal - centre));
+      vec3 facing = cross(side, axis);
+      vec3 placed = centre + side * position.x * width;
+      vec3 placedNormal = facing;
+      // The ribbon is one quad: its round normal is worked out per fragment from vAcross.
+      vAcross = position.x;
+      vSide = normalize(normalMatrix * side);
+      vFacing = normalize(normalMatrix * facing);
+    #elif defined(USE_INSTANCING)
+      vec3 placed = (instanceMatrix * vec4(position, 1.0)).xyz;
+      vec3 placedNormal = normalize(mat3(instanceMatrix) * normal);
+    #else
+      vec3 placed = position;
+      vec3 placedNormal = normal;
+    #endif
+    float sky = detail.x;
+    float tone = 1.0;
+    #ifdef USE_INSTANCING_COLOR
+      sky *= instanceColor.r;
+      tone = instanceColor.g;
+    #endif
+    vLocal = placed;
+    vSurface = uSurface[finish] * tone;
     vFinish = uFinish[finish];
-    vDetail = vec4(detail.x, 1.0, uAniso[finish], float(section));
-    vNormal = normalize(normalMatrix * normal);
+    vDetail = vec4(sky, 1.0, uAniso[finish], float(section));
+    vNormal = normalize(normalMatrix * placedNormal);
     // Brushing runs round the ship's long axis.
-    vec2 relative = position.xy;
+    vec2 relative = placed.xy;
     vec3 around = length(relative) > 1e-4 ? vec3(-relative.y, relative.x, 0.0) : vec3(1.0, 0.0, 0.0);
     vTangent = normalize(mat3(modelViewMatrix) * normalize(around));
-    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    #if defined(USE_INSTANCING) && defined(NEEDLE_RIBBON)
+      // A rod's tangent is its own axis.
+      vTangent = normalize(mat3(modelViewMatrix) * axis);
+    #endif
+    vec4 viewPosition = modelViewMatrix * vec4(placed, 1.0);
     vViewPosition = viewPosition.xyz;
 
     // Where this point falls in the star's shadow map, pushed a few centimetres out along its
     // normal so a surface does not shadow itself.
-    vec4 lightView = uShadowView[section] * vec4(position + normal * 0.05, 1.0);
+    vec4 lightView = uShadowView[section] * vec4(placed + placedNormal * 0.6 * uShadowBias, 1.0);
     vec4 lightClip = uShadowProjection * lightView;
     vShadow = vec3(lightClip.xy * 0.5 + 0.5, -lightView.z);
 
@@ -108,6 +154,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D uShadowMap;
   uniform float uShadowTexel;
   uniform vec2 uShadowRange;
+  uniform float uShadowBias;
   uniform vec3 uGalaxyPole;
   uniform float uAmbient;
   uniform vec3 uFillDirection;
@@ -122,6 +169,11 @@ const FRAGMENT_SHADER = /* glsl */ `
   varying vec4 vFinish;
   varying vec4 vDetail;
   varying vec3 vShadow;
+  #ifdef NEEDLE_RIBBON
+    varying float vAcross;
+    varying vec3 vSide;
+    varying vec3 vFacing;
+  #endif
 
   // The broad lobe's share of a bare metal's reflection.
   const float HAZE = 0.35;
@@ -166,7 +218,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec2 texel = uv / uShadowTexel - 0.5;
     vec2 base = floor(texel);
     vec2 f = texel - base;
-    float depth = vShadow.z - 0.08;
+    float depth = vShadow.z - uShadowBias;
     float span = uShadowRange.y - uShadowRange.x;
     float lit00 = step(depth, uShadowRange.x + span * unpackRGBAToDepth(texture2D(uShadowMap, (base + vec2(0.5, 0.5)) * uShadowTexel)));
     float lit10 = step(depth, uShadowRange.x + span * unpackRGBAToDepth(texture2D(uShadowMap, (base + vec2(1.5, 0.5)) * uShadowTexel)));
@@ -177,6 +229,40 @@ const FRAGMENT_SHADER = /* glsl */ `
 
   void main() {
     #include <logdepthbuf_fragment>
+
+    #ifdef NEEDLE_RIBBON
+    {
+      // Rods: thousands of them, overlapping many deep, every fragment shaded -- the logarithmic
+      // depth is written here, so nothing is rejected early. So a lean light, its normal bent
+      // round the rod across the ribbon's width: Lambert for what is not metal, and a highlight after Kajiya and Kay's for hair, which a fibre's
+      // reflection is -- a band across the rod wherever the half vector is near its normal
+      // plane, the streak down each rod the star picks out. No shadow map, no sky: the rods'
+      // own depth in the bundle (their occlusion) darkens the inner ones.
+      float across = clamp(vAcross, -0.5, 0.5) * 3.14159265;
+      vec3 n = normalize(vSide * sin(across) + vFacing * cos(across));
+      vec3 v = normalize(-vViewPosition);
+      vec3 rod = normalize(vTangent);
+      vec3 h = normalize(uLight + v);
+      float nl = max(dot(n, uLight), 0.0);
+      float metal = vFinish.x;
+      float rough = vFinish.y;
+      float occlusion = vDetail.x;
+      float th = dot(rod, h);
+      float band = pow(sqrt(max(1.0 - th * th, 0.0)), mix(400.0, 40.0, rough));
+      vec3 f0 = mix(vec3(0.04), vSurface, metal);
+      vec3 specular = f0 * band * (0.6 + 1.0 * (1.0 - rough)) * smoothstep(0.0, 0.2, dot(n, uLight) + 0.1);
+      // Gold glints stay gold: the tone curve whitens a bright highlight, so its hue is deepened first.
+      specular *= mix(vec3(1.0), vSurface / max(max(vSurface.r, vSurface.g), 1e-3), metal);
+      vec3 diffuse = (1.0 - metal) * vSurface / PI * nl;
+      vec3 radiance = (diffuse + specular) * uIrradiance * mix(1.0, occlusion, 0.5);
+      radiance += vSurface * (1.0 - 0.7 * metal) / PI * (uAmbient + 0.02) * uIrradiance * occlusion;
+      if (uFillIrradiance > 0.0) radiance += vSurface / PI * uFillColor * uFillIrradiance * uIrradiance * max(dot(n, uFillDirection), 0.0) * occlusion;
+      gl_FragColor = vec4(radiance, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      return;
+    }
+    #endif
 
     vec3 albedo = vSurface;
     float metal = vFinish.x;
@@ -195,7 +281,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec2 surfaceMetres = vec2(atan(relative.y, relative.x) * radius, vLocal.z);
     vec2 pixelMetres = fwidth(surfaceMetres);
 
-    if (pattern < -5.5) {
+    if (pattern < -6.5) {
+      // A needle: drawn metal brushed along its length, so its highlight is a streak down it.
+      t = normalize(cross(n, t));
+    } else if (pattern < -5.5) {
       // Mottled: two tones in broad, soft swirls, like paint stirred and left half mixed -- the
       // Blip-A's xenonite. Laid out in the hull's own metres on two slanted planes, so flat
       // panels facing any way all carry it.
@@ -307,6 +396,7 @@ export function shipMaterial(): THREE.ShaderMaterial {
       uShadowMap: { value: null },
       uShadowTexel: { value: 1 / 1024 },
       uShadowRange: { value: new THREE.Vector2(0, 1) },
+      uShadowBias: { value: 0.08 },
       uShadowView: { value: [new THREE.Matrix4(), new THREE.Matrix4(), new THREE.Matrix4()] },
       uShadowProjection: { value: new THREE.Matrix4() },
       // A galaxy across the sky, tilted: in view space, set with the light.
