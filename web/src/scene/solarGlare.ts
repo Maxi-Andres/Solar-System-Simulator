@@ -1,3 +1,4 @@
+import { SCENE_LOG_DEPTH_GLSL } from './logDepth.ts';
 import { DISPLAY_FLOOR } from './shading.ts';
 import { srgbToLinear } from './starRendering.ts';
 
@@ -237,13 +238,35 @@ export function sunAngularRadiusDeg(radiusKm: number, distanceKm: number): numbe
   return (Math.atan(radiusKm / Math.max(1, distanceKm)) * 180) / Math.PI;
 }
 
-/** A plain billboard; the scene has already turned the quad to face the camera. */
+/**
+ * A billboard -- the scene has already turned the quad to face the camera -- at one depth over
+ * all of it: just in front of the star's own disc, its nearest point less a fiftieth of its
+ * radius. So the depth test hides the veil wherever a body stands between the star and the
+ * camera -- a planet in front of its star, seen from its night side, a ship -- and never where
+ * only the star's own sphere is under it, which the veil lies over (uOverDisc). At the star's
+ * centre, where the quad sits, the disc's near half would hide it; and tested not at all, it
+ * showed through every planet in front of a star but the Sun.
+ *
+ * The depth is written from the vertex, the same everywhere on the quad: with the logarithmic
+ * depth buffer, the logarithm of that distance as the bodies' fragments write theirs
+ * (logDepth.ts, not three's own formula, which this scene replaces), so the two compare.
+ */
 export const SOLAR_GLARE_VERTEX_SHADER = /* glsl */ `
+uniform float uSunRadiusDeg;
 varying vec2 vUv;
+${SCENE_LOG_DEPTH_GLSL}
 
 void main() {
   vUv = uv;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 centre = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  float front = max(-centre.z - 1.02 * length(centre.xyz) * sin(radians(uSunRadiusDeg)), 1e-6);
+  #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+    gl_Position.z = (2.0 * min(sceneLogDepth(front), 1.0) - 1.0) * gl_Position.w;
+  #else
+    vec4 clip = projectionMatrix * vec4(0.0, 0.0, -front, 1.0);
+    gl_Position.z = clip.z / clip.w * gl_Position.w;
+  #endif
 }
 `;
 

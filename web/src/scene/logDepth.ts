@@ -147,6 +147,18 @@ export function depthResolution(w: number, fromNear = true, far = CAMERA_FAR_UNI
 const SCALE = (1 / CAMERA_NEAR_UNITS).toExponential();
 const INVERSE_RANGE = (1 / Math.log2(1 + CAMERA_FAR_UNITS / CAMERA_NEAR_UNITS)).toExponential(12);
 
+/**
+ * GLSL: `sceneLogDepth(w)`, the depth this scene's bodies write at a distance of `w` scene
+ * units, 0 to 1 -- for a shader that places its depth itself, as the star glare does
+ * (solarGlare.ts). The same formula as the chunks below, so the two compare exactly; three's
+ * own `logDepthBufFC` is not it, and a depth from that lands in front of every body.
+ */
+export const SCENE_LOG_DEPTH_GLSL = /* glsl */ `
+float sceneLogDepth(float w) {
+  return log2(1.0 + w * ${SCALE}) * ${INVERSE_RANGE};
+}
+`;
+
 THREE.ShaderChunk.logdepthbuf_vertex = /* glsl */ `
 #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
 

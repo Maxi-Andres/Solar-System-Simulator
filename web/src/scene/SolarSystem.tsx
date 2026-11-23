@@ -1048,13 +1048,12 @@ export function SolarSystem({
             },
             vertexShader: SOLAR_GLARE_VERTEX_SHADER,
             fragmentShader: SOLAR_GLARE_FRAGMENT_SHADER,
-            // Light adds. Depth is read, so a planet crossing in front of the Sun hides
-            // the halo behind it, and never written, because a veil has no surface.
-            // Another star's veil lies over its own disc, and the sphere would hide it there
-            // from the test: it is scattered light in the camera, over everything, so it
-            // is not tested at all.
+            // Light adds. Depth is read, so a planet or a ship in front of a star hides the
+            // halo behind it -- the Sun's or any other's -- and never written, because a veil
+            // has no surface. Its depth is just in front of the star's own disc
+            // (solarGlare.ts), so another star's veil still lies over its own disc.
             blending: THREE.AdditiveBlending,
-            depthTest: definition.id === 'sun',
+            depthTest: true,
             depthWrite: false,
             transparent: true,
             // The exposure is already chosen and stated, as it is for the stars.
