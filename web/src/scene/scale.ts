@@ -309,6 +309,20 @@ export const NEIGHBOURHOOD_FROM_KM = 10_000 * AU_KM;
  */
 export const NEIGHBOURHOOD_FRAMING_KM = 50 * LIGHT_YEAR_KM;
 
+/** How many of its radii a focused body is framed from, unless it asks for its own framing. */
+export const BODY_FRAMING_RADII = 8;
+
+/**
+ * Where the camera stands from a body focused as itself, km: eight of its radii, the body
+ * filling a good part of the frame. The same for a planet of another star -- drawn as a sphere
+ * of its measured or estimated radius (exoplanets.ts) -- as for any planet: framed by its orbit
+ * instead, as it once was while those planets had no disc, τ Ceti e (and Adrian over it) ended
+ * 2.8 AU off, a dot beside its star (Maxi, 2026-11-23).
+ */
+export function bodyFramingKm(body: { readonly radiusEquatorialKm: number }): number {
+  return BODY_FRAMING_RADII * body.radiusEquatorialKm;
+}
+
 export function kmToUnits(km: number): number {
   return km / KM_PER_UNIT;
 }

@@ -55,7 +55,7 @@ const WAVE_NEAR_FULL_PC = 150;
 const FACE_ON = 0.12;
 
 /** The names, in order. */
-const NAMES = ['Local Bubble', 'Radcliffe Wave', 'Local Interstellar Cloud'] as const;
+export const NAMES = ['Local Bubble', 'Radcliffe Wave', 'Local Interstellar Cloud'] as const;
 
 const SHELL_VERTEX = /* glsl */ `
   #include <common>

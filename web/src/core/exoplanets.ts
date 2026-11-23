@@ -273,15 +273,6 @@ export function planetBodyDefinition(planet: ExoPlanet, parent: BodyId): BodyDef
 }
 
 /**
- * Where the camera stands to frame a planet, km from it: five times its orbit's radius,
- * from where the frame's height, 27 degrees, holds the whole orbit with the star at its
- * centre -- a planet seen without a disc means nothing without the star it goes round.
- */
-export function planetFramingKm(planet: ExoPlanet): number {
-  return 5 * planet.semiMajorAxisAu * (1 + planet.eccentricity) * AU_KM;
-}
-
-/**
  * A view from `tiltDeg` off an orbit's pole, so the orbit reads as the ellipse it is; with
  * up square to it. A direction from the focus to the camera and an up, as the store's
  * framing request takes them.

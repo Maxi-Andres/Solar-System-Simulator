@@ -5,6 +5,8 @@ import {
   PLANETARY_SYSTEM_DESCRIPTION_IDS,
   SOLAR_SYSTEM_DESCRIPTION_ID,
 } from '../descriptions/subjects.ts';
+import { hasDescription } from '../descriptions/ids.ts';
+import { LEVELS, type LevelId } from '../state/levels.ts';
 import { ALPHA_CEN_SYSTEM } from './alphaCenBodies.ts';
 import { normalizeName } from './normalizeName.ts';
 import type { PlanetarySystem } from './planetarySystems.ts';
@@ -16,6 +18,10 @@ import type { PlanetarySystem } from './planetarySystems.ts';
  * planets' orbits. None of them is a body: searching "alpha centauri" found its stars, one at a
  * time, and never the system (Maxi, 2026-11-22).
  *
+ * And the breadcrumb's levels beside them -- the Solar Neighbourhood, the Milky Way, the Local
+ * Group, out to the Observable Universe -- each doing what its crumb does: "milky way" found
+ * nothing, the Milky Way being no body (Maxi, 2026-11-23).
+ *
  * Kept free of React and of the store, as search.ts is, so the matching can be tested on its own.
  */
 
@@ -23,15 +29,22 @@ import type { PlanetarySystem } from './planetarySystems.ts';
 export type SystemPlace =
   | { readonly kind: 'solar-system' }
   | { readonly kind: 'alpha-centauri' }
-  | { readonly kind: 'planetary'; readonly key: string };
+  | { readonly kind: 'planetary'; readonly key: string }
+  /** A breadcrumb level, gone to as its crumb goes (state/levels.ts). */
+  | { readonly kind: 'level'; readonly level: LevelId };
 
 export interface SystemEntry {
   readonly place: SystemPlace;
   readonly name: string;
   /** The line under its name. */
   readonly detail: string;
-  /** Other names it is found by, besides its name and its name with "system" after it. */
+  /** Other names it is found by, besides its name and, for a star system, its name with "system" after it. */
   readonly otherNames: readonly string[];
+  /**
+   * Names it is found by only when typed whole: "galaxy" is the Milky Way, but "gal" is still the
+   * start of anything else's name.
+   */
+  readonly wholeNames?: readonly string[];
   /** Its description's id, where it has one (descriptions/subjects.ts). */
   readonly about: BodyId | null;
 }
@@ -66,6 +79,41 @@ export function systemEntries(planetary: readonly PlanetarySystem[]): SystemEntr
   ];
 }
 
+/**
+ * The breadcrumb's levels that are no star system, inner to outer, with the names people call them
+ * by. Alpha Centauri's and the planetary systems' are the systems above, and the Solar System is
+ * one of them already.
+ */
+const LEVEL_NAMES: readonly {
+  readonly level: LevelId;
+  readonly otherNames: readonly string[];
+  readonly wholeNames: readonly string[];
+}[] = [
+  { level: 'solar-neighbourhood', otherNames: ['Solar Neighborhood'], wholeNames: ['neighbourhood', 'neighborhood', 'the solar neighbourhood'] },
+  { level: 'milky-way', otherNames: [], wholeNames: ['galaxy', 'our galaxy', 'the galaxy', 'the milky way'] },
+  { level: 'local-group', otherNames: [], wholeNames: ['the local group'] },
+  { level: 'local-volume', otherNames: [], wholeNames: ['the local volume'] },
+  { level: 'virgo-cluster', otherNames: [], wholeNames: ['virgo', 'the virgo cluster'] },
+  { level: 'laniakea', otherNames: ['Laniakea Supercluster'], wholeNames: ['the laniakea supercluster'] },
+  { level: 'nearby-universe', otherNames: [], wholeNames: ['the nearby universe'] },
+  { level: 'observable-universe', otherNames: [], wholeNames: ['universe', 'the universe', 'the observable universe', 'cosmos'] },
+];
+
+/** The breadcrumb's levels as search entries, each with its description where one is written. */
+export function levelEntries(): SystemEntry[] {
+  return LEVEL_NAMES.map(({ level, otherNames, wholeNames }): SystemEntry => {
+    const { name, kind, readAbout } = LEVELS[level];
+    return {
+      place: { kind: 'level', level },
+      name,
+      detail: kind.charAt(0).toUpperCase() + kind.slice(1),
+      otherNames,
+      wholeNames,
+      about: readAbout.find((candidate) => hasDescription(candidate.id))?.id ?? null,
+    };
+  });
+}
+
 /** Shortest query a system is listed for by a name merely starting with it: "alp", not "a". */
 const PREFIX_MIN_LENGTH = 3;
 
@@ -89,8 +137,8 @@ export function searchSystems(entries: readonly SystemEntry[], query: string): S
   const words = typed.split(' ');
   const matches: SystemMatch[] = [];
   for (const entry of entries) {
-    const names = [entry.name, `${entry.name} system`, ...entry.otherNames].map(normalizeName);
-    const exact = names.includes(typed);
+    const names = [entry.name, ...(entry.place.kind === 'level' ? [] : [`${entry.name} system`]), ...entry.otherNames].map(normalizeName);
+    const exact = names.includes(typed) || (entry.wholeNames ?? []).some((name) => normalizeName(name) === typed);
     const prefix =
       typed.length >= PREFIX_MIN_LENGTH &&
       names.some((name) => {

@@ -18,7 +18,19 @@ import type { CometSource } from '../core/comets.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { archivePlanetId, archiveSystemKey, searchEntry, type ExoplanetArchive } from '../core/exoplanetArchive.ts';
 import { allPlanetarySystems, registeredSystem } from '../core/planetarySystems.ts';
-import { searchSystems, systemEntries, type SystemEntry, type SystemPlace } from '../core/systemSearch.ts';
+import { levelEntries, searchSystems, systemEntries, type SystemEntry, type SystemPlace } from '../core/systemSearch.ts';
+import {
+  constellationFeatures,
+  featureIndex,
+  searchFeatures,
+  staticFeatures,
+  streamFeatures,
+  type FeatureEntry,
+} from '../core/featureSearch.ts';
+import { loadConstellations } from '../core/constellations.ts';
+import { loadStreams } from '../core/streams.ts';
+import type { ConstellationCatalog } from '@sss/tools/types';
+import type { StreamsFile } from '../core/streams.ts';
 import { hasDescription } from '../descriptions/ids.ts';
 import { formatPeriod, NEUTRON_STAR_COLOR, pulsarBodyId, type PulsarArchive } from '../core/pulsars.ts';
 import {
@@ -50,6 +62,7 @@ import {
   normalizeName,
   parentNameOf,
   searchBodies,
+  starQuery,
 } from '../core/search.ts';
 import { addStarBody, starBodyId } from '../core/starBodies.ts';
 import { GALAXY_COLOR, galaxyBodyId, type LocalGroupArchive } from '../core/localGroup.ts';
@@ -212,7 +225,9 @@ type Result =
   /** A fictional thing, by its record's id (core/fiction.ts). */
   | { readonly kind: 'fiction'; readonly id: string }
   /** A star system, framed whole (core/systemSearch.ts). */
-  | { readonly kind: 'system'; readonly entry: SystemEntry };
+  | { readonly kind: 'system'; readonly entry: SystemEntry }
+  /** Something drawn and named that is no body: a constellation, a stream, an arm (core/featureSearch.ts). */
+  | { readonly kind: 'feature'; readonly entry: FeatureEntry };
 
 export function SearchPanel({
   store,
@@ -276,6 +291,7 @@ export function SearchPanel({
   const setFocus = useViewStore((state) => state.setFocus);
   const setLayer = useViewStore((state) => state.setLayer);
   const readAbout = useViewStore((state) => state.readAbout);
+  const requestFraming = useViewStore((state) => state.requestFraming);
   const satelliteChips = useViewStore((state) => state.satelliteChips);
   const toggleSatelliteChip = useViewStore((state) => state.toggleSatelliteChip);
 
@@ -352,6 +368,31 @@ export function SearchPanel({
     void laniakeaNames.request();
   }, [store, names, comets, satelliteNames, starNames, exoplanets, pulsars, globularClusters, localGroup, localVolume, laniakea, laniakeaNames]);
 
+  // The constellations' and the streams' names, fetched with the rest: drawn and named, no bodies.
+  const [constellations, setConstellations] = useState<ConstellationCatalog | null>(null);
+  const [streams, setStreams] = useState<StreamsFile | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadConstellations().then((catalog) => {
+      if (live) setConstellations(catalog);
+    });
+    void loadStreams().then((file) => {
+      if (live) setStreams(file);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const features = useMemo(
+    () =>
+      featureIndex([
+        ...staticFeatures(),
+        ...(constellations === null ? [] : constellationFeatures(constellations)),
+        ...(streams === null ? [] : streamFeatures(streams)),
+      ]),
+    [constellations, streams],
+  );
+
   // Each index prepared for searching as it arrives (beltNames.ts prepareSearch): in idle
   // moments, a few milliseconds at a time, rather than all at once on the next keystroke.
   useEffect(() => {
@@ -404,7 +445,7 @@ export function SearchPanel({
         return { item, exact };
       });
     // The systems before all else: a place, where the rest are what is in it.
-    const fromSystems: Result[] = searchSystems(systemEntries(allPlanetarySystems()), searched).map(({ entry }) => ({
+    const fromSystems: Result[] = searchSystems([...systemEntries(allPlanetarySystems()), ...levelEntries()], searched).map(({ entry }) => ({
       kind: 'system',
       entry,
     }));
@@ -430,7 +471,7 @@ export function SearchPanel({
     const fromStars: Result[] =
       starIndex === null
         ? []
-        : searchNames(starIndex, searched, STAR_LIMIT)
+        : searchNames(starIndex, starQuery(searched), STAR_LIMIT)
             .filter(({ k }) => !store.isPropagatedBody(starBodyId(starIndex.names.tier[k]!, starIndex.names.index[k]!)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'star', k }, score));
     // The stars listed already, so a host found by both its names is listed once.
@@ -499,6 +540,10 @@ export function SearchPanel({
         : searchNames(structureIndex, searched, GALAXY_LIMIT)
             .filter(({ k }) => !bodiesListed.has(structureBodyId(laniakeaCatalogue.info.landmarks[k]!)))
             .map(({ k, score }) => scoredResult(scored, { kind: 'structure', k }, score));
+    // What is drawn and named but no body: listed with the catalogues, by the same scores.
+    const fromFeatures: Result[] = searchFeatures(features, searched).map(({ entry, score }) =>
+      scoredResult(scored, { kind: 'feature', entry }, score),
+    );
     // Array.prototype.sort is stable: equal scores keep stars, Archive, pulsars, clusters, galaxies.
     const fromCatalogues = [
       ...fromStars,
@@ -509,17 +554,32 @@ export function SearchPanel({
       ...fromVolume,
       ...fromStructures,
       ...fromLaniakea,
+      ...fromFeatures,
     ].sort(
       (a, b) => scored.get(a)! - scored.get(b)!,
     );
+    // A fictional world named exactly what was typed ("Erid", "Adrian") goes before real things
+    // merely like it (the Eridanus Supervoid); a real thing of the very same name (Saturn's
+    // Pandora) still comes first, as the bodies and catalogues lead below.
+    const typedName = normalizeName(searched);
+    const fictionNamed = (result: Result): boolean => {
+      if (result.kind !== 'fiction') return false;
+      const record = fictionEntry(result.id);
+      return record != null && [record.name, ...record.aliases].some((name) => normalizeName(name) === typedName);
+    };
+    const anyRealNamed =
+      bodyResults.some(({ exact }) => exact) || fromCatalogues.some((item) => scored.get(item)! <= EXACT_NAME_SCORE);
+    const fictionFirst = anyRealNamed ? [] : fromFiction.filter(fictionNamed);
+    const fictionAfter = fromFiction.filter((result) => !fictionFirst.includes(result));
     return [
       ...fromSystems,
+      ...fictionFirst,
       // A catalogue entry named exactly what was typed goes before a body merely like it.
       ...mergeBodiesAndCatalogues(
         bodyResults,
         fromCatalogues.map((item) => ({ item, exact: scored.get(item)! <= EXACT_NAME_SCORE })),
       ),
-      ...fromFiction,
+      ...fictionAfter,
       ...fromComets,
       ...fromSatellites,
       ...fromNames,
@@ -545,6 +605,7 @@ export function SearchPanel({
     beltMatches,
     laniakeaMatches,
     bulkMatches,
+    features,
   ]);
 
   // A new query starts at the top.
@@ -597,6 +658,20 @@ export function SearchPanel({
     }
     if (result.kind === 'body') {
       go(result.id);
+      return;
+    }
+    if (result.kind === 'feature') {
+      // Its layers on, and where it is seen from: its level, as its crumb goes, or a framing.
+      for (const layer of result.entry.layers) setLayer(layer, true);
+      const go = result.entry.go;
+      if (go.kind === 'level') {
+        onSystem({ kind: 'level', level: go.level });
+      } else {
+        requestFraming(go.km, go.view ?? undefined);
+        setFocus(go.focus);
+        renderDemand.request();
+      }
+      closePanel();
       return;
     }
     if (result.kind === 'system') {
@@ -818,6 +893,8 @@ export function SearchPanel({
                     ? `fiction-${result.id}`
                     : result.kind === 'system'
                       ? `system-${result.entry.name}`
+                      : result.kind === 'feature'
+                        ? `feature-${result.entry.key}`
                       : `${result.kind}-${result.k}`
               }
               role="option"
@@ -858,7 +935,7 @@ export function SearchPanel({
                 </span>
               </span>
               {row.fiction !== undefined && <FictionTag record={row.fiction} />}
-              {result.kind === 'system' && result.entry.about !== null && hasDescription(result.entry.about) && (
+              {(result.kind === 'system' || result.kind === 'feature') && result.entry.about !== null && hasDescription(result.entry.about) && (
                 <button
                   type="button"
                   title={`Read about ${result.entry.name}`}
@@ -907,6 +984,10 @@ function describeResult(
 } {
   if (result.kind === 'system') {
     return { glyph: '◎', color: '#e6d8b0', name: result.entry.name, detail: result.entry.detail };
+  }
+  if (result.kind === 'feature') {
+    // The scene's map names' own colour (App.tsx GALAXY_LABEL_STYLE).
+    return { glyph: '◇', color: '#9aa4b4', name: result.entry.name, detail: result.entry.detail };
   }
   if (result.kind === 'fiction') {
     const record = fictionEntry(result.id)!;

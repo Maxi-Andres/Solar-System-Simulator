@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import { MASS_PROXIMA_SUN } from './alphaCentauri.ts';
 import {
+  drawnRadiusEarth,
   estimatedRadiusEarth,
   GM_EARTH,
   planetBodyDefinition,
-  planetFramingKm,
   planetStateAboutStar,
   skyAxes,
   skyOffsetKm,
   type ExoPlanet,
 } from './exoplanets.ts';
 import { PROXIMA_PLANETS, proximaPlanetOf } from './proximaPlanets.ts';
+import { PLANETARY_SYSTEMS } from './planetarySystems.ts';
+import { bodyFramingKm } from '../scene/scale.ts';
 
 const AU_KM = 149_597_870.7;
 const GM_SUN = 1.3271244e11;
@@ -134,11 +136,13 @@ describe('the body a planet becomes', () => {
     expect(planetBodyDefinition(proxima('b'), 'x').color).not.toBe('#7c7c7c');
   });
 
-  it('is framed with its star and its whole orbit in view', () => {
-    // 27 degrees of frame: the orbit's widest must fit in it from where the camera stands.
-    for (const p of [...PROXIMA_PLANETS, eccentric]) {
-      const halfHeight = planetFramingKm(p) * Math.tan((13.5 * Math.PI) / 180);
-      expect(halfHeight).toBeGreaterThan(1.1 * p.semiMajorAxisAu * (1 + p.eccentricity) * AU_KM);
+  it('is framed as any planet is, from eight of its drawn radii, not from its orbit', () => {
+    // τ Ceti e -- and Adrian over it -- ended 2.8 AU off when framed by its orbit (2026-11-23).
+    const tauCetiE = PLANETARY_SYSTEMS.flatMap((system) => system.planets).find((p) => p.id === 'tau-ceti-e')!;
+    for (const p of [...PROXIMA_PLANETS, eccentric, tauCetiE]) {
+      const body = planetBodyDefinition(p, 'x');
+      expect(bodyFramingKm(body)).toBeCloseTo(8 * drawnRadiusEarth(p) * 6371, 3);
+      expect(bodyFramingKm(body) / AU_KM).toBeLessThan(0.002);
     }
   });
 });

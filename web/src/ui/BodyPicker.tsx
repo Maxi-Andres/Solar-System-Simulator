@@ -289,6 +289,74 @@ export function goToLevel(level: SunLevel, onFocus: (id: BodyId) => void): void 
   renderDemand.request();
 }
 
+/**
+ * The Virgo Cluster's crumb: M87, its centre, made a body if it is not one yet (it is, once loaded:
+ * App.tsx), framed as the cluster, and the level selected. Search's too (systemSearch.ts).
+ */
+export function goToVirgoCluster(
+  store: EphemerisStore,
+  localVolume: LazySource<LocalVolumeArchive>,
+  onFocus: (id: BodyId) => void,
+): void {
+  void localVolume.request().then(() => {
+    const archive = localVolume.value;
+    const k = archive === null ? null : virgoCentre(archive);
+    if (archive === null || k === null) {
+      return;
+    }
+    const id = ensureGalaxyBody(store, archive.galaxies[k]!);
+    useViewStore.getState().requestFraming(VIRGO_FRAMING_KM, VIRGO_VIEW);
+    onFocus(id);
+    useViewStore.getState().selectLevel('virgo-cluster');
+    renderDemand.request();
+  });
+}
+
+/**
+ * Laniakea's crumb: its attractor, the structures made bodies first if the catalogue has only now
+ * come, framed as the supercluster, and the level selected. Search's too (systemSearch.ts).
+ */
+export function goToLaniakeaLevel(
+  store: EphemerisStore,
+  laniakea: LazySource<LaniakeaCatalogue>,
+  onFocus: (id: BodyId) => void,
+): void {
+  void laniakea.request().then(() => {
+    const c = laniakea.value;
+    const landmark = c === null ? null : laniakeaLandmark(c);
+    if (c === null || landmark === null) {
+      return;
+    }
+    ensureStructureBodies(store, c.info.landmarks);
+    useViewStore.getState().requestFraming(LANIAKEA_FRAMING_KM, LANIAKEA_VIEW);
+    onFocus(structureBodyId(landmark));
+    useViewStore.getState().selectLevel('laniakea');
+    renderDemand.request();
+  });
+}
+
+/**
+ * Any breadcrumb level, gone to as its crumb goes, from anywhere (search, systemSearch.ts): the
+ * Sun's at their framings about it, the Virgo Cluster and Laniakea about their own centres, each
+ * asking for the catalogue its crumb does. A star system's level is its system's to go to.
+ */
+export function goToAnyLevel(
+  level: LevelId,
+  store: EphemerisStore,
+  sources: { readonly localVolume: LazySource<LocalVolumeArchive>; readonly laniakea: LazySource<LaniakeaCatalogue> },
+  onFocus: (id: BodyId) => void,
+): void {
+  if (level === 'virgo-cluster') {
+    goToVirgoCluster(store, sources.localVolume, onFocus);
+  } else if (level === 'laniakea') {
+    goToLaniakeaLevel(store, sources.laniakea, onFocus);
+  } else if (level !== 'alpha-centauri' && level !== 'planetary-system') {
+    if (level === 'local-volume') void sources.localVolume.request();
+    if (level === 'nearby-universe') void sources.laniakea.request();
+    goToLevel(level, onFocus);
+  }
+}
+
 export function BodyPicker({
   store,
   focus,
@@ -361,20 +429,7 @@ export function BodyPicker({
     toLevel('local-volume');
   };
   // The Virgo Cluster: M87, made a body if it is not one yet (it is, once loaded: App.tsx).
-  const toVirgo = (): void => {
-    void localVolume.request().then(() => {
-      const archive = localVolume.value;
-      const k = archive === null ? null : virgoCentre(archive);
-      if (archive === null || k === null) {
-        return;
-      }
-      const id = ensureGalaxyBody(store, archive.galaxies[k]!);
-      requestFraming(VIRGO_FRAMING_KM, VIRGO_VIEW);
-      onFocus(id);
-      selectLevel('virgo-cluster');
-      renderDemand.request();
-    });
-  };
+  const toVirgo = (): void => goToVirgoCluster(store, localVolume, onFocus);
   // Laniakea: its attractor, the structures made bodies first if the catalogue has only now come.
   const toStructure = (
     choose: (c: LaniakeaCatalogue) => LaniakeaLandmark | null,
@@ -397,7 +452,7 @@ export function BodyPicker({
       renderDemand.request();
     });
   };
-  const toLaniakea = (): void => toStructure(laniakeaLandmark, LANIAKEA_FRAMING_KM, LANIAKEA_VIEW, 'laniakea');
+  const toLaniakea = (): void => goToLaniakeaLevel(store, laniakea, onFocus);
   const toNearbyUniverse = (): void => {
     void laniakea.request();
     toLevel('nearby-universe');

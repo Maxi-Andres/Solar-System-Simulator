@@ -7,6 +7,7 @@ import { deepSkyLayerKind, deepSkyOf, NOTABLE_STAR_KIND } from './deepSky.ts';
 import { structureKindLabel, structureOf } from './structures.ts';
 import { REGION_LAYER_IDS, regionOf } from './regions.ts';
 import { starBodyFacts } from './starBodies.ts';
+import { remnantOf } from './supernovaRemnants.ts';
 import type { LayerId } from '../state/store.ts';
 import { normalizeName } from './normalizeName.ts';
 
@@ -205,12 +206,56 @@ function wordScore(word: string, field: string): number | null {
   return null;
 }
 
-/** Whether a star body has a designation that is `typed` whole (or `whole`, its spaces gone). */
-function isDesignationOf(id: BodyId, typed: string, whole: string): boolean {
-  return (starBodyFacts(id)?.designations ?? []).some((designation) => {
-    const name = normalizedName(designation);
+/**
+ * A body's other names, each whole: a star's designations, a remnant's, a black hole's, a nebula's
+ * or a Messier object's catalogue names, a region's. Searched as one field (the catalogue, below),
+ * and each typed whole is the body's own name.
+ */
+function otherNamesOf(body: BodyDefinition): readonly string[] {
+  switch (body.kind) {
+    case 'star':
+      return starBodyFacts(body.id)?.designations ?? [];
+    // Green's designation and its other names: "G184.6-5.8", "M1", "SN 1054", "Cas A" -- only
+    // its name was searched (2026-11-23).
+    case 'supernova-remnant': {
+      const remnant = remnantOf(body.id);
+      return remnant === null ? [] : [remnant.green, ...remnant.otherNames];
+    }
+    case 'black-hole':
+      return BLACK_HOLE_ALIASES.get(body.id) ?? [];
+    case 'nebula':
+    case 'deep-sky':
+      return deepSkyOf(body.id)?.aliases ?? [];
+    case 'region':
+      return regionOf(body.id)?.aliases ?? [];
+    default:
+      return [];
+  }
+}
+
+/** Whether a body has another name that is `typed` whole (or `whole`, its spaces gone). */
+function isOtherNameOf(body: BodyDefinition, typed: string, whole: string): boolean {
+  return otherNamesOf(body).some((other) => {
+    const name = normalizedName(other);
     return name === typed || squeezedName(name) === whole;
   });
+}
+
+/**
+ * The black holes' other names: "Sagittarius A*" and the Galactic Centre are Sgr A*'s. Its id
+ * written out (blackHoles.ts SGR_A_ID, checked in searchCoverage.test.ts): that module reaches back here
+ * through the star bodies, and a constant read from it as this one loads would not be there yet.
+ */
+export const BLACK_HOLE_ALIASES: ReadonlyMap<BodyId, readonly string[]> = new Map([
+  ['sgr-a-star', ['Sagittarius A*', 'Galactic Centre', 'Galactic Center']],
+]);
+
+/**
+ * The query to search the star names with: "Gliese 710" as the names write it, "GJ 710" -- the
+ * Gliese catalogue's numbers are all GJ in names.json, and "gliese" found nothing.
+ */
+export function starQuery(query: string): string {
+  return query.replace(/^\s*gliese\s*(?=\d)/i, 'GJ ');
 }
 
 export interface SearchResult {
@@ -263,20 +308,15 @@ export function searchBodies(
       tag === null
         ? body.kind === 'structure'
           ? normalizedName(recordHolderAliases(body.id))
-          : body.kind === 'nebula' || body.kind === 'deep-sky'
-            ? normalizedName((deepSkyOf(body.id)?.aliases ?? []).join(' '))
-            : body.kind === 'region'
-              ? normalizedName((regionOf(body.id)?.aliases ?? []).join(' '))
-              : body.kind === 'star'
-                ? normalizedName((starBodyFacts(body.id)?.designations ?? []).join(' '))
-                : ''
+          : normalizedName(otherNamesOf(body).join(' '))
         : normalizedName(`${tag.catalogueName ?? ''} ${tag.noradId} ${tag.cosparId}`);
 
     // The whole query against the whole name first: "s2004s12", "16 psyche".
     const exact = name === typed || squeezedName(name) === whole;
-    // Or against one of a star's designations, whole: "alpha centauri a" is A, before the
-    // planet whose name merely has those words, though run together they would score worse.
-    if (!exact && body.kind === 'star' && isDesignationOf(body.id, typed, whole)) {
+    // Or against one of its other names, whole: "alpha centauri a" is A, before the planet
+    // whose name merely has those words, though run together they would score worse; "M1" is
+    // the Crab Nebula, before M17 and M18, whose names merely start with it.
+    if (!exact && isOtherNameOf(body, typed, whole)) {
       results.push({ body, score: 0, exact: true });
       continue;
     }

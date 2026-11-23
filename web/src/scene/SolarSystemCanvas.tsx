@@ -13,8 +13,6 @@ import type { LocalVolumeArchive } from '../core/localVolume.ts';
 import type { LaniakeaCatalogue, LaniakeaNameIndex } from '../core/laniakea.ts';
 import type { LazySource } from '../core/satellites.ts';
 import type { CosmicWebSource } from '../core/cosmicWeb.ts';
-import { planetFramingKm } from '../core/exoplanets.ts';
-import { exoPlanetOf } from '../core/planetarySystems.ts';
 import { FICTION_LAYER } from '../core/fiction.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import type { SimClock } from '../core/time.ts';
@@ -47,7 +45,7 @@ import type { ScaleBarElements } from '../ui/ScaleBar.tsx';
 import type { SharedFrame } from './satellites.ts';
 // Before any material compiles: replaces three's log-depth chunks. See logDepth.ts.
 import { CAMERA_FAR_UNITS, CAMERA_NEAR_UNITS } from './logDepth.ts';
-import { FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
+import { bodyFramingKm, FOV_DEG, kmToUnits, MAX_VIEW_DISTANCE_KM } from './scale.ts';
 import { SolarSystem as SolarSystemLayer } from './SolarSystem.tsx';
 import { Starfield as StarfieldLayer } from './Starfield.tsx';
 
@@ -281,10 +279,8 @@ export function SolarSystemCanvas({
 }: SolarSystemCanvasProps) {
   const focusBody = store.body(focus);
   const radiusUnits = kmToUnits(focusBody.radiusEquatorialKm);
-  // Eight radii, or for a planet of another star -- no disc, no radius -- its orbit about
-  // the star (exoplanets.ts planetFramingKm).
-  const otherPlanet = exoPlanetOf(focus);
-  const framingUnits = otherPlanet === null ? radiusUnits * 8 : kmToUnits(planetFramingKm(otherPlanet));
+  // Eight radii, a planet of another star's as any body's (scale.ts bodyFramingKm).
+  const framingUnits = kmToUnits(bodyFramingKm(focusBody));
   // The scene writes it, the labels read it: which markers lost their spot this frame.
   // SolarSystem's frame runs before LabelProjector's, being declared first.
   const hiddenMarkers = useMemo(() => new Set<BodyId>(), []);

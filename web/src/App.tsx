@@ -75,7 +75,7 @@ import {
   recordHolderEarthView,
   recordHolderOf,
 } from './core/recordHolders.ts';
-import { BodyPicker, goToLevel, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
+import { BodyPicker, goToAnyLevel, goToLevel, type AlphaCenNavigator, type PlanetSystemsNavigator } from './ui/BodyPicker.tsx';
 import type { SystemPlace } from './core/systemSearch.ts';
 import { CasedName } from './ui/casedName.tsx';
 import { ScaleBar, type ScaleBarElements } from './ui/ScaleBar.tsx';
@@ -374,23 +374,27 @@ export function App() {
     [store, exoplanets, stars3d, alphaCen, planetSystems, requestFraming, setFocus],
   );
 
-  // A pulsar clicked on the map or found by search (D6a): made a neutron star of its real
-  // size (pulsars.ts) and framed whole.
-  // A star system found by search (core/systemSearch.ts): framed whole, as its breadcrumb entry
-  // frames it -- the Solar System as its level, Alpha Centauri from out of the pair's plane.
+  // A star system or a breadcrumb level found by search (core/systemSearch.ts): framed whole, as
+  // its breadcrumb entry frames it -- the Solar System as its level, Alpha Centauri from out of the
+  // pair's plane, the Milky Way as its crumb does.
   const goToSystem = useCallback(
     (place: SystemPlace): void => {
       if (place.kind === 'solar-system') {
         goToLevel('solar-system', setFocus);
       } else if (place.kind === 'alpha-centauri') {
         alphaCen?.go('A', ALPHA_CEN_FRAMING_KM);
+      } else if (place.kind === 'level') {
+        // A breadcrumb level, as its crumb goes (BodyPicker.tsx goToAnyLevel).
+        if (store !== null) goToAnyLevel(place.level, store, { localVolume, laniakea }, setFocus);
       } else {
         planetSystems?.go(place.key);
       }
     },
-    [alphaCen, planetSystems, setFocus],
+    [alphaCen, planetSystems, setFocus, store, localVolume, laniakea],
   );
 
+  // A pulsar clicked on the map or found by search (D6a): made a neutron star of its real
+  // size (pulsars.ts) and framed whole.
   const goToPulsar = useCallback(
     (k: number): void => {
       if (store === null) {

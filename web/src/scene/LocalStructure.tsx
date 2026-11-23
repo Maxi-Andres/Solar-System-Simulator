@@ -48,7 +48,7 @@ const OUTSIDE_FULL = 1.5;
 const DASHES = 120;
 const DASH_FILL = 0.55;
 
-const NAMES = ['Zero-velocity surface · computed', 'Council of Giants · McCall 2014', 'Local Sheet · McCall 2014'];
+export const NAMES = ['Zero-velocity surface · computed', 'Council of Giants · McCall 2014', 'Local Sheet · McCall 2014'];
 
 function ramp(value: number, gone: number, full: number): number {
   if (value <= gone) return 0;
