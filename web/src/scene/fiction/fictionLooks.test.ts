@@ -104,6 +104,16 @@ describe('fictionWorldMaterial', () => {
     }
   });
 
+  it('counts only the air ahead of a camera inside it', () => {
+    // The whole line's column counted the air behind the camera too: from the top of Adrian's
+    // air the sky straight up was as opaque as the limb, in two green bands either side.
+    for (const vertex of [SHELL_SHADERS.vertex, SHELL_SHADERS.annulusVertex]) {
+      expect(vertex).toContain('vCamera = ');
+    }
+    expect(SHELL_SHADERS.fragment).toContain('varying vec3 vCamera;');
+    expect(SHELL_SHADERS.fragment).toContain('chapman(mu)');
+  });
+
   it('bakes each layer a look declares, and reads them back', () => {
     const sources = worldShaderSources(JUNGLE_MOON);
     for (let layer = 0; layer < JUNGLE_MOON.layers; layer += 1) {

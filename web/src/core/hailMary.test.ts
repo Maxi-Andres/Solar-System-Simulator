@@ -15,6 +15,8 @@ import {
 import { C_KM_S, G0_KM_S2, lorentzFactor, ParkedShip, ThrustTrip, Voyage } from './hailMary.ts';
 import { AFT_REACH_M, BLIP_A_LENGTH_M } from '../scene/fiction/looks/blipA.ts';
 import { CENTRIFUGE_CONTROL_ROOM_RADIUS_M } from '../scene/fiction/looks/hailMary.ts';
+import { shellRadius } from '../scene/fiction/looks/atmosphereShell.ts';
+import { DENSE_HAZE_AIR } from '../scene/fiction/looks/denseHaze.ts';
 import { PLANETARY_SYSTEMS } from './planetarySystems.ts';
 import { length, subtract } from './vec3.ts';
 
@@ -75,7 +77,7 @@ describe('a voyage', () => {
   const start = { x: 1.5e8, y: 0, z: 0 };
   const end = { x: 1.5e8, y: -6e13, z: 9e13 };
   const launch = 2_461_041.5;
-  const voyage = new Voyage(ship, launch, start, end, 1.5 * G0_KM_S2, { radiusKm: 12_553, speedKmS: 12.6, pole: { x: 0, y: 0, z: 1 } });
+  const voyage = new Voyage(ship, launch, start, end, 1.5 * G0_KM_S2, { radiusKm: 15_064, speedKmS: 12.6, pole: { x: 0, y: 0, z: 1 } });
   const bow = { x: 0, y: 0, z: 0 };
 
   it('points its bow along the thrust: ahead, then back once turned over; in orbit, along its motion', () => {
@@ -105,7 +107,7 @@ describe('a voyage', () => {
     expect(length(subtract(voyage.lineState(voyage.arrivalJd).position, end)) / length(subtract(end, start))).toBeLessThan(1e-9);
     for (const days of [0, 0.3, 2.7]) {
       const offset = voyage.orbitOffset(voyage.arrivalJd + days);
-      expect(length(offset.position)).toBeCloseTo(12_553, 6);
+      expect(length(offset.position)).toBeCloseTo(15_064, 6);
       expect(length(offset.velocity)).toBeCloseTo(12.6, 9);
     }
   });
@@ -131,15 +133,18 @@ describe('Adrian and the Hail Mary', () => {
     }
   });
 
-  it('put the ship’s 12.6 km/s orbit above the sphere drawn for τ Ceti e, by Adrian’s invented mass', () => {
+  it('put the ship’s 12.6 km/s orbit above the air drawn about τ Ceti e, by Adrian’s invented mass', () => {
     const real = PLANETARY_SYSTEMS.flatMap((system) => system.planets).find((planet) => planet.id === TAU_CETI_E_ID)!;
     const drawnKm = drawnRadiusEarth(real) * 6371;
     const voyage = FICTION_SHIPS[0]!.voyage!;
     const mass = valueOf(voyage.destinationMassEarth)!;
     const v = valueOf(voyage.orbitSpeedKmS)!;
     const radius = (mass * GM_EARTH) / (v * v);
-    expect(radius).toBeGreaterThan(drawnKm + 500);
-    expect(radius).toBeLessThan(drawnKm + 3_000);
+    // 15,064 km: over 1,000 km above the top of the drawn air, twelve scale heights up.
+    expect(radius).toBeCloseTo(15_064, 0);
+    expect(radius).toBeGreaterThan(drawnKm * shellRadius(DENSE_HAZE_AIR.scaleHeight) + 1_000);
+    // And the ground's gravity 1.8 g, more than Earth's as the canon says.
+    expect(mass / (drawnKm / 6371) ** 2).toBeCloseTo(1.83, 2);
     expect(valueNote(voyage.destinationMassEarth).kind).toBe('invented');
     // At the real minimum mass it would be below the ground.
     expect((real.massEarth * GM_EARTH) / (v * v)).toBeLessThan(drawnKm);
@@ -164,7 +169,7 @@ describe('the Blip-A', () => {
   const hailMary = FICTION_SHIPS.find((ship) => ship.id === 'hail-mary')!;
   const blipA = FICTION_SHIPS.find((ship) => ship.id === 'blip-a')!;
   const voyage = new Voyage(hailMary, 2_461_041.5, { x: 1.5e8, y: 0, z: 0 }, { x: 1.5e8, y: -6e13, z: 9e13 }, 1.5 * G0_KM_S2, {
-    radiusKm: 12_553,
+    radiusKm: 15_064,
     speedKmS: 12.6,
     pole: { x: 0, y: 0, z: 1 },
   });
@@ -185,7 +190,7 @@ describe('the Blip-A', () => {
     for (const days of [-1_000, 0, 3.5]) {
       const jd = voyage.arrivalJd + days;
       const own = parked.offset(jd).position;
-      expect(length(own)).toBeCloseTo(12_553, 6);
+      expect(length(own)).toBeCloseTo(15_064, 6);
       // 400 m ahead of the Hail Mary, along the same circle.
       expect(length(subtract(own, voyage.orbitOffset(jd).position))).toBeCloseTo(0.4, 6);
     }

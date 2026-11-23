@@ -60,11 +60,13 @@ const ANNULUS_VERTEX = /* glsl */ `
   varying vec3 vPosition;
   varying vec3 vToCamera;
   varying vec3 vStar;
+  varying vec3 vCamera;
 
   ${CAMERA_LOCAL_GLSL}
 
   void main() {
     vec3 camera = cameraLocal();
+    vCamera = camera;
     float distance = length(camera);
     // position: x, y around the circle; z 0 on the inner edge and 1 on the outer.
     float b = mix(${ANNULUS_INNER}, uShellRadius, position.z);
@@ -99,11 +101,13 @@ const SHELL_VERTEX = /* glsl */ `
   varying vec3 vPosition;
   varying vec3 vToCamera;
   varying vec3 vStar;
+  varying vec3 vCamera;
 
   ${CAMERA_LOCAL_GLSL}
 
   void main() {
-    if (length(cameraLocal()) > uShellRadius * ${OUTSIDE}) {
+    vCamera = cameraLocal();
+    if (length(vCamera) > uShellRadius * ${OUTSIDE}) {
       // Outside the air: the annulus draws the halo.
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     } else {
@@ -123,10 +127,12 @@ const FRAGMENT_SHADER = /* glsl */ `
 
   uniform float uAmbient;
   uniform float uIrradiance;
+  uniform float uShellRadius;
 
   varying vec3 vPosition;
   varying vec3 vToCamera;
   varying vec3 vStar;
+  varying vec3 vCamera;
 
   ${HAZE_GLSL}
 
@@ -141,7 +147,25 @@ const FRAGMENT_SHADER = /* glsl */ `
     float z = max(b - 1.0, 0.0);
     vec3 up = closest / max(b, 1e-6);
 
-    vec3 column = hazeExtinction() * exp(-z / uScaleHeight) * sqrt(2.0 * PI / uScaleHeight);
+    vec3 column;
+    if (length(vCamera) > uShellRadius * ${OUTSIDE}) {
+      // From outside, the ray crosses all the air about its tangent point: the whole column.
+      column = hazeExtinction() * exp(-z / uScaleHeight) * sqrt(2.0 * PI / uScaleHeight);
+    } else {
+      // From inside, only the air ahead of the camera: from its height, toward the ray's angle
+      // above its horizon, the Chapman function the surface's light uses. The whole line's
+      // column counted the air behind the camera too -- straight up from the top of the air,
+      // the line through the planet, and the sky there as opaque as the limb.
+      float height = length(vCamera);
+      vec3 cameraUp = vCamera / height;
+      float mu = dot(ray, cameraUp);
+      column = hazeExtinction() * exp(-max(height - 1.0, 0.0) / uScaleHeight) * chapman(mu);
+      if (mu >= 0.0) {
+        // Climbing, the ray's air is all near the camera, and is lit there.
+        z = max(height - 1.0, 0.0);
+        up = cameraUp;
+      }
+    }
     float muSun = dot(up, toStar);
     // Where the light reaching the camera was scattered: on an opaque tangent path, not at the
     // tangent point but where the path's depth from the camera's side reaches about one -- a few

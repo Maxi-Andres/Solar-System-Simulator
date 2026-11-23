@@ -544,11 +544,15 @@ export const TAU_CETI_E_ID: BodyId = 'tau-ceti-e';
 
 /**
  * Adrian's mass, invented: the real candidate's minimum mass is 3.93 Earths (Feng et al. 2017), the
- * mass at an unknown tilt anything above it. 5.0 puts the canon's 12.6 km/s orbit a thousand
- * kilometres above the sphere the app draws for τ Ceti e (its radius estimated from that minimum
- * mass, exoplanets.ts) -- at the minimum itself that speed would be below the ground.
+ * mass at an unknown tilt anything above it. The canon fixes the orbit's speed, 12.6 km/s, so the
+ * mass sets its radius, GM / v². 6.0 puts it at 15,064 km, 3,530 km above the 11,530 km sphere the
+ * app draws for τ Ceti e (its radius estimated from that minimum mass, exoplanets.ts) and 2,430 km
+ * above the top of the air drawn about it (looks/atmosphereShell.ts, twelve scale heights), so a
+ * ship in that orbit is seen clear of the haze; the ground's gravity is then 1.8 g. At 5.0 the orbit
+ * was 12,554 km, inside the drawn air (Maxi, 2026-11-23); at the minimum the speed would be below
+ * the ground.
  */
-const ADRIAN_MASS_EARTH = 5.0;
+const ADRIAN_MASS_EARTH = 6.0;
 
 /**
  * Adrian, the world the Hail Mary is sent to: Tau Ceti e, which the app draws as the real candidate
@@ -569,7 +573,7 @@ const ADRIAN: FictionRecord = {
   radiusKm: { silent: true },
   massEarth: invented(
     ADRIAN_MASS_EARTH,
-    'Canon says only heavier gravity than Earth’s; above the real candidate’s minimum 3.93, chosen so the novel’s 12.6 km/s orbit clears the drawn sphere.',
+    'Canon says only heavier gravity than Earth’s; above the real candidate’s minimum 3.93, chosen so the novel’s 12.6 km/s orbit runs 3,500 km up, clear of the drawn air. 1.8 g at the ground.',
   ),
   // The real candidate's orbit (Feng et al. 2017), not the fiction's: these are not used.
   orbit: {
