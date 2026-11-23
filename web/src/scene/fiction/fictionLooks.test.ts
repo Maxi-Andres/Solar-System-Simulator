@@ -1,9 +1,11 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
+import { FICTION, FICTION_OVERLAYS } from '../../core/fiction.ts';
 import type { FictionLook } from '../../core/fictionLook.ts';
 import { createFictionObject, createFictionWorldExtras, fictionWorldMaterial, planetshineStrength } from './fictionLooks.ts';
 import { AIRLESS_FACE_SIZE, BARREN, ICY } from './looks/airless.ts';
@@ -24,6 +26,7 @@ import {
   createHailMary,
 } from './looks/hailMary.ts';
 import { SHIP_SHADERS } from './looks/shipMaterial.ts';
+import { type Manifest, prebakedFiles } from './looks/prebakedSurfaces.ts';
 import { AMMONIA_HAZE, AMMONIA_HAZE_AIR } from './looks/ammoniaHaze.ts';
 import { ARID, ARID_AIR } from './looks/arid.ts';
 import { AFT_REACH_M, BLIP_A_CENTRE_OF_MASS_Z_M, BLIP_A_LENGTH_M, FORE_REACH_M, createBlipA } from './looks/blipA.ts';
@@ -668,6 +671,34 @@ describe('the ships, for framing and drawing', () => {
       }
       ship.dispose();
     }
+  });
+});
+
+describe('the worlds baked ahead into images', () => {
+  it('has images for every world the app draws with a look, made from that look as it is now', async () => {
+    const folder = join(import.meta.dirname, '../../../public/textures/fiction');
+    const manifest = JSON.parse(await readFile(join(folder, 'manifest.json'), 'utf8')) as Manifest;
+    let worlds = 0;
+    for (const record of [...FICTION, ...FICTION_OVERLAYS]) {
+      if (record.look.kind !== 'world') continue;
+      const material = shader(fictionWorldMaterial(record.look));
+      const key = material.userData['surfaceKey'] as string | undefined;
+      material.dispose();
+      // A palette not drawn yet has no bake, and no images to need.
+      if (key === undefined) continue;
+      worlds += 1;
+      const entry = manifest.worlds[record.id];
+      // Re-run web/scripts/bakeFictionSurfaces.mjs after changing a look.
+      expect(entry?.key, `${record.id}: its images are missing or were made from an older look`).toBe(key);
+      entry!.layers.forEach((layer, i) => {
+        expect(existsSync(join(folder, record.id, prebakedFiles.preview(i))), `${record.id} preview ${i}`).toBe(true);
+        for (let face = 0; face < 6; face += 1) {
+          expect(existsSync(join(folder, record.id, prebakedFiles.colour(i, face))), `${record.id} ${i}/${face}`).toBe(true);
+          if (layer.alpha !== 'none') expect(existsSync(join(folder, record.id, prebakedFiles.alpha(i, face))), `${record.id} ${i}/${face} alpha`).toBe(true);
+        }
+      });
+    }
+    expect(worlds).toBeGreaterThanOrEqual(20);
   });
 });
 

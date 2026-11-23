@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { renderDemand } from '../../../core/renderDemand.ts';
 import { NOISE_GLSL } from './noise.ts';
+import { type AlphaStorage, type SurfaceImageSet, prebakedFiles } from './prebakedSurfaces.ts';
 
 /**
  * A world's procedural surface, worked out once on the GPU into cube maps and sampled after.
@@ -25,6 +26,11 @@ import { NOISE_GLSL } from './noise.ts';
  * each frame's tiles are timed, and the next frame bakes as many as that cost per texel fits --
  * so a cheap look bakes in a few frames and a costly one never holds a frame past the budget.
  * Without the timer, a look's own texel count a frame.
+ *
+ * **Or not baked at all.** Where the world's surface was baked ahead of time into images
+ * (prebakedSurfaces.ts), they are fetched instead, a 32-texel preview first, and copied into the
+ * same cube maps by a pass that only reads them -- no noise, no compile to speak of. The bake
+ * here is the fallback, for a look changed since its images were made.
  *
  * **Compiled first, off the frame.** The bake's shader is the expensive one to compile, and
  * three compiles on first draw, holding the page. It is compiled with `compileAsync` for the
@@ -99,6 +105,57 @@ export function bakeFragmentShader(lookGlsl: string, layer: number): string {
   `;
 }
 
+/**
+ * The copy from images: a face's colour, and its alpha from where the images keep it -- none (1),
+ * a grayscale image (byte), sixteen bits over two channels (word), or the colour image's own
+ * alpha (the preview strip). Read texel for texel, unfiltered: a word's two bytes must not blend.
+ */
+const DECODE_FRAGMENT = /* glsl */ `
+  uniform sampler2D uColour;
+  uniform sampler2D uAlpha;
+  uniform int uAlphaMode;
+  uniform float uSize;
+  uniform vec2 uStrip;
+
+  void main() {
+    vec2 uv = gl_FragCoord.xy / uSize;
+    uv.x = uStrip.x + uv.x * uStrip.y;
+    vec4 colour = texture2D(uColour, uv);
+    float a = 1.0;
+    if (uAlphaMode == 1) {
+      a = texture2D(uAlpha, uv).r;
+    } else if (uAlphaMode == 2) {
+      vec2 word = floor(texture2D(uAlpha, uv).rg * 255.0 + 0.5);
+      a = (word.x * 256.0 + word.y) / 65535.0;
+    } else if (uAlphaMode == 3) {
+      a = colour.a;
+    }
+    gl_FragColor = vec4(colour.rgb, a);
+  }
+`;
+
+const ALPHA_MODE: Record<AlphaStorage | 'strip', number> = { none: 0, byte: 1, word: 2, strip: 3 };
+
+/** A bitmap as a texture read texel for texel. */
+function dataTexture(bitmap: ImageBitmap): THREE.Texture {
+  const texture = new THREE.Texture(bitmap);
+  texture.flipY = false;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Where a bake may find its world already baked, and what to tell the material as it goes. */
+export interface BakeImages {
+  /** The images, or null: then it is baked here. */
+  find(): Promise<SurfaceImageSet | null>;
+  /** A first, coarse surface is in: these cube maps for now. */
+  onPreview(textures: THREE.CubeTexture[]): void;
+}
+
 /** What a look bakes: GLSL defining `vec4 bakeLayer0(vec3 d, float footprint)` and so on. */
 export interface BakeSource {
   readonly glsl: string;
@@ -125,7 +182,13 @@ export class SurfaceBake {
   #scene = new THREE.Scene();
   #mesh: THREE.Mesh;
   #camera = new THREE.OrthographicCamera();
-  #state: 'new' | 'compiling' | 'baking' | 'done' | 'disposed' = 'new';
+  #state: 'new' | 'finding' | 'loading' | 'compiling' | 'baking' | 'done' | 'disposed' = 'new';
+  readonly #images: BakeImages | null;
+  /** Images arrived and waiting for a frame to copy them in. */
+  #previewIn: { readonly strip: ImageBitmap; readonly storage: AlphaStorage }[] | null = null;
+  #facesIn: { colour: readonly ImageBitmap[]; alpha: readonly ImageBitmap[] | null; storage: AlphaStorage }[] | null = null;
+  #previewTargets: THREE.WebGLCubeRenderTarget[] = [];
+  #decodeMaterial: THREE.ShaderMaterial | null = null;
   /** The next tile: layer, face and position folded into one count. */
   #next = 0;
   readonly #tile: number;
@@ -139,8 +202,15 @@ export class SurfaceBake {
   /** Frames' timer queries not yet read back, with the texels each covered. */
   #pending: { query: WebGLQuery; texels: number }[] = [];
 
-  constructor(source: BakeSource, uniforms: Record<string, THREE.IUniform>, onDone: () => void, faceSize = BAKE_FACE_SIZE) {
+  constructor(
+    source: BakeSource,
+    uniforms: Record<string, THREE.IUniform>,
+    onDone: () => void,
+    faceSize = BAKE_FACE_SIZE,
+    images: BakeImages | null = null,
+  ) {
     this.#onDone = onDone;
+    this.#images = images;
     this.#texelsPerFrame = source.texelsPerFrame ?? BAKE_TEXELS_PER_FRAME;
     this.#tile = Math.min(TILE, faceSize);
     this.#tilesPerFace = Math.ceil(faceSize / this.#tile) ** 2;
@@ -179,13 +249,34 @@ export class SurfaceBake {
     return this.#state === 'done';
   }
 
+  /** The cube maps' render targets, for the generator that reads them back (web/scripts). */
+  get targets(): readonly THREE.WebGLCubeRenderTarget[] {
+    return this.#targets;
+  }
+
   /**
    * Called from the world's draw (inside the frame's render): bakes this frame's tiles, or
    * starts the compile that must come first. Asks for the next frame while there is more.
    */
   step(renderer: THREE.WebGLRenderer): void {
     if (this.#state === 'new') {
-      this.#state = 'compiling';
+      if (this.#images !== null) {
+        this.#state = 'finding';
+        this.#images.find().then(
+          (set) => (set === null ? this.#bakeHere() : this.#load(set)),
+          () => this.#bakeHere(),
+        );
+        return;
+      }
+      this.#bakeHere();
+      return;
+    }
+    if (this.#state === 'loading') {
+      this.#copyIn(renderer);
+      return;
+    }
+    if (this.#state === 'compiling' && this.#needsCompile) {
+      this.#needsCompile = false;
       // Not here: compiling inside the frame's render would end the render state it is using.
       setTimeout(() => this.#compile(renderer), 0);
       return;
@@ -233,6 +324,134 @@ export class SurfaceBake {
       const known = this.#msPerTexel;
       this.#msPerTexel = known === null || cost > known ? cost : 0.7 * known + 0.3 * cost;
     }
+  }
+
+  /** No images: bake it here, from the next frame on. */
+  #bakeHere(): void {
+    if (this.#state !== 'new' && this.#state !== 'finding') return;
+    this.#state = 'compiling';
+    // Not inside the frame's render: compiling there would end the render state it is using.
+    // The compile needs the renderer, which the next step brings.
+    this.#needsCompile = true;
+    renderDemand.request(1);
+  }
+
+  #needsCompile = false;
+
+  /** Images found: fetch the preview and the faces, each copied in by the next frame after it lands. */
+  #load(set: SurfaceImageSet): void {
+    if (this.#state !== 'finding') return;
+    this.#state = 'loading';
+    set.preview().then(
+      (strips) => {
+        if (this.#state !== 'loading') return strips.forEach(({ strip }) => strip.close());
+        this.#previewIn = strips;
+        renderDemand.request(1);
+      },
+      () => {},
+    );
+    set.faces().then(
+      (layers) => {
+        if (this.#state !== 'loading') return layers.forEach((layer) => [...layer.colour, ...(layer.alpha ?? [])].forEach((b) => b.close()));
+        this.#facesIn = layers.map((layer) => ({ colour: layer.colour, alpha: layer.alpha, storage: layer.storage }));
+        renderDemand.request(1);
+      },
+      // The images failed to come: bake it here after all.
+      () => {
+        if (this.#state !== 'loading') return;
+        this.#state = 'finding';
+        this.#bakeHere();
+      },
+    );
+  }
+
+  /** Copies whatever images have landed into cube maps: the preview's small ones, or the real ones. */
+  #copyIn(renderer: THREE.WebGLRenderer): void {
+    if (this.#facesIn !== null) {
+      const layers = this.#facesIn;
+      this.#facesIn = null;
+      this.#previewIn?.forEach(({ strip }) => strip.close());
+      this.#previewIn = null;
+      layers.forEach((layer, i) => {
+        const target = this.#targets[i]!;
+        for (let face = 0; face < 6; face += 1) {
+          this.#decode(renderer, target, face, layer.colour[face]!, layer.alpha?.[face] ?? null, layer.storage, [0, 1]);
+        }
+        [...layer.colour, ...(layer.alpha ?? [])].forEach((bitmap) => bitmap.close());
+      });
+      for (const target of this.#previewTargets) target.dispose();
+      this.#previewTargets = [];
+      this.#decodeMaterial?.dispose();
+      this.#decodeMaterial = null;
+      this.#state = 'done';
+      this.#onDone();
+      return;
+    }
+    if (this.#previewIn !== null && this.#previewTargets.length === 0) {
+      const strips = this.#previewIn;
+      this.#previewIn = null;
+      this.#previewTargets = strips.map(({ strip }) => {
+        const target = new THREE.WebGLCubeRenderTarget(prebakedFiles.previewSize, {
+          generateMipmaps: true,
+          minFilter: THREE.LinearMipmapLinearFilter,
+          magFilter: THREE.LinearFilter,
+          depthBuffer: false,
+        });
+        for (let face = 0; face < 6; face += 1) this.#decode(renderer, target, face, strip, null, 'strip', [face / 6, 1 / 6]);
+        strip.close();
+        return target;
+      });
+      this.#images?.onPreview(this.#previewTargets.map((target) => target.texture));
+    }
+  }
+
+  /** One face of `target` from images: the colour, and the alpha as stored. */
+  #decode(
+    renderer: THREE.WebGLRenderer,
+    target: THREE.WebGLCubeRenderTarget,
+    face: number,
+    colour: ImageBitmap,
+    alpha: ImageBitmap | null,
+    storage: AlphaStorage | 'strip',
+    strip: [number, number],
+  ): void {
+    this.#decodeMaterial ??= new THREE.ShaderMaterial({
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: DECODE_FRAGMENT,
+      uniforms: {
+        uColour: { value: null },
+        uAlpha: { value: null },
+        uAlphaMode: { value: 0 },
+        uSize: { value: 1 },
+        uStrip: { value: new THREE.Vector2(0, 1) },
+      },
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const material = this.#decodeMaterial;
+    const colourTexture = dataTexture(colour);
+    const alphaTexture = alpha === null ? null : dataTexture(alpha);
+    material.uniforms['uColour']!.value = colourTexture;
+    material.uniforms['uAlpha']!.value = alphaTexture ?? colourTexture;
+    material.uniforms['uAlphaMode']!.value = ALPHA_MODE[storage];
+    material.uniforms['uSize']!.value = target.width;
+    (material.uniforms['uStrip']!.value as THREE.Vector2).set(strip[0], strip[1]);
+    this.#mesh.material = material;
+    target.scissorTest = false;
+    // Mipmaps once, after the last face.
+    target.texture.generateMipmaps = face === 5;
+    const previous = renderer.getRenderTarget();
+    const previousFace = renderer.getActiveCubeFace();
+    const previousLevel = renderer.getActiveMipmapLevel();
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setRenderTarget(target, face);
+    renderer.render(this.#scene, this.#camera);
+    renderer.setRenderTarget(previous, previousFace, previousLevel);
+    renderer.autoClear = autoClear;
+    colourTexture.dispose();
+    alphaTexture?.dispose();
   }
 
   #compile(renderer: THREE.WebGLRenderer): void {
@@ -299,6 +518,8 @@ export class SurfaceBake {
 
   dispose(): void {
     this.#state = 'disposed';
+    for (const target of this.#previewTargets) target.dispose();
+    this.#decodeMaterial?.dispose();
     this.#pending = [];
     for (const target of this.#targets) target.dispose();
     for (const material of this.#materials) material.dispose();

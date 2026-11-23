@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { FictionLook } from '../../../core/fictionLook.ts';
 import { LIGHTING } from '../../shading.ts';
 import { DETAIL_NOISE_GLSL, detailNoiseTexture } from './detailNoise.ts';
+import { findSurfaceImages, hashKey } from './prebakedSurfaces.ts';
 import { NOISE_GLSL, seedHash } from './noise.ts';
 import { RING_GLSL } from './ringProfile.ts';
 import { BAKE_FACE_SIZE, BAKE_TEXELS_PER_FRAME, SurfaceBake } from './surfaceBake.ts';
@@ -154,6 +155,11 @@ export interface SurfaceLook {
   readonly halfFloat?: boolean;
   /** Texels baked a frame, for a bake costlier per texel than most; BAKE_TEXELS_PER_FRAME when absent. */
   readonly bakeTexelsPerFrame?: number;
+  /**
+   * Layers that hold data, not colour (cloud cover, relief): stored losslessly when baked ahead
+   * (prebakedSurfaces.ts), where a colour's chroma would be shared between neighbouring texels.
+   */
+  readonly dataLayers?: readonly number[];
   /** Texels a cube face is baked at; BAKE_FACE_SIZE when absent. `TEXEL` in `glsl` is its width in radii. */
   readonly faceSize?: number;
   readonly glsl: string;
@@ -371,6 +377,8 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
     ...surface.uniforms(world),
   };
   const baked = { value: 0 };
+  const key = surfaceKey(options);
+  const layerUniforms: THREE.IUniform[] = [];
   const bake = new SurfaceBake(
     {
       glsl: sources.bake,
@@ -380,10 +388,24 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
     },
     own,
     () => {
+      bake.textures.forEach((texture, i) => {
+        layerUniforms[i]!.value = texture;
+      });
       baked.value = 1;
     },
     surface.faceSize,
+    {
+      find: () => findSurfaceImages(key),
+      // The 32-texel preview, while the faces come: a world already, not a flat colour.
+      onPreview: (textures) => {
+        textures.forEach((texture, i) => {
+          layerUniforms[i]!.value = texture;
+        });
+        baked.value = 1;
+      },
+    },
   );
+  bake.textures.forEach((texture) => layerUniforms.push({ value: texture }));
 
   const material = new THREE.ShaderMaterial({
     vertexShader: sources.vertex,
@@ -396,7 +418,7 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
       uBaked: baked,
       uDetailNoise: { value: detailNoiseTexture() },
       uFallback: { value: new THREE.Vector3(...surface.fallback) },
-      ...Object.fromEntries(bake.textures.map((texture, i) => [`uLayer${i}`, { value: texture }])),
+      ...Object.fromEntries(layerUniforms.map((uniform, i) => [`uLayer${i}`, uniform])),
       uRayleighDepth: { value: new THREE.Vector3(...haze.rayleigh) },
       uMieDepth: { value: haze.mie },
       uAbsorption: { value: new THREE.Vector3(...(haze.absorption ?? [0, 0, 0])) },
@@ -406,12 +428,36 @@ export function worldMaterial(options: WorldOptions): THREE.ShaderMaterial {
     },
   });
   material.userData['starDirection'] = starDirection;
+  material.userData['surfaceKey'] = key;
+  material.userData['surfaceBake'] = bake;
+  material.userData['surfaceLook'] = surface;
   material.userData['ambient'] = ambient;
   material.onBeforeRender = (renderer) => {
     if (!bake.done) bake.step(renderer);
   };
   material.addEventListener('dispose', () => bake.dispose());
   return material;
+}
+
+/**
+ * Everything a world's bake depends on, hashed: its look's bake GLSL (the noise with it), its
+ * look -- seed, tint, cloud cover -- less the rings, which the bake does not draw, the tint's
+ * weight, the faces' size, layers and precision. The images baked ahead of time are found by it
+ * (prebakedSurfaces.ts); change any of these and the old images are no longer found.
+ */
+export function surfaceKey(options: WorldOptions): string {
+  const { surface, world, tintWeight } = options;
+  const { rings: _rings, ...look } = world;
+  return hashKey(
+    JSON.stringify({
+      bake: worldShaderSources(surface).bake,
+      look,
+      tintWeight,
+      faceSize: surface.faceSize ?? BAKE_FACE_SIZE,
+      layers: surface.layers,
+      halfFloat: surface.halfFloat === true,
+    }),
+  );
 }
 
 /** The ring uniforms a world's shadow and its rings share. Inner and outer 0: no rings. */

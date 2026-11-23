@@ -29,6 +29,8 @@ import type { Haze, SurfaceLook } from './worldShader.ts';
  */
 export const JUNGLE_MOON: SurfaceLook = {
   layers: 2,
+  // The second layer is the sky and the relief: cloud cover, cloud brightness, height.
+  dataLayers: [1],
   fallback: [0.03, 0.06, 0.06],
   uniforms: (world) => ({
     uClouds: { value: world.clouds ?? 0 },

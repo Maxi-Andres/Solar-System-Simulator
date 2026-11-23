@@ -25,7 +25,10 @@ import { textureUrl } from './textureCache.ts';
 
 const TEXTURE_DIR = join(import.meta.dirname, '../../public/textures');
 
-const files = (await readdir(TEXTURE_DIR)).filter((name) => !name.endsWith('.md'));
+// The real bodies' maps only: fiction/ holds the fictional worlds' surfaces, baked by this
+// project from its own shaders (web/scripts/bakeFictionSurfaces.mjs), nothing to credit; their
+// test is in scene/fiction/fictionLooks.test.ts.
+const files = (await readdir(TEXTURE_DIR)).filter((name) => !name.endsWith('.md') && name !== 'fiction');
 const credits = await readFile(join(TEXTURE_DIR, 'CREDITS.md'), 'utf8');
 
 /** Every (body, set) pair, flattened, since both sets ship. Moons have no maps yet. */

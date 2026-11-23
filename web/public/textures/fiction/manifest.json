@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "worlds": {
+    "adrian": {
+      "id": "adrian",
+      "key": "8806f188fb06e4a4",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "byte"
+        }
+      ]
+    },
+    "erid": {
+      "id": "erid",
+      "key": "3907aba8d2b4756c",
+      "faceSize": 512,
+      "layers": [
+        {
+          "alpha": "none"
+        }
+      ]
+    },
+    "pandora": {
+      "id": "pandora",
+      "key": "a4d1e332cd613de6",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "byte"
+        },
+        {
+          "alpha": "none"
+        }
+      ]
+    },
+    "poly-l4": {
+      "id": "poly-l4",
+      "key": "a62ca40500b8df41",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "poly-l5": {
+      "id": "poly-l5",
+      "key": "56214beadbd75a46",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus": {
+      "id": "polyphemus",
+      "key": "46e4954cdbd57ec0",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "none"
+        }
+      ]
+    },
+    "polyphemus-1": {
+      "id": "polyphemus-1",
+      "key": "620f3eec9313d938",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-10": {
+      "id": "polyphemus-10",
+      "key": "7355c624e6dfe9f0",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-11": {
+      "id": "polyphemus-11",
+      "key": "3367f321c41b1eed",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-12": {
+      "id": "polyphemus-12",
+      "key": "39e779582f1dd19c",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-13": {
+      "id": "polyphemus-13",
+      "key": "f556fc183877d4b4",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-14": {
+      "id": "polyphemus-14",
+      "key": "b4925f50e9e740c4",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-2": {
+      "id": "polyphemus-2",
+      "key": "14fa9ea8ba9ba7bc",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-3": {
+      "id": "polyphemus-3",
+      "key": "3ac81bb8d389fddc",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-4": {
+      "id": "polyphemus-4",
+      "key": "6a566ff47d82f208",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-6": {
+      "id": "polyphemus-6",
+      "key": "94f1762dde32a179",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-7": {
+      "id": "polyphemus-7",
+      "key": "d8e75b0a70540be6",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-8": {
+      "id": "polyphemus-8",
+      "key": "a41bc2e28d7bcdc6",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "polyphemus-9": {
+      "id": "polyphemus-9",
+      "key": "ac7ef7eb478e28ff",
+      "faceSize": 256,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    },
+    "vulcan": {
+      "id": "vulcan",
+      "key": "125a369d13321149",
+      "faceSize": 512,
+      "layers": [
+        {
+          "alpha": "word"
+        }
+      ]
+    }
+  }
+}
