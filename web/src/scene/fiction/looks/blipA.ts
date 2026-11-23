@@ -8,11 +8,11 @@ import { LOW_DETAIL_BELOW, ShipBuilder, createShipRig } from './shipRig.ts';
  * film, every detail our own (canon notes, section 4b).
  *
  * **What the film shows**, as a general idea only: two long spindles of rods, alike, side by side
- * and parallel in one plane, a gap about their own width between them; each thickest at its
+ * and parallel in one plane, all but touching at the middle; each thickest at its
  * middle and tapering to a point at both ends, made of long parallel rods packed tight, of
- * staggered lengths, so its ends are ragged, a few rods reaching farther. Between them at the
- * middle a solid bridge joins them into one ship, a hub at its middle, and across both spindles
- * and the bridge a set of frames -- parallel,
+ * staggered lengths, so its ends are ragged, a few rods reaching farther. They meet at the
+ * middle, all but touching round a small hub, and open into a V toward the tips; across both
+ * and the hub a set of frames -- parallel,
  * angled bands like ribs clamping it all together, whose peaked tops are the sawtooth seen from
  * the side. Symmetric across the plane between the spindles, and fore and aft. Dark bronze and
  * brown, metal, the star glinting gold along the rods.
@@ -46,13 +46,14 @@ export const FORE_REACH_M = BLIP_A_LENGTH_M / 2;
 export const AFT_REACH_M = BLIP_A_LENGTH_M / 2;
 
 /**
- * Each spindle at its middle, across (x) and through (y), and the gap between the two: in the
- * proportions of a fan's model of the film's ship -- a spindle about an eighth of the length
- * across, the gap about as wide.
+ * Each spindle at its middle, across (x) and through (y), and the gap between the two there.
+ * The spindles in the proportions of a fan's model of the film's ship, about an eighth of the
+ * length across; the gap as the film shows it -- the two wings all but touching at the middle,
+ * round a small hub, and opening into a V toward the tips as they taper.
  */
 export const SPINDLE_WIDTH_M = 46;
 export const SPINDLE_THICKNESS_M = 38;
-export const SPINDLE_GAP_M = 34;
+export const SPINDLE_GAP_M = 3;
 
 /** Across both spindles and the gap. */
 export const BLIP_A_WIDTH_M = 2 * SPINDLE_WIDTH_M + SPINDLE_GAP_M;
@@ -71,19 +72,11 @@ const FRAME_DEPTH_M = 1.2;
 const FRAME_PEAK_M = 12;
 const FRAME_LEAN = 0.55;
 
-/**
- * The bridge: the solid middle joining the spindles across the gap, as long as the frames' span
- * (their chevrons included) and a little thinner than the spindles' middle. Its ends are cut to
- * a point in profile, so from the side it is a flat hexagon.
- */
-export const BRIDGE_LENGTH_M = 78;
-export const BRIDGE_THICKNESS_M = 30;
-
-/** The hub: a faceted dome rising a few metres from the bridge's middle, above and below. */
-const HUB_HALF = new THREE.Vector3(SPINDLE_GAP_M * 0.3, BRIDGE_THICKNESS_M / 2 + 5, 14);
+/** The hub where the wings meet: small, faceted, standing a little proud of them above and below. */
+const HUB_HALF = new THREE.Vector3(10, SPINDLE_THICKNESS_M / 2 + 5, 16);
 
 /** Rods each spindle carries at each level of detail. */
-const RODS_FULL = 800;
+const RODS_FULL = 600;
 const RODS_MID = 300;
 
 /** Above this share of the view's half-height every rod is drawn; below it, the middle level. */
@@ -219,36 +212,9 @@ function spindleCores(builder: ShipBuilder, scale: number, finish: number, occlu
 
 /** The hub and the frames: one mesh of flat faces, symmetric across x = 0 and fore and aft. */
 function middleGeometry(builder: ShipBuilder): void {
-  // The bridge: a flat hexagon in profile (y against z), carried across x from deep inside one
-  // spindle to deep inside the other, so the two are one ship.
-  const bridgeHalfLength = BRIDGE_LENGTH_M / 2;
-  const profile = new THREE.Shape([
-    new THREE.Vector2(-bridgeHalfLength, 0),
-    new THREE.Vector2(-bridgeHalfLength + 12, -BRIDGE_THICKNESS_M / 2),
-    new THREE.Vector2(bridgeHalfLength - 12, -BRIDGE_THICKNESS_M / 2),
-    new THREE.Vector2(bridgeHalfLength, 0),
-    new THREE.Vector2(bridgeHalfLength - 12, BRIDGE_THICKNESS_M / 2),
-    new THREE.Vector2(-bridgeHalfLength + 12, BRIDGE_THICKNESS_M / 2),
-  ]);
-  const span = 2 * SPINDLE_X;
-  const bridge = new THREE.ExtrudeGeometry(profile, { depth: span, bevelEnabled: false, steps: 1 });
-  // The profile's x onto the ship's z, its y onto y, the extrusion onto -x; then centred.
-  const onto = new THREE.Matrix4()
-    .makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(-1, 0, 0))
-    .premultiply(new THREE.Matrix4().makeTranslation(span / 2, 0, 0));
-  builder.add(bridge, onto, FINISH.hull, 0.85);
-  // Orderly rods along the bridge, top and bottom, parallel to the spindles' own.
-  for (let k = -3; k <= 3; k += 1) {
-    for (const ySide of [-1, 1]) {
-      const rod = new THREE.BoxGeometry(1.4, 1.4, BRIDGE_LENGTH_M - 26);
-      builder.add(rod, new THREE.Matrix4().makeTranslation(k * (SPINDLE_GAP_M / 8), ySide * (BRIDGE_THICKNESS_M / 2 + 0.7), 0), FINISH.hull, 0.8);
-    }
-  }
-
-  // The hub: a faceted dome at the bridge's middle, standing out of it above and below.
+  // The hub, where the wings meet: a small faceted body, ribbed along its flanks.
   const hub = new THREE.IcosahedronGeometry(1, 1);
   builder.add(hub, new THREE.Matrix4().makeScale(HUB_HALF.x, HUB_HALF.y, HUB_HALF.z), FINISH.hull, 0.8);
-  // Orderly ribs along the hub's flanks.
   for (let k = -2; k <= 2; k += 1) {
     if (k === 0) continue;
     for (const side of [-1, 1]) {
@@ -257,54 +223,57 @@ function middleGeometry(builder: ShipBuilder): void {
     }
   }
 
-  // The frames: a band hugging each spindle, its top drawn up into a peak, the two bands joined
-  // across the gap over and under the bridge. Each band leans back from the middle plane -- the
-  // two of a frame mirror each other -- so seen from above a frame is a chevron.
+  // The frames: each one band round both wings and the hub as one bundle, a peak over each wing,
+  // a shallower notch between them. Each band runs back from the middle, so seen from above a
+  // frame is a chevron, its point ahead at the middle.
+  const w = SPINDLE_WIDTH_M / 2 + 1.2;
+  const t = SPINDLE_THICKNESS_M / 2 + 1.2;
+  const slope = Math.tan(FRAME_LEAN);
+  const zAxis = new THREE.Vector3(0, 0, 1);
   for (let i = 0; i < FRAMES; i += 1) {
-    const z = (i - (FRAMES - 1) / 2) * FRAME_PITCH_M;
-    // The middle frame's peak stands tallest; the outer ones lower: the sawtooth steps down.
+    const zc = (i - (FRAMES - 1) / 2) * FRAME_PITCH_M;
+    // The middle frame's peaks stand tallest; the outer ones lower: the sawtooth steps down.
     const peak = FRAME_PEAK_M * (1 - 0.16 * Math.abs(i - (FRAMES - 1) / 2));
-    for (const side of [-1, 1]) {
-      const centre = new THREE.Vector3(side * SPINDLE_X, 0, z);
-      const lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), side * FRAME_LEAN);
-      const w = SPINDLE_WIDTH_M / 2 + 1.2;
-      const t = SPINDLE_THICKNESS_M / 2 + 1.2;
-      // The band's outline round the spindle's lozenge, the peak on top.
-      const outline = [
-        new THREE.Vector2(w, 0),
-        new THREE.Vector2(w * 0.55, t * 0.85),
-        new THREE.Vector2(w * 0.2, t + 0.15 * peak),
-        new THREE.Vector2(0, t + peak),
-        new THREE.Vector2(-w * 0.2, t + 0.15 * peak),
-        new THREE.Vector2(-w * 0.55, t * 0.85),
-        new THREE.Vector2(-w, 0),
-        new THREE.Vector2(-w * 0.55, -t * 0.85),
-        new THREE.Vector2(0, -t - 0.25 * peak),
-        new THREE.Vector2(w * 0.55, -t * 0.85),
-      ];
-      outline.forEach((from, k) => {
-        const to = outline[(k + 1) % outline.length]!;
-        const mid = new THREE.Vector3((from.x + to.x) / 2, (from.y + to.y) / 2, 0);
-        const along = new THREE.Vector3(to.x - from.x, to.y - from.y, 0);
-        const segment = new THREE.BoxGeometry(along.length() + 1.6, FRAME_DEPTH_M, FRAME_BAND_M);
-        const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(along.y, along.x));
-        // Its own outline's frame, then leaned, then placed on the spindle.
-        const local = new THREE.Matrix4().compose(mid, turn, new THREE.Vector3(1, 1, 1));
-        const placed = new THREE.Matrix4().compose(centre, lean, new THREE.Vector3(1, 1, 1)).multiply(local);
-        builder.add(segment, placed, FINISH.hull, 0.85);
-      });
-    }
-    // Across the gap, over and under the hub, joining the two bands where they meet: the
-    // chevron's point, ahead of the band's middle by its lean.
-    const apex = z + (SPINDLE_WIDTH_M / 2 + 1.2) * Math.sin(FRAME_LEAN);
-    for (const ySide of [-1, 1]) {
-      const strap = new THREE.BoxGeometry(SPINDLE_GAP_M + 4, FRAME_DEPTH_M, FRAME_BAND_M);
-      builder.add(strap, new THREE.Matrix4().makeTranslation(0, ySide * (BRIDGE_THICKNESS_M / 2 + 1.4 + FRAME_DEPTH_M / 2), apex), FINISH.hull, 0.8);
-    }
+    // The right half of the outline, top then bottom, from the outer edge in; the left mirrors it.
+    const right: [number, number][] = [
+      [SPINDLE_X + w, 0],
+      [SPINDLE_X + w * 0.55, t * 0.85],
+      [SPINDLE_X + w * 0.2, t + 0.15 * peak],
+      [SPINDLE_X, t + peak],
+      [SPINDLE_X - w * 0.2, t + 0.15 * peak],
+      [SPINDLE_X - w * 0.6, t * 0.8],
+      [0, HUB_HALF.y + 1.5],
+    ];
+    const rightBottom: [number, number][] = [
+      [0, -HUB_HALF.y - 1.5],
+      [SPINDLE_X - w * 0.6, -t * 0.8],
+      [SPINDLE_X, -t - 0.25 * peak],
+      [SPINDLE_X + w * 0.55, -t * 0.85],
+    ];
+    const loop: [number, number][] = [
+      ...right,
+      ...right.slice(0, -1).reverse().map(([x, y]): [number, number] => [-x, y]),
+      ...rightBottom.slice(1).reverse().map(([x, y]): [number, number] => [-x, y]),
+      ...rightBottom,
+    ];
+    // Placed: the band runs back from the middle with distance out, the chevron.
+    const at = ([x, y]: [number, number]): THREE.Vector3 => new THREE.Vector3(x, y, zc + (SPINDLE_X - Math.abs(x)) * slope);
+    loop.forEach((point, k) => {
+      const from = at(point);
+      const to = at(loop[(k + 1) % loop.length]!);
+      const along = to.clone().sub(from);
+      const length = along.length();
+      if (length < 1e-3) return;
+      const xAxis = along.divideScalar(length);
+      const across = zAxis.clone().addScaledVector(xAxis, -zAxis.dot(xAxis)).normalize();
+      const yAxis = new THREE.Vector3().crossVectors(across, xAxis);
+      const matrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, across).setPosition(from.add(to).multiplyScalar(0.5));
+      builder.add(new THREE.BoxGeometry(length + 1.2, FRAME_DEPTH_M, FRAME_BAND_M), matrix, FINISH.hull, 0.85);
+    });
   }
 }
 
-/** Small on screen: two thin lozenges and a bar across them. */
+/** Small on screen: two thin lozenges, touching, and the hub between them. */
 function silhouetteGeometry(): THREE.BufferGeometry {
   const builder = new ShipBuilder(0);
   for (const side of [-1, 1]) {
@@ -321,7 +290,7 @@ function silhouetteGeometry(): THREE.BufferGeometry {
   }
   builder.add(
     new THREE.BoxGeometry(1, 1, 1),
-    new THREE.Matrix4().makeScale(BLIP_A_WIDTH_M, BRIDGE_THICKNESS_M, BRIDGE_LENGTH_M),
+    new THREE.Matrix4().makeScale(HUB_HALF.x * 2, HUB_HALF.y * 2, HUB_HALF.z * 2),
     FINISH.hull,
     0.8,
   );

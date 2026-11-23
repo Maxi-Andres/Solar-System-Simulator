@@ -640,6 +640,37 @@ describe('the Blip-A', () => {
   });
 });
 
+describe('the ships, for framing and drawing', () => {
+  it('have finite, non-empty bounds -- every part, instanced ones over all their copies -- and draw from any distance', async () => {
+    for (const design of ['hail-mary', 'blip-a'] as const) {
+      const ship = createFictionObject({ kind: 'ship', design });
+      const camera = new THREE.PerspectiveCamera(45, 1, 1e-6, 1e9);
+      // From far, near, and from the very centre: no division by a zero distance, no NaN placed.
+      for (const at of [new THREE.Vector3(0, 0, 50), new THREE.Vector3(0.3, 0.2, 0.4), new THREE.Vector3(0, 0, 0)]) {
+        camera.position.copy(at);
+        camera.updateMatrixWorld();
+        ship.update?.(new THREE.Vector3(1, 0.3, 0.2).normalize(), camera);
+      }
+      if ('loaded' in ship) await (ship as { loaded: Promise<void> }).loaded;
+      ship.object.updateMatrixWorld(true);
+      ship.object.traverse((part) => {
+        expect(part.matrixWorld.elements.every(Number.isFinite), `${design} ${part.name}`).toBe(true);
+        const instanced = part as THREE.InstancedMesh;
+        if (instanced.isInstancedMesh) {
+          instanced.computeBoundingSphere();
+          expect(Number.isFinite(instanced.boundingSphere!.radius) && instanced.boundingSphere!.radius > 0, part.name).toBe(true);
+        }
+      });
+      const box = new THREE.Box3().setFromObject(ship.object);
+      if (design === 'blip-a') {
+        expect([...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite)).toBe(true);
+        expect(box.max.z - box.min.z).toBeGreaterThan(0.9);
+      }
+      ship.dispose();
+    }
+  });
+});
+
 describe('createFictionObject', () => {
   it('still builds the stand-ins, and frees them', () => {
     for (const look of [
