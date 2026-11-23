@@ -450,7 +450,10 @@ export function surfaceKey(options: WorldOptions): string {
   const { rings: _rings, ...look } = world;
   return hashKey(
     JSON.stringify({
-      bake: worldShaderSources(surface).bake,
+      // Line endings normalised: a Windows checkout (core.autocrlf) turns the shader sources'
+      // newlines into CRLF, which would change the key and send every world back to the
+      // run-time bake there.
+      bake: worldShaderSources(surface).bake.replace(/\r\n?/g, '\n'),
       look,
       tintWeight,
       faceSize: surface.faceSize ?? BAKE_FACE_SIZE,
