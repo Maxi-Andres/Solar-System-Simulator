@@ -57,4 +57,4 @@ export type FictionLook =
    * A ship, our own design from what its canon describes. Length 1 along local +z (+z the bow,
    * the direction it accelerates), centred on its centre of mass.
    */
-  | { readonly kind: 'ship'; readonly design: 'hail-mary' | 'blip-a' };
+  | { readonly kind: 'ship'; readonly design: 'hail-mary' | 'blip-a' | 'death-star' | 'death-star-ii' };

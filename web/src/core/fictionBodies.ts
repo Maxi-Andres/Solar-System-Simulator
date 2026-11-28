@@ -7,6 +7,8 @@ import {
   FICTION,
   FICTION_ANCHOR_STARS,
   FICTION_COLOR,
+  FICTION_STARS,
+  type FictionStarRecord,
   fictionBodyId,
   fictionRecord,
   inventedOrbit,
@@ -16,8 +18,10 @@ import {
 } from './fiction.ts';
 import { stateToOsculatingElements } from './kepler.ts';
 import { lagrangeState, massRatio } from './lagrange.ts';
-import { towardStar } from './planetarySystems.ts';
-import { addStarBody, starBodyFacts } from './starBodies.ts';
+import { registerStarDirection, towardStar } from './planetarySystems.ts';
+import { addStarBody, setStarDisc, starBodyDefinition, starBodyFacts } from './starBodies.ts';
+import { mapSquarePositionKm } from './starWars.ts';
+import { temperatureToColorIndex } from '../scene/blackbody.ts';
 import type { StarNameIndex, Stars3dSource } from './stars3d.ts';
 import { J2000_JD } from './time.ts';
 import type { StateVector, Vec3 } from './vec3.ts';
@@ -48,6 +52,10 @@ export function resolveAnchor(store: EphemerisStore, anchor: FictionAnchor): Bod
   // An overlay is no body of its own: drawn over the real one (SolarSystem.tsx), never placed.
   if (anchor.kind === 'overlay') return null;
   if (anchor.kind === 'star') return starBodyByDesignation(store, anchor.designation);
+  if (anchor.kind === 'fictionStar') {
+    const star = fictionBodyId(anchor.id);
+    return store.isPropagatedBody(star) ? star : null;
+  }
   const id = fictionBodyId(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   if (!store.isPropagatedBody(id)) return null;
   return anchor.kind === 'fiction' ? id : store.body(id).parent;
@@ -60,8 +68,10 @@ export function resolveAnchor(store: EphemerisStore, anchor: FictionAnchor): Bod
  */
 export function fictionOrbit(record: FictionRecord, gmParentKm3S2: number): ExoPlanet {
   const massEarth = valueOf(record.massEarth) ?? 0;
+  // Made up only where the record gives no distance of its own: a place invented for a whole
+  // system (Star Wars' galaxy) keeps the orbits its record gives within it.
   const invented =
-    record.position === 'invented'
+    record.position === 'invented' && valueOf(record.orbit.semiMajorAxisKm) === null
       ? inventedOrbit(record.id, { minKm: 0.3 * AU_KM, maxKm: 3 * AU_KM })
       : null;
   const mu = gmParentKm3S2 + massEarth * GM_EARTH;
@@ -173,6 +183,62 @@ export async function ensureFictionStars(
       if (c !== null) await addStarBody(store, stars3d, names, c, keep, true);
     }
   }
+}
+
+const SOLAR_RADIUS_KM = 695_700;
+
+/**
+ * Where a star of the fiction's own is, km from the Sun: its map square laid on its galaxy
+ * (starWars.ts), or -- a companion -- that far from its star along the galaxy map's east, held still.
+ */
+export function fictionStarPositionKm(star: FictionStarRecord): Vec3 | null {
+  const square = valueOf(star.mapSquare);
+  if (square === null) return null;
+  const at = mapSquarePositionKm(square);
+  if (star.companionOf === undefined) return at;
+  const host = FICTION_STARS.find((other) => other.id === star.companionOf!.id);
+  const hostAt = host === undefined ? null : fictionStarPositionKm(host);
+  const separation = valueOf(star.companionOf.separationAu);
+  if (hostAt === null || separation === null) return null;
+  // Off its star by the separation, in a fixed direction: the canon gives none, and any will do.
+  const direction = { x: Math.cos(1.1), y: Math.sin(1.1) * 0.6, z: Math.sin(1.1) * 0.8 };
+  return {
+    x: hostAt.x + direction.x * separation * AU_KM,
+    y: hostAt.y + direction.y * separation * AU_KM,
+    z: hostAt.z + direction.z * separation * AU_KM,
+  };
+}
+
+/**
+ * Makes the fiction's own stars bodies (fiction.ts FICTION_STARS): each a star like any other --
+ * a disc of its radius in its temperature's colour, its mass for its worlds' orbits -- held still
+ * where its galaxy and map put it, and its direction registered so its worlds' orbits are laid
+ * out against it. Returns the ids added.
+ */
+export function placeFictionStars(store: EphemerisStore): BodyId[] {
+  const added: BodyId[] = [];
+  for (const star of FICTION_STARS) {
+    const id = fictionBodyId(star.id);
+    if (store.isPropagatedBody(id)) continue;
+    const position = fictionStarPositionKm(star);
+    const temperature = valueOf(star.temperatureK);
+    const radius = valueOf(star.radiusSun);
+    const mass = valueOf(star.massSun);
+    if (position === null || temperature === null || radius === null || mass === null) continue;
+    const colorIndex = temperatureToColorIndex(temperature);
+    setStarDisc(id, colorIndex, temperature);
+    const length = Math.hypot(position.x, position.y, position.z);
+    registerStarDirection(id, { x: position.x / length, y: position.y / length, z: position.z / length });
+    const state: StateVector = { position, velocity: { x: 0, y: 0, z: 0 } };
+    store.addPropagatedBody(
+      { ...starBodyDefinition(id, star.name, colorIndex, radius * SOLAR_RADIUS_KM, mass), color: FICTION_COLOR },
+      null,
+      () => state,
+      { exact: true },
+    );
+    added.push(id);
+  }
+  return added;
 }
 
 /**

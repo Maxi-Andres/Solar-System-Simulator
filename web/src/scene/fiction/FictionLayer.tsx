@@ -10,14 +10,15 @@ import {
   FICTION_COLOR,
   FICTION_LINES,
   FICTION_SHIPS,
+  FICTION_STARS,
   fictionBodyId,
   fictionReadingId,
   fictionTag,
   valueOf,
   type FictionLineRecord,
 } from '../../core/fiction.ts';
-import { placeFiction } from '../../core/fictionBodies.ts';
-import { parkedOf, placeShips, voyageOf } from '../../core/hailMary.ts';
+import { placeFiction, placeFictionStars } from '../../core/fictionBodies.ts';
+import { parkedOf, placeShips, stationOf, voyageOf } from '../../core/hailMary.ts';
 import { renderDemand } from '../../core/renderDemand.ts';
 import type { SimClock } from '../../core/time.ts';
 import { useViewStore } from '../../state/store.ts';
@@ -38,6 +39,12 @@ setFictionMakers({
   object: createFictionObject,
   planetshineStrength,
   pose: (id, jd, out) => {
+    // A station (the Death Stars), its weapon turned to its aim.
+    const station = stationOf(id);
+    if (station !== null) {
+      station.pose(jd, out);
+      return CRUISE;
+    }
     // A parked ship (the Blip-A) along its motion, not spinning.
     const parked = parkedOf(id);
     if (parked !== null) {
@@ -89,6 +96,7 @@ export function FictionLayer({
 }) {
   useEffect(() => {
     const placed = (): boolean =>
+      FICTION_STARS.every((star) => store.isPropagatedBody(fictionBodyId(star.id))) &&
       FICTION.every((record) => store.isPropagatedBody(fictionBodyId(record.id))) &&
       FICTION_SHIPS.every((ship) => store.isPropagatedBody(fictionBodyId(ship.id)));
     // Adding a body tells the store's listeners, this one among them: not placed again inside.
@@ -97,7 +105,7 @@ export function FictionLayer({
       if (placing) return;
       placing = true;
       try {
-        if (placeFiction(store).length + placeShips(store).length > 0) renderDemand.request();
+        if (placeFictionStars(store).length + placeFiction(store).length + placeShips(store).length > 0) renderDemand.request();
       } finally {
         placing = false;
       }

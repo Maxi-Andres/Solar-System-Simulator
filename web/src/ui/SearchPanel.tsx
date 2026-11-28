@@ -933,8 +933,13 @@ export function SearchPanel({
                   {row.detail}
                   {reason !== null && ` · ${reason}`}
                 </span>
+                {/* Under the name, not beside it: "FICTION · POSITION INVENTED" beside it left the name a few letters. */}
+                {row.fiction !== undefined && (
+                  <span style={{ display: 'block', marginTop: '0.2rem' }}>
+                    <FictionTag record={row.fiction} />
+                  </span>
+                )}
               </span>
-              {row.fiction !== undefined && <FictionTag record={row.fiction} />}
               {(result.kind === 'system' || result.kind === 'feature') && result.entry.about !== null && hasDescription(result.entry.about) && (
                 <button
                   type="button"
@@ -999,14 +1004,18 @@ function describeResult(
         record.kind === 'line'
           ? record.aliases[0]?.replace(/^Petrova line \((.*)\)$/, '$1') ?? 'Line'
           : record.kind === 'ship'
-            ? 'Starship'
-            : record.kind === 'trojan'
+            ? record.station !== undefined
+              ? 'Battle station'
+              : 'Starship'
+            : record.kind === 'star'
+              ? 'Star'
+              : record.kind === 'trojan'
               ? 'Trojan'
-              : record.kind === 'moon' && record.anchor.kind === 'fiction'
-                ? `Moon of ${fictionRecord(record.anchor.id)?.name ?? ''}`
-                : record.anchor.kind === 'overlay'
-                  ? record.anchorLine
-                  : 'Planet',
+                : record.kind === 'moon' && record.anchor.kind === 'fiction'
+                  ? `Moon of ${fictionRecord(record.anchor.id)?.name ?? ''}`
+                  : record.anchor.kind === 'overlay'
+                    ? record.anchorLine
+                    : 'Planet',
         `${record.work.title} (${record.work.year})`,
       ].join(' · '),
       fiction: record,

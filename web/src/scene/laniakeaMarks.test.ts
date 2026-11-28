@@ -192,3 +192,18 @@ describe('MarkState', () => {
     }
   });
 });
+
+describe('a galaxy seen from inside', () => {
+  it('draws no light of its own within its optical edge, all of it past twice that, smooth between', async () => {
+    const { outsideShare, INSIDE_GONE, INSIDE_WHOLE } = await import('./Laniakea.tsx');
+    const h = 9_115; // ESO 107-11's half-light radius, pc
+    expect(outsideShare(0, h)).toBe(0);
+    // Yavin, 32,000 light years (9.8 kpc) from its centre: inside.
+    expect(outsideShare(9_800, h)).toBe(0);
+    expect(outsideShare(INSIDE_GONE * h, h)).toBe(0);
+    expect(outsideShare(INSIDE_WHOLE * h, h)).toBe(1);
+    expect(outsideShare(1e9, h)).toBe(1);
+    const mid = outsideShare(((INSIDE_GONE + INSIDE_WHOLE) / 2) * h, h);
+    expect(mid).toBeCloseTo(0.5, 12);
+  });
+});

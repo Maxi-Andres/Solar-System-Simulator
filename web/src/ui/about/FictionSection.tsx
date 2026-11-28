@@ -83,12 +83,19 @@ export const fictionSection: AboutSection = {
         </Item>
         <Item title="Position invented">
           For a thing the canon gives no place at all, one is made up from its name, the same in every visit,
-          and its label says <Strong>POSITION INVENTED</Strong>.
+          and its label says <Strong>POSITION INVENTED</Strong>. Star Wars names no galaxy, so its galaxy is a real
+          one picked by a rule and a seed — ESO 107-11, an Sc spiral 480 million light years away, as wide as the
+          canon’s 120,000 light years — and its systems sit at their squares of the canon’s own galaxy map laid
+          on it: Yavin at P-6, Endor at H-16.
         </Item>
       </Items>
       <Prose>
-        The looks are drawn here, procedurally, from what each story describes: no film’s model, texture or
-        artwork is used. A world is lit by its own star, as the real planets of other stars are.
+        The worlds are drawn here, procedurally, from what each story describes: no studio’s model, texture or
+        artwork is used. Three ships are models given to the project: the Hail Mary, a fan-made model of the
+        film’s ship; the Death Star, SebastianSosnowski’s “Death Star - Star Wars” (Sketchfab, CC BY-NC-ND 4.0),
+        used unchanged; and the second Death Star, N8’s “Death Star II” (Sketchfab, CC BY 4.0), adapted — its
+        darkest materials lightened, its textures re-encoded. Each is lit by its own star, as the real planets of
+        other stars are.
       </Prose>
 
       <Sub section="fiction" id="works">

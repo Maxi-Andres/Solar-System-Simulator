@@ -15,12 +15,12 @@ export { LOW_DETAIL_BELOW, SHADOW_MAP_SIZE, SHADOWS_ABOVE } from './shipRig.ts';
  * **The file** (web/public/models/fiction/hail-mary.glb) was built from the 693,225-triangle
  * source by a script kept outside the repository: node transforms baked in; turned so the long
  * axis is +z, bow forward, stern at z = 0, in metres, 40 m long; welded on position; each part
- * simplified with meshoptimizer to an absolute error -- 5 cm for the full model, 80 cm for the
- * silhouette -- with the seams between materials locked so panels cannot crack, components
+ * simplified with meshoptimizer to an absolute error -- 3 mm for the full model, 5 cm for the
+ * silhouette (2026-11-27; it was 1.5 cm, which lost too much) -- with the seams between materials locked so panels cannot crack, components
  * smaller than the error pruned, and the source's own normals carried onto the simplified
  * vertices (split at 35 degree creases where it has none), so a cylinder of a dozen faces still
  * shades as round; ambient occlusion baked into COLOR_0; positions and normals quantised and
- * meshopt-compressed. 45,835 triangles full, 5,780 for the silhouette, 552 KB.
+ * meshopt-compressed. 290,696 triangles full, 16,356 for the silhouette, 2.8 MB.
  *
  * **It is drawn with our ship shader** (shipMaterial.ts), not the file's materials: each of
  * the model's materials is mapped to one of our finishes by its colour, metalness and

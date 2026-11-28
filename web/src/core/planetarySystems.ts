@@ -266,6 +266,15 @@ export function registerPlanetarySystem(system: PlanetarySystem, host: BodyId, t
   }
 }
 
+/**
+ * The direction from the Sun to a star body no catalogue holds -- a star of the fiction's own
+ * (fictionBodies.ts placeFictionStars) -- so its worlds' orbits are laid out against it, as an
+ * Archive host's are.
+ */
+export function registerStarDirection(host: BodyId, toward: Vec3): void {
+  registeredDirections.set(host, toward);
+}
+
 /** A registered system by key, with its star's body id; null for none. */
 export function registeredSystem(key: string): { readonly system: PlanetarySystem; readonly host: BodyId } | null {
   return registered.get(key) ?? null;

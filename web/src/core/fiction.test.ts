@@ -405,7 +405,9 @@ describe('invented positions', () => {
   it('is said on the tag of a thing placed so, and not on one the canon places', () => {
     expect(fictionTag(record('canon'))).toBe('FICTION');
     expect(fictionTag(record('invented'))).toBe('FICTION · POSITION INVENTED');
-    // No record uses it yet.
-    expect(FICTION.filter((r) => r.position === 'invented')).toEqual([]);
+    // Only Star Wars', whose galaxy the canon never places: every one of them.
+    const invented = FICTION.filter((r) => r.position === 'invented');
+    expect(invented.map((r) => r.id).sort()).toEqual(['endor', 'forest-moon-of-endor', 'yavin-4', 'yavin-prime']);
+    expect(invented.every((r) => r.work.title === 'Star Wars')).toBe(true);
   });
 });

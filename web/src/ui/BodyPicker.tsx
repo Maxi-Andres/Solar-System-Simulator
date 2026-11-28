@@ -11,7 +11,8 @@ import {
   inAlphaCen,
   type AlphaCenKey,
 } from '../core/alphaCenBodies.ts';
-import { fictionEntryOfBody, fictionOf, fictionShipOf, realAnchorOf } from '../core/fiction.ts';
+import { fictionEntryOfBody, fictionOf, fictionShipOf, inFictionGalaxy, realAnchorOf } from '../core/fiction.ts';
+import { STAR_WARS_GALAXY } from '../core/starWars.ts';
 import { FictionTag } from './FictionTag.tsx';
 import { allPlanetarySystems, planetarySystemOf } from '../core/planetarySystems.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf, type BlackHoleSystem } from '../core/blackHoles.ts';
@@ -231,6 +232,10 @@ export function crumbMenuFor(body: BodyDefinition): CrumbMenu {
   if (blackHoleSystemOf(body.id) !== null) {
     return 'black-hole';
   }
+  // A body of a fictional galaxy (Star Wars'): its crumbs are its own, above it (core/fiction.ts).
+  if (inFictionGalaxy(body.id)) {
+    return 'none';
+  }
   // A fictional ship goes between systems: listed in none, found by search (core/hailMary.ts).
   if (fictionShipOf(body.id) !== null) {
     return 'none';
@@ -395,6 +400,18 @@ export function BodyPicker({
   // Another galaxy: out of the Milky Way altogether -- and beyond the Local Group, in the
   // Local Volume or in the Virgo Cluster.
   const inOtherGalaxy = focusBody.kind === 'galaxy' || focusBody.kind === 'structure';
+  // A fictional galaxy's (Star Wars', core/starWars.ts): none of our levels is above it but the
+  // observable universe; its galaxy and its star are its crumbs.
+  const fictionGalaxy = inFictionGalaxy(focus);
+  let fictionStar: BodyDefinition | null = null;
+  if (fictionGalaxy) {
+    for (let id: BodyId | null = focusBody.parent; id !== null; id = store.body(id).parent) {
+      if (store.body(id).kind === 'star') {
+        fictionStar = store.body(id);
+        break;
+      }
+    }
+  }
   const region = inOtherGalaxy ? volumeRegion(galaxyOf(focus)) : null;
   // A galaxy or a structure of Laniakea's catalogue: in Laniakea, or beyond it (see the header).
   const deep = focusBody.kind === 'structure' || galaxyOf(focus)?.laniakeaIndex !== undefined;
@@ -592,7 +609,26 @@ export function BodyPicker({
           <Caret open={universeOpen} />
         </button>
         {!endsAt(0) && <Separator />}
-        {recordHolder === null && crumbShown(1, selectedLevel) && (
+        {fictionGalaxy && (
+          <>
+            <span
+              title={`Star Wars’ galaxy, laid on the real ${STAR_WARS_GALAXY.name}: invented, the canon names no galaxy`}
+              style={{ ...crumbStyle, color: OUTER_CRUMB, cursor: 'default' }}
+            >
+              Star Wars Galaxy
+            </span>
+            <Separator />
+          </>
+        )}
+        {fictionStar !== null && fictionStar.id !== parent?.id && (
+          <>
+            <Crumb onClick={() => onFocus(fictionStar.id)}>
+              <CasedName name={fictionStar.name} />
+            </Crumb>
+            <Separator />
+          </>
+        )}
+        {!fictionGalaxy && recordHolder === null && crumbShown(1, selectedLevel) && (
           <>
             <Crumb
               onClick={showNearby ? toNearbyUniverse : toLaniakea}
@@ -615,7 +651,7 @@ export function BodyPicker({
             {!endsAt(1) && <Separator />}
           </>
         )}
-        {!deep && crumbShown(2, selectedLevel) && (
+        {!fictionGalaxy && !deep && crumbShown(2, selectedLevel) && (
           <>
             <Crumb
               onClick={region === 'virgo' ? toVirgo : toLocalVolume}
@@ -638,7 +674,7 @@ export function BodyPicker({
             {!endsAt(2) && <Separator />}
           </>
         )}
-        {region === null && !deep && crumbShown(3, selectedLevel) && (
+        {!fictionGalaxy && region === null && !deep && crumbShown(3, selectedLevel) && (
           <>
             <Crumb onClick={toLocalGroup} outer current={selectedLevel === 'local-group'}>
               Local Group
@@ -657,7 +693,7 @@ export function BodyPicker({
             {!endsAt(3) && <Separator />}
           </>
         )}
-        {!inOtherGalaxy && crumbShown(4, selectedLevel) && (
+        {!fictionGalaxy && !inOtherGalaxy && crumbShown(4, selectedLevel) && (
           <>
             <Crumb onClick={toGalaxy} outer current={selectedLevel === 'milky-way'}>
               Milky Way
@@ -676,7 +712,7 @@ export function BodyPicker({
             {!endsAt(4) && <Separator />}
           </>
         )}
-        {blackHoleSystem === null && !inGalaxy && !inOtherGalaxy && crumbShown(5, selectedLevel) && (
+        {!fictionGalaxy && blackHoleSystem === null && !inGalaxy && !inOtherGalaxy && crumbShown(5, selectedLevel) && (
           <>
             <Crumb onClick={toNeighbourhood} outer current={selectedLevel === 'solar-neighbourhood'}>
               Solar Neighbourhood

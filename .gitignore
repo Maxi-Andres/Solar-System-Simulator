@@ -23,3 +23,6 @@ __pycache__/
 
 # The photo library, downloaded by tools/src/photos/fetchPhotos.ts (pnpm -C tools fetch:photos).
 tools/.cache/
+
+# Over GitHub's 100 MB per-file limit: kept locally only (models-source/death-star-ii/SOURCE.md).
+models-source/death-star-ii/death-star-ii-textures-4k.glb

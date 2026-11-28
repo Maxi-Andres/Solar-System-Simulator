@@ -11,6 +11,7 @@ import {
   type FictionShipRecord,
 } from './fiction.ts';
 import { PLANETARY_SYSTEMS, towardStar } from './planetarySystems.ts';
+import { J2000_JD } from './time.ts';
 import { add, cross, dot, length, normalize, scale, subtract, type StateVector, type Vec3 } from './vec3.ts';
 
 /**
@@ -258,9 +259,126 @@ export class ParkedShip {
   }
 }
 
-/** The voyages placed, by the ship's body id; and the ships parked beside them. */
+/**
+ * A station about one of the fiction's worlds (fiction.ts FictionStation): the Death Stars.
+ *
+ * - **orbit**: a circle about the world's centre, in the plane its aim (a moon of that world) goes
+ *   round in, at the speed the world's mass gives, starting `phase` from the aim's direction at
+ *   J2000.
+ * - **hold**: still over one place on the world, as the canon says the shield generator's field
+ *   held the second Death Star -- not an orbit. The world does not turn here (fictional worlds are
+ *   drawn unspun), so "over one place" is drawn as over the point under its star, at noon: lit.
+ *   Its weapon is turned straight out from the world, as in the film it fires on the fleet.
+ *
+ * Its state is about the world (the frame tree), never the Sun's: Star Wars' galaxy is 4.5e21 km
+ * away, where a double resolves only about a million kilometres.
+ */
+export class Station {
+  readonly #radiusKm: number;
+  readonly #rate: number;
+  readonly #phaseRad: number;
+  readonly #e1: Vec3;
+  readonly #e2: Vec3;
+  /** The last instant it was posed at: what its framing is worked out for. */
+  #lastJd = J2000_JD;
+
+  constructor(
+    readonly record: FictionShipRecord,
+    readonly id: BodyId,
+    readonly world: BodyId,
+    /** What its weapon is turned to; null, out from the world. */
+    readonly aim: BodyId | null,
+    readonly mode: 'orbit' | 'hold',
+    radiusKm: number,
+    gmWorld: number,
+    phaseDeg: number,
+    readonly store: EphemerisStore,
+  ) {
+    this.#radiusKm = radiusKm;
+    this.#rate = gmWorld > 0 ? Math.sqrt(gmWorld / radiusKm ** 3) : 0;
+    this.#phaseRad = (phaseDeg * Math.PI) / 180;
+    // The plane: the aim's orbit about the world, if it goes round it; else the world's own orbit.
+    const about =
+      aim !== null && aim !== world
+        ? store.stateRelativeTo(aim, world, J2000_JD)
+        : store.stateRelativeTo(world, store.body(world).parent ?? 'sun', J2000_JD);
+    const r = about === null ? { x: 1, y: 0, z: 0 } : normalize(about.position);
+    const pole = about === null ? { x: 0, y: 0, z: 1 } : normalize(cross(about.position, about.velocity));
+    this.#e1 = r;
+    this.#e2 = cross(pole, r);
+  }
+
+  /** Its position and velocity about the world at `jd`. */
+  offset(jd: number): StateVector {
+    if (this.mode === 'hold') {
+      const star = this.#star();
+      const toward = star === null ? null : this.store.stateRelativeTo(star, this.world, jd);
+      const up = toward === null ? this.#e1 : normalize(toward.position);
+      return { position: scale(up, this.#radiusKm), velocity: { x: 0, y: 0, z: 0 } };
+    }
+    const angle = this.#phaseRad + this.#rate * (jd - J2000_JD) * DAY_S;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const speed = this.#radiusKm * this.#rate;
+    return {
+      position: add(scale(this.#e1, this.#radiusKm * c), scale(this.#e2, this.#radiusKm * s)),
+      velocity: add(scale(this.#e1, -speed * s), scale(this.#e2, speed * c)),
+    };
+  }
+
+  /** Its first view (stationFraming). */
+  framing(): { readonly km: number; readonly view: { direction: [number, number, number]; up: [number, number, number] } } {
+    const pole = cross(this.#e1, this.#e2);
+    const star = this.#star();
+    const toward = star === null ? null : this.store.stateRelativeTo(star, this.id, this.#lastJd);
+    const sun = toward === null ? this.#e1 : normalize(toward.position);
+    const side = normalize(cross(pole, sun));
+    const turn = ((this.mode === 'hold' ? 70 : 35) * Math.PI) / 180;
+    const d = add(scale(sun, Math.cos(turn)), scale(side, Math.sin(turn)));
+    const radiusKm = (valueOf(this.record.lengthM) ?? 1000) / 2000;
+    return { km: 6 * radiusKm, view: { direction: [d.x, d.y, d.z], up: [pole.x, pole.y, pole.z] } };
+  }
+
+  /** The star its world goes round in the end: up the parents to the first star. */
+  #star(): BodyId | null {
+    for (let id = this.store.body(this.world).parent; id !== null; id = this.store.body(id).parent) {
+      if (this.store.body(id).kind === 'star') return id;
+    }
+    return null;
+  }
+
+  /** Its weapon turned to its aim, or out from its world, into `out` (the model's +z is the dish's axis); it does not spin. */
+  pose(jd: number, out: { x: number; y: number; z: number }): { readonly centrifuge: boolean } {
+    this.#lastJd = jd;
+    const toward = this.aim === null ? null : this.store.stateRelativeTo(this.aim, this.id, jd);
+    const d = toward === null ? this.offset(jd).position : toward.position;
+    const n = Math.hypot(d.x, d.y, d.z) || 1;
+    out.x = d.x / n;
+    out.y = d.y / n;
+    out.z = d.z / n;
+    return UNDER_THRUST;
+  }
+}
+
+/**
+ * Where a station is first seen from: its lit side -- toward its star, turned about its world's
+ * orbital pole so the terminator shows its relief: 35 degrees for one in orbit, 70 for one held
+ * over its world's noon, which would otherwise stand in front of the world's whole lit face -- six
+ * of its radii out, its world's pole up. Null for anything else.
+ */
+export function stationFraming(id: BodyId): { readonly km: number; readonly view: { direction: [number, number, number]; up: [number, number, number] } } | null {
+  const station = stations.get(id);
+  return station === undefined ? null : station.framing();
+}
+
+/** The voyages placed, by the ship's body id; the ships parked beside them; the stations. */
 const voyages = new Map<BodyId, Voyage>();
 const parkedShips = new Map<BodyId, ParkedShip>();
+const stations = new Map<BodyId, Station>();
+
+export function stationOf(id: BodyId): Station | null {
+  return stations.get(id) ?? null;
+}
 
 export function voyageOf(id: BodyId): Voyage | null {
   return voyages.get(id) ?? null;
@@ -412,6 +530,36 @@ export function placeShips(store: EphemerisStore, ships: readonly FictionShipRec
       // Not before it came: its trip there is not drawn.
       { exact: true, coverage: { startJd: parked.fromJd, stopJd: Number.POSITIVE_INFINITY } },
     );
+    added.push(id);
+  }
+  // Then the stations, once their worlds are bodies.
+  for (const record of ships) {
+    const id = fictionBodyId(record.id);
+    const { station } = record;
+    if (station === undefined || store.isPropagatedBody(id)) continue;
+    const world = fictionBodyId(station.about);
+    const aim = station.aim === undefined ? null : fictionBodyId(station.aim);
+    const radius = valueOf(station.radiusKm);
+    if (radius === null || !store.isPropagatedBody(world) || (aim !== null && !store.isPropagatedBody(aim))) continue;
+    const placed = new Station(
+      record,
+      id,
+      world,
+      aim,
+      station.mode,
+      radius,
+      store.body(world).gmBodyOnlyKm3S2,
+      station.phaseDeg === undefined ? 0 : (valueOf(station.phaseDeg) ?? 0),
+      store,
+    );
+    stations.set(id, placed);
+    store.addPropagatedBody({ ...shipBodyDefinition(record), parent: world }, null, (jd) => placed.offset(jd), {
+      exact: true,
+      aboutParent: true,
+      // There at every instant: a craft with no span is taken as nowhere (App.tsx steps the
+      // camera back from it), and the canon's "long time ago" gives no dates to cut it at.
+      coverage: { startJd: Number.NEGATIVE_INFINITY, stopJd: Number.POSITIVE_INFINITY },
+    });
     added.push(id);
   }
   return added;

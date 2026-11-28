@@ -157,6 +157,24 @@ export const LANIAKEA_FROM_LY = 30e6;
 export const VOLUMES_MOST = 192;
 
 /**
+ * From inside a galaxy, its light is not drawn: there a galaxy is its stars, one by one, and none of
+ * a catalogue galaxy's are -- summed as a glow, the disc seen edge-on from within fills the whole sky
+ * a flat grey (Maxi, 2026-11-27, at the Death Stars in ESO 107-11: "no es un foco, se tendría que
+ * atenuar"). As the Milky Way's model is left out round the Sun. Gone with the camera within
+ * INSIDE_GONE half-light radii of its centre -- about its optical edge, R25, for a disc -- whole past
+ * INSIDE_WHOLE, smooth between. NEAR_SHARE still takes out what is round the camera from farther.
+ */
+export const INSIDE_GONE = 2;
+export const INSIDE_WHOLE = 4;
+
+/** The share of a galaxy's volume drawn with the camera `distancePc` from its centre (INSIDE_GONE). */
+export function outsideShare(distancePc: number, halfLightPc: number): number {
+  const t = (distancePc / halfLightPc - INSIDE_GONE) / (INSIDE_WHOLE - INSIDE_GONE);
+  const x = Math.min(Math.max(t, 0), 1);
+  return x * x * (3 - 2 * x);
+}
+
+/**
  * An outline's opacity where its surface is seen edge-on, and through its face: a basin's.
  * Seen face-on a surface is almost nothing, so where a basin wraps round the camera it does
  * not fill the frame; its rim is the line it draws.
@@ -1604,7 +1622,7 @@ export function Laniakea({ source, names, store, clock, focus, visible, showMark
       const ry = fixed.centre.y - cameraPc.y;
       const rz = fixed.centre.z - cameraPc.z;
       const distance = Math.hypot(rx, ry, rz);
-      const share = 1 - pointShare((fixed.halfLightPc / distance) * pixelsPerRadian);
+      const share = (1 - pointShare((fixed.halfLightPc / distance) * pixelsPerRadian)) * outsideShare(distance, fixed.halfLightPc);
       if (share <= 0) continue;
       const { u, v, w } = fixed.axes;
       const n = counts[fixed.kind];

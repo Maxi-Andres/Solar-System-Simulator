@@ -1,7 +1,7 @@
 {
   "name": "hail-mary-model-build",
   "private": true,
-  "description": "Builds web/public/models/fiction/hail-mary.glb from project-hail-mary.glb: node build.mjs project-hail-mary.glb <outDir> 0.015 0.12",
+  "description": "Builds web/public/models/fiction/hail-mary.glb from project-hail-mary.glb: node build.mjs project-hail-mary.glb <outDir> 0.003 0.05",
   "type": "module",
   "dependencies": {
     "@gltf-transform/core": "^4.5.1",

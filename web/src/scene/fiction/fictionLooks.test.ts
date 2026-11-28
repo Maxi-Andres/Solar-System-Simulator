@@ -511,7 +511,8 @@ describe('the Hail Mary', () => {
 
   it('ships the model compressed, simplified, and laid out as the code expects', async () => {
     const file = await readFile(join(import.meta.dirname, '../../../public/models', HAIL_MARY_MODEL));
-    expect(file.byteLength).toBeLessThan(1.5e6);
+    // 2026-11-27 (Maxi: simplified too far): 3 mm error, not 1.5 cm.
+    expect(file.byteLength).toBeLessThan(3.5e6);
     // The GLB's JSON chunk: nodes, meshes, accessors -- no need to decode the buffers for these.
     const jsonLength = file.readUInt32LE(12);
     const gltf = JSON.parse(file.subarray(20, 20 + jsonLength).toString('utf8')) as {
@@ -527,9 +528,9 @@ describe('the Hail Mary', () => {
     };
     const full = ['Main Ship', 'Habitat', 'Main Habitat Lines'].reduce((sum, n) => sum + trianglesOf(n), 0);
     const low = ['Main Ship LOW', 'Habitat LOW', 'Main Habitat Lines LOW'].reduce((sum, n) => sum + trianglesOf(n), 0);
-    expect(full).toBeGreaterThan(30000);
-    expect(full).toBeLessThan(60000);
-    expect(low).toBeLessThan(7000);
+    expect(full).toBeGreaterThan(250000);
+    expect(full).toBeLessThan(350000);
+    expect(low).toBeLessThan(20000);
   });
 
   it('frees what it made', async () => {

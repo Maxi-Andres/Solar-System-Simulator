@@ -3,7 +3,7 @@ import type { BodyDefinition, BodyId } from '@sss/tools/types';
 import { inAlphaCen } from '../core/alphaCenBodies.ts';
 import { blackHoleSystemOf } from '../core/blackHoles.ts';
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
-import { fictionShipOf } from '../core/fiction.ts';
+import { fictionShipOf, inFictionGalaxy } from '../core/fiction.ts';
 import { galaxyOf } from '../core/localGroup.ts';
 import { volumeRegion } from '../core/localVolume.ts';
 import { planetarySystemOf, systemFramingKm } from '../core/planetarySystems.ts';
@@ -73,7 +73,9 @@ function ownFramingKm(body: BodyDefinition): number {
  */
 export function focusLadder(store: Pick<EphemerisStore, 'body'>, focus: BodyId): readonly Rung[] {
   const body = store.body(focus);
-  if (recordHolderOf(focus) !== null) {
+  // A record-holder; and a fictional galaxy's body (Star Wars'), whose only level above it is
+  // the observable universe -- none of ours is centred near it.
+  if (recordHolderOf(focus) !== null || inFictionGalaxy(focus)) {
     return ladder(ownFramingKm(body), outerFrom('observable-universe'));
   }
   const galaxy = galaxyOf(focus);

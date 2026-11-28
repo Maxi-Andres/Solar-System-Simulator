@@ -46,6 +46,7 @@ import { ensureMeteorShowers } from './core/meteorShowers.ts';
 import { ensureInterstellarClouds } from './core/interstellarClouds.ts';
 import { julianDayToDate, tdbToUtc } from './core/time.ts';
 import { ensureLandingSites, landingSiteFraming } from './core/landingSites.ts';
+import { stationFraming } from './core/hailMary.ts';
 import { FICTION_COLOR, FICTION_LAYER, fictionEntryOfBody, fictionTag, overlayOf } from './core/fiction.ts';
 import { ensureFictionStars } from './core/fictionBodies.ts';
 import { ensurePulsarBody, pulsarFramingKm } from './core/pulsars.ts';
@@ -129,6 +130,11 @@ setFocusFraming((id) => {
   const site = landingSiteFraming(id);
   if (site !== null) {
     return site;
+  }
+  // A Death Star from its lit side, its star behind the camera (core/hailMary.ts Station).
+  const station = stationFraming(id);
+  if (station !== null) {
+    return station;
   }
   // A Lagrange point or a boundary's mark, from far enough to see what it is about (regions.ts).
   const region = regionOf(id);
@@ -854,7 +860,9 @@ export function App() {
   const uiVisible = layers.userInterface;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    // Clipped, not hidden: names of bodies off the screen are placed past its edge (LabelProjector),
+    // and a hidden overflow is still a scroll container -- focusing one scrolled the whole app aside.
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'clip' }}>
       <SolarSystemCanvas
         store={store}
         stars={stars}

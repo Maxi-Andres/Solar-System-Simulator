@@ -6,6 +6,7 @@ import { BARREN, ICY, NO_HAZE } from './looks/airless.ts';
 import { AMMONIA_HAZE, AMMONIA_HAZE_AIR } from './looks/ammoniaHaze.ts';
 import { ARID, ARID_AIR } from './looks/arid.ts';
 import { createBlipA } from './looks/blipA.ts';
+import { createDeathStar } from './looks/deathStar.ts';
 import { DENSE_HAZE, DENSE_HAZE_AIR } from './looks/denseHaze.ts';
 import { createHailMary, type Planetshine, type ShipMode } from './looks/hailMary.ts';
 import { atmosphereHalo } from './looks/atmosphereShell.ts';
@@ -148,6 +149,7 @@ export function createFictionWorldExtras(look: WorldLook, material: THREE.Materi
 /** A fictional object that is not a world: a monolith, Rama, a wormhole's mouth. */
 export function createFictionObject(look: Exclude<FictionLook, { kind: 'world' }>): FictionObject {
   if (look.kind === 'ship') {
+    if (look.design === 'death-star' || look.design === 'death-star-ii') return createDeathStar(look.design);
     return look.design === 'blip-a' ? createBlipA() : createHailMary();
   }
   const geometry =

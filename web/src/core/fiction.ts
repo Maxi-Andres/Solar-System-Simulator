@@ -2,6 +2,8 @@ import type { BodyId } from '@sss/tools/types';
 
 import type { FictionLook, WorldPalette } from './fictionLook.ts';
 import { normalizeName } from './normalizeName.ts';
+import { idSeed, seededRandom } from './seeded.ts';
+import { STAR_WARS_STARS, STAR_WARS_STATIONS, STAR_WARS_WORLDS } from './starWars.ts';
 
 /**
  * Fiction (Phase F): worlds and things from novels and films, placed where their canon puts
@@ -38,6 +40,11 @@ export const FICTION_LAYER = 'fiction';
  */
 export const PENDING_RESEARCH = 'Stand-in until the canon is read.';
 
+/** Invented for good, not pending: the canon is read, and silent on it. */
+export function invented<T>(value: T, why: string): FictionValue<T> {
+  return { value, invented: true, why };
+}
+
 /** A stand-in pending the research: drawn, and shown as such. */
 export function standIn<T>(value: T, why: string = PENDING_RESEARCH): FictionValue<T> {
   return { value, invented: true, why, pending: true };
@@ -66,10 +73,6 @@ export type FictionValue<T = number> =
   | { readonly value: T; readonly invented: true; readonly why: string; readonly pending?: true }
   | { readonly silent: true };
 
-/** Invented for good, not pending: the canon is read, and silent on it. */
-function invented<T>(value: T, why: string): FictionValue<T> {
-  return { value, invented: true, why };
-}
 
 
 /** The value to draw with, or null where the canon is silent and nothing was invented. */
@@ -132,7 +135,12 @@ export type FictionAnchor =
    * beside it (FICTION_OVERLAYS): with the Fiction layer on, the body's label, look and panel add
    * the fiction; off, nothing of the body changes. No body of its own, and the real data untouched.
    */
-  | { readonly kind: 'overlay'; readonly body: BodyId };
+  | { readonly kind: 'overlay'; readonly body: BodyId }
+  /**
+   * A star of the fiction's own (FictionStarRecord), by its id: Yavin's sun, in a galaxy the canon
+   * never relates to ours -- placed by starWars.ts, made a body with the Fiction layer.
+   */
+  | { readonly kind: 'fictionStar'; readonly id: string };
 
 /**
  * Where a fictional thing goes round its anchor: the elements exoplanets.ts draws a real planet
@@ -205,6 +213,22 @@ export interface FictionRecord extends FictionBase {
   readonly facts: readonly FictionFact[];
   /** One line: what is real about the anchor, and what is not. */
   readonly realityCheck: string;
+}
+
+/**
+ * A star of the fiction's own: one the canon names and no catalogue has, because its galaxy is not
+ * ours (starWars.ts). Made a body with the Fiction layer -- a star like any other, its disc of its
+ * radius in its temperature's colour -- at its square of the canon's map, laid on a real galaxy.
+ */
+export interface FictionStarRecord extends FictionBase {
+  readonly kind: 'star';
+  /** Its square on the canon's map of its galaxy ("P-6"). */
+  readonly mapSquare: FictionValue<string>;
+  readonly temperatureK: FictionValue;
+  readonly radiusSun: FictionValue;
+  readonly massSun: FictionValue;
+  /** A companion: held this far from the star it is with, its own slow orbit not drawn. */
+  readonly companionOf?: { readonly id: string; readonly separationAu: FictionValue };
 }
 
 const AVATAR: FictionWork = { title: 'Avatar', creator: 'James Cameron', year: 2009, medium: 'film' };
@@ -786,7 +810,10 @@ const VULCAN: FictionRecord = {
 };
 
 /** The records: each value the canon's with its source, or invented with why. */
-export const FICTION: readonly FictionRecord[] = [...AVATAR_WORLDS, ERID, VULCAN];
+export const FICTION: readonly FictionRecord[] = [...AVATAR_WORLDS, ERID, VULCAN, ...STAR_WARS_WORLDS];
+
+/** The fiction's own stars (FictionStarRecord): Star Wars', whose galaxy is not ours. */
+export const FICTION_STARS: readonly FictionStarRecord[] = STAR_WARS_STARS;
 
 /** The worlds drawn over real bodies (FictionAnchor 'overlay'). */
 export const FICTION_OVERLAYS: readonly FictionRecord[] = [ADRIAN];
@@ -823,6 +850,26 @@ export interface FictionParking {
   readonly yearsBefore: FictionValue;
 }
 
+/**
+ * A station about one of the fiction's worlds (the Death Stars): on a circle about its centre, or
+ * held still over one place on it -- the second Death Star, kept there by its moon's shield
+ * generator's field rather than by an orbit.
+ */
+export interface FictionStation {
+  /** The world, by its record's id. */
+  readonly about: string;
+  readonly mode: 'orbit' | 'hold';
+  /** From the world's centre, km. */
+  readonly radiusKm: FictionValue;
+  /** Where along the circle at J2000, degrees from the aim's direction, for an orbit; for a hold, nothing. */
+  readonly phaseDeg?: FictionValue;
+  /**
+   * The world its main weapon is turned to, by its record's id; absent, turned straight out from
+   * the world it is held over. The drawing's choice either way, said in the panel.
+   */
+  readonly aim?: string;
+}
+
 interface FictionShipBase extends FictionBase {
   readonly kind: 'ship';
   readonly look: Extract<FictionLook, { kind: 'ship' }>;
@@ -834,12 +881,14 @@ interface FictionShipBase extends FictionBase {
  * (the Hail Mary), or parked beside one's orbit (the Blip-A).
  */
 export type FictionShipRecord =
-  | (FictionShipBase & { readonly voyage: FictionVoyage; readonly parked?: undefined })
-  | (FictionShipBase & { readonly parked: FictionParking; readonly voyage?: undefined });
+  | (FictionShipBase & { readonly voyage: FictionVoyage; readonly parked?: undefined; readonly station?: undefined })
+  | (FictionShipBase & { readonly parked: FictionParking; readonly voyage?: undefined; readonly station?: undefined })
+  | (FictionShipBase & { readonly station: FictionStation; readonly voyage?: undefined; readonly parked?: undefined });
 
 /** The world a ship goes round in the end: its voyage's destination, or the one its companion's voyage ends at. */
 export function shipWorld(ship: FictionShipRecord): BodyId | null {
   if (ship.voyage !== undefined) return ship.voyage.to;
+  if (ship.station !== undefined) return fictionBodyId(ship.station.about);
   const beside = FICTION_SHIPS.find((other) => other.id === ship.parked.beside);
   return beside?.voyage?.to ?? null;
 }
@@ -917,7 +966,7 @@ const BLIP_A: FictionShipRecord = {
 };
 
 /** The ships, voyaging ones first: a parked one is placed by its companion's orbit. */
-export const FICTION_SHIPS: readonly FictionShipRecord[] = [HAIL_MARY, BLIP_A];
+export const FICTION_SHIPS: readonly FictionShipRecord[] = [HAIL_MARY, BLIP_A, ...STAR_WARS_STATIONS];
 
 /**
  * A line of something fictional from a star to one of its planets: the Petrova lines, Astrophage
@@ -964,9 +1013,15 @@ export const FICTION_LINES: readonly FictionLineRecord[] = [
 ];
 
 /** Every fictional thing: the worlds, the overlays, the ships, the lines. */
-export type FictionEntry = FictionRecord | FictionShipRecord | FictionLineRecord;
+export type FictionEntry = FictionRecord | FictionShipRecord | FictionLineRecord | FictionStarRecord;
 
-export const FICTION_ENTRIES: readonly FictionEntry[] = [...FICTION, ...FICTION_OVERLAYS, ...FICTION_SHIPS, ...FICTION_LINES];
+export const FICTION_ENTRIES: readonly FictionEntry[] = [
+  ...FICTION,
+  ...FICTION_OVERLAYS,
+  ...FICTION_SHIPS,
+  ...FICTION_LINES,
+  ...FICTION_STARS,
+];
 
 const ENTRY_BY_ID = new Map(FICTION_ENTRIES.map((entry) => [entry.id, entry] as const));
 
@@ -979,8 +1034,21 @@ export function fictionEntry(id: string): FictionEntry | null {
 export function valuesOfEntry(entry: FictionEntry): FictionValue<unknown>[] {
   const facts = entry.facts.map((fact) => fact.value);
   if (entry.kind === 'line') return facts;
+  if (entry.kind === 'star') {
+    return [
+      entry.temperatureK,
+      entry.radiusSun,
+      entry.massSun,
+      entry.mapSquare,
+      ...(entry.companionOf === undefined ? [] : [entry.companionOf.separationAu]),
+      ...facts,
+    ];
+  }
   if (entry.kind === 'ship') {
-    const { voyage } = entry;
+    const { voyage, station } = entry;
+    if (station !== undefined) {
+      return [entry.lengthM, station.radiusKm, ...(station.phaseDeg === undefined ? [] : [station.phaseDeg]), ...facts];
+    }
     if (voyage === undefined) return [entry.lengthM, entry.parked.aheadKm, entry.parked.yearsBefore, ...facts];
     return [
       entry.lengthM,
@@ -1022,7 +1090,7 @@ export function fictionShipOf(id: BodyId): FictionShipRecord | null {
 /** The body a fictional entry is found at: its own, or the real body it is drawn over or along. */
 export function fictionTargetId(entry: FictionEntry): BodyId {
   if (entry.kind === 'line') return entry.planet;
-  if (entry.kind !== 'ship' && entry.anchor.kind === 'overlay') return entry.anchor.body;
+  if (entry.kind !== 'ship' && entry.kind !== 'star' && entry.anchor.kind === 'overlay') return entry.anchor.body;
   return fictionBodyId(entry.id);
 }
 
@@ -1059,13 +1127,20 @@ export function fictionOf(id: BodyId): FictionRecord | null {
   return BY_BODY.get(id) ?? null;
 }
 
-export function isFictionBody(id: BodyId): boolean {
-  return BY_BODY.has(id) || SHIP_BY_BODY.has(id);
+const STAR_BY_BODY = new Map(FICTION_STARS.map((star) => [fictionBodyId(star.id), star] as const));
+
+/** The fiction's own star a body is, or null. */
+export function fictionStarOf(id: BodyId): FictionStarRecord | null {
+  return STAR_BY_BODY.get(id) ?? null;
 }
 
-/** The entry a fictional body is -- a world or a ship -- or null for every real one. */
-export function fictionEntryOfBody(id: BodyId): FictionRecord | FictionShipRecord | null {
-  return BY_BODY.get(id) ?? SHIP_BY_BODY.get(id) ?? null;
+export function isFictionBody(id: BodyId): boolean {
+  return BY_BODY.has(id) || SHIP_BY_BODY.has(id) || STAR_BY_BODY.has(id);
+}
+
+/** The entry a fictional body is -- a world, a ship or a star -- or null for every real one. */
+export function fictionEntryOfBody(id: BodyId): FictionRecord | FictionShipRecord | FictionStarRecord | null {
+  return BY_BODY.get(id) ?? SHIP_BY_BODY.get(id) ?? STAR_BY_BODY.get(id) ?? null;
 }
 
 /** The world's look, for a fictional body drawn as a sphere; null for any other body. */
@@ -1079,21 +1154,52 @@ export function fictionWorldLook(id: BodyId): Extract<FictionLook, { kind: 'worl
  * is Polyphemus's, Alpha Centauri A. Null for a chain of fictional anchors that never reaches a
  * real one, which fiction.test.ts rules out.
  */
-export function realAnchorOf(record: FictionRecord): Extract<FictionAnchor, { kind: 'alphaCen' | 'overlay' | 'star' }> | null {
+export function realAnchorOf(
+  record: FictionRecord,
+): Extract<FictionAnchor, { kind: 'alphaCen' | 'overlay' | 'star' | 'fictionStar' }> | null {
   let current: FictionRecord | null = record;
   for (let steps = 0; current !== null && steps <= FICTION.length; steps += 1) {
     const anchor: FictionAnchor = current.anchor;
-    if (anchor.kind === 'alphaCen' || anchor.kind === 'overlay' || anchor.kind === 'star') return anchor;
+    // A star of the fiction's own ends the chain: its galaxy, real, is where it is placed.
+    if (anchor.kind === 'alphaCen' || anchor.kind === 'overlay' || anchor.kind === 'star' || anchor.kind === 'fictionStar') return anchor;
     current = fictionRecord(anchor.kind === 'fiction' ? anchor.id : anchor.of);
   }
   return null;
 }
 
 /**
+ * The bodies of a galaxy not ours (Star Wars', starWars.ts): its stars, the worlds hung from them,
+ * the stations about those worlds. Built lazily, once.
+ */
+let otherGalaxy: ReadonlySet<BodyId> | null = null;
+
+/**
+ * Whether a body is in a fictional galaxy, not ours: then no fold of the Milky Way's, the Local
+ * Group's or the Local Volume's takes its mark or its name (markHosts.ts, LabelProjector.tsx) --
+ * from 480 million light years the Milky Way is a dot, and what is in it folds into its name,
+ * but Yavin is not in it.
+ */
+export function inFictionGalaxy(id: BodyId): boolean {
+  if (otherGalaxy === null) {
+    const worlds = FICTION.filter((record) => realAnchorOf(record)?.kind === 'fictionStar');
+    const worldIds = new Set(worlds.map((record) => record.id));
+    otherGalaxy = new Set<BodyId>([
+      ...FICTION_STARS.map((star) => fictionBodyId(star.id)),
+      ...worlds.map((record) => fictionBodyId(record.id)),
+      ...FICTION_SHIPS.filter((ship) => ship.station !== undefined && worldIds.has(ship.station.about)).map((ship) =>
+        fictionBodyId(ship.id),
+      ),
+    ]);
+  }
+  return otherGalaxy.has(id);
+}
+
+/**
  * The layer besides Fiction a fictional body needs on, as its real kind would: a planet's the
  * Planets, a moon's the Moons -- and a Trojan its planet's, the Planets (floatingOrigin.ts).
  */
-export function fictionLayerKind(record: FictionRecord | FictionShipRecord): 'planet' | 'moon' | 'spacecraft' {
+export function fictionLayerKind(record: FictionRecord | FictionShipRecord | FictionStarRecord): 'planet' | 'moon' | 'spacecraft' | 'star' {
+  if (record.kind === 'star') return 'star';
   return record.kind === 'moon' ? 'moon' : record.kind === 'ship' ? 'spacecraft' : 'planet';
 }
 
@@ -1151,29 +1257,7 @@ export function searchFiction<T extends FictionBase = FictionEntry>(
 
 // --- Invented positions -------------------------------------------------------------------
 
-/**
- * A 32-bit seed from an id (FNV-1a): the same id, the same seed, in every session and browser.
- */
-export function idSeed(id: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < id.length; i += 1) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash >>> 0;
-}
-
-/** A generator of numbers in [0, 1) from a seed (mulberry32): deterministic, and plenty for placing. */
-export function seededRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
+export { idSeed, seededRandom } from './seeded.ts';
 
 /** An orbit made up for a thing the canon gives no place. */
 export interface InventedOrbit {

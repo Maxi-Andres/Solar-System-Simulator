@@ -3,16 +3,22 @@ import type { BodyId } from '@sss/tools/types';
 import type { DistanceMode, EphemerisStore } from '../core/ephemerisStore.ts';
 import {
   FICTION_COLOR,
+  fictionBodyId,
   fictionOf,
   fictionReadingId,
+  fictionRecord,
   fictionShipOf,
+  fictionStarOf,
   valueNote,
+  valueOf,
   workLine,
   type FictionBase,
   type FictionRecord,
   type FictionShipRecord,
+  type FictionStarRecord,
   type FictionValue,
 } from '../core/fiction.ts';
+import { STAR_WARS_GALAXY } from '../core/starWars.ts';
 import { fictionOrbit } from '../core/fictionBodies.ts';
 import { C_KM_S, DAYS_PER_YEAR, lorentzFactor, parkedOf, voyageOf } from '../core/hailMary.ts';
 import { FICTION_ABOUT_NAMES, fictionAboutKey } from '../descriptions/fiction/ids.ts';
@@ -42,6 +48,7 @@ const NOTE_COLOR = {
 } as const;
 
 function formatDistance(km: number): string {
+  if (km >= 1e6 * LIGHT_YEAR_KM) return `${(km / LIGHT_YEAR_KM / 1e6).toFixed(1)} million ly`;
   if (km >= 0.05 * LIGHT_YEAR_KM) return `${(km / LIGHT_YEAR_KM).toFixed(2)} ly`;
   if (km >= 0.1 * AU_KM) return `${(km / AU_KM).toFixed(3)} AU`;
   return `${Math.round(km).toLocaleString('en-US')} km`;
@@ -68,6 +75,11 @@ export function FictionPanel({
   const ship = fictionShipOf(focus);
   if (ship !== null) {
     return <ShipPanel store={store} ship={ship} focus={focus} jd={jd} distanceMode={distanceMode} onClose={onClose} />;
+  }
+  // A star of the fiction's own: where its galaxy and the canon's map put it (core/starWars.ts).
+  const star = fictionStarOf(focus);
+  if (star !== null) {
+    return <StarPanel store={store} star={star} focus={focus} jd={jd} distanceMode={distanceMode} onClose={onClose} />;
   }
   const record = fictionOf(focus);
   if (record === null) {
@@ -99,7 +111,8 @@ export function FictionPanel({
         <Divider />
         <ValueRow label="Radius" value={record.radiusKm} format={(km) => `${Math.round(km).toLocaleString('en-US')} km`} />
         <ValueRow label="Mass" value={record.massEarth} format={(m) => `${m.toLocaleString('en-US', { maximumSignificantDigits: 4 })} Earths`} />
-        {record.position === 'invented' ? (
+        {/* Invented where the record gives no orbit of its own; Star Wars' worlds keep theirs, their galaxy the invention. */}
+        {record.position === 'invented' && valueOf(record.orbit.semiMajorAxisKm) === null ? (
           <Row
             label="Position"
             note={{ text: 'canon silent · seeded from its id', kind: 'invented', detail: 'The canon gives it no place.' }}
@@ -189,7 +202,7 @@ function ShipPanel({
     <Panel title={ship.name} onClose={onClose} width="17.5rem">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <span style={{ color: FICTION_COLOR, fontSize: '0.8rem' }}>△</span>
-        <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>ship</span>
+        <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>{ship.station !== undefined ? 'station' : 'ship'}</span>
         <FictionTag record={ship} />
       </div>
       <div style={{ marginTop: '0.55rem', fontSize: '0.72rem', color: '#c4c4c4' }}>{workLine(ship.work)}</div>
@@ -249,7 +262,12 @@ function ShipPanel({
             )}
           </>
         )}
-        <ValueRow label="Length" value={ship.lengthM} format={(m) => `${m} m`} />
+        {ship.station !== undefined && <StationRows store={store} ship={ship} station={ship.station} />}
+        <ValueRow
+          label={ship.station !== undefined ? 'Diameter' : 'Length'}
+          value={ship.lengthM}
+          format={(m) => (m >= 10_000 ? `${(m / 1000).toLocaleString('en-US')} km` : `${m} m`)}
+        />
         {ship.facts.map((fact) => (
           <ValueRow
             key={fact.label}
@@ -262,6 +280,112 @@ function ShipPanel({
       </dl>
       <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
       <RealityCheck record={ship} />
+    </Panel>
+  );
+}
+
+/** Where a station is and what it is turned to (core/hailMary.ts Station). */
+function StationRows({
+  store,
+  ship,
+  station,
+}: {
+  store: EphemerisStore;
+  ship: FictionShipRecord;
+  station: NonNullable<FictionShipRecord['station']>;
+}) {
+  const world = fictionRecord(station.about);
+  const aim = station.aim === undefined ? null : fictionRecord(station.aim);
+  const worldRadius = world === null ? null : valueOf(world.radiusKm);
+  const radius = valueOf(station.radiusKm);
+  return (
+    <>
+      <Row label="Now">{station.mode === 'orbit' ? `orbiting ${world?.name ?? ''}` : `held over ${world?.name ?? ''}`}</Row>
+      {station.mode === 'orbit' ? (
+        <ValueRow label="Orbit radius" value={station.radiusKm} format={(km) => `${Math.round(km).toLocaleString('en-US')} km`} />
+      ) : (
+        <ValueRow
+          label="Altitude"
+          value={station.radiusKm}
+          format={(km) => `${Math.round(km - (worldRadius ?? 0)).toLocaleString('en-US')} km`}
+        />
+      )}
+      {station.mode === 'orbit' && radius !== null && world !== null && (
+        <Row label="Period" note={{ text: 'from Kepler’s third law', kind: 'computed' }}>
+          {formatPeriod(
+            (2 * Math.PI * Math.sqrt(radius ** 3 / Math.max(store.body(fictionBodyId(world.id)).gmBodyOnlyKm3S2, 1e-9))) / 86_400,
+          )}
+        </Row>
+      )}
+      <Row
+        label="Superlaser toward"
+        note={{ text: 'the drawing’s choice', kind: 'invented', detail: `The canon does not say where ${ship.name} faces here.` }}
+      >
+        {aim === null ? `out from ${world?.name ?? 'its world'}` : aim.name}
+      </Row>
+    </>
+  );
+}
+
+/** A star of the fiction's own (core/starWars.ts): its square of the canon's map, laid on a real galaxy. */
+function StarPanel({
+  store,
+  star,
+  focus,
+  jd,
+  distanceMode,
+  onClose,
+}: {
+  store: EphemerisStore;
+  star: FictionStarRecord;
+  focus: BodyId;
+  jd: number;
+  distanceMode: DistanceMode;
+  onClose: () => void;
+}) {
+  const fromSun = store.distanceBetween(focus, 'sun', jd, distanceMode);
+  return (
+    <Panel title={star.name} onClose={onClose} width="17.5rem">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ color: FICTION_COLOR, fontSize: '0.8rem' }}>△</span>
+        <span style={{ fontSize: '0.62rem', letterSpacing: '0.1em', color: '#5a5a5a', textTransform: 'uppercase' }}>star</span>
+        <FictionTag record={star} />
+      </div>
+      <div style={{ marginTop: '0.55rem', fontSize: '0.72rem', color: '#c4c4c4' }}>{workLine(star.work)}</div>
+      <div style={{ marginTop: '0.2rem', fontSize: '0.7rem', color: '#8a8a8a' }}>{star.anchorLine}</div>
+      <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
+      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.28rem 0.7rem' }}>
+        <Row label="From Sun">{fromSun === null ? '--' : formatDistance(fromSun)}</Row>
+        <Row
+          label="Galaxy"
+          note={{
+            text: 'invented · seeded from a rule',
+            kind: 'invented',
+            detail: `The canon names no galaxy. A real Sc spiral of the canon's 120,000 light years, its distance measured (${STAR_WARS_GALAXY.distanceMethod}), picked by a seed (core/starWars.ts).`,
+          }}
+        >
+          {`${STAR_WARS_GALAXY.name} (PGC ${STAR_WARS_GALAXY.pgc})`}
+        </Row>
+        <ValueRow label="Map square" value={star.mapSquare} format={String} />
+        <Divider />
+        <ValueRow label="Temperature" value={star.temperatureK} format={(k) => `${k.toLocaleString('en-US')} K`} />
+        <ValueRow label="Radius" value={star.radiusSun} format={(r) => `${r} suns`} />
+        <ValueRow label="Mass" value={star.massSun} format={(m) => `${m} suns`} />
+        {star.companionOf !== undefined && (
+          <ValueRow label="From its companion" value={star.companionOf.separationAu} format={(au) => `${au} AU`} />
+        )}
+        {star.facts.map((fact) => (
+          <ValueRow
+            key={fact.label}
+            label={fact.label}
+            value={fact.value}
+            format={(v) => (fact.unit === undefined ? String(v) : `${String(v)} ${fact.unit}`)}
+            extra={fact.note}
+          />
+        ))}
+      </dl>
+      <div style={{ height: 1, background: '#242424', margin: '0.7rem 0' }} />
+      <RealityCheck record={star} />
     </Panel>
   );
 }

@@ -11,11 +11,34 @@
         }
       ]
     },
+    "endor": {
+      "id": "endor",
+      "key": "86c8c29dd6ca2341",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "none"
+        }
+      ]
+    },
     "erid": {
       "id": "erid",
       "key": "3907aba8d2b4756c",
       "faceSize": 512,
       "layers": [
+        {
+          "alpha": "none"
+        }
+      ]
+    },
+    "forest-moon-of-endor": {
+      "id": "forest-moon-of-endor",
+      "key": "a83e4137b1a2ccc3",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "byte"
+        },
         {
           "alpha": "none"
         }
@@ -201,6 +224,29 @@
       "layers": [
         {
           "alpha": "word"
+        }
+      ]
+    },
+    "yavin-4": {
+      "id": "yavin-4",
+      "key": "08e38da3127014e7",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "byte"
+        },
+        {
+          "alpha": "none"
+        }
+      ]
+    },
+    "yavin-prime": {
+      "id": "yavin-prime",
+      "key": "cfc35ccdc6267119",
+      "faceSize": 1024,
+      "layers": [
+        {
+          "alpha": "none"
         }
       ]
     }

@@ -21,10 +21,35 @@ export type FictionAboutKey =
   | 'petrova'
   | 'erid'
   | 'blip-a'
-  | 'vulcan';
+  | 'vulcan'
+  | 'death-star'
+  | 'death-star-ii'
+  | 'yavin'
+  | 'endor';
 
 /** The records with a page of their own, by the same name. */
-const OWN_PAGES: ReadonlySet<string> = new Set(['pandora', 'polyphemus', 'adrian', 'hail-mary', 'erid', 'blip-a', 'vulcan']);
+const OWN_PAGES: ReadonlySet<string> = new Set([
+  'pandora',
+  'polyphemus',
+  'adrian',
+  'hail-mary',
+  'erid',
+  'blip-a',
+  'vulcan',
+  'death-star',
+  'death-star-ii',
+]);
+
+/** Star Wars' systems, one page each for the star and its worlds. */
+const SYSTEM_PAGES: Readonly<Record<string, FictionAboutKey>> = {
+  'yavin-star': 'yavin',
+  'yavin-prime': 'yavin',
+  'yavin-4': 'yavin',
+  'endor-i': 'endor',
+  'endor-ii': 'endor',
+  endor: 'endor',
+  'forest-moon-of-endor': 'endor',
+};
 
 /** What each page is called on the way into it ("Read about …"). */
 export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
@@ -37,6 +62,10 @@ export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
   erid: 'Erid',
   'blip-a': 'Blip-A',
   vulcan: 'Vulcan',
+  'death-star': 'Death Star',
+  'death-star-ii': 'Death Star II',
+  yavin: 'Yavin system',
+  endor: 'Endor system',
 };
 
 /**
@@ -45,8 +74,10 @@ export const FICTION_ABOUT_NAMES: Readonly<Record<FictionAboutKey, string>> = {
  */
 export function fictionAboutKey(recordId: string): FictionAboutKey | null {
   if (OWN_PAGES.has(recordId)) return recordId as FictionAboutKey;
+  const system = SYSTEM_PAGES[recordId];
+  if (system !== undefined) return system;
   const entry = fictionEntry(recordId);
-  if (entry === null || entry.kind === 'ship') return null;
+  if (entry === null || entry.kind === 'ship' || entry.kind === 'star') return null;
   if (entry.kind === 'line') return 'petrova';
   const anchor = entry.anchor;
   const of = anchor.kind === 'fiction' ? anchor.id : anchor.kind === 'lagrange' ? anchor.of : null;

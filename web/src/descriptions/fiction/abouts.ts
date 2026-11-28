@@ -383,6 +383,88 @@ const BLIP_A: FictionAbout = {
   ],
 };
 
+/**
+ * Star Wars' (core/starWars.ts). No film stills yet: the works' own images only, and none was
+ * supplied for these.
+ */
+const GALAXY_PARAGRAPH =
+  'Where it is drawn: the canon names no galaxy, so the app puts Star Wars’ in a real one, chosen by a rule and a seed — ESO 107-11, an Sc spiral in Pavo some 480 million light years away, as wide as the canon’s 120,000 light years and at a distance measured from its own light (Tully-Fisher). Within it each system sits at its square of the canon’s own galaxy map, 5,000 light years a square, the map’s centre on the galaxy’s; how the map is turned in the disc is invented, by the seed.';
+
+const DEATH_STAR: FictionAbout = {
+  kind: 'Battle station',
+  photos: [],
+  story: [
+    'The Death Star is the Galactic Empire’s moon-sized battle station in Star Wars (1977), built to destroy a planet with one shot of its superlaser. The Rebels learn its weakness from its stolen plans and destroy it at the Battle of Yavin, as it comes round the gas giant Yavin to fire on their base on the planet’s fourth moon.',
+  ],
+  canon: [
+    'Its size is 160 km across in today’s canon: the 2009 starwars.com Databank gives it, as do the novel Catalyst and Rogue One: The Ultimate Visual Guide (2016) as Wookieepedia cites them. The older Legends books made it 120 km. Inside, 357 levels and about 1.2 million aboard, by the official reference books as cited.',
+    'The film gives the rest of what is drawn: the superlaser’s dish in the northern hemisphere, eight beams meeting before it; a trench round the equator; the target, a thermal exhaust port “only two meters wide”. And the battle’s clock: the station “orbiting the planet at maximum velocity”, the moon “in range in thirty minutes”.',
+  ],
+  invented: [
+    GALAXY_PARAGRAPH + ' The Yavin system is at square P-6, in the Outer Rim.',
+    'Its orbit: a circle 600,000 km from Yavin Prime, inside Yavin 4’s, so that it comes round the planet to reach the moon as in the film; 1.7 days a turn about the planet’s invented mass, starting opposite the moon at J2000. Its dish is always turned at Yavin 4: the drawing’s choice. It is shown with the second Death Star, though in the story it was destroyed four years before that one was attacked.',
+    'Its model is SebastianSosnowski’s “Death Star - Star Wars” (Sketchfab, CC BY-NC-ND 4.0), given to the project by its author and used unchanged, with its own textures, lit here by Yavin’s star.',
+  ],
+  reality: [
+    'Nothing near this size has been built: the largest thing ever put in orbit, the ISS, is 109 m across. A sphere 160 km wide is the size of a small moon — Saturn’s Mimas, 396 km, with its one giant crater, looks so like it that the likeness is quoted everywhere; Mimas was first seen close by Voyager 1 in 1980, three years after the film, so the resemblance is chance.',
+  ],
+};
+
+const DEATH_STAR_II: FictionAbout = {
+  kind: 'Battle station',
+  photos: [],
+  story: [
+    'The second Death Star is the larger station the Empire builds over the forest moon of Endor in Return of the Jedi (1983), shielded from the moon below. It is half-finished, yet its superlaser works; it is destroyed at the Battle of Endor once the shield generator on the moon falls.',
+  ],
+  canon: [
+    'Its size is 200 km across in today’s canon, by the film’s 2017 junior novel as Wookieepedia cites it; the Legends books made it 160 km, and the 2009 starwars.com Databank, measuring the film’s models, about 900 km. The script calls it “half-completed”, its superstructure curling away from the finished part. Ultimate Star Wars (2015), as cited, has it held in a “stationary orbit” by the shield generator’s field; 560 levels, 2,471,647 aboard.',
+  ],
+  invented: [
+    GALAXY_PARAGRAPH + ' The Endor system is at square H-16, in the Outer Rim, on the far side of the galaxy’s centre from Yavin.',
+    'Where it is held: 3,000 km above the forest moon, so that it stands some 4° across in the moon’s sky; the canon gives no height. The moon is drawn unturned, so “over one place” is drawn over its noon, the point under its star — lit. Its dish is turned straight out from the moon, as in the film it fires on the Rebel fleet.',
+    'Its model is N8’s “Death Star II” (Sketchfab, CC BY 4.0), given to the project by its author and adapted: the darkest of its materials lightened so that, under a single star, the unfinished parts read darker than the hull and not black, and its textures re-encoded for the web.',
+  ],
+  reality: [
+    'No orbit keeps a station still over one place that low: with the moon’s invented mass and its 18-hour day, a synchronous orbit would be some 15,000 km up, and anything lower must be held by a force no known physics provides. Shown with the first Death Star, though in the story they never existed at once.',
+  ],
+};
+
+const YAVIN: FictionAbout = {
+  kind: 'Star system',
+  photos: [],
+  story: [
+    'Yavin is the system of the Rebels’ base in Star Wars (1977): a gas giant, Yavin, and its fourth moon, a jungle world where the Rebellion hides in an ancient temple. The first Death Star comes round the giant to destroy the moon and is destroyed there.',
+  ],
+  canon: [
+    'Its star is an orange K main-sequence star, by a Lucasfilm partwork as cited. The giant is orange and “nearly 200,000 km” across, by the junior novelisation as cited — 1.4 times Jupiter’s width; the reference books give it 26 moons, or 13. Yavin 4 is 10,200 km across, its year 4,818 days (Complete Locations, as cited). On the canon’s map the system is in square P-6, the Gordian Reach.',
+  ],
+  invented: [
+    GALAXY_PARAGRAPH,
+    'The star’s temperature, radius and mass, those of a K4 dwarf; the giant’s mass, 3.1 Jupiters, from the 4 g the Legends books give at its cloud tops; its orbit, some 5 AU, from Yavin 4’s year about the star’s chosen mass; Yavin 4’s orbit, 1.2 million km out so the giant spans 9.5° of its sky; every orbit’s plane, by a seed. The looks are this app’s own drawing.',
+  ],
+  reality: [
+    'A giant 1.4 times Jupiter’s width is possible — hot or young giants are puffed up to twice it. A habitable moon of a giant planet is a real possibility astronomers search for; none is confirmed yet.',
+  ],
+};
+
+const ENDOR: FictionAbout = {
+  kind: 'Star system',
+  photos: [],
+  story: [
+    'Endor is the system of the last battle of Return of the Jedi (1983): the second Death Star is built over the forest moon of the gas giant Endor, where the Ewoks live and the station’s shield generator stands.',
+  ],
+  canon: [
+    'The forest moon is 4,900 km across, its year 402 days, its day 18 hours, its gravity “light”; the system has two stars, Endor I and Endor II — all from the official reference books as Wookieepedia cites them. The gas giant is 48,951 km across with nine major moons (The Rise of Skywalker: The Visual Dictionary, 2019, as cited). On the canon’s map the system is in square H-16, the Moddell sector.',
+  ],
+  invented: [
+    GALAXY_PARAGRAPH,
+    'The stars’ kinds, which the canon does not give: Endor I like the Sun, Endor II a red dwarf held 300 AU off; Endor’s mass, Neptune’s, and its orbit, about 1.07 AU, from the moon’s 402-day year; the moon’s orbit, 400,000 km out so the giant spans 7° of its sky; its gravity, the 0.85 g of the Legends books, for its mass; the planes, by a seed. The looks are this app’s own drawing.',
+  ],
+  reality: [
+    'About half of Sun-like stars have a companion, and planets about one star of a wide pair are common. A moon 4,900 km across holding a warm, breathable air is the hard part: Titan, a little larger, keeps an air thicker than Earth’s only because it is cold.',
+  ],
+};
+
 /** Each page by its key (ids.ts). */
 export const FICTION_ABOUTS: Readonly<Record<FictionAboutKey, FictionAbout>> = {
   pandora: PANDORA,
@@ -394,4 +476,8 @@ export const FICTION_ABOUTS: Readonly<Record<FictionAboutKey, FictionAbout>> = {
   erid: ERID,
   'blip-a': BLIP_A,
   vulcan: VULCAN,
+  'death-star': DEATH_STAR,
+  'death-star-ii': DEATH_STAR_II,
+  yavin: YAVIN,
+  endor: ENDOR,
 };

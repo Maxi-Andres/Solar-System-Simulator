@@ -2,6 +2,7 @@ import type { BodyDefinition, BodyId, LocalVolumeCatalog } from '@sss/tools/type
 
 import type { EphemerisStore } from '../core/ephemerisStore.ts';
 import { SGR_A_ID } from '../core/blackHoles.ts';
+import { inFictionGalaxy } from '../core/fiction.ts';
 import {
   basinAt,
   groupOf,
@@ -251,7 +252,8 @@ export function bodyFold(body: BodyDefinition, fromSunPc: readonly [number, numb
     const galaxy = galaxyOf(body.id);
     return galaxy === null ? UNFOLDED : galaxyFold(galaxy);
   }
-  if (body.id === SGR_A_ID) {
+  // Sgr A*, the Milky Way's own mark; and a fictional galaxy's bodies, which are not in it.
+  if (body.id === SGR_A_ID || inFictionGalaxy(body.id)) {
     return UNFOLDED;
   }
   return { host: MILKY_WAY_HOST, separationPc: MARK_HOSTS.distancePc(MILKY_WAY_HOST, fromSunPc) };

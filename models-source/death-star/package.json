@@ -1,0 +1,13 @@
+{
+  "name": "death-star-model-build",
+  "private": true,
+  "description": "Builds web/public/models/fiction/death-star.glb and death-star-ii.glb: textures to WebP, nothing else changed. node build.mjs <source.glb> <out.glb> [size] [quality]",
+  "type": "module",
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "gl-matrix": "^3.4.4",
+    "meshoptimizer": "^0.22.0"
+  }
+}

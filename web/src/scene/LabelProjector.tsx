@@ -10,7 +10,7 @@ import { useStoreVersion } from '../core/useStoreVersion.ts';
 import { rebaseVisibleFrame, satelliteVisibility, type SharedFrame } from './satellites.ts';
 import { ALPHA_CEN_PAIR_LABEL, ALPHA_CEN_SYSTEM, alphaCenMember, inAlphaCen } from '../core/alphaCenBodies.ts';
 import { setCasedText } from '../ui/casedName.tsx';
-import { FICTION_OVERLAYS, isFictionBody } from '../core/fiction.ts';
+import { FICTION_OVERLAYS, inFictionGalaxy, isFictionBody } from '../core/fiction.ts';
 import { planetarySystemOf, systemExtentKm } from '../core/planetarySystems.ts';
 import { isCatalogueStar } from '../core/starBodies.ts';
 import { BLACK_HOLE_SYSTEMS, blackHoleSystemOf } from '../core/blackHoles.ts';
@@ -663,7 +663,8 @@ export function LabelProjector({
     if (home?.galaxyFolded === true) {
       for (let i = projected.length - 1; i >= 0; i -= 1) {
         const kind = store.body(projected[i]!.id).kind;
-        if (kind !== 'galaxy' && kind !== 'structure') {
+        // A fictional galaxy's bodies are not the Milky Way's (core/fiction.ts inFictionGalaxy).
+        if (kind !== 'galaxy' && kind !== 'structure' && !inFictionGalaxy(projected[i]!.id)) {
           projected.splice(i, 1);
         }
       }

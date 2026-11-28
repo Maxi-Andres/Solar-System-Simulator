@@ -182,7 +182,15 @@ describe('placing fiction', () => {
   });
 
   it('gives a thing whose canon gives no place an invented orbit, the same every time', () => {
-    const lost: FictionRecord = { ...fictionRecord('polyphemus')!, id: 'lost-world', position: 'invented' };
+    // Invented where its record gives no distance; one it gives (Star Wars' worlds) is kept.
+    const polyphemus = fictionRecord('polyphemus')!;
+    const lost: FictionRecord = {
+      ...polyphemus,
+      id: 'lost-world',
+      position: 'invented',
+      orbit: { ...polyphemus.orbit, semiMajorAxisKm: { silent: true } },
+    };
+    expect(fictionOrbit({ ...polyphemus, position: 'invented' }, GM_SUN).semiMajorAxisAu).toBeCloseTo(1.23, 6);
     const a = fictionOrbit(lost, GM_SUN);
     expect(fictionOrbit(lost, GM_SUN)).toEqual(a);
     expect(a.semiMajorAxisAu).not.toBeCloseTo(1.23, 3);
