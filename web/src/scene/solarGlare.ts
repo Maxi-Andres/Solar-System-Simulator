@@ -233,9 +233,18 @@ export function glareWorldRadius(distanceUnits: number, radiusDeg: number): numb
   return distanceUnits * Math.tan((radiusDeg * Math.PI) / 180);
 }
 
-/** The Sun's angular radius at a distance, degrees. The inner edge of the veil. */
+/**
+ * A star's angular radius at a distance from its centre, degrees: the inner edge of the veil, and
+ * the depth it is laid at (just in front of the sphere's nearest point).
+ *
+ * The **arcsine**, not the arctangent: a sphere's edge is where the line of sight grazes it, at
+ * sin = R / d. The two agree far off and part close in -- 40 against 56 degrees at 1.2 radii from the
+ * centre -- and the arctangent shipped: the veil was laid behind the sphere's near side, which then
+ * showed through it as a faceted patch (Maxi 2026-11-28, at α Cen A: "se hace como un huevo"), and
+ * the Sun's mask stopped short of its limb, a ring of veil over its edge in another colour.
+ */
 export function sunAngularRadiusDeg(radiusKm: number, distanceKm: number): number {
-  return (Math.atan(radiusKm / Math.max(1, distanceKm)) * 180) / Math.PI;
+  return (Math.asin(Math.min(1, radiusKm / Math.max(1, distanceKm))) * 180) / Math.PI;
 }
 
 /**
@@ -320,12 +329,15 @@ void main() {
     ${GLARE_SQUARE_COEFFICIENT.toFixed(1)} / (angleDeg * angleDeg)
   );
 
-  // Full strength from the limb outward, fading inward across the last tenth of the
+  // Full strength from the limb outward, fading inward across the last fiftieth of the
   // disc. It used to run the other way -- zero at the limb, full a tenth of a radius
   // past it -- which left a black band exactly where the halo should be brightest, and
   // the radial profile of the frame showed it: 69 at the limb, 29 ten pixels out, and
-  // no halo until 1.07 radii.
-  veil *= uOverDisc > 0.5 ? 1.0 : smoothstep(uSunRadiusDeg * 0.9, uSunRadiusDeg, angleDeg);
+  // no halo until 1.07 radii. And it faded in over the last tenth, which was hidden while
+  // the disc was clipped white; with the Sun's surface drawn it showed as a smooth ring of
+  // the veil's colour over the limb (Maxi 2026-11-28: "en el borde también está de otro
+  // color"). A fiftieth is a pixel or two at any size the disc fills the frame.
+  veil *= uOverDisc > 0.5 ? 1.0 : smoothstep(uSunRadiusDeg * 0.98, uSunRadiusDeg, angleDeg);
 
   vec3 linear = uColor * min(1.0, veil);
   gl_FragColor = vec4(

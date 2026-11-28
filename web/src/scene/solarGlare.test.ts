@@ -74,6 +74,10 @@ describe('the Sun as seen from where you are', () => {
 
   it('is nearly three times that from Mercury', () => {
     expect(2 * sunAngularRadiusDeg(695_700, 0.387 * AU_KM)).toBeCloseTo(1.377, 2);
+    // Close in, the sphere's edge, where the sight line grazes it: the arcsine, not the arctangent.
+    expect(sunAngularRadiusDeg(1, 1.2)).toBeCloseTo((Math.asin(1 / 1.2) * 180) / Math.PI, 9);
+    expect(sunAngularRadiusDeg(1, 1.2)).toBeGreaterThan(56);
+    expect(sunAngularRadiusDeg(1, 0.5)).toBe(90);
   });
 });
 
@@ -198,7 +202,7 @@ describe('the shader says the same thing as the module', () => {
     // The black ring Maxi found: the mask used to run the other way, so the veil was
     // zero exactly where the halo should be brightest.
     expect(SOLAR_GLARE_FRAGMENT_SHADER).toContain(
-      'smoothstep(uSunRadiusDeg * 0.9, uSunRadiusDeg, angleDeg)',
+      'smoothstep(uSunRadiusDeg * 0.98, uSunRadiusDeg, angleDeg)',
     );
     expect(SOLAR_GLARE_FRAGMENT_SHADER).not.toContain('uSunRadiusDeg * 1.1');
   });
